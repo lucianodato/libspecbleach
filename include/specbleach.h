@@ -47,8 +47,6 @@ extern "C" {
 #include <stdbool.h>
 #include <stdint.h>
 
-// TODO (luciano/todo): Extract library to it's own repository when API is
-// stable.
 // TODO (luciano/todo): Document interface
 // TODO (luciano/todo): Handle parameter in a future proof way
 
