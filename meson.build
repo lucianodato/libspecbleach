@@ -52,9 +52,6 @@ endif
 if current_os == 'darwin'
     cflags += ['-mrecip']
 endif
-if current_os == 'windows'
-    cflags += ['-fno-stack-protector']
-endif
 
 libspecbleach = library('specbleach',
   shared_sources,
