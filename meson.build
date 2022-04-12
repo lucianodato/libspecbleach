@@ -1,4 +1,4 @@
-project('libspecbleach', 'c', version: '0.1.0',default_options: ['c_std=c99','default_library=static','buildtype=release'])
+project('libspecbleach', 'c', version: '0.1.0',default_options: ['c_std=c99','default_library=static'])
 
 #sources to compile
 shared_sources = [
@@ -52,11 +52,8 @@ endif
 if current_os == 'darwin'
     cflags += ['-mrecip']
 endif
-if current_os == 'windows'
-    cflags += ['-fno-stack-protector']
-endif
 
-libspecbleach = static_library('specbleach',
+libspecbleach = library('specbleach',
   shared_sources,
   specbleach_sources,
   include_directories : inc,
