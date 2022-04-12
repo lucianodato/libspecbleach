@@ -53,7 +53,7 @@ if current_os == 'darwin'
     cflags += ['-mrecip']
 endif
 
-libspecbleach = library('specbleach',
+libspecbleach = static_library('specbleach',
   shared_sources,
   specbleach_sources,
   include_directories : inc,
