@@ -1,4 +1,4 @@
-project('libspecbleach', 'c', version: '0.1.0',default_options: ['c_std=c99','default_library=static','buildtype=release'])
+project('libspecbleach', 'c', version: '0.1.0',default_options: ['c_std=c99'])
 
 #sources to compile
 shared_sources = [
@@ -51,9 +51,6 @@ endif
 # Add osx multiarch flags when appropriate
 if current_os == 'darwin'
     cflags += ['-mrecip']
-endif
-if current_os == 'windows'
-    cflags += ['-fno-stack-protector']
 endif
 
 libspecbleach = library('specbleach',
