@@ -27,9 +27,6 @@ extern "C" {
 #include <stdbool.h>
 #include <stdint.h>
 
-// TODO (luciano/todo): Document interface
-// TODO (luciano/todo): Handle parameter in a future proof way
-
 typedef void *SpectralBleachHandle;
 
 typedef struct SpectralBleachParameters {
@@ -42,33 +39,95 @@ typedef struct SpectralBleachParameters {
   float noise_rescale;
 } SpectralBleachParameters;
 
+/**
+ * --------------- Manual noise reduction ---------------
+ */
+
+/**
+ * Returns a handle to an instance of the library for the manual based
+ * noise reduction
+ */
 SpectralBleachHandle specbleach_initialize(uint32_t sample_rate);
+/**
+ * Free instance associated to the handle passed
+ */
 void specbleach_free(SpectralBleachHandle instance);
+/**
+ * Loads the parameters for the reduction.
+ * This has to be called before processing
+ */
+bool specbleach_load_parameters(SpectralBleachHandle instance,
+                                SpectralBleachParameters parameters);
+/**
+ * Process buffer of a number of samples
+ */
 bool specbleach_process(SpectralBleachHandle instance,
                         uint32_t number_of_samples, const float *input,
                         float *output);
+/**
+ * Returns the latency in samples associated with the library instance
+ */
 uint32_t specbleach_get_latency(SpectralBleachHandle instance);
-bool specbleach_load_parameters(SpectralBleachHandle instance,
-                                SpectralBleachParameters parameters);
+/**
+ * Returns the size of the noise profile spectrum
+ */
 uint32_t specbleach_get_noise_profile_size(SpectralBleachHandle instance);
+/**
+ * Returns a pointer to the noise profile calculated inside the instance
+ */
 float *specbleach_get_noise_profile(SpectralBleachHandle instance);
+/**
+ * Allows to load a custom noise profile
+ */
 bool specbleach_load_noise_profile(SpectralBleachHandle instance,
                                    const float *restored_profile,
                                    uint32_t profile_size,
                                    uint32_t profile_blocks);
+/**
+ * Resets the internal noise profile of the library instance
+ */
+bool specbleach_reset_noise_profile(SpectralBleachHandle instance);
+/**
+ * Returns if the instance has a noise profile calculated internally
+ */
+bool specbleach_noise_profile_available(SpectralBleachHandle instance);
+/**
+ * Returns the number of blocks used for the noise profile calculation
+ */
 uint32_t
 specbleach_get_noise_profile_blocks_averaged(SpectralBleachHandle instance);
-bool specbleach_reset_noise_profile(SpectralBleachHandle instance);
-bool specbleach_noise_profile_available(SpectralBleachHandle instance);
 
+/**
+ * --------------- Adaptive noise reduction ---------------
+ */
+
+/**
+ * Returns a handle to an instance of the library for the adaptive based
+ * noise reduction
+ */
 SpectralBleachHandle specbleach_adaptive_initialize(uint32_t sample_rate);
+
+/**
+ * Free instance associated to the handle passed
+ */
 void specbleach_adaptive_free(SpectralBleachHandle instance);
+/**
+ * Loads the parameters for the reduction.
+ * This has to be called before processing
+ */
+bool specbleach_adaptive_load_parameters(SpectralBleachHandle instance,
+                                         SpectralBleachParameters parameters);
+/**
+ * Returns the latency in samples associated with the library instance
+ */
+uint32_t specbleach_adaptive_get_latency(SpectralBleachHandle instance);
+/**
+ * Process buffer of a number of samples
+ */
 bool specbleach_adaptive_process(SpectralBleachHandle instance,
                                  uint32_t number_of_samples, const float *input,
                                  float *output);
-uint32_t specbleach_adaptive_get_latency(SpectralBleachHandle instance);
-bool specbleach_adaptive_load_parameters(SpectralBleachHandle instance,
-                                         SpectralBleachParameters parameters);
+
 #ifdef __cplusplus
 }
 #endif
