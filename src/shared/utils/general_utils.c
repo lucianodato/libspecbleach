@@ -33,6 +33,10 @@ inline float from_db_to_coefficient(const float value_db) {
   return expf(value_db / 10.F * logf(10.F));
 }
 
+float remap_percentage_log_like_unity(const float value) {
+  return 1.F - expf(-5.F * (value / 100.F));
+}
+
 int get_next_divisible_two(int number) {
   int q = number / 2;
   int n1 = 2 * q;

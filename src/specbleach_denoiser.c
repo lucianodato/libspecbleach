@@ -177,7 +177,7 @@ bool specbleach_load_parameters(SpectralBleachHandle instance,
       .reduction_amount =
           from_db_to_coefficient(parameters.reduction_amount * -1.F),
       .noise_rescale = from_db_to_coefficient(parameters.noise_rescale),
-      .smoothing_factor = parameters.smoothing_factor / 100.F,
+      .smoothing_factor = remap_percentage_log_like_unity(parameters.smoothing_factor),
       .whitening_factor = parameters.whitening_factor / 100.F,
   };
   // clang-format on
