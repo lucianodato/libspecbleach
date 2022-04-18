@@ -30,9 +30,7 @@ extern "C" {
 typedef void *SpectralBleachHandle;
 
 typedef struct SpectralBleachParameters {
-  bool learn_noise;
   bool residual_listen;
-  bool transient_protection;
   float reduction_amount;
   float smoothing_factor;
   float noise_rescale;
