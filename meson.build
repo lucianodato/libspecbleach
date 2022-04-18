@@ -27,7 +27,8 @@ shared_sources = [
 specbleach_sources = [
     'src/denoiser/spectral_denoiser.c',
     'src/adaptivedenoiser/adaptive_denoiser.c',
-    'src/specbleach.c',
+    'src/specbleach_adenoiser.c',
+    'src/specbleach_denoiser.c',
 ]
 
 # public header
