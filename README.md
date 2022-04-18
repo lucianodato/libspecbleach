@@ -2,7 +2,8 @@
 
 C library for audio noise reduction
 
-[![build](https://github.com/lucianodato/libspecbleach/actions/workflows/build.yml/badge.svg)](https://github.com/lucianodato/libspecbleach/actions/workflows/build.yml)
+[![main](https://github.com/lucianodato/libspecbleach/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/lucianodato/libspecbleach/actions/workflows/build.yml)
+[![development](https://github.com/lucianodato/libspecbleach/actions/workflows/build.yml/badge.svg?branch=development)](https://github.com/lucianodato/libspecbleach/actions/workflows/build.yml)
 
 ## Background
 
