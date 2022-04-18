@@ -2,6 +2,8 @@
 
 C library for audio noise reduction
 
+[![build](https://github.com/lucianodato/libspecbleach/actions/workflows/build.yml/badge.svg)](https://github.com/lucianodato/libspecbleach/actions/workflows/build.yml)
+
 ## Background
 
 This library is based on the algorithms that were used in noise-repellent. These were extracted into a this standalone library. It was design to be extensible and modular. It uses the concept of a spectral processor which uses a short time Fourier transform (STFT) to process the audio. There are two initial processors in place, one which uses the adaptive part of noise repellent and one that uses the manual capturing profile based denoising. The library could be extended with more spectral processors using any STFT-based algorithm such as de-crackle, de-click and other audio restoration algorithms.
