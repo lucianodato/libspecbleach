@@ -1,0 +1,25 @@
+name: build
+on:
+  push:
+    branches:
+      - "*"
+  pull_request:
+    branches:
+      - "*"
+
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: recursive
+      - name: Set up dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -qq meson libfftw3-dev ninja-build
+      - name: Build library
+        shell: bash
+        run: |
+          meson build --buildtype release
+          ninja -v -C build
