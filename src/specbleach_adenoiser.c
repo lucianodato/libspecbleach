@@ -1,0 +1,119 @@
+/*
+libspecbleach - A spectral processing library
+
+Copyright 2021 Luciano Dato <lucianodato@gmail.com>
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Lesser General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/
+*/
+
+#include "../include/specbleach_adenoiser.h"
+#include "adaptivedenoiser/adaptive_denoiser.h"
+#include "shared/configurations.h"
+#include "shared/stft/stft_processor.h"
+#include "shared/utils/general_utils.h"
+#include <math.h>
+#include <stdlib.h>
+#include <string.h>
+
+typedef struct SbAdaptiveDenoiser {
+  uint32_t sample_rate;
+  AdaptiveDenoiserParameters denoise_parameters;
+
+  SpectralProcessorHandle adaptive_spectral_denoiser;
+  StftProcessor *stft_processor;
+} SbAdaptiveDenoiser;
+
+SpectralBleachHandle
+specbleach_adaptive_initialize(const uint32_t sample_rate) {
+  SbAdaptiveDenoiser *self =
+      (SbAdaptiveDenoiser *)calloc(1U, sizeof(SbAdaptiveDenoiser));
+
+  self->sample_rate = sample_rate;
+
+  self->stft_processor = stft_processor_initialize(
+      sample_rate, FRAME_SIZE_SPEECH, OVERLAP_FACTOR_SPEECH,
+      PADDING_CONFIGURATION_SPEECH, ZEROPADDING_AMOUNT_SPEECH,
+      INPUT_WINDOW_TYPE_SPEECH, OUTPUT_WINDOW_TYPE_SPEECH);
+
+  if (!self->stft_processor) {
+    specbleach_adaptive_free(self);
+    return NULL;
+  }
+
+  const uint32_t fft_size = get_stft_fft_size(self->stft_processor);
+
+  self->adaptive_spectral_denoiser = spectral_adaptive_denoiser_initialize(
+      self->sample_rate, fft_size, OVERLAP_FACTOR_SPEECH);
+
+  if (!self->adaptive_spectral_denoiser) {
+    specbleach_adaptive_free(self);
+    return NULL;
+  }
+
+  return self;
+}
+
+void specbleach_adaptive_free(SpectralBleachHandle instance) {
+  SbAdaptiveDenoiser *self = (SbAdaptiveDenoiser *)instance;
+
+  spectral_adaptive_denoiser_free(self->adaptive_spectral_denoiser);
+  stft_processor_free(self->stft_processor);
+  free(self);
+}
+
+uint32_t specbleach_adaptive_get_latency(SpectralBleachHandle instance) {
+  SbAdaptiveDenoiser *self = (SbAdaptiveDenoiser *)instance;
+
+  return get_stft_latency(self->stft_processor);
+}
+
+bool specbleach_adaptive_process(SpectralBleachHandle instance,
+                                 const uint32_t number_of_samples,
+                                 const float *input, float *output) {
+  if (!instance || number_of_samples == 0 || !input || !output) {
+    return false;
+  }
+
+  SbAdaptiveDenoiser *self = (SbAdaptiveDenoiser *)instance;
+
+  stft_processor_run(self->stft_processor, number_of_samples, input, output,
+                     &spectral_adaptive_denoiser_run,
+                     self->adaptive_spectral_denoiser);
+
+  return true;
+}
+
+bool specbleach_adaptive_load_parameters(SpectralBleachHandle instance,
+                                         SpectralBleachParameters parameters) {
+  if (!instance) {
+    return false;
+  }
+
+  SbAdaptiveDenoiser *self = (SbAdaptiveDenoiser *)instance;
+
+  // clang-format off
+  self->denoise_parameters = (AdaptiveDenoiserParameters){
+      .residual_listen = parameters.residual_listen,
+      .reduction_amount =
+          from_db_to_coefficient(parameters.reduction_amount * -1.F),
+      .noise_rescale = from_db_to_coefficient(parameters.noise_rescale),
+      .smoothing_factor = parameters.smoothing_factor / 100.F,
+  };
+  // clang-format on
+
+  load_adaptive_reduction_parameters(self->adaptive_spectral_denoiser,
+                                     self->denoise_parameters);
+
+  return true;
+}

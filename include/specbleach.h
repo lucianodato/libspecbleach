@@ -24,51 +24,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/
 extern "C" {
 #endif
 
-#include <stdbool.h>
-#include <stdint.h>
+#include "specbleach_adenoiser.h"
+#include "specbleach_denoiser.h"
 
-// TODO (luciano/todo): Document interface
-// TODO (luciano/todo): Handle parameter in a future proof way
-
-typedef void *SpectralBleachHandle;
-
-typedef struct SpectralBleachParameters {
-  bool learn_noise;
-  bool residual_listen;
-  bool transient_protection;
-  float reduction_amount;
-  float smoothing_factor;
-  float whitening_factor;
-  float noise_rescale;
-} SpectralBleachParameters;
-
-SpectralBleachHandle specbleach_initialize(uint32_t sample_rate);
-void specbleach_free(SpectralBleachHandle instance);
-bool specbleach_process(SpectralBleachHandle instance,
-                        uint32_t number_of_samples, const float *input,
-                        float *output);
-uint32_t specbleach_get_latency(SpectralBleachHandle instance);
-bool specbleach_load_parameters(SpectralBleachHandle instance,
-                                SpectralBleachParameters parameters);
-uint32_t specbleach_get_noise_profile_size(SpectralBleachHandle instance);
-float *specbleach_get_noise_profile(SpectralBleachHandle instance);
-bool specbleach_load_noise_profile(SpectralBleachHandle instance,
-                                   const float *restored_profile,
-                                   uint32_t profile_size,
-                                   uint32_t profile_blocks);
-uint32_t
-specbleach_get_noise_profile_blocks_averaged(SpectralBleachHandle instance);
-bool specbleach_reset_noise_profile(SpectralBleachHandle instance);
-bool specbleach_noise_profile_available(SpectralBleachHandle instance);
-
-SpectralBleachHandle specbleach_adaptive_initialize(uint32_t sample_rate);
-void specbleach_adaptive_free(SpectralBleachHandle instance);
-bool specbleach_adaptive_process(SpectralBleachHandle instance,
-                                 uint32_t number_of_samples, const float *input,
-                                 float *output);
-uint32_t specbleach_adaptive_get_latency(SpectralBleachHandle instance);
-bool specbleach_adaptive_load_parameters(SpectralBleachHandle instance,
-                                         SpectralBleachParameters parameters);
 #ifdef __cplusplus
 }
 #endif
