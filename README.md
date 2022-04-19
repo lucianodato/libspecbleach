@@ -25,3 +25,11 @@ Installation:
   ninja -C build -v
   sudo ninja -C build install
 ```
+
+## Example
+
+A simple console app example is provided to demonstrate how to use the library. It needs libsndfile to compile successfully. Use it as follows:
+
+```bash
+  adenoise_demo <input file name> <output file name>
+```
