@@ -31,6 +31,10 @@ specbleach_sources = [
     'src/specbleach_denoiser.c',
 ]
 
+example_sources = [
+    'example/adenoiser_demo.c'
+]
+
 # public header
 inc = include_directories('include')
 
@@ -64,4 +68,12 @@ libspecbleach = library('specbleach',
 
 libspecbleach_dep = declare_dependency(include_directories : inc,
   link_with : libspecbleach)
+
+sndfile_dep = meson.get_compiler('c').find_library('sndfile',
+                has_headers: ['sndfile.h'],
+                required: false)
+
+if sndfile_dep.found()
+    executable('adenoiser_demo', example_sources, dependencies : [sndfile_dep,libspecbleach_dep])
+endif
 

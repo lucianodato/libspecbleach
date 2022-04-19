@@ -31,13 +31,22 @@ extern "C" {
 typedef void *SpectralBleachHandle;
 
 typedef struct SpectralBleachParameters {
-  bool learn_noise;
-  bool residual_listen;
-  bool transient_protection;
-  float reduction_amount;
-  float smoothing_factor;
-  float whitening_factor;
-  float noise_rescale;
+  bool learn_noise; // Sets the processor in listening mode to capture the noise
+                    // profile. It's either true or false
+  bool residual_listen;   // Enables outputting the residue of the reduction
+                          // processing. It's either true or false
+  float reduction_amount; // Sets the amount of dBs that the noise will be
+                          // attenuated. It goes from 0 dB to 40 dB
+  float smoothing_factor; // Percentage of smoothing to apply. It goes from 0 to
+                          // 100 percent
+  bool transient_protection; // Enables or disables the transient protection
+                             // when smoothing_factor is being used.
+  float whitening_factor; // Percentage of whitening that is going to be applied
+                          // to the residue of the reduction. It goes from 0 to
+                          // 100 percent
+  float noise_rescale;    // Strenght in which the reduction will be applied. It
+                       // can be a possitive or negative dB value in between -12
+                       // dB and 12 dB
 } SpectralBleachParameters;
 
 /**
