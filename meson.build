@@ -42,27 +42,10 @@ m_dep = meson.get_compiler('c').find_library('m', required : true)
 fftw_dep = dependency('fftw3f', required : true)
 dep = [m_dep, fftw_dep]
 
-#get the host operating system and configure install path and shared object extension
-current_os = host_machine.system()
-current_arch = host_machine.cpu_family()
-
-#compiler flags
-cflags = []
-
-# Add x86_64 optimization where appropriate (not for ARM, not for riscv)
-if current_arch != 'aarch64' and current_arch != 'riscv64' and current_os != 'darwin' 
-    cflags += ['-ffast-math', '-msse','-msse2','-mfpmath=sse']
-endif
-# Add osx multiarch flags when appropriate
-if current_os == 'darwin'
-    cflags += ['-mrecip']
-endif
-
 libspecbleach = library('specbleach',
   shared_sources,
   specbleach_sources,
   include_directories : inc,
-  c_args: cflags,
   dependencies: dep,
   install: false)
 
@@ -71,9 +54,9 @@ libspecbleach_dep = declare_dependency(include_directories : inc,
 
 sndfile_dep = meson.get_compiler('c').find_library('sndfile',
                 has_headers: ['sndfile.h'],
-                required: false)
+                required: get_option('enable_example'))
 
-if sndfile_dep.found()
+if sndfile_dep.found() and get_option('enable_example')
     executable('adenoiser_demo', example_sources, dependencies : [sndfile_dep,libspecbleach_dep])
 endif
 
