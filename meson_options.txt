@@ -1,2 +1,1 @@
 option('enable_example', type : 'boolean', value : false, description : 'Enables building example application')
-option('optimization_c_flags', type: 'array', value: ['-ffast-math', '-msse','-msse2','-mfpmath=sse'], description : 'Enables optimizacion flags. Remove flags if not in x86_64/i686 platform')
