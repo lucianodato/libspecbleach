@@ -46,6 +46,7 @@ libspecbleach = library('specbleach',
   shared_sources,
   specbleach_sources,
   include_directories : inc,
+  c_args : get_option('optimization_c_flags'),
   dependencies: dep,
   install: false)
 
