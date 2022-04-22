@@ -34,11 +34,11 @@ typedef struct SpectralBleachParameters {
   bool residual_listen;   // Enables outputting the residue of the reduction
                           // processing. It's either true or false
   float reduction_amount; // Sets the amount of dBs that the noise will be
-                          // attenuated. It goes from 0 dB to 40 dB
+                          // attenuated. It goes from 0 dB to 20 dB
   float smoothing_factor; // Percentage of smoothing to apply. It goes from 0 to
                           // 100 percent
   float noise_rescale;    // Strenght in which the reduction will be applied. It
-                       // can be a possitive or negative dB value in between -12
+                       // can be a possitive or negative dB value in between 0
                        // dB and 12 dB
 } SpectralBleachParameters;
 
