@@ -6,7 +6,7 @@ C library for audio noise reduction and other spectral effects
 
 ## Background
 
-This library is based on the algorithms that were used in noise-repellent. These were extracted into a this standalone library. It was design to be extensible and modular. It uses the concept of a spectral processor which uses a short time Fourier transform (STFT) to process the audio. There are two initial processors in place, one which uses the adaptive part of noise repellent and one that uses the manual capturing profile based denoising. The library could be extended with more spectral processors using any STFT-based algorithm such as de-crackle, de-click and other audio restoration algorithms.
+This library is based on the algorithms that were used in [noise-repellent](https://github.com/lucianodato/noise-repellent). These were extracted into a this standalone library to remove the lv2 dependency. It was design to be extensible and modular. It uses the concept of a spectral processor which itself uses a short time Fourier transform (STFT) to process the audio. There are two initial processors in place, one which uses the adaptive part of noise repellent and one that uses the manual capturing profile based denoising. The library could be extended with more spectral processors using any STFT-based algorithm such as de-crackle, de-click and other audio restoration algorithms.
 
 ## De-noise algorithms
 
@@ -28,7 +28,7 @@ Installation:
 
 ## Example
 
-A simple console app example is provided to demonstrate how to use the library. It needs libsndfile to compile successfully. Use it as follows:
+A simple console app example is provided to demonstrate how to use the library. It needs libsndfile to compile successfully. The compiled binary won't be installed but you can use it as follows:
 
 ```bash
   adenoise_demo <input file name> <output file name>
