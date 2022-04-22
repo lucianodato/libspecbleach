@@ -17,7 +17,8 @@ jobs:
       - name: Set up dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -qq meson libfftw3-dev ninja-build libsndfile1-dev
+          sudo apt-get install -qq python3-pip libfftw3-dev ninja-build libsndfile1-dev
+          sudo pip install meson
       - name: Build library
         shell: bash
         run: |
