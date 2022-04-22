@@ -1,6 +1,6 @@
 # libspecbleach
 
-C library for audio noise reduction
+C library for audio noise reduction and other spectral effects
 
 [![build](https://github.com/lucianodato/libspecbleach/actions/workflows/build.yml/badge.svg)](https://github.com/lucianodato/libspecbleach/actions/workflows/build.yml)
 
