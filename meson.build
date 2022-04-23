@@ -31,6 +31,11 @@ specbleach_sources = [
     'src/specbleach_denoiser.c',
 ]
 
+specbleach_headers = [
+  'include/specbleach_adenoiser.h',
+  'include/specbleach_denoiser.h',
+]
+
 example_sources = [
     'example/adenoiser_demo.c'
 ]
@@ -41,6 +46,8 @@ inc = include_directories('include')
 m_dep = meson.get_compiler('c').find_library('m', required : true)
 fftw_dep = dependency('fftw3f', required : true)
 dep = [m_dep, fftw_dep]
+
+install_headers(specbleach_headers)
 
 libspecbleach = library('specbleach',
   shared_sources,
