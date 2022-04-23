@@ -123,6 +123,7 @@ void spectral_adaptive_denoiser_free(SpectralProcessorHandle instance) {
   louizou_estimator_free(self->adaptive_estimator);
   spectral_features_free(self->spectral_features);
   noise_scaling_criterias_free(self->noise_scaling_criteria);
+  spectral_smoothing_free(self->spectrum_smoothing);
   postfilter_free(self->postfiltering);
   denoise_mixer_free(self->mixer);
 
