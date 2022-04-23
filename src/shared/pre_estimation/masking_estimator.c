@@ -48,7 +48,7 @@ struct MaskingEstimator {
   float *threshold_j;
   float *masking_offset;
   float *spreaded_spectrum;
-  float *bark_reference_spectrum;
+  float *critical_bands_reference_spectrum;
 };
 
 MaskingEstimator *masking_estimation_initialize(const uint32_t fft_size,
@@ -81,7 +81,7 @@ MaskingEstimator *masking_estimation_initialize(const uint32_t fft_size,
       (float *)calloc(self->number_critical_bands, sizeof(float));
   self->spreaded_spectrum =
       (float *)calloc(self->number_critical_bands, sizeof(float));
-  self->bark_reference_spectrum =
+  self->critical_bands_reference_spectrum =
       (float *)calloc(self->number_critical_bands, sizeof(float));
 
   self->reference_spectrum = absolute_hearing_thresholds_initialize(
@@ -107,6 +107,7 @@ void masking_estimation_free(MaskingEstimator *self) {
   free(self->threshold_j);
   free(self->masking_offset);
   free(self->spreaded_spectrum);
+  free(self->critical_bands_reference_spectrum);
 
   free(self);
 }
@@ -118,11 +119,12 @@ bool compute_masking_thresholds(MaskingEstimator *self, const float *spectrum,
   }
 
   compute_critical_bands_spectrum(self->critical_bands, spectrum,
-                                  self->bark_reference_spectrum);
+                                  self->critical_bands_reference_spectrum);
 
   direct_matrix_to_vector_spectral_convolution(
-      self->spectral_spreading_function, self->bark_reference_spectrum,
-      self->spreaded_spectrum, self->number_critical_bands);
+      self->spectral_spreading_function,
+      self->critical_bands_reference_spectrum, self->spreaded_spectrum,
+      self->number_critical_bands);
 
   for (uint32_t j = 0U; j < self->number_critical_bands; j++) {
 

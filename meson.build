@@ -47,7 +47,7 @@ libspecbleach = library('specbleach',
   specbleach_sources,
   include_directories : inc,
   dependencies: dep,
-  install: false)
+  install: true)
 
 libspecbleach_dep = declare_dependency(include_directories : inc,
   link_with : libspecbleach)
