@@ -31,6 +31,11 @@ specbleach_sources = [
     'src/specbleach_denoiser.c',
 ]
 
+specbleach_headers = [
+  'include/specbleach_adenoiser.h',
+  'include/specbleach_denoiser.h',
+]
+
 example_sources = [
     'example/adenoiser_demo.c'
 ]
@@ -42,12 +47,20 @@ m_dep = meson.get_compiler('c').find_library('m', required : true)
 fftw_dep = dependency('fftw3f', required : true)
 dep = [m_dep, fftw_dep]
 
+install_headers(specbleach_headers)
+
 libspecbleach = library('specbleach',
   shared_sources,
   specbleach_sources,
   include_directories : inc,
   dependencies: dep,
   install: true)
+
+pkg_mod = import('pkgconfig')
+pkg_mod.generate(libraries : libspecbleach,
+                 version: meson.project_version(),
+                 name : 'libspecbleach',
+                 description : 'C library for audio noise reduction and other spectral effects')
 
 libspecbleach_dep = declare_dependency(include_directories : inc,
   link_with : libspecbleach)
