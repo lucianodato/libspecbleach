@@ -41,9 +41,9 @@ int main(int argc, char **argv) {
   const char *input_file_name = argv[1];
   const char *output_file_name = argv[2];
 
-  SF_INFO sfinfo;
-  SNDFILE *input_file = sf_open(input_file_name, SFM_READ, &sfinfo);
-  SNDFILE *output_file = sf_open(output_file_name, SFM_WRITE, &sfinfo);
+  SF_INFO *sfinfo = (SF_INFO *)calloc(1, sizeof(SF_INFO));
+  SNDFILE *input_file = sf_open(input_file_name, SFM_READ, sfinfo);
+  SNDFILE *output_file = sf_open(output_file_name, SFM_WRITE, sfinfo);
 
   // Buffers for input and output to be used by the library
   float *input_library_buffer = (float *)calloc(BLOCK_SIZE, sizeof(float));
@@ -52,7 +52,7 @@ int main(int argc, char **argv) {
   // Declaration of the library instance. It needs to know the samplerate of the
   // audio
   SpectralBleachHandle lib_instance =
-      specbleach_adaptive_initialize((uint32_t)sfinfo.samplerate);
+      specbleach_adaptive_initialize((uint32_t)sfinfo->samplerate);
 
   // Configuration of the denoising parameters. These are hardcoded just for the
   // example
@@ -78,6 +78,7 @@ int main(int argc, char **argv) {
 
   sf_close(input_file);
   sf_close(output_file);
+  free(sfinfo);
 
   // Once done you can free the library instance and the buffers used
   specbleach_adaptive_free(lib_instance);

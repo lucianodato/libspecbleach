@@ -129,6 +129,7 @@ void spectral_adaptive_denoiser_free(SpectralProcessorHandle instance) {
 
   free(self->residual_spectrum);
   free(self->denoised_spectrum);
+  free(self->noise_profile);
   free(self->gain_spectrum);
   free(self->alpha);
   free(self->beta);
