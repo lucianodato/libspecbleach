@@ -65,11 +65,14 @@ pkg_mod.generate(libraries : libspecbleach,
 libspecbleach_dep = declare_dependency(include_directories : inc,
   link_with : libspecbleach)
 
-sndfile_dep = meson.get_compiler('c').find_library('sndfile',
-                has_headers: ['sndfile.h'],
-                required: get_option('enable_example'))
 
-if sndfile_dep.found() and get_option('enable_example')
-    executable('adenoiser_demo', example_sources, dependencies : [sndfile_dep,libspecbleach_dep])
+if get_option('enable_example')
+  sndfile_dep = meson.get_compiler('c').find_library('sndfile',
+                  has_headers: ['sndfile.h'],
+                  required: true)
+
+  executable('adenoiser_demo',
+    example_sources,
+    dependencies : [sndfile_dep,libspecbleach_dep],
+    install: true)
 endif
-

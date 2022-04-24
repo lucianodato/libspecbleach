@@ -57,7 +57,7 @@ int main(int argc, char **argv) {
   // Configuration of the denoising parameters. These are hardcoded just for the
   // example
   SpectralBleachParameters parameters =
-      (SpectralBleachParameters){.residual_listen = true,
+      (SpectralBleachParameters){.residual_listen = false,
                                  .reduction_amount = 10.F,
                                  .smoothing_factor = 0.F,
                                  .noise_rescale = 2.F};
