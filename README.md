@@ -28,8 +28,10 @@ Installation:
 
 ## Example
 
-A simple console app example is provided to demonstrate how to use the library. It needs libsndfile to compile successfully. The compiled binary won't be installed but you can use it as follows:
+A simple console app example is provided to demonstrate how to use the library. It needs libsndfile to compile successfully. You can use it as follows:
 
 ```bash
   adenoise_demo <input file name> <output file name>
 ```
+
+It will recognize any libsndfile supported format.
