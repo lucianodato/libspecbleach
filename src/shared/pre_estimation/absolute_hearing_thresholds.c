@@ -55,8 +55,6 @@ absolute_hearing_thresholds_initialize(const uint32_t sample_rate,
   AbsoluteHearingThresholds *self = (AbsoluteHearingThresholds *)calloc(
       1U, sizeof(AbsoluteHearingThresholds));
 
-  self->fft_transform = fft_transform_initialize_bins(fft_size);
-
   self->fft_size = fft_size;
   self->real_spectrum_size = self->fft_size / 2U + 1U;
   self->sample_rate = sample_rate;
@@ -64,6 +62,8 @@ absolute_hearing_thresholds_initialize(const uint32_t sample_rate,
   self->sine_wave_amplitude = SINE_AMPLITUDE;
   self->sine_wave_frequency = REFERENCE_SINE_WAVE_FREQ;
   self->reference_level = REFERENCE_LEVEL;
+
+  self->fft_transform = fft_transform_initialize_bins(self->fft_size);
 
   self->spl_reference_values =
       (float *)calloc(self->real_spectrum_size, sizeof(float));
