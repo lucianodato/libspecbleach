@@ -23,4 +23,4 @@ jobs:
         shell: bash
         run: |
           meson build --buildtype release
-          ninja -v -C build
+          meson compile -v -C build

@@ -22,8 +22,8 @@ Installation:
   git clone https://github.com/lucianodato/noise-repellent.git
   cd noise-repellent
   meson build --buildtype=release --prefix=/usr --libdir=lib (your-os-appropriate-location-fullpath)
-  ninja -C build -v
-  sudo ninja -C build install
+  meson compile -C build -v
+  sudo meson install -C build
 ```
 
 ## Example
