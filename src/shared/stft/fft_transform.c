@@ -59,10 +59,10 @@ FftTransform *fft_transform_initialize(const uint32_t sample_rate,
       (float *)fftwf_malloc(sizeof(float) * self->fft_size);
   self->forward =
       fftwf_plan_r2r_1d((int)self->fft_size, self->input_fft_buffer,
-                        self->output_fft_buffer, FFTW_R2HC, FFTW_ESTIMATE);
+                        self->output_fft_buffer, FFTW_FORWARD, FFTW_ESTIMATE);
   self->backward =
       fftwf_plan_r2r_1d((int)self->fft_size, self->output_fft_buffer,
-                        self->input_fft_buffer, FFTW_HC2R, FFTW_ESTIMATE);
+                        self->input_fft_buffer, FFTW_BACKWARD, FFTW_ESTIMATE);
 
   return self;
 }
@@ -79,10 +79,10 @@ FftTransform *fft_transform_initialize_bins(const uint32_t fft_size) {
       (float *)fftwf_malloc(sizeof(float) * self->fft_size);
   self->forward =
       fftwf_plan_r2r_1d((int)self->fft_size, self->input_fft_buffer,
-                        self->output_fft_buffer, FFTW_R2HC, FFTW_ESTIMATE);
+                        self->output_fft_buffer, FFTW_FORWARD, FFTW_ESTIMATE);
   self->backward =
       fftwf_plan_r2r_1d((int)self->fft_size, self->output_fft_buffer,
-                        self->input_fft_buffer, FFTW_HC2R, FFTW_ESTIMATE);
+                        self->input_fft_buffer, FFTW_BACKWARD, FFTW_ESTIMATE);
 
   return self;
 }
