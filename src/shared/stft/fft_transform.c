@@ -113,6 +113,7 @@ void fft_transform_free(FftTransform *self) {
   fftwf_free(self->output_fft_buffer);
   fftwf_destroy_plan(self->forward);
   fftwf_destroy_plan(self->backward);
+  fftwf_cleanup();
 
   free(self);
 }
