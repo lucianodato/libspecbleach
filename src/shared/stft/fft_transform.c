@@ -48,8 +48,8 @@ FftTransform *fft_transform_initialize(const uint32_t sample_rate,
   FftTransform *self = (FftTransform *)calloc(1U, sizeof(FftTransform));
 
   self->padding_type = padding_type;
-  self->frame_size = (uint32_t)((frame_size_ms / 1000.F) * (float)sample_rate);
   self->zeropadding_amount = zeropadding_amount;
+  self->frame_size = (uint32_t)((frame_size_ms / 1000.F) * (float)sample_rate);
 
   self->fft_size = calculate_fft_size(self);
 
@@ -113,7 +113,6 @@ void fft_transform_free(FftTransform *self) {
   fftwf_free(self->output_fft_buffer);
   fftwf_destroy_plan(self->forward);
   fftwf_destroy_plan(self->backward);
-  fftwf_cleanup();
 
   free(self);
 }

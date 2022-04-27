@@ -28,6 +28,7 @@ static float get_windows_scale_factor(StftWindows *self,
 struct StftWindows {
   float *input_window;
   float *output_window;
+
   uint32_t stft_frame_size;
   float scale_factor;
 };
