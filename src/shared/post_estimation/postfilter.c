@@ -69,7 +69,7 @@ void postfilter_free(PostFilter *self) {
 
 static void calculate_postfilter(PostFilter *self, const float *spectrum,
                                  const float *gain_spectrum) {
-  if (!spectrum || !gain_spectrum) {
+  if (!self || !spectrum || !gain_spectrum) {
     return;
   }
 
@@ -111,7 +111,7 @@ static void calculate_postfilter(PostFilter *self, const float *spectrum,
 
 bool postfilter_apply(PostFilter *self, const float *spectrum,
                       float *gain_spectrum) {
-  if (!spectrum || !gain_spectrum) {
+  if (!self || !spectrum || !gain_spectrum) {
     return false;
   }
 
