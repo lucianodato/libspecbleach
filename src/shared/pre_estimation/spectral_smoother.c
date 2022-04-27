@@ -34,13 +34,12 @@ struct SpectralSmoother {
   uint32_t real_spectrum_size;
   float adaptive_coefficient;
   float previous_adaptive_coefficient;
+  TimeSmoothingType type;
 
   float *noise_spectrum;
-
   float *smoothed_spectrum;
   float *smoothed_spectrum_previous;
 
-  TimeSmoothingType type;
   TransientDetector *transient_detection;
 };
 
@@ -68,11 +67,11 @@ SpectralSmoother *spectral_smoothing_initialize(const uint32_t fft_size,
 }
 
 void spectral_smoothing_free(SpectralSmoother *self) {
+  transient_detector_free(self->transient_detection);
+
   free(self->noise_spectrum);
   free(self->smoothed_spectrum);
   free(self->smoothed_spectrum_previous);
-
-  transient_detector_free(self->transient_detection);
 
   free(self);
 }

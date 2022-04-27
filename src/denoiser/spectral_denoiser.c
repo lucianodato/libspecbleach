@@ -59,7 +59,6 @@ typedef struct SbSpectralDenoiser {
   NoiseProfile *noise_profile;
   SpectralFeatures *spectral_features;
   DenoiseMixer *mixer;
-
   NoiseScalingCriterias *noise_scaling_criteria;
   SpectralSmoother *spectrum_smoothing;
 } SbSpectralDenoiser;
@@ -118,6 +117,7 @@ void spectral_denoiser_free(SpectralProcessorHandle instance) {
   SbSpectralDenoiser *self = (SbSpectralDenoiser *)instance;
 
   noise_estimation_free(self->noise_estimator);
+  noise_profile_free(self->noise_profile);
   spectral_features_free(self->spectral_features);
   spectral_smoothing_free(self->spectrum_smoothing);
   noise_scaling_criterias_free(self->noise_scaling_criteria);

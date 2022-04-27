@@ -38,8 +38,8 @@ struct AbsoluteHearingThresholds {
 
   SpectralFeatures *spectral_features;
   FftTransform *fft_transform;
-  SpectrumType spectrum_type;
 
+  SpectrumType spectrum_type;
   uint32_t fft_size;
   uint32_t real_spectrum_size;
   uint32_t sample_rate;

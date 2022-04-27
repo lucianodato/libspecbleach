@@ -26,11 +26,11 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <string.h>
 
 struct PostFilter {
-  float *postfilter;
   FftTransform *gain_fft_spectrum;
   FftTransform *postfilter_fft_spectrum;
   bool preserve_minimun;
 
+  float *postfilter;
   float *pf_gain_spectrum;
 
   float snr_threshold;

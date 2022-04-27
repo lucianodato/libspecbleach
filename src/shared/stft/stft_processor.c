@@ -73,12 +73,12 @@ StftProcessor *stft_processor_initialize(const uint32_t sample_rate,
 }
 
 void stft_processor_free(StftProcessor *self) {
+  fft_transform_free(self->fft_transform);
+  stft_buffer_free(self->stft_buffer);
+  stft_window_free(self->stft_windows);
+
   free(self->output_accumulator);
   free(self->tmp_output);
-
-  stft_buffer_free(self->stft_buffer);
-  fft_transform_free(self->fft_transform);
-  stft_window_free(self->stft_windows);
 
   free(self);
 }
