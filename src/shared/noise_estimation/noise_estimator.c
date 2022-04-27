@@ -43,7 +43,10 @@ NoiseEstimator *noise_estimation_initialize(const uint32_t fft_size,
   return self;
 }
 
-void noise_estimation_free(NoiseEstimator *self) { free(self); }
+void noise_estimation_free(NoiseEstimator *self) {
+  noise_profile_free(self->noise_profile);
+  free(self);
+}
 
 bool noise_estimation_run(NoiseEstimator *self, float *signal_spectrum) {
   if (!self || !signal_spectrum) {

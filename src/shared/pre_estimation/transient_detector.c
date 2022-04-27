@@ -28,11 +28,11 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 struct TransientDetector {
   uint32_t fft_size;
   uint32_t real_spectrum_size;
-
-  float *previous_spectrum;
   float rolling_mean;
   bool transient_present;
   uint32_t window_count;
+
+  float *previous_spectrum;
 };
 
 TransientDetector *transient_detector_initialize(const uint32_t fft_size) {

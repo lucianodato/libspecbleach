@@ -113,22 +113,22 @@ static void compute_mapping_spectrum(CriticalBands *self) {
   switch (self->type) {
   case BARK_SCALE: {
     self->current_critical_bands = (float *)bark_bands;
-    self->number_bands = sizeof(bark_bands) / sizeof(float) + 1U;
+    self->number_bands = sizeof(bark_bands) / sizeof(float);
     break;
   }
   case MEL_SCALE: {
     self->current_critical_bands = (float *)mel_bands;
-    self->number_bands = sizeof(mel_bands) / sizeof(float) + 1U;
+    self->number_bands = sizeof(mel_bands) / sizeof(float);
     break;
   }
   case OPUS_SCALE: {
     self->current_critical_bands = (float *)opus_bands;
-    self->number_bands = sizeof(opus_bands) / sizeof(float) + 1U;
+    self->number_bands = sizeof(opus_bands) / sizeof(float);
     break;
   }
   case OCTAVE_SCALE: {
     self->current_critical_bands = (float *)octave_bands;
-    self->number_bands = sizeof(octave_bands) / sizeof(float) + 1U;
+    self->number_bands = sizeof(octave_bands) / sizeof(float);
     break;
   }
   default:

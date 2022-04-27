@@ -55,8 +55,10 @@ DenoiseMixer *denoise_mixer_initialize(uint32_t fft_size, uint32_t sample_rate,
 
 void denoise_mixer_free(DenoiseMixer *self) {
   spectral_whitening_free(self->whitener);
+
   free(self->residual_spectrum);
   free(self->denoised_spectrum);
+
   free(self);
 }
 

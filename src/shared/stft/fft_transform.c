@@ -48,13 +48,15 @@ FftTransform *fft_transform_initialize(const uint32_t sample_rate,
   FftTransform *self = (FftTransform *)calloc(1U, sizeof(FftTransform));
 
   self->padding_type = padding_type;
-  self->frame_size = (uint32_t)((frame_size_ms / 1000.F) * (float)sample_rate);
   self->zeropadding_amount = zeropadding_amount;
+  self->frame_size = (uint32_t)((frame_size_ms / 1000.F) * (float)sample_rate);
 
   self->fft_size = calculate_fft_size(self);
 
-  self->input_fft_buffer = (float *)calloc(self->fft_size, sizeof(float));
-  self->output_fft_buffer = (float *)calloc(self->fft_size, sizeof(float));
+  self->input_fft_buffer =
+      (float *)fftwf_malloc(sizeof(float) * self->fft_size);
+  self->output_fft_buffer =
+      (float *)fftwf_malloc(sizeof(float) * self->fft_size);
   self->forward =
       fftwf_plan_r2r_1d((int)self->fft_size, self->input_fft_buffer,
                         self->output_fft_buffer, FFTW_FORWARD, FFTW_ESTIMATE);
@@ -71,8 +73,10 @@ FftTransform *fft_transform_initialize_bins(const uint32_t fft_size) {
   self->fft_size = fft_size;
   self->frame_size = self->fft_size;
 
-  self->input_fft_buffer = (float *)calloc(self->fft_size, sizeof(float));
-  self->output_fft_buffer = (float *)calloc(self->fft_size, sizeof(float));
+  self->input_fft_buffer =
+      (float *)fftwf_malloc(sizeof(float) * self->fft_size);
+  self->output_fft_buffer =
+      (float *)fftwf_malloc(sizeof(float) * self->fft_size);
   self->forward =
       fftwf_plan_r2r_1d((int)self->fft_size, self->input_fft_buffer,
                         self->output_fft_buffer, FFTW_FORWARD, FFTW_ESTIMATE);
@@ -105,8 +109,8 @@ static uint32_t calculate_fft_size(FftTransform *self) {
 }
 
 void fft_transform_free(FftTransform *self) {
-  free(self->input_fft_buffer);
-  free(self->output_fft_buffer);
+  fftwf_free(self->input_fft_buffer);
+  fftwf_free(self->output_fft_buffer);
   fftwf_destroy_plan(self->forward);
   fftwf_destroy_plan(self->backward);
 

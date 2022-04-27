@@ -51,16 +51,16 @@ struct NoiseScalingCriterias {
   float higher_snr;
   float alpha_minimun;
   float beta_minimun;
+  CriticalBandIndexes band_indexes;
+  CriticalBandType critical_band_type;
 
   float *masking_thresholds;
   float *clean_signal_estimation;
+  float *critical_bands_noise_profile;
+  float *critical_bands_reference_spectrum;
 
   MaskingEstimator *masking_estimation;
   CriticalBands *critical_bands;
-  CriticalBandIndexes band_indexes;
-  CriticalBandType critical_band_type;
-  float *bark_noise_profile;
-  float *bark_reference_spectrum;
 };
 
 NoiseScalingCriterias *noise_scaling_criterias_initialize(
@@ -89,9 +89,9 @@ NoiseScalingCriterias *noise_scaling_criterias_initialize(
   self->number_critical_bands =
       get_number_of_critical_bands(self->critical_bands);
 
-  self->bark_noise_profile =
+  self->critical_bands_noise_profile =
       (float *)calloc(self->number_critical_bands, sizeof(float));
-  self->bark_reference_spectrum =
+  self->critical_bands_reference_spectrum =
       (float *)calloc(self->number_critical_bands, sizeof(float));
 
   self->masking_thresholds =
@@ -108,8 +108,8 @@ void noise_scaling_criterias_free(NoiseScalingCriterias *self) {
 
   free(self->clean_signal_estimation);
   free(self->masking_thresholds);
-  free(self->bark_noise_profile);
-  free(self->bark_reference_spectrum);
+  free(self->critical_bands_noise_profile);
+  free(self->critical_bands_reference_spectrum);
 
   free(self);
 }
@@ -149,9 +149,9 @@ static void a_posteriori_snr_critical_bands(NoiseScalingCriterias *self,
                                             NoiseScalingParameters parameters) {
 
   compute_critical_bands_spectrum(self->critical_bands, noise_spectrum,
-                                  self->bark_noise_profile);
+                                  self->critical_bands_noise_profile);
   compute_critical_bands_spectrum(self->critical_bands, spectrum,
-                                  self->bark_reference_spectrum);
+                                  self->critical_bands_reference_spectrum);
 
   float a_posteriori_snr = 20.F;
   float oversustraction_factor = 1.F;
@@ -160,8 +160,9 @@ static void a_posteriori_snr_critical_bands(NoiseScalingCriterias *self,
 
     self->band_indexes = get_band_indexes(self->critical_bands, j);
 
-    a_posteriori_snr = 10.F * log10f(self->bark_reference_spectrum[j] /
-                                     self->bark_noise_profile[j]);
+    a_posteriori_snr =
+        10.F * log10f(self->critical_bands_reference_spectrum[j] /
+                      self->critical_bands_noise_profile[j]);
 
     if (a_posteriori_snr >= self->lower_snr &&
         a_posteriori_snr <= self->higher_snr) {
