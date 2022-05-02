@@ -50,6 +50,7 @@ StftBuffer *stft_buffer_initialize(const uint32_t stft_frame_size,
 void stft_buffer_free(StftBuffer *self) {
   free(self->in_fifo);
   free(self->out_fifo);
+
   free(self);
 }
 
@@ -61,10 +62,11 @@ bool stft_buffer_fill(StftBuffer *self, const float input_sample,
 
   self->in_fifo[self->read_position] = input_sample;
   *output_sample = self->out_fifo[self->read_position - self->start_position];
-  self->read_position++;
+  self->read_position++; // Advance
 
   // Is it full?
   if (self->read_position == self->stft_frame_size) {
+    self->read_position = self->start_position; // Reset read
     return true;
   }
 
@@ -76,8 +78,6 @@ bool stft_buffer_advance_block(StftBuffer *self,
   if (!reconstructed_signal) {
     return false;
   }
-
-  self->read_position = self->start_position;
 
   memcpy(self->in_fifo, &self->in_fifo[self->block_step],
          sizeof(float) * self->start_position);

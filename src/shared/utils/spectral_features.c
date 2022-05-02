@@ -51,6 +51,7 @@ void spectral_features_free(SpectralFeatures *self) {
   free(self->power_spectrum);
   free(self->phase_spectrum);
   free(self->magnitude_spectrum);
+
   free(self);
 }
 

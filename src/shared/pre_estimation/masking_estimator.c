@@ -43,8 +43,8 @@ struct MaskingEstimator {
   CriticalBandIndexes band_indexes;
 
   float *spectral_spreading_function;
-  float *unity_gain_bark_spectrum;
-  float *spreaded_unity_gain_bark_spectrum;
+  float *unity_gain_critical_bands_spectrum;
+  float *spreaded_unity_gain_critical_bands_spectrum;
   float *threshold_j;
   float *masking_offset;
   float *spreaded_spectrum;
@@ -71,9 +71,9 @@ MaskingEstimator *masking_estimation_initialize(const uint32_t fft_size,
       (float *)calloc(((size_t)self->number_critical_bands *
                        (size_t)self->number_critical_bands),
                       sizeof(float));
-  self->unity_gain_bark_spectrum =
+  self->unity_gain_critical_bands_spectrum =
       (float *)calloc(self->number_critical_bands, sizeof(float));
-  self->spreaded_unity_gain_bark_spectrum =
+  self->spreaded_unity_gain_critical_bands_spectrum =
       (float *)calloc(self->number_critical_bands, sizeof(float));
   self->threshold_j =
       (float *)calloc(self->number_critical_bands, sizeof(float));
@@ -88,11 +88,13 @@ MaskingEstimator *masking_estimation_initialize(const uint32_t fft_size,
       self->sample_rate, self->fft_size, spectrum_type);
 
   compute_spectral_spreading_function(self);
-  initialize_spectrum_with_value(self->unity_gain_bark_spectrum,
+  initialize_spectrum_with_value(self->unity_gain_critical_bands_spectrum,
                                  self->number_critical_bands, 1.F);
   direct_matrix_to_vector_spectral_convolution(
-      self->spectral_spreading_function, self->unity_gain_bark_spectrum,
-      self->spreaded_unity_gain_bark_spectrum, self->number_critical_bands);
+      self->spectral_spreading_function,
+      self->unity_gain_critical_bands_spectrum,
+      self->spreaded_unity_gain_critical_bands_spectrum,
+      self->number_critical_bands);
 
   return self;
 }
@@ -102,8 +104,8 @@ void masking_estimation_free(MaskingEstimator *self) {
   critical_bands_free(self->critical_bands);
 
   free(self->spectral_spreading_function);
-  free(self->unity_gain_bark_spectrum);
-  free(self->spreaded_unity_gain_bark_spectrum);
+  free(self->unity_gain_critical_bands_spectrum);
+  free(self->spreaded_unity_gain_critical_bands_spectrum);
   free(self->threshold_j);
   free(self->masking_offset);
   free(self->spreaded_spectrum);
@@ -144,7 +146,7 @@ bool compute_masking_thresholds(MaskingEstimator *self, const float *spectrum,
     self->threshold_j[j] =
         powf(10.F, log10f(self->spreaded_spectrum[j]) -
                        (self->masking_offset[j] / 10.F)) -
-        (10.F * log10f(self->spreaded_unity_gain_bark_spectrum[j]));
+        (10.F * log10f(self->spreaded_unity_gain_critical_bands_spectrum[j]));
 
     self->band_indexes = get_band_indexes(self->critical_bands, j);
 

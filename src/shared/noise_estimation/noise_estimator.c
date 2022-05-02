@@ -44,7 +44,9 @@ NoiseEstimator *noise_estimation_initialize(const uint32_t fft_size,
 }
 
 void noise_estimation_free(NoiseEstimator *self) {
-  noise_profile_free(self->noise_profile);
+
+  // Don't free noise profile used as reference here
+
   free(self);
 }
 

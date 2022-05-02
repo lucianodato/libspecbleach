@@ -44,6 +44,7 @@ NoiseProfile *noise_profile_initialize(const uint32_t size) {
 
 void noise_profile_free(NoiseProfile *self) {
   free(self->noise_profile);
+
   free(self);
 }
 

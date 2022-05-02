@@ -60,6 +60,7 @@ SpectralWhitening *spectral_whitening_initialize(const uint32_t fft_size,
 void spectral_whitening_free(SpectralWhitening *self) {
   free(self->whitened_residual_spectrum);
   free(self->residual_max_spectrum);
+
   free(self);
 }
 
