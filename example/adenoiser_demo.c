@@ -28,7 +28,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <sndfile.h>
 #include <stdlib.h>
 
-// This is not a deliverate value. The library handles any amount passed through
+// This is not a deliberate value. The library handles any amount passed through
 // a circular buffer
 #define BLOCK_SIZE 512
 
