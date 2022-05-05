@@ -37,8 +37,8 @@ typedef struct SpectralBleachParameters {
                           // attenuated. It goes from 0 dB to 20 dB
   float smoothing_factor; // Percentage of smoothing to apply. It goes from 0 to
                           // 100 percent
-  float noise_rescale;    // Strenght in which the reduction will be applied. It
-                       // can be a possitive or negative dB value in between 0
+  float noise_rescale;    // Strength in which the reduction will be applied. It
+                       // can be a positive or negative dB value in between 0
                        // dB and 12 dB
 } SpectralBleachParameters;
 
