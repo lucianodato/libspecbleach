@@ -70,6 +70,7 @@ void specbleach_adaptive_free(SpectralBleachHandle instance) {
 
   spectral_adaptive_denoiser_free(self->adaptive_spectral_denoiser);
   stft_processor_free(self->stft_processor);
+
   free(self);
 }
 

@@ -34,7 +34,7 @@ struct StftProcessor {
   uint32_t fft_size;
   uint32_t frame_size;
   float *output_accumulator;
-  float *tmp_output;
+  float *tmp_buffer;
 
   FftTransform *fft_transform;
   StftBuffer *stft_buffer;
@@ -60,8 +60,8 @@ StftProcessor *stft_processor_initialize(const uint32_t sample_rate,
   self->input_latency = self->frame_size - self->hop;
 
   self->output_accumulator =
-      (float *)calloc((size_t)self->frame_size * 2U, sizeof(float));
-  self->tmp_output = (float *)calloc((size_t)self->frame_size, sizeof(float));
+      (float *)calloc(self->frame_size * 2L, sizeof(float));
+  self->tmp_buffer = (float *)calloc(self->frame_size, sizeof(float));
 
   self->stft_buffer =
       stft_buffer_initialize(self->frame_size, self->input_latency, self->hop);
@@ -73,12 +73,12 @@ StftProcessor *stft_processor_initialize(const uint32_t sample_rate,
 }
 
 void stft_processor_free(StftProcessor *self) {
-  fft_transform_free(self->fft_transform);
   stft_buffer_free(self->stft_buffer);
   stft_window_free(self->stft_windows);
+  fft_transform_free(self->fft_transform);
 
   free(self->output_accumulator);
-  free(self->tmp_output);
+  free(self->tmp_buffer);
 
   free(self);
 }
@@ -92,7 +92,10 @@ bool stft_processor_run(StftProcessor *self, const uint32_t number_of_samples,
   }
 
   for (uint32_t k = 0U; k < number_of_samples; k++) {
-    if (stft_buffer_fill(self->stft_buffer, input[k], &output[k])) {
+    // Start filling buffer sample per sample
+    output[k] = stft_buffer_fill(self->stft_buffer, input[k]);
+
+    if (is_buffer_full(self->stft_buffer)) {
       fft_load_input_samples(self->fft_transform,
                              get_full_buffer_block(self->stft_buffer));
 
@@ -114,11 +117,11 @@ bool stft_processor_run(StftProcessor *self, const uint32_t number_of_samples,
                         get_fft_input_buffer(self->fft_transform),
                         OUTPUT_WINDOW);
 
-      fft_get_output_samples(self->fft_transform, self->tmp_output);
+      fft_get_output_samples(self->fft_transform, self->tmp_buffer);
 
       // STFT Overlap Add
       for (uint32_t k = 0U; k < self->frame_size; k++) {
-        self->output_accumulator[k] += self->tmp_output[k];
+        self->output_accumulator[k] += self->tmp_buffer[k];
       }
 
       stft_buffer_advance_block(self->stft_buffer, self->output_accumulator);
