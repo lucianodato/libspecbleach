@@ -36,7 +36,7 @@ FftTransform *fft_transform_initialize(uint32_t frame_size,
                                        ZeroPaddingType padding_type,
                                        uint32_t zeropadding_amount);
 FftTransform *fft_transform_initialize_bins(uint32_t fft_size);
-void fft_transform_free(FftTransform *self, bool clean_fftw);
+void fft_transform_free(FftTransform *self);
 bool fft_load_input_samples(FftTransform *self, const float *input);
 bool fft_get_output_samples(FftTransform *self, float *output);
 uint32_t get_fft_size(FftTransform *self);

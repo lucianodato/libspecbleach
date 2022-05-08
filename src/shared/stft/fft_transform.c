@@ -106,14 +106,11 @@ static uint32_t calculate_fft_size(FftTransform *self) {
   }
 }
 
-void fft_transform_free(FftTransform *self, bool clean_fftw) {
+void fft_transform_free(FftTransform *self) {
   fftwf_free(self->input_fft_buffer);
   fftwf_free(self->output_fft_buffer);
   fftwf_destroy_plan(self->forward);
   fftwf_destroy_plan(self->backward);
-  if (clean_fftw) {
-    fftwf_cleanup();
-  }
 
   free(self);
 }
