@@ -86,7 +86,7 @@ absolute_hearing_thresholds_initialize(const uint32_t sample_rate,
 }
 
 void absolute_hearing_thresholds_free(AbsoluteHearingThresholds *self) {
-  fft_transform_free(self->fft_transform, false);
+  fft_transform_free(self->fft_transform);
   spectral_features_free(self->spectral_features);
 
   free(self->sinewave);
