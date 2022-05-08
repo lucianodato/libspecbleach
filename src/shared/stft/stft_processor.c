@@ -50,11 +50,11 @@ StftProcessor *stft_processor_initialize(const uint32_t sample_rate,
                                          WindowTypes output_window) {
   StftProcessor *self = (StftProcessor *)calloc(1U, sizeof(StftProcessor));
 
-  self->fft_transform = fft_transform_initialize(
-      sample_rate, stft_frame_size, padding_type, zeropadding_amount);
-
+  self->frame_size =
+      (uint32_t)((stft_frame_size / 1000.F) * (float)sample_rate);
+  self->fft_transform = fft_transform_initialize(self->frame_size, padding_type,
+                                                 zeropadding_amount);
   self->fft_size = get_fft_size(self->fft_transform);
-  self->frame_size = get_frame_size(self->fft_transform);
   self->overlap_factor = overlap_factor;
   self->hop = self->frame_size / self->overlap_factor;
   self->input_latency = self->frame_size - self->hop;

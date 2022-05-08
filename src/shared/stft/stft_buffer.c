@@ -41,9 +41,8 @@ StftBuffer *stft_buffer_initialize(const uint32_t stft_frame_size,
   self->start_position = start_position;
   self->block_step = block_step;
   self->read_position = self->start_position;
-  self->in_fifo = (float *)calloc((size_t)self->stft_frame_size, sizeof(float));
-  self->out_fifo =
-      (float *)calloc((size_t)self->stft_frame_size, sizeof(float));
+  self->in_fifo = (float *)calloc(self->stft_frame_size, sizeof(float));
+  self->out_fifo = (float *)calloc(self->stft_frame_size, sizeof(float));
 
   return self;
 }
@@ -83,8 +82,8 @@ bool stft_buffer_advance_block(StftBuffer *self,
 
   self->read_position = self->start_position; // Reset read
 
-  memcpy(self->in_fifo, &self->in_fifo[self->block_step],
-         sizeof(float) * self->start_position);
+  memmove(self->in_fifo, &self->in_fifo[self->block_step],
+          sizeof(float) * self->start_position);
 
   memcpy(self->out_fifo, reconstructed_signal,
          sizeof(float) * self->block_step);

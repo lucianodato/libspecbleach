@@ -43,15 +43,14 @@ struct FftTransform {
   float *output_fft_buffer;
 };
 
-FftTransform *fft_transform_initialize(const uint32_t sample_rate,
-                                       const float frame_size_ms,
+FftTransform *fft_transform_initialize(const uint32_t frame_size,
                                        const ZeroPaddingType padding_type,
                                        const uint32_t zeropadding_amount) {
   FftTransform *self = (FftTransform *)calloc(1U, sizeof(FftTransform));
 
   self->padding_type = padding_type;
   self->zeropadding_amount = zeropadding_amount;
-  self->frame_size = (uint32_t)((frame_size_ms / 1000.F) * (float)sample_rate);
+  self->frame_size = frame_size;
 
   self->fft_size = calculate_fft_size(self);
 
@@ -112,12 +111,12 @@ void fft_transform_free(FftTransform *self) {
   fftwf_free(self->output_fft_buffer);
   fftwf_destroy_plan(self->forward);
   fftwf_destroy_plan(self->backward);
+  // fftwf_cleanup();
 
   free(self);
 }
 
 uint32_t get_fft_size(FftTransform *self) { return self->fft_size; }
-uint32_t get_frame_size(FftTransform *self) { return self->frame_size; }
 uint32_t get_fft_real_spectrum_size(FftTransform *self) {
   return self->fft_size / 2U + 1U;
 }
