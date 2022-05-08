@@ -35,11 +35,18 @@ typedef struct SpectralBleachParameters {
                           // processing. It's either true or false
   float reduction_amount; // Sets the amount of dBs that the noise will be
                           // attenuated. It goes from 0 dB to 20 dB
-  float smoothing_factor; // Percentage of smoothing to apply. It goes from 0 to
-                          // 100 percent
-  float noise_rescale;    // Strength in which the reduction will be applied. It
-                       // can be a positive or negative dB value in between 0
-                       // dB and 12 dB
+  float smoothing_factor; // Percentage of smoothing to apply. Averages the
+                          // reduction calculation frame per frame so the rate
+                          // of change is less resulting in less musical noise
+                          // but if too strong it can blur transient and reduce
+                          // high frequencies. It goes from 0 to 100 percent
+  float
+      noise_rescale; // Strength in which the reduction will be applied. It uses
+                     // the masking thresholds of the signal to determine where
+                     // in the spectrum the reduction needs to be stronger. This
+                     // parameter scales how much in each of the frequencies the
+                     // reduction is going to be applied. It can be a positive
+                     // or negative dB value in between 0 dB and 12 dB
 } SpectralBleachParameters;
 
 /**
