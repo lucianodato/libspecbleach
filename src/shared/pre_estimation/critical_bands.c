@@ -24,20 +24,20 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <math.h>
 #include <stdlib.h>
 
-const static float bark_bands[24] = {
+static const float bark_bands[24] = {
     100.F,  200.F,  300.F,  400.F,  510.F,  630.F,  770.F,   920.F,
     1080.F, 1270.F, 1480.F, 1720.F, 2000.F, 2320.F, 2700.F,  3150.F,
     3700.F, 4400.F, 5300.F, 6400.F, 7700.F, 9500.F, 12000.F, 15500.F};
-const static float opus_bands[20] = {200.F,  400.F,  600.F,  800.F,   1000.F,
+static const float opus_bands[20] = {200.F,  400.F,  600.F,  800.F,   1000.F,
                                      1200.F, 1400.F, 1600.F, 2000.F,  2400.F,
                                      2800.F, 3200.F, 4000.F, 4800.F,  5600.F,
                                      6800.F, 8000.F, 9600.F, 12000.F, 15600.F};
-const static float mel_bands[33] = {
+static const float mel_bands[33] = {
     250.F,  500.F,  750.F,  1000.F, 1250.F, 1500.F, 1750.F, 2000.F,
     2250.F, 2500.F, 2750.F, 3000.F, 3250.F, 3500.F, 3750.F, 4000.F,
     4250.F, 4500.F, 4750.F, 5000.F, 5250.F, 5500.F, 5750.F, 6000.F,
     6250.F, 6500.F, 6750.F, 7000.F, 7250.F, 7500.F, 7750.F, 8000.F};
-const static float octave_bands[10] = {31.5F,  63.F,   125.F,  250.F,  500.F,
+static const float octave_bands[10] = {31.5F,  63.F,   125.F,  250.F,  500.F,
                                        1000.F, 2000.F, 4000.F, 8000.F, 16000.F};
 
 static void compute_mapping_spectrum(CriticalBands *self);
@@ -78,7 +78,7 @@ CriticalBands *critical_bands_initialize(const uint32_t sample_rate,
   compute_band_indexes(self);
 
   return self;
-};
+}
 
 void critical_bands_free(CriticalBands *self) {
   free(self->band_delimiter_bins);

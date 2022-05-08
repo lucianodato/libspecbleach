@@ -23,14 +23,14 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <math.h>
 #include <stdlib.h>
 
-inline float sanitize_denormal(float value) {
+float sanitize_denormal(float value) {
   if (!isnormal(value)) {
     value = 0.F;
   }
   return value;
 }
 
-inline float from_db_to_coefficient(const float value_db) {
+float from_db_to_coefficient(const float value_db) {
   return expf(value_db / 10.F * logf(10.F));
 }
 
