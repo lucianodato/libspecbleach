@@ -116,8 +116,9 @@ SpectralProcessorHandle spectral_denoiser_initialize(
 void spectral_denoiser_free(SpectralProcessorHandle instance) {
   SbSpectralDenoiser *self = (SbSpectralDenoiser *)instance;
 
+  // Don't free noise profile used as reference here
+
   noise_estimation_free(self->noise_estimator);
-  noise_profile_free(self->noise_profile);
   spectral_features_free(self->spectral_features);
   spectral_smoothing_free(self->spectrum_smoothing);
   noise_scaling_criterias_free(self->noise_scaling_criteria);
@@ -128,6 +129,7 @@ void spectral_denoiser_free(SpectralProcessorHandle instance) {
   free(self->alpha);
   free(self->beta);
   free(self->noise_spectrum);
+
   free(self);
 }
 

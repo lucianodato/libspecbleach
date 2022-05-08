@@ -58,8 +58,8 @@ PostFilter *postfilter_initialize(const uint32_t fft_size) {
 }
 
 void postfilter_free(PostFilter *self) {
-  fft_transform_free(self->gain_fft_spectrum);
-  fft_transform_free(self->postfilter_fft_spectrum);
+  fft_transform_free(self->gain_fft_spectrum, false);
+  fft_transform_free(self->postfilter_fft_spectrum, false);
 
   free(self->postfilter);
   free(self->pf_gain_spectrum);

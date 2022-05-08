@@ -50,25 +50,28 @@ StftBuffer *stft_buffer_initialize(const uint32_t stft_frame_size,
 void stft_buffer_free(StftBuffer *self) {
   free(self->in_fifo);
   free(self->out_fifo);
+
   free(self);
 }
 
-bool stft_buffer_fill(StftBuffer *self, const float input_sample,
-                      float *output_sample) {
-  if (!output_sample) {
-    return false;
-  }
-
-  self->in_fifo[self->read_position] = input_sample;
-  *output_sample = self->out_fifo[self->read_position - self->start_position];
-  self->read_position++;
-
-  // Is it full?
+bool is_buffer_full(StftBuffer *self) {
   if (self->read_position == self->stft_frame_size) {
     return true;
   }
 
   return false;
+}
+
+float stft_buffer_fill(StftBuffer *self, const float input_sample) {
+  float sample_value = 0.F;
+
+  self->in_fifo[self->read_position] = input_sample;
+  sample_value = self->out_fifo[self->read_position - self->start_position];
+  if (self->read_position < self->stft_frame_size) {
+    self->read_position++; // Advance
+  }
+
+  return sample_value;
 }
 
 bool stft_buffer_advance_block(StftBuffer *self,
@@ -77,10 +80,10 @@ bool stft_buffer_advance_block(StftBuffer *self,
     return false;
   }
 
-  self->read_position = self->start_position;
+  self->read_position = self->start_position; // Reset read
 
-  memcpy(self->in_fifo, &self->in_fifo[self->block_step],
-         sizeof(float) * self->start_position);
+  memmove(self->in_fifo, &self->in_fifo[self->block_step],
+          sizeof(float) * self->start_position);
 
   memcpy(self->out_fifo, reconstructed_signal,
          sizeof(float) * self->block_step);

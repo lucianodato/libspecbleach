@@ -54,6 +54,7 @@ TransientDetector *transient_detector_initialize(const uint32_t fft_size) {
 
 void transient_detector_free(TransientDetector *self) {
   free(self->previous_spectrum);
+
   free(self);
 }
 

@@ -27,6 +27,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <string.h>
 
 static uint32_t calculate_fft_size(FftTransform *self);
+static void allocate_fftw(FftTransform *self);
 
 struct FftTransform {
   fftwf_plan forward;
@@ -35,34 +36,27 @@ struct FftTransform {
   uint32_t fft_size;
   uint32_t frame_size;
   uint32_t zeropadding_amount;
+  uint32_t copy_position;
   ZeroPaddingType padding_type;
   uint32_t padding_amount;
   float *input_fft_buffer;
   float *output_fft_buffer;
 };
 
-FftTransform *fft_transform_initialize(const uint32_t sample_rate,
-                                       const float frame_size_ms,
+FftTransform *fft_transform_initialize(const uint32_t frame_size,
                                        const ZeroPaddingType padding_type,
                                        const uint32_t zeropadding_amount) {
   FftTransform *self = (FftTransform *)calloc(1U, sizeof(FftTransform));
 
   self->padding_type = padding_type;
   self->zeropadding_amount = zeropadding_amount;
-  self->frame_size = (uint32_t)((frame_size_ms / 1000.F) * (float)sample_rate);
+  self->frame_size = frame_size;
 
   self->fft_size = calculate_fft_size(self);
 
-  self->input_fft_buffer =
-      (float *)fftwf_malloc(sizeof(float) * self->fft_size);
-  self->output_fft_buffer =
-      (float *)fftwf_malloc(sizeof(float) * self->fft_size);
-  self->forward =
-      fftwf_plan_r2r_1d((int)self->fft_size, self->input_fft_buffer,
-                        self->output_fft_buffer, FFTW_FORWARD, FFTW_ESTIMATE);
-  self->backward =
-      fftwf_plan_r2r_1d((int)self->fft_size, self->output_fft_buffer,
-                        self->input_fft_buffer, FFTW_BACKWARD, FFTW_ESTIMATE);
+  self->copy_position = (self->fft_size / 2U) - (self->frame_size / 2U);
+
+  allocate_fftw(self);
 
   return self;
 }
@@ -73,18 +67,22 @@ FftTransform *fft_transform_initialize_bins(const uint32_t fft_size) {
   self->fft_size = fft_size;
   self->frame_size = self->fft_size;
 
+  allocate_fftw(self);
+
+  return self;
+}
+
+static void allocate_fftw(FftTransform *self) {
   self->input_fft_buffer =
-      (float *)fftwf_malloc(sizeof(float) * self->fft_size);
+      (float *)fftwf_malloc(self->fft_size * sizeof(float));
   self->output_fft_buffer =
-      (float *)fftwf_malloc(sizeof(float) * self->fft_size);
+      (float *)fftwf_malloc(self->fft_size * sizeof(float));
   self->forward =
       fftwf_plan_r2r_1d((int)self->fft_size, self->input_fft_buffer,
                         self->output_fft_buffer, FFTW_FORWARD, FFTW_ESTIMATE);
   self->backward =
       fftwf_plan_r2r_1d((int)self->fft_size, self->output_fft_buffer,
                         self->input_fft_buffer, FFTW_BACKWARD, FFTW_ESTIMATE);
-
-  return self;
 }
 
 static uint32_t calculate_fft_size(FftTransform *self) {
@@ -108,17 +106,19 @@ static uint32_t calculate_fft_size(FftTransform *self) {
   }
 }
 
-void fft_transform_free(FftTransform *self) {
+void fft_transform_free(FftTransform *self, bool clean_fftw) {
   fftwf_free(self->input_fft_buffer);
   fftwf_free(self->output_fft_buffer);
   fftwf_destroy_plan(self->forward);
   fftwf_destroy_plan(self->backward);
+  if (clean_fftw) {
+    fftwf_cleanup();
+  }
 
   free(self);
 }
 
 uint32_t get_fft_size(FftTransform *self) { return self->fft_size; }
-uint32_t get_frame_size(FftTransform *self) { return self->frame_size; }
 uint32_t get_fft_real_spectrum_size(FftTransform *self) {
   return self->fft_size / 2U + 1U;
 }
@@ -128,8 +128,11 @@ bool fft_load_input_samples(FftTransform *self, const float *input) {
     return false;
   }
 
-  memcpy(&self->input_fft_buffer[self->padding_amount / 2U], input,
-         sizeof(float) * self->frame_size);
+  // Copy centered values only
+  for (int i = (int)self->copy_position;
+       i < (self->frame_size + self->copy_position); i++) {
+    self->input_fft_buffer[i] = input[i - self->copy_position];
+  }
 
   return true;
 }
@@ -139,8 +142,11 @@ bool fft_get_output_samples(FftTransform *self, float *output) {
     return false;
   }
 
-  memcpy(output, &self->input_fft_buffer[self->padding_amount / 2U],
-         sizeof(float) * self->frame_size);
+  // Copy centered values only
+  for (int i = (int)self->copy_position;
+       i < (self->frame_size + self->copy_position); i++) {
+    output[i - self->copy_position] = self->input_fft_buffer[i];
+  }
 
   return true;
 }

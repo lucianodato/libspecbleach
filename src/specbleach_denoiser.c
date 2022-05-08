@@ -81,6 +81,7 @@ void specbleach_free(SpectralBleachHandle instance) {
   noise_profile_free(self->noise_profile);
   spectral_denoiser_free(self->spectral_denoiser);
   stft_processor_free(self->stft_processor);
+
   free(self);
 }
 

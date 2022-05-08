@@ -37,16 +37,27 @@ typedef struct SpectralBleachParameters {
                           // processing. It's either true or false
   float reduction_amount; // Sets the amount of dBs that the noise will be
                           // attenuated. It goes from 0 dB to 40 dB
-  float smoothing_factor; // Percentage of smoothing to apply. It goes from 0 to
-                          // 100 percent
+  float smoothing_factor; // Percentage of smoothing to apply. Averages the
+                          // reduction calculation frame per frame so the rate
+                          // of change is less resulting in less musical noise
+                          // but if too strong it can blur transient and reduce
+                          // high frequencies. It goes from 0 to 100 percent
   bool transient_protection; // Enables or disables the transient protection
-                             // when smoothing_factor is being used.
+                             // when smoothing_factor is being used. This can
+                             // help to preserve transient content when
+                             // smoothing is strong.
   float whitening_factor; // Percentage of whitening that is going to be applied
-                          // to the residue of the reduction. It goes from 0 to
-                          // 100 percent
-  float noise_rescale;    // Strenght in which the reduction will be applied. It
-                       // can be a possitive or negative dB value in between 0
-                       // dB and 12 dB
+                          // to the residue of the reduction. It modifies the
+                          // noise floor to be more like white noise. This can
+                          // help hide musical noise when the noise is colored.
+                          // It goes from 0 to 100 percent
+  float
+      noise_rescale; // Strength in which the reduction will be applied. It uses
+                     // the masking thresholds of the signal to determine where
+                     // in the spectrum the reduction needs to be stronger. This
+                     // parameter scales how much in each of the frequencies the
+                     // reduction is going to be applied. It can be a positive
+                     // or negative dB value in between 0 dB and 12 dB
 } SpectralBleachParameters;
 
 /**

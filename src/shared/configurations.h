@@ -68,7 +68,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
   2.0F // 2 Power Subtraction / 1 Magnitude Subtraxtion / 0.5 Spectral
        // Subtraction
 
-// Oversubtraction criterias
+// Oversubtraction criteria
 #define ALPHA_MAX 6.F
 #define ALPHA_MIN 1.F
 #define BETA_MAX 0.01F

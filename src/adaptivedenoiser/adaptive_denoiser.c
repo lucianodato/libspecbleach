@@ -133,6 +133,7 @@ void spectral_adaptive_denoiser_free(SpectralProcessorHandle instance) {
   free(self->gain_spectrum);
   free(self->alpha);
   free(self->beta);
+
   free(self);
 }
 
@@ -164,8 +165,7 @@ bool spectral_adaptive_denoiser_run(SpectralProcessorHandle instance,
   louizou_estimator_run(self->adaptive_estimator, reference_spectrum,
                         self->noise_profile);
 
-  // Scale estimated noise profile for oversubtraction using a posteriori SNR
-  // piecewise function
+  // Scale estimated noise profile for oversubtraction
   NoiseScalingParameters oversubtraction_parameters = (NoiseScalingParameters){
       .oversubtraction =
           self->default_oversubtraction + self->parameters.noise_rescale,
