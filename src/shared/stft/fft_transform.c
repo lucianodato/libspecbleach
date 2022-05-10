@@ -126,7 +126,7 @@ bool fft_load_input_samples(FftTransform *self, const float *input) {
   }
 
   // Copy centered values only
-  for (int i = (int)self->copy_position;
+  for (uint32_t i = self->copy_position;
        i < (self->frame_size + self->copy_position); i++) {
     self->input_fft_buffer[i] = input[i - self->copy_position];
   }
@@ -140,7 +140,7 @@ bool fft_get_output_samples(FftTransform *self, float *output) {
   }
 
   // Copy centered values only
-  for (int i = (int)self->copy_position;
+  for (uint32_t i = self->copy_position;
        i < (self->frame_size + self->copy_position); i++) {
     output[i - self->copy_position] = self->input_fft_buffer[i];
   }

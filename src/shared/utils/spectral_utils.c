@@ -24,24 +24,23 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <float.h>
 #include <math.h>
 
-static inline float blackman(const uint32_t bin_index,
-                             const uint32_t fft_size) {
+static float blackman(const uint32_t bin_index, const uint32_t fft_size) {
   const float p = ((float)(bin_index)) / ((float)(fft_size));
   return sanitize_denormal(0.42F - (0.5F * cosf(2.F * M_PI * p)) +
                            (0.08F * cosf(4.F * M_PI * p)));
 }
 
-static inline float hanning(const uint32_t bin_index, const uint32_t fft_size) {
+static float hanning(const uint32_t bin_index, const uint32_t fft_size) {
   const float p = ((float)(bin_index)) / ((float)(fft_size));
   return sanitize_denormal(0.5F - (0.5F * cosf(2.F * M_PI * p)));
 }
 
-static inline float hamming(const uint32_t bin_index, const uint32_t fft_size) {
+static float hamming(const uint32_t bin_index, const uint32_t fft_size) {
   const float p = ((float)(bin_index)) / ((float)(fft_size));
   return sanitize_denormal(0.54F - (0.46F * cosf(2.F * M_PI * p)));
 }
 
-static inline float vorbis(const uint32_t bin_index, const uint32_t fft_size) {
+static float vorbis(const uint32_t bin_index, const uint32_t fft_size) {
   const float p = ((float)(bin_index)) / ((float)(fft_size));
   return sanitize_denormal(sinf(M_PI / 2.F * powf(sinf(M_PI * p), 2.F)));
 }
@@ -144,14 +143,13 @@ bool direct_matrix_to_vector_spectral_convolution(const float *matrix_spectum,
   return true;
 }
 
-inline float fft_bin_to_freq(const uint32_t bin_index,
-                             const uint32_t sample_rate,
-                             const uint32_t fft_size) {
+float fft_bin_to_freq(const uint32_t bin_index, const uint32_t sample_rate,
+                      const uint32_t fft_size) {
   return (float)bin_index * ((float)sample_rate / (float)fft_size);
 }
 
-inline uint32_t freq_to_fft_bin(const float freq, const uint32_t sample_rate,
-                                const uint32_t fft_size) {
+uint32_t freq_to_fft_bin(const float freq, const uint32_t sample_rate,
+                         const uint32_t fft_size) {
   return (uint32_t)(freq / ((float)sample_rate / (float)fft_size / 2.F));
 }
 
