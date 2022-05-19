@@ -40,18 +40,29 @@ example_sources = [
     'example/adenoiser_demo.c'
 ]
 
-# public header
-inc = include_directories('include')
+#get cpu architecture
+current_arch = build_machine.cpu_family()
+
+# shared c_args for libraries
+lib_c_args = []
+
+# Add default x86 and x86_64 optimizations
+if current_arch == 'x86' or current_arch == 'x86_64'
+    lib_c_args += ['-msse','-msse2','-mfpmath=sse','-ffast-math','-fomit-frame-pointer','-fno-finite-math-only']
+endif
 
 m_dep = meson.get_compiler('c').find_library('m', required : true)
 fftw_dep = dependency('fftw3f', required : true)
 dep = [m_dep, fftw_dep]
 
+# public header
+inc = include_directories('include')
 install_headers(specbleach_headers)
 
 libspecbleach = library('specbleach',
   shared_sources,
   specbleach_sources,
+  c_args: lib_c_args,
   include_directories : inc,
   dependencies: dep,
   install: true)
