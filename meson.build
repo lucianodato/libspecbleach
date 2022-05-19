@@ -1,4 +1,4 @@
-project('libspecbleach', 'c', version: '0.1.5',default_options: ['c_std=c99'])
+project('libspecbleach', 'c', version: '0.1.6',default_options: ['c_std=c99'])
 
 # Sources to compile
 shared_sources = [
