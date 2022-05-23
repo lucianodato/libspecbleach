@@ -53,6 +53,7 @@ typedef struct SbSpectralDenoiser {
   DenoiserParameters denoise_parameters;
   GainEstimationType gain_estimation_type;
   TimeSmoothingType time_smoothing_type;
+  NoiseEstimatorType noise_estimator_type;
 
   NoiseEstimator *noise_estimator;
   PostFilter *postfiltering;
@@ -81,6 +82,7 @@ SpectralProcessorHandle spectral_denoiser_initialize(
   self->default_undersubtraction = DEFAULT_UNDERSUBTRACTION;
   self->gain_estimation_type = GAIN_ESTIMATION_TYPE;
   self->time_smoothing_type = TIME_SMOOTHING_TYPE;
+  self->noise_estimator_type = NOISE_ESTIMATION_TYPE;
 
   self->gain_spectrum = (float *)calloc(self->fft_size, sizeof(float));
   initialize_spectrum_with_value(self->gain_spectrum, self->fft_size, 1.F);
@@ -92,8 +94,8 @@ SpectralProcessorHandle spectral_denoiser_initialize(
   self->noise_spectrum =
       (float *)calloc(self->real_spectrum_size, sizeof(float));
 
-  self->noise_estimator =
-      noise_estimation_initialize(self->fft_size, noise_profile);
+  self->noise_estimator = noise_estimation_initialize(
+      self->fft_size, self->noise_estimator_type, noise_profile);
 
   self->spectral_features =
       spectral_features_initialize(self->real_spectrum_size);

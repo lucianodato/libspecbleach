@@ -27,8 +27,16 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 typedef struct NoiseEstimator NoiseEstimator;
 
-NoiseEstimator *noise_estimation_initialize(uint32_t fft_size,
-                                            NoiseProfile *noise_profile);
+typedef enum NoiseEstimatorType {
+  ROLLING_MEAN = 0,
+  MAX = 1,
+  MIN = 2,
+} NoiseEstimatorType;
+
+NoiseEstimator *
+noise_estimation_initialize(uint32_t fft_size,
+                            NoiseEstimatorType noise_estimator_type,
+                            NoiseProfile *noise_profile);
 void noise_estimation_free(NoiseEstimator *self);
 bool noise_estimation_run(NoiseEstimator *self, float *signal_spectrum);
 

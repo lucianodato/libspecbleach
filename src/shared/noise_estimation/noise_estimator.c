@@ -27,16 +27,20 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 struct NoiseEstimator {
   uint32_t fft_size;
   uint32_t real_spectrum_size;
+  NoiseEstimatorType noise_estimator_type;
 
   NoiseProfile *noise_profile;
 };
 
-NoiseEstimator *noise_estimation_initialize(const uint32_t fft_size,
-                                            NoiseProfile *noise_profile) {
+NoiseEstimator *
+noise_estimation_initialize(const uint32_t fft_size,
+                            const NoiseEstimatorType noise_estimator_type,
+                            NoiseProfile *noise_profile) {
   NoiseEstimator *self = (NoiseEstimator *)calloc(1U, sizeof(NoiseEstimator));
 
   self->fft_size = fft_size;
   self->real_spectrum_size = self->fft_size / 2U + 1U;
+  self->noise_estimator_type = noise_estimator_type;
 
   self->noise_profile = noise_profile;
 
@@ -57,12 +61,26 @@ bool noise_estimation_run(NoiseEstimator *self, float *signal_spectrum) {
 
   float *noise_profile = get_noise_profile(self->noise_profile);
 
-  get_rolling_mean_spectrum(
-      noise_profile, signal_spectrum,
-      get_noise_profile_blocks_averaged(self->noise_profile),
-      self->real_spectrum_size);
+  switch (self->noise_estimator_type) {
+  case ROLLING_MEAN:
+    get_rolling_mean_spectrum(
+        noise_profile, signal_spectrum,
+        get_noise_profile_blocks_averaged(self->noise_profile),
+        self->real_spectrum_size);
+    increment_blocks_averaged(self->noise_profile);
+    break;
+  case MAX:
+    max_spectrum(noise_profile, signal_spectrum, self->real_spectrum_size);
+    set_noise_profile_available(self->noise_profile);
+    break;
+  case MIN:
+    min_spectrum(noise_profile, signal_spectrum, self->real_spectrum_size);
+    set_noise_profile_available(self->noise_profile);
+    break;
 
-  increment_blocks_averaged(self->noise_profile);
+  default:
+    break;
+  }
 
   return true;
 }

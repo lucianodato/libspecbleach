@@ -61,6 +61,9 @@ uint32_t get_noise_profile_size(NoiseProfile *self) {
 uint32_t get_noise_profile_blocks_averaged(NoiseProfile *self) {
   return self->noise_profile_blocks_averaged;
 }
+void set_noise_profile_available(NoiseProfile *self) {
+  self->noise_spectrum_available = true;
+}
 
 bool set_noise_profile(NoiseProfile *self, const float *noise_profile,
                        const uint32_t noise_profile_size,

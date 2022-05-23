@@ -125,6 +125,19 @@ bool min_spectrum(float *spectrum_one, const float *spectrum_two,
   return true;
 }
 
+bool max_spectrum(float *spectrum_one, const float *spectrum_two,
+                  const uint32_t spectrum_size) {
+  if (!spectrum_one || !spectrum_two || spectrum_size <= 0U) {
+    return false;
+  }
+
+  for (uint32_t k = 0; k < spectrum_size; k++) {
+    spectrum_one[k] = fmaxf(spectrum_one[k], spectrum_two[k]);
+  }
+
+  return true;
+}
+
 bool direct_matrix_to_vector_spectral_convolution(const float *matrix_spectum,
                                                   const float *spectrum,
                                                   float *out_spectrum,
