@@ -71,10 +71,6 @@ bool noise_estimation_run(NoiseEstimator *self,
     max_spectrum(noise_profile, signal_spectrum, self->real_spectrum_size);
     set_noise_profile_available(self->noise_profile);
     break;
-  case MIN:
-    min_spectrum(noise_profile, signal_spectrum, self->real_spectrum_size);
-    set_noise_profile_available(self->noise_profile);
-    break;
 
   default:
     break;

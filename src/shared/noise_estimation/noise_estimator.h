@@ -31,7 +31,6 @@ typedef enum NoiseEstimatorType {
   OFF = 0,
   ROLLING_MEAN = 1,
   MAX = 2,
-  MIN = 3,
 } NoiseEstimatorType;
 
 NoiseEstimator *noise_estimation_initialize(uint32_t fft_size,

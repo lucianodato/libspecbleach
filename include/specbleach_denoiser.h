@@ -32,10 +32,9 @@ typedef void *SpectralBleachHandle;
 
 typedef struct SpectralBleachParameters {
   int learn_noise; // Sets the processor in listening mode to capture the noise
-                   // profile. 0 is disabled, 1 will learn the average profile,
-                   // 2 will learn the max profile, 3 will learn the min
-                   // profile. For the average profile you need at least 5
-                   // frames of audio
+                   // profile. 0 is disabled, 1 will learn the average profile
+                   // and 2 will learn the max profile. For the average profile
+                   // you need at least 5 frames of audio
   bool residual_listen;   // Enables outputting the residue of the reduction
                           // processing. It's either true or false
   float reduction_amount; // Sets the amount of dBs that the noise will be
