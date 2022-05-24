@@ -82,7 +82,6 @@ SpectralProcessorHandle spectral_denoiser_initialize(
   self->default_undersubtraction = DEFAULT_UNDERSUBTRACTION;
   self->gain_estimation_type = GAIN_ESTIMATION_TYPE;
   self->time_smoothing_type = TIME_SMOOTHING_TYPE;
-  self->noise_estimator_type = NOISE_ESTIMATION_TYPE;
 
   self->gain_spectrum = (float *)calloc(self->fft_size, sizeof(float));
   initialize_spectrum_with_value(self->gain_spectrum, self->fft_size, 1.F);
@@ -94,8 +93,8 @@ SpectralProcessorHandle spectral_denoiser_initialize(
   self->noise_spectrum =
       (float *)calloc(self->real_spectrum_size, sizeof(float));
 
-  self->noise_estimator = noise_estimation_initialize(
-      self->fft_size, self->noise_estimator_type, noise_profile);
+  self->noise_estimator =
+      noise_estimation_initialize(self->fft_size, noise_profile);
 
   self->spectral_features =
       spectral_features_initialize(self->real_spectrum_size);
@@ -159,8 +158,11 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
       get_spectral_feature(self->spectral_features, fft_spectrum,
                            self->fft_size, self->spectrum_type);
 
-  if (self->denoise_parameters.learn_noise) {
-    noise_estimation_run(self->noise_estimator, reference_spectrum);
+  if ((NoiseEstimatorType)self->denoise_parameters.learn_noise != OFF) {
+    noise_estimation_run(
+        self->noise_estimator,
+        (NoiseEstimatorType)self->denoise_parameters.learn_noise,
+        reference_spectrum);
   } else if (is_noise_estimation_available(self->noise_profile)) {
     memcpy(self->noise_spectrum, get_noise_profile(self->noise_profile),
            self->real_spectrum_size * sizeof(float));

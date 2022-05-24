@@ -79,9 +79,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define LOWER_SNR 0.F
 #define HIGHER_SNR 20.F
 
-// Noise Estimator
-#define MIN_NUMBER_OF_WINDOWS_NOISE_AVERAGED 5
-
 // Adaptive Estimator
 #define N_SMOOTH 0.7F
 #define BETA_AT 0.8F
@@ -119,7 +116,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 // Masking
 #define CRITICAL_BANDS_TYPE OPUS_SCALE
 
-// Noise estimation
+// Noise Estimator
+#define MIN_NUMBER_OF_WINDOWS_NOISE_AVERAGED 5
 #define NOISE_ESTIMATION_TYPE ROLLING_MEAN
 
 // Noise Scaling strategy

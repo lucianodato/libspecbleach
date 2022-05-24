@@ -27,20 +27,16 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 struct NoiseEstimator {
   uint32_t fft_size;
   uint32_t real_spectrum_size;
-  NoiseEstimatorType noise_estimator_type;
 
   NoiseProfile *noise_profile;
 };
 
-NoiseEstimator *
-noise_estimation_initialize(const uint32_t fft_size,
-                            const NoiseEstimatorType noise_estimator_type,
-                            NoiseProfile *noise_profile) {
+NoiseEstimator *noise_estimation_initialize(const uint32_t fft_size,
+                                            NoiseProfile *noise_profile) {
   NoiseEstimator *self = (NoiseEstimator *)calloc(1U, sizeof(NoiseEstimator));
 
   self->fft_size = fft_size;
   self->real_spectrum_size = self->fft_size / 2U + 1U;
-  self->noise_estimator_type = noise_estimator_type;
 
   self->noise_profile = noise_profile;
 
@@ -54,14 +50,16 @@ void noise_estimation_free(NoiseEstimator *self) {
   free(self);
 }
 
-bool noise_estimation_run(NoiseEstimator *self, float *signal_spectrum) {
+bool noise_estimation_run(NoiseEstimator *self,
+                          const NoiseEstimatorType noise_estimator_type,
+                          float *signal_spectrum) {
   if (!self || !signal_spectrum) {
     return false;
   }
 
   float *noise_profile = get_noise_profile(self->noise_profile);
 
-  switch (self->noise_estimator_type) {
+  switch (noise_estimator_type) {
   case ROLLING_MEAN:
     get_rolling_mean_spectrum(
         noise_profile, signal_spectrum,
