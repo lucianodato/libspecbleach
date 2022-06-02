@@ -23,6 +23,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "general_utils.h"
 #include <float.h>
 #include <math.h>
+#include <stdlib.h>
 
 static float blackman(const uint32_t bin_index, const uint32_t fft_size) {
   const float p = ((float)(bin_index)) / ((float)(fft_size));
@@ -195,6 +196,56 @@ bool get_rolling_mean_spectrum(float *averaged_spectrum,
     } else {
       averaged_spectrum[k] += (current_spectrum[k] - averaged_spectrum[k]) /
                               (float)number_of_blocks;
+    }
+  }
+
+  return true;
+}
+
+static int min_max_comparator(const void *a, const void *b) {
+  float x = *(const float *)a;
+  float y = *(const float *)b;
+
+  return x >= y ? 1 : -1;
+}
+
+static float find_median(const float *array, uint32_t array_size) {
+  float median = 0.F;
+
+  if (array_size % 2 == 0) {
+    // if number of elements are even
+    median = (array[(array_size - 1U) / 2U] + array[array_size / 2U]) / 2.F;
+  } else {
+    // if number of elements are odd
+    median = array[array_size / 2U];
+  }
+
+  return median;
+}
+
+bool get_rolling_median_spectrum(float *median_spectrum,
+                                 const float *current_spectrum_buffer,
+                                 const uint32_t number_of_blocks,
+                                 const uint32_t spectrum_size) {
+  if (!median_spectrum || !current_spectrum_buffer || spectrum_size <= 0U) {
+    return false;
+  }
+
+  float tmp_buffer[number_of_blocks];
+
+  for (uint32_t i = 1U; i < spectrum_size; i++) {
+    for (uint32_t j = 0U; j < number_of_blocks; j++) {
+      tmp_buffer[j] = current_spectrum_buffer[j * spectrum_size + i];
+    }
+
+    // Sorting array
+    qsort(tmp_buffer, number_of_blocks, sizeof(float), min_max_comparator);
+
+    float median_of_buffer = find_median(tmp_buffer, number_of_blocks);
+
+    // Taking the max of the median
+    if (median_of_buffer > median_spectrum[i]) {
+      median_spectrum[i] = median_of_buffer;
     }
   }
 

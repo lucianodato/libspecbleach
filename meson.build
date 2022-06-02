@@ -6,6 +6,7 @@ shared_sources = [
     'src/shared/utils/spectral_features.c',
     'src/shared/utils/general_utils.c',
     'src/shared/utils/denoise_mixer.c',
+    'src/shared/utils/spectral_trailing_buffer.c',
     'src/shared/post_estimation/spectral_whitening.c',
     'src/shared/post_estimation/postfilter.c',
     'src/shared/pre_estimation/noise_scaling_criterias.c',
@@ -36,8 +37,12 @@ specbleach_headers = [
   'include/specbleach_denoiser.h',
 ]
 
+adaptive_example_sources = [
+    'example/adenoiser_demo.c',
+]
+
 example_sources = [
-    'example/adenoiser_demo.c'
+    'example/denoiser_demo.c'
 ]
 
 # Dependencies for libspecbleach
@@ -88,6 +93,11 @@ if get_option('enable_example')
                   required: true)
 
   executable('adenoiser_demo',
+    adaptive_example_sources,
+    dependencies : [sndfile_dep,libspecbleach_dep],
+    install: true)
+
+  executable('denoiser_demo',
     example_sources,
     dependencies : [sndfile_dep,libspecbleach_dep],
     install: true)

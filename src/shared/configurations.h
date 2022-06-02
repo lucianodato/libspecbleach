@@ -118,6 +118,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 // Noise Estimator
 #define MIN_NUMBER_OF_WINDOWS_NOISE_AVERAGED 5
+#define NUMBER_OF_MEDIAN_SPECTRUM 5
 
 // Noise Scaling strategy
 #define OVERSUBTRACTION_TYPE MASKING_THRESHOLDS

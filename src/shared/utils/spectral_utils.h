@@ -53,5 +53,9 @@ bool get_rolling_mean_spectrum(float *averaged_spectrum,
                                const float *current_spectrum,
                                uint32_t number_of_blocks,
                                uint32_t spectrum_size);
+bool get_rolling_median_spectrum(float *median_spectrum,
+                               const float *current_spectrum_buffer,
+                               uint32_t number_of_blocks,
+                               uint32_t spectrum_size);
 
 #endif
