@@ -1,4 +1,4 @@
-project('libspecbleach', 'c', version: '0.1.6',default_options: ['c_std=c99'])
+project('libspecbleach', 'c', version: '0.1.7',default_options: ['c_std=c99'])
 
 # Sources to compile
 shared_sources = [
@@ -6,6 +6,7 @@ shared_sources = [
     'src/shared/utils/spectral_features.c',
     'src/shared/utils/general_utils.c',
     'src/shared/utils/denoise_mixer.c',
+    'src/shared/utils/spectral_trailing_buffer.c',
     'src/shared/post_estimation/spectral_whitening.c',
     'src/shared/post_estimation/postfilter.c',
     'src/shared/pre_estimation/noise_scaling_criterias.c',
@@ -36,8 +37,12 @@ specbleach_headers = [
   'include/specbleach_denoiser.h',
 ]
 
+adaptive_example_sources = [
+    'example/adenoiser_demo.c',
+]
+
 example_sources = [
-    'example/adenoiser_demo.c'
+    'example/denoiser_demo.c'
 ]
 
 # Dependencies for libspecbleach
@@ -82,12 +87,17 @@ libspecbleach_dep = declare_dependency(include_directories : inc,
   link_with : libspecbleach)
 
 # Example compilation
-if get_option('enable_example')
+if get_option('enable_examples')
   sndfile_dep = meson.get_compiler('c').find_library('sndfile',
                   has_headers: ['sndfile.h'],
                   required: true)
 
   executable('adenoiser_demo',
+    adaptive_example_sources,
+    dependencies : [sndfile_dep,libspecbleach_dep],
+    install: true)
+
+  executable('denoiser_demo',
     example_sources,
     dependencies : [sndfile_dep,libspecbleach_dep],
     install: true)

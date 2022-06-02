@@ -22,6 +22,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define MODULES_CONFIGURATIONS_H
 
 #include "gain_estimation/gain_estimators.h"
+#include "noise_estimation/noise_estimator.h"
 #include "pre_estimation/critical_bands.h"
 #include "pre_estimation/noise_scaling_criterias.h"
 #include "pre_estimation/spectral_smoother.h"
@@ -78,9 +79,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define LOWER_SNR 0.F
 #define HIGHER_SNR 20.F
 
-// Noise Estimator
-#define MIN_NUMBER_OF_WINDOWS_NOISE_AVERAGED 5
-
 // Adaptive Estimator
 #define N_SMOOTH 0.7F
 #define BETA_AT 0.8F
@@ -117,6 +115,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 // Masking
 #define CRITICAL_BANDS_TYPE OPUS_SCALE
+
+// Noise Estimator
+#define MIN_NUMBER_OF_WINDOWS_NOISE_AVERAGED 5
+#define NUMBER_OF_MEDIAN_SPECTRUM 5
 
 // Noise Scaling strategy
 #define OVERSUBTRACTION_TYPE MASKING_THRESHOLDS

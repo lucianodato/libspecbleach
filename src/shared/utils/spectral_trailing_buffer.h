@@ -18,27 +18,22 @@ License along with this library; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#ifndef NOISE_ESTIMATOR_H
-#define NOISE_ESTIMATOR_H
+#ifndef SPECTRAL_TRAILING_BUFFER_H
+#define SPECTRAL_TRAILING_BUFFER_H
 
-#include "noise_profile.h"
 #include <stdbool.h>
 #include <stdint.h>
 
-typedef struct NoiseEstimator NoiseEstimator;
+typedef struct SpectralTrailingBuffer SpectralTrailingBuffer;
 
-typedef enum NoiseEstimatorType {
-  OFF = 0,
-  ROLLING_MEAN = 1,
-  MEDIAN = 2,
-  MAX = 3,
-} NoiseEstimatorType;
-
-NoiseEstimator *noise_estimation_initialize(uint32_t fft_size,
-                                            NoiseProfile *noise_profile);
-void noise_estimation_free(NoiseEstimator *self);
-bool noise_estimation_run(NoiseEstimator *self,
-                          NoiseEstimatorType noise_estimator_type,
-                          float *signal_spectrum);
+SpectralTrailingBuffer *
+spectral_trailing_buffer_initialize(uint32_t real_spectrum_size,
+                                    uint32_t buffer_size);
+void spectral_trailing_buffer_free(SpectralTrailingBuffer *self);
+bool spectral_trailing_buffer_push_back(SpectralTrailingBuffer *self,
+                                        const float *input_spectrum);
+float *get_trailing_spectral_buffer(SpectralTrailingBuffer *self);
+uint32_t get_spectrum_buffer_size(SpectralTrailingBuffer *self);
+uint32_t get_spectrum_size(SpectralTrailingBuffer *self);
 
 #endif

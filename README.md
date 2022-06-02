@@ -28,10 +28,18 @@ Installation:
 
 ## Example
 
-A simple console app example is provided to demonstrate how to use the library. It needs libsndfile to compile successfully. You can use it as follows:
+Simple console apps examples are provided to demonstrate how to use the library. It needs libsndfile to compile successfully. You can use them as follows:
+
+Adaptive noise learn
 
 ```bash
   adenoise_demo <input file name> <output file name>
+```
+
+Manual noise learn
+
+```bash
+  denoise_demo <input file name> <output file name>
 ```
 
 It will recognize any libsndfile supported format.

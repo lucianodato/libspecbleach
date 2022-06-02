@@ -42,6 +42,8 @@ float max_spectral_value(const float *spectrum, uint32_t real_spectrum_size);
 float min_spectral_value(const float *spectrum, uint32_t real_spectrum_size);
 bool min_spectrum(float *spectrum_one, const float *spectrum_two,
                   uint32_t spectrum_size);
+bool max_spectrum(float *spectrum_one, const float *spectrum_two,
+                  uint32_t spectrum_size);
 float fft_bin_to_freq(uint32_t bin_index, uint32_t sample_rate,
                       uint32_t fft_size);
 uint32_t freq_to_fft_bin(float freq, uint32_t sample_rate, uint32_t fft_size);
@@ -49,6 +51,10 @@ float spectral_flux(const float *spectrum, const float *previous_spectrum,
                     uint32_t spectrum_size);
 bool get_rolling_mean_spectrum(float *averaged_spectrum,
                                const float *current_spectrum,
+                               uint32_t number_of_blocks,
+                               uint32_t spectrum_size);
+bool get_rolling_median_spectrum(float *median_spectrum,
+                               const float *current_spectrum_buffer,
                                uint32_t number_of_blocks,
                                uint32_t spectrum_size);
 

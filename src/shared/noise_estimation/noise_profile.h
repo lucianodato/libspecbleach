@@ -34,6 +34,7 @@ uint32_t get_noise_profile_blocks_averaged(NoiseProfile *self);
 bool increment_blocks_averaged(NoiseProfile *self);
 bool set_noise_profile(NoiseProfile *self, const float *noise_profile,
                        uint32_t noise_profile_size, uint32_t averaged_blocks);
+void set_noise_profile_available(NoiseProfile *self);
 bool reset_noise_profile(NoiseProfile *self);
 bool is_noise_estimation_available(NoiseProfile *self);
 
