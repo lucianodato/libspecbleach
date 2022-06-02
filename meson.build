@@ -1,4 +1,4 @@
-project('libspecbleach', 'c', version: '0.1.6',default_options: ['c_std=c99'])
+project('libspecbleach', 'c', version: '0.1.7',default_options: ['c_std=c99'])
 
 # Sources to compile
 shared_sources = [
@@ -87,7 +87,7 @@ libspecbleach_dep = declare_dependency(include_directories : inc,
   link_with : libspecbleach)
 
 # Example compilation
-if get_option('enable_example')
+if get_option('enable_examples')
   sndfile_dep = meson.get_compiler('c').find_library('sndfile',
                   has_headers: ['sndfile.h'],
                   required: true)

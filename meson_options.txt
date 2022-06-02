@@ -1,1 +1,1 @@
-option('enable_example', type : 'boolean', value : false, description : 'Enables building example application')
+option('enable_examples', type : 'boolean', value : false, description : 'Enables building example application')
