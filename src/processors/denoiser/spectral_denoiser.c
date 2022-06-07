@@ -19,16 +19,16 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 #include "spectral_denoiser.h"
-#include "../shared/configurations.h"
-#include "../shared/gain_estimation/gain_estimators.h"
-#include "../shared/noise_estimation/noise_estimator.h"
-#include "../shared/post_estimation/postfilter.h"
-#include "../shared/pre_estimation/critical_bands.h"
-#include "../shared/pre_estimation/noise_scaling_criterias.h"
-#include "../shared/pre_estimation/spectral_smoother.h"
-#include "../shared/utils/denoise_mixer.h"
-#include "../shared/utils/spectral_features.h"
-#include "../shared/utils/spectral_utils.h"
+#include "../../shared/configurations.h"
+#include "../../shared/gain_estimation/gain_estimators.h"
+#include "../../shared/noise_estimation/noise_estimator.h"
+#include "../../shared/post_estimation/postfilter.h"
+#include "../../shared/pre_estimation/critical_bands.h"
+#include "../../shared/pre_estimation/noise_scaling_criterias.h"
+#include "../../shared/pre_estimation/spectral_smoother.h"
+#include "../../shared/utils/denoise_mixer.h"
+#include "../../shared/utils/spectral_features.h"
+#include "../../shared/utils/spectral_utils.h"
 #include <float.h>
 #include <math.h>
 #include <stdlib.h>
