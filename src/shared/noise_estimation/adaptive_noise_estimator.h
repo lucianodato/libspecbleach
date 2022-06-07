@@ -18,8 +18,8 @@ License along with this library; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#ifndef LOUIZOU_ESTIMATOR_H
-#define LOUIZOU_ESTIMATOR_H
+#ifndef ADAPTIVE_NOISE_ESTIMATOR_H
+#define ADAPTIVE_NOISE_ESTIMATOR_H
 
 #include <stdbool.h>
 #include <stdint.h>

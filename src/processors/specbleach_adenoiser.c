@@ -18,11 +18,11 @@ License along with this library; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#include "../include/specbleach_adenoiser.h"
+#include "../../include/specbleach_adenoiser.h"
+#include "../shared/configurations.h"
+#include "../shared/stft/stft_processor.h"
+#include "../shared/utils/general_utils.h"
 #include "adaptivedenoiser/adaptive_denoiser.h"
-#include "shared/configurations.h"
-#include "shared/stft/stft_processor.h"
-#include "shared/utils/general_utils.h"
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>

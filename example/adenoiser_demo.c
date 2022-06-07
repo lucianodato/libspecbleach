@@ -24,7 +24,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  * with the algorithm and write it to an output file
  */
 
-#include "./include/specbleach_adenoiser.h"
+#include <specbleach_adenoiser.h>
 #include <sndfile.h>
 #include <stdlib.h>
 

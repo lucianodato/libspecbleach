@@ -18,32 +18,27 @@ License along with this library; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#ifndef SPECTRAL_DENOISER_H
-#define SPECTRAL_DENOISER_H
+#ifndef SPECTRAL_ADAPTIVE_DENOISER_H
+#define SPECTRAL_ADAPTIVE_DENOISER_H
 
-#include "../interfaces/spectral_processor.h"
-#include "../shared/noise_estimation/noise_profile.h"
+#include "../../interfaces/spectral_processor.h"
 #include <stdbool.h>
 #include <stdint.h>
 
-typedef struct DenoiserParameters {
+typedef struct AdaptiveDenoiserParameters {
   float reduction_amount;
   float noise_rescale;
-  bool residual_listen;
-  bool transient_protection;
-  int learn_noise;
   float smoothing_factor;
-  float whitening_factor;
-} DenoiserParameters;
+  bool residual_listen;
+} AdaptiveDenoiserParameters;
 
 SpectralProcessorHandle
-spectral_denoiser_initialize(uint32_t sample_rate, uint32_t fft_size,
-                             uint32_t overlap_factor,
-                             NoiseProfile *noise_profile);
-void spectral_denoiser_free(SpectralProcessorHandle instance);
-bool load_reduction_parameters(SpectralProcessorHandle instance,
-                               DenoiserParameters parameters);
-bool spectral_denoiser_run(SpectralProcessorHandle instance,
-                           float *fft_spectrum);
+spectral_adaptive_denoiser_initialize(uint32_t sample_rate, uint32_t fft_size,
+                                      uint32_t overlap_factor);
+void spectral_adaptive_denoiser_free(SpectralProcessorHandle instance);
+bool load_adaptive_reduction_parameters(SpectralProcessorHandle instance,
+                                        AdaptiveDenoiserParameters parameters);
+bool spectral_adaptive_denoiser_run(SpectralProcessorHandle instance,
+                                    float *fft_spectrum);
 
 #endif

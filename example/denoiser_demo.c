@@ -20,12 +20,12 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 /**
  * This is just a simple console application example using the library with the
- * adaptive denoiser processor. It uses libsndfile to read audio, process it
+ * denoiser processor. It uses libsndfile to read audio, process it
  * with the algorithm and write it to an output file
  */
 
-#include "./include/specbleach_denoiser.h"
 #include <sndfile.h>
+#include <specbleach_denoiser.h>
 #include <stdlib.h>
 
 // This is not a deliberate value. The library handles any amount passed through
