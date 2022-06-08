@@ -24,8 +24,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  * with the algorithm and write it to an output file
  */
 
-#include <specbleach_adenoiser.h>
 #include <sndfile.h>
+#include <specbleach_adenoiser.h>
 #include <stdlib.h>
 
 // This is not a deliberate value. The library handles any amount passed through
@@ -60,7 +60,8 @@ int main(int argc, char **argv) {
       (SpectralBleachParameters){.residual_listen = false,
                                  .reduction_amount = 10.F,
                                  .smoothing_factor = 0.F,
-                                 .noise_rescale = 2.F};
+                                 .noise_rescale = 2.F,
+                                 .post_filter_threshold = -10.F};
 
   // Load the parameters before doing the denoising. This can be done during an
   // audio loop. It's RT safe

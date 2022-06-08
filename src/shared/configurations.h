@@ -60,7 +60,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #endif
 
 // Postfilter SNR Threshold
-#define POSTFILTER_THRESHOLD 0.4F
 #define POSTFILTER_SCALE 10.0F
 #define PRESERVE_MINIMUN_GAIN true
 

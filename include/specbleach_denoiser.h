@@ -31,36 +31,49 @@ extern "C" {
 typedef void *SpectralBleachHandle;
 
 typedef struct SpectralBleachParameters {
-  int learn_noise; // Sets the processor in listening mode to capture the noise
-                   // profile. 0 is disabled, 1 will learn the average profile,
-                   // 2 will learn the maximun median profile and 3 will learn
-                   // the max profile. For the average and median profile you
-                   // need at least 5 frames of audio
-  bool residual_listen;   // Enables outputting the residue of the reduction
-                          // processing. It's either true or false
-  float reduction_amount; // Sets the amount of dBs that the noise will be
-                          // attenuated. It goes from 0 dB to 40 dB
-  float smoothing_factor; // Percentage of smoothing to apply. Averages the
-                          // reduction calculation frame per frame so the rate
-                          // of change is less resulting in less musical noise
-                          // but if too strong it can blur transient and reduce
-                          // high frequencies. It goes from 0 to 100 percent
-  bool transient_protection; // Enables or disables the transient protection
-                             // when smoothing_factor is being used. This can
-                             // help to preserve transient content when
-                             // smoothing is strong.
-  float whitening_factor; // Percentage of whitening that is going to be applied
-                          // to the residue of the reduction. It modifies the
-                          // noise floor to be more like white noise. This can
-                          // help hide musical noise when the noise is colored.
-                          // It goes from 0 to 100 percent
-  float
-      noise_rescale; // Strength in which the reduction will be applied. It uses
-                     // the masking thresholds of the signal to determine where
-                     // in the spectrum the reduction needs to be stronger. This
-                     // parameter scales how much in each of the frequencies the
-                     // reduction is going to be applied. It can be a positive
-                     // or negative dB value in between 0 dB and 12 dB
+
+  /* Sets the processor in listening mode to capture the noise profile. 0 is
+   * disabled, 1 will learn the average profile, 2 will learn the maximun median
+   * profile and 3 will learn the max profile. For the average and median
+   * profile you need at least 5 frames of audio */
+  int learn_noise;
+
+  /* Enables outputting the residue of the reduction processing. It's either
+   * true or false */
+  bool residual_listen;
+
+  /* Sets the amount of dBs that the noise will be attenuated. It goes from 0 dB
+   * to 40 dB */
+  float reduction_amount;
+
+  /* Percentage of smoothing to apply. Averages the reduction calculation frame
+   * per frame so the rate of change is less resulting in less musical noise but
+   * if too strong it can blur transient and reduce high frequencies. It goes
+   * from 0 to 100 percent */
+  float smoothing_factor;
+
+  /* Enables or disables the transient protection when smoothing_factor is being
+   * used. This can help to preserve transient content when smoothing is strong.
+   */
+  bool transient_protection;
+
+  /* Percentage of whitening that is going to be applied to the residue of the
+   * reduction. It modifies the noise floor to be more like white noise. This
+   * can help hide musical noise when the noise is colored. It goes from 0 to
+   * 100 percent */
+  float whitening_factor;
+
+  /* Strength in which the reduction will be applied. It uses the masking
+   * thresholds of the signal to determine where in the spectrum the reduction
+   * needs to be stronger. This parameter scales how much in each of the
+   * frequencies the reduction is going to be applied. It can be a positive dB
+   * value in between 0 dB and 12 dB */
+  float noise_rescale;
+
+  /*Sets the SNR threshold in dB in which the post-filter will start to blur
+   * musical noise. It can be a positive or negative dB value in between -10 dB
+   * and 10 dB */
+  float post_filter_threshold;
 } SpectralBleachParameters;
 
 /**

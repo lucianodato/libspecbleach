@@ -67,7 +67,8 @@ int main(int argc, char **argv) {
                                  .reduction_amount = 10.F,
                                  .smoothing_factor = 0.F,
                                  .noise_rescale = 2.F,
-                                 .whitening_factor = 0.F};
+                                 .whitening_factor = 0.F,
+                                 .post_filter_threshold = -10.F};
 
   // Load the parameters before doing the denoising or profile learning. This
   // can be done during an audio loop. It's RT safe

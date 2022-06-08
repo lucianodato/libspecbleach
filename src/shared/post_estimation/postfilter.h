@@ -26,9 +26,15 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 typedef struct PostFilter PostFilter;
 
+typedef struct PostFiltersParameters {
+  float snr_threshold;
+  float postfilter_scale;
+  bool preserve_minimun;
+} PostFiltersParameters;
+
 PostFilter *postfilter_initialize(uint32_t fft_size);
 void postfilter_free(PostFilter *self);
 bool postfilter_apply(PostFilter *self, const float *spectrum,
-                      float *gain_spectrum);
+                      float *gain_spectrum, PostFiltersParameters parameters);
 
 #endif
