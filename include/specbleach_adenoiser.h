@@ -45,6 +45,13 @@ typedef struct SpectralBleachParameters {
    * from 0 to 100 percent */
   float smoothing_factor;
 
+  /* Type of algorithm used to scale noise in order to apply over or under
+   * subtraction in different parts of the spectrum while calculating the
+   * reduction. 0 is a-posteriori snr scaling using the complete spectrum, 1 is
+   * a-posteriori using critical bands and 3 is using masking thresholds
+   */
+  int noise_scaling_type;
+
   /* Strength in which the reduction will be applied. It uses the masking
    * thresholds of the signal to determine where in the spectrum the reduction
    * needs to be stronger. This parameter scales how much in each of the

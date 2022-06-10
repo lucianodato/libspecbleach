@@ -64,14 +64,12 @@ struct NoiseScalingCriterias {
 };
 
 NoiseScalingCriterias *noise_scaling_criterias_initialize(
-    const NoiseScalingType subtraction_type, const uint32_t fft_size,
-    const CriticalBandType critical_band_type, const uint32_t sample_rate,
-    SpectrumType spectrum_type) {
+    const uint32_t fft_size, const CriticalBandType critical_band_type,
+    const uint32_t sample_rate, SpectrumType spectrum_type) {
 
   NoiseScalingCriterias *self =
       (NoiseScalingCriterias *)calloc(1U, sizeof(NoiseScalingCriterias));
 
-  self->noise_scaling_type = subtraction_type;
   self->fft_size = fft_size;
   self->real_spectrum_size = self->fft_size / 2U + 1U;
   self->critical_band_type = critical_band_type;
@@ -123,13 +121,13 @@ bool apply_noise_scaling_criteria(NoiseScalingCriterias *self,
     return false;
   }
 
-  switch (self->noise_scaling_type) {
+  switch ((NoiseScalingType)parameters.scaling_type) {
+  case A_POSTERIORI_SNR:
+    a_posteriori_snr(self, spectrum, noise_spectrum, alpha, parameters);
+    break;
   case A_POSTERIORI_SNR_CRITICAL_BANDS:
     a_posteriori_snr_critical_bands(self, spectrum, noise_spectrum, alpha,
                                     parameters);
-    break;
-  case A_POSTERIORI_SNR:
-    a_posteriori_snr(self, spectrum, noise_spectrum, alpha, parameters);
     break;
   case MASKING_THRESHOLDS:
     masking_thresholds(self, spectrum, noise_spectrum, alpha, beta, parameters);

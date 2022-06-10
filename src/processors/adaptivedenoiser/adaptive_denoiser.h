@@ -27,6 +27,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 typedef struct AdaptiveDenoiserParameters {
   float reduction_amount;
+  int noise_scaling_type;
   float noise_rescale;
   float smoothing_factor;
   float post_filter_threshold;

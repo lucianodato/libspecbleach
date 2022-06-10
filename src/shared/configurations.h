@@ -120,7 +120,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define NUMBER_OF_MEDIAN_SPECTRUM 5
 
 // Noise Scaling strategy
-#define OVERSUBTRACTION_TYPE MASKING_THRESHOLDS
 #define GAIN_ESTIMATION_TYPE WIENER
 
 // Time Smoothing
@@ -147,7 +146,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define CRITICAL_BANDS_TYPE_SPEECH OPUS_SCALE
 
 // Noise Scaling strategy
-#define OVERSUBTRACTION_TYPE_SPEECH MASKING_THRESHOLDS
 #define GAIN_ESTIMATION_TYPE_SPEECH WIENER
 
 // Time Smoothing

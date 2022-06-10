@@ -176,6 +176,7 @@ bool specbleach_load_parameters(SpectralBleachHandle instance,
       .learn_noise = parameters.learn_noise,
       .residual_listen = parameters.residual_listen,
       .transient_protection = parameters.transient_protection,
+      .noise_scaling_type = parameters.noise_scaling_type,
       .reduction_amount =
           from_db_to_coefficient(parameters.reduction_amount * -1.F),
       .noise_rescale = from_db_to_coefficient(parameters.noise_rescale),

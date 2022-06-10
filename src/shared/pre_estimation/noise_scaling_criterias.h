@@ -27,22 +27,22 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdint.h>
 
 typedef enum NoiseScalingType {
-  A_POSTERIORI_SNR_CRITICAL_BANDS = 0,
-  A_POSTERIORI_SNR = 1,
+  A_POSTERIORI_SNR = 0,
+  A_POSTERIORI_SNR_CRITICAL_BANDS = 1,
   MASKING_THRESHOLDS = 2,
 } NoiseScalingType;
 
 typedef struct NoiseScalingParameters {
   float undersubtraction;
   float oversubtraction;
+  int scaling_type;
 } NoiseScalingParameters;
 
 typedef struct NoiseScalingCriterias NoiseScalingCriterias;
 
 NoiseScalingCriterias *noise_scaling_criterias_initialize(
-    NoiseScalingType subtraction_type, uint32_t fft_size,
-    CriticalBandType critical_band_type, uint32_t sample_rate,
-    SpectrumType spectrum_type);
+    uint32_t fft_size, CriticalBandType critical_band_type,
+    uint32_t sample_rate, SpectrumType spectrum_type);
 void noise_scaling_criterias_free(NoiseScalingCriterias *self);
 bool apply_noise_scaling_criteria(NoiseScalingCriterias *self,
                                   const float *spectrum,
