@@ -194,12 +194,6 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
     // Apply post filtering to reduce residual noise on low SNR frames
     PostFiltersParameters post_filter_parameters = (PostFiltersParameters){
         .snr_threshold = self->denoise_parameters.post_filter_threshold,
-        .postfilter_scale =
-            self->denoise_parameters.post_filter_threshold > 1.F
-                ? POSTFILTER_SCALE *
-                      self->denoise_parameters.post_filter_threshold
-                : POSTFILTER_SCALE,
-        .preserve_minimun = (bool)PRESERVE_MINIMUN_GAIN,
     };
     postfilter_apply(self->postfiltering, fft_spectrum, self->gain_spectrum,
                      post_filter_parameters);
