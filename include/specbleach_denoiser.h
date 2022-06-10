@@ -77,7 +77,7 @@ typedef struct SpectralBleachParameters {
    * value in between 0 dB and 12 dB */
   float noise_rescale;
 
-  /*Sets the SNR threshold in dB in which the post-filter will start to blur
+  /* Sets the SNR threshold in dB in which the post-filter will start to blur
    * musical noise. It can be a positive or negative dB value in between -10 dB
    * and 10 dB */
   float post_filter_threshold;
