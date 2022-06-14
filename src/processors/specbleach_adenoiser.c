@@ -35,15 +35,15 @@ typedef struct SbAdaptiveDenoiser {
   StftProcessor *stft_processor;
 } SbAdaptiveDenoiser;
 
-SpectralBleachHandle
-specbleach_adaptive_initialize(const uint32_t sample_rate) {
+SpectralBleachHandle specbleach_adaptive_initialize(const uint32_t sample_rate,
+                                                    float frame_size) {
   SbAdaptiveDenoiser *self =
       (SbAdaptiveDenoiser *)calloc(1U, sizeof(SbAdaptiveDenoiser));
 
   self->sample_rate = sample_rate;
 
   self->stft_processor = stft_processor_initialize(
-      sample_rate, FRAME_SIZE_SPEECH, OVERLAP_FACTOR_SPEECH,
+      sample_rate, frame_size, OVERLAP_FACTOR_SPEECH,
       PADDING_CONFIGURATION_SPEECH, ZEROPADDING_AMOUNT_SPEECH,
       INPUT_WINDOW_TYPE_SPEECH, OUTPUT_WINDOW_TYPE_SPEECH);
 

@@ -84,10 +84,12 @@ typedef struct SpectralBleachParameters {
 } SpectralBleachParameters;
 
 /**
- * Returns a handle to an instance of the library for the manual based
- * noise reduction
+ * Returns a handle to an instance of the library for the adaptive based
+ * noise reduction. Sample rate could be anything from 4000hz to 192khz.
+ * Recommended frame size range is between 20ms and 100ms
  */
-SpectralBleachHandle specbleach_initialize(uint32_t sample_rate);
+SpectralBleachHandle specbleach_initialize(uint32_t sample_rate,
+                                           float frame_size);
 /**
  * Free instance associated to the handle passed
  */

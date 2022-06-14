@@ -96,7 +96,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 /* --------------------------------------------------------------- */
 
 // STFT configurations - Frame size in milliseconds
-#define FRAME_SIZE_GENERAL 46
 #define OVERLAP_FACTOR_GENERAL 4
 #define INPUT_WINDOW_TYPE_GENERAL HANN_WINDOW
 #define OUTPUT_WINDOW_TYPE_GENERAL HANN_WINDOW
@@ -130,7 +129,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 /* ------------------------------------------------------------------------ */
 
 // STFT configurations - Frame size in milliseconds
-#define FRAME_SIZE_SPEECH 20
 #define OVERLAP_FACTOR_SPEECH 2
 #define INPUT_WINDOW_TYPE_SPEECH VORBIS_WINDOW
 #define OUTPUT_WINDOW_TYPE_SPEECH VORBIS_WINDOW

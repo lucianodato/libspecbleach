@@ -31,6 +31,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 // This is not a deliberate value. The library handles any amount passed through
 // a circular buffer
 #define BLOCK_SIZE 512
+#define FRAME_SIZE 20
 
 int main(int argc, char **argv) {
   if (argc != 3) {
@@ -52,7 +53,7 @@ int main(int argc, char **argv) {
   // Declaration of the library instance. It needs to know the samplerate of the
   // audio
   SpectralBleachHandle lib_instance =
-      specbleach_adaptive_initialize((uint32_t)sfinfo->samplerate);
+      specbleach_adaptive_initialize((uint32_t)sfinfo->samplerate, FRAME_SIZE);
 
   // Configuration of the denoising parameters. These are hardcoded just for the
   // example

@@ -37,14 +37,15 @@ typedef struct SbSpectralDenoiser {
   StftProcessor *stft_processor;
 } SbSpectralDenoiser;
 
-SpectralBleachHandle specbleach_initialize(const uint32_t sample_rate) {
+SpectralBleachHandle specbleach_initialize(const uint32_t sample_rate,
+                                           float frame_size) {
   SbSpectralDenoiser *self =
       (SbSpectralDenoiser *)calloc(1U, sizeof(SbSpectralDenoiser));
 
   self->sample_rate = sample_rate;
 
   self->stft_processor = stft_processor_initialize(
-      sample_rate, FRAME_SIZE_GENERAL, OVERLAP_FACTOR_GENERAL,
+      sample_rate, frame_size, OVERLAP_FACTOR_GENERAL,
       PADDING_CONFIGURATION_GENERAL, ZEROPADDING_AMOUNT_GENERAL,
       INPUT_WINDOW_TYPE_GENERAL, OUTPUT_WINDOW_TYPE_GENERAL);
 

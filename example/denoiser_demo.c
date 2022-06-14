@@ -34,6 +34,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define NOISE_FRAMES                                                           \
   8 // Amount of frames to capture profile at the beginning of the file (can be
     // anywhere)
+#define FRAME_SIZE 46
 
 int main(int argc, char **argv) {
   if (argc != 3) {
@@ -55,7 +56,7 @@ int main(int argc, char **argv) {
   // Declaration of the library instance. It needs to know the samplerate of the
   // audio
   SpectralBleachHandle lib_instance =
-      specbleach_initialize((uint32_t)sfinfo->samplerate);
+      specbleach_initialize((uint32_t)sfinfo->samplerate, FRAME_SIZE);
 
   // NOISE PROFILE LEARN STAGE
 
