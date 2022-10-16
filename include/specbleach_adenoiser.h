@@ -45,6 +45,12 @@ typedef struct SpectralBleachParameters {
    * from 0 to 100 percent */
   float smoothing_factor;
 
+  /* Percentage of whitening that is going to be applied to the residue of the
+   * reduction. It modifies the noise floor to be more like white noise. This
+   * can help hide musical noise when the noise is colored. It goes from 0 to
+   * 100 percent */
+  float whitening_factor;
+
   /* Type of algorithm used to scale noise in order to apply over or under
    * subtraction in different parts of the spectrum while calculating the
    * reduction. 0 is a-posteriori snr scaling using the complete spectrum, 1 is

@@ -30,6 +30,7 @@ typedef struct AdaptiveDenoiserParameters {
   int noise_scaling_type;
   float noise_rescale;
   float smoothing_factor;
+  float whitening_factor;
   float post_filter_threshold;
   bool residual_listen;
 } AdaptiveDenoiserParameters;

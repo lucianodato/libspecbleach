@@ -61,6 +61,7 @@ int main(int argc, char **argv) {
       (SpectralBleachParameters){.residual_listen = false,
                                  .reduction_amount = 10.F,
                                  .smoothing_factor = 0.F,
+                                 .whitening_factor = 0.F,
                                  .noise_rescale = 2.F,
                                  .post_filter_threshold = -10.F};
 

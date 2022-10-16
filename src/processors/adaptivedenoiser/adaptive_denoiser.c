@@ -196,6 +196,7 @@ bool spectral_adaptive_denoiser_run(SpectralProcessorHandle instance,
   DenoiseMixerParameters mixer_parameters = (DenoiseMixerParameters){
       .noise_level = self->parameters.reduction_amount,
       .residual_listen = self->parameters.residual_listen,
+      .whitening_amount = self->parameters.whitening_factor,
   };
 
   denoise_mixer_run(self->mixer, fft_spectrum, self->gain_spectrum,
