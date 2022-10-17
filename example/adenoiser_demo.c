@@ -24,13 +24,14 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  * with the algorithm and write it to an output file
  */
 
-#include <specbleach_adenoiser.h>
 #include <sndfile.h>
+#include <specbleach_adenoiser.h>
 #include <stdlib.h>
 
 // This is not a deliberate value. The library handles any amount passed through
 // a circular buffer
 #define BLOCK_SIZE 512
+#define FRAME_SIZE 20
 
 int main(int argc, char **argv) {
   if (argc != 3) {
@@ -52,7 +53,7 @@ int main(int argc, char **argv) {
   // Declaration of the library instance. It needs to know the samplerate of the
   // audio
   SpectralBleachHandle lib_instance =
-      specbleach_adaptive_initialize((uint32_t)sfinfo->samplerate);
+      specbleach_adaptive_initialize((uint32_t)sfinfo->samplerate, FRAME_SIZE);
 
   // Configuration of the denoising parameters. These are hardcoded just for the
   // example
@@ -60,7 +61,10 @@ int main(int argc, char **argv) {
       (SpectralBleachParameters){.residual_listen = false,
                                  .reduction_amount = 10.F,
                                  .smoothing_factor = 0.F,
-                                 .noise_rescale = 2.F};
+                                 .whitening_factor = 0.F,
+                                 .noise_scaling_type = 0,
+                                 .noise_rescale = 2.F,
+                                 .post_filter_threshold = -10.F};
 
   // Load the parameters before doing the denoising. This can be done during an
   // audio loop. It's RT safe

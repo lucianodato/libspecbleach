@@ -52,7 +52,6 @@ typedef struct SpectralAdaptiveDenoiser {
   float *noise_profile;
 
   SpectrumType spectrum_type;
-  NoiseScalingType noise_scaling_type;
   CriticalBandType band_type;
   GainEstimationType gain_estimation_type;
   TimeSmoothingType time_smoothing_type;
@@ -80,7 +79,6 @@ spectral_adaptive_denoiser_initialize(const uint32_t sample_rate,
   self->default_oversubtraction = DEFAULT_OVERSUBTRACTION;
   self->default_undersubtraction = DEFAULT_UNDERSUBTRACTION;
   self->spectrum_type = SPECTRAL_TYPE_SPEECH;
-  self->noise_scaling_type = OVERSUBTRACTION_TYPE_SPEECH;
   self->band_type = CRITICAL_BANDS_TYPE_SPEECH;
   self->gain_estimation_type = GAIN_ESTIMATION_TYPE_SPEECH;
   self->time_smoothing_type = TIME_SMOOTHING_TYPE_SPEECH;
@@ -105,8 +103,7 @@ spectral_adaptive_denoiser_initialize(const uint32_t sample_rate,
       spectral_smoothing_initialize(self->fft_size, self->time_smoothing_type);
 
   self->noise_scaling_criteria = noise_scaling_criterias_initialize(
-      self->noise_scaling_type, self->fft_size, self->band_type,
-      self->sample_rate, self->spectrum_type);
+      self->fft_size, self->band_type, self->sample_rate, self->spectrum_type);
 
   self->spectral_features =
       spectral_features_initialize(self->real_spectrum_size);
@@ -170,6 +167,7 @@ bool spectral_adaptive_denoiser_run(SpectralProcessorHandle instance,
       .oversubtraction =
           self->default_oversubtraction + self->parameters.noise_rescale,
       .undersubtraction = self->default_undersubtraction,
+      .scaling_type = self->parameters.noise_scaling_type,
   };
   apply_noise_scaling_criteria(self->noise_scaling_criteria, reference_spectrum,
                                self->noise_profile, self->alpha, self->beta,
@@ -188,12 +186,17 @@ bool spectral_adaptive_denoiser_run(SpectralProcessorHandle instance,
                  self->beta, self->gain_estimation_type);
 
   // Apply post filtering to reduce residual noise on low SNR frames
-  postfilter_apply(self->postfiltering, fft_spectrum, self->gain_spectrum);
+  PostFiltersParameters post_filter_parameters = (PostFiltersParameters){
+      .snr_threshold = self->parameters.post_filter_threshold,
+  };
+  postfilter_apply(self->postfiltering, fft_spectrum, self->gain_spectrum,
+                   post_filter_parameters);
 
   // Mix results
   DenoiseMixerParameters mixer_parameters = (DenoiseMixerParameters){
       .noise_level = self->parameters.reduction_amount,
       .residual_listen = self->parameters.residual_listen,
+      .whitening_amount = self->parameters.whitening_factor,
   };
 
   denoise_mixer_run(self->mixer, fft_spectrum, self->gain_spectrum,

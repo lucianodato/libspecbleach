@@ -1,33 +1,6 @@
-shared_sources = files(
-    'shared/utils/general_utils.c',
-    'shared/utils/denoise_mixer.c',
-    'shared/utils/spectral_features.c',
-    'shared/utils/spectral_utils.c',
-    'shared/utils/spectral_trailing_buffer.c',
-    'shared/pre_estimation/absolute_hearing_thresholds.c',
-    'shared/pre_estimation/masking_estimator.c',
-    'shared/pre_estimation/noise_scaling_criterias.c',
-    'shared/pre_estimation/transient_detector.c',
-    'shared/pre_estimation/spectral_smoother.c',
-    'shared/post_estimation/spectral_whitening.c',
-    'shared/post_estimation/postfilter.c',
-    'shared/noise_estimation/adaptive_noise_estimator.c',
-    'shared/noise_estimation/noise_estimator.c',
-    'shared/noise_estimation/noise_profile.c',
-    'shared/gain_estimation/gain_estimators.c',
-    'shared/pre_estimation/critical_bands.c',
-    'shared/stft/fft_transform.c',
-    'shared/stft/stft_windows.c',
-    'shared/stft/stft_buffer.c',
-    'shared/stft/stft_processor.c',
-)
+subdir('shared')
 
-processors_sources = files(
-    'processors/denoiser/spectral_denoiser.c',
-    'processors/adaptivedenoiser/adaptive_denoiser.c',
-    'processors/specbleach_adenoiser.c',
-    'processors/specbleach_denoiser.c',
-)
+subdir('processors')
 
 specbleach_sources = [shared_sources, processors_sources]
 

@@ -60,8 +60,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #endif
 
 // Postfilter SNR Threshold
-#define POSTFILTER_THRESHOLD 0.4F
-#define POSTFILTER_SCALE 10.0F
+#define POSTFILTER_SCALE 20.0F
 #define PRESERVE_MINIMUN_GAIN true
 
 // Gain Estimators
@@ -97,7 +96,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 /* --------------------------------------------------------------- */
 
 // STFT configurations - Frame size in milliseconds
-#define FRAME_SIZE_GENERAL 46
 #define OVERLAP_FACTOR_GENERAL 4
 #define INPUT_WINDOW_TYPE_GENERAL HANN_WINDOW
 #define OUTPUT_WINDOW_TYPE_GENERAL HANN_WINDOW
@@ -121,7 +119,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define NUMBER_OF_MEDIAN_SPECTRUM 5
 
 // Noise Scaling strategy
-#define OVERSUBTRACTION_TYPE MASKING_THRESHOLDS
 #define GAIN_ESTIMATION_TYPE WIENER
 
 // Time Smoothing
@@ -132,7 +129,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 /* ------------------------------------------------------------------------ */
 
 // STFT configurations - Frame size in milliseconds
-#define FRAME_SIZE_SPEECH 20
 #define OVERLAP_FACTOR_SPEECH 2
 #define INPUT_WINDOW_TYPE_SPEECH VORBIS_WINDOW
 #define OUTPUT_WINDOW_TYPE_SPEECH VORBIS_WINDOW
@@ -148,7 +144,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define CRITICAL_BANDS_TYPE_SPEECH OPUS_SCALE
 
 // Noise Scaling strategy
-#define OVERSUBTRACTION_TYPE_SPEECH MASKING_THRESHOLDS
 #define GAIN_ESTIMATION_TYPE_SPEECH WIENER
 
 // Time Smoothing
