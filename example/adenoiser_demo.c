@@ -44,6 +44,14 @@ int main(int argc, char **argv) {
 
   SF_INFO *sfinfo = (SF_INFO *)calloc(1, sizeof(SF_INFO));
   SNDFILE *input_file = sf_open(input_file_name, SFM_READ, sfinfo);
+
+  if (sfinfo->channels != 1) {
+      fprintf(stderr, "input has more than %d channels, please input a mono wav file\n", sfinfo->channels);
+      sf_close(input_file);
+      free(sfinfo);
+      return 1;
+  }
+
   SNDFILE *output_file = sf_open(output_file_name, SFM_WRITE, sfinfo);
 
   // Buffers for input and output to be used by the library
