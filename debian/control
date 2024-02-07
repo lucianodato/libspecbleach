@@ -1,0 +1,30 @@
+Source: libspecbleach
+Section: libs
+Priority: optional
+Maintainer: Rafael Diniz <rafael@riseup.net>
+Rules-Requires-Root: no
+Build-Depends:
+ debhelper-compat (= 13),
+Standards-Version: 4.6.2
+Homepage: https://github.com/lucianodato/libspecbleach
+#Vcs-Browser: https://salsa.debian.org/debian/libspecbleach
+#Vcs-Git: https://salsa.debian.org/debian/libspecbleach.git
+
+Package: libspecbleach-dev
+Section: libdevel
+Architecture: any
+Multi-Arch: same
+Depends:
+ libspecbleach1 (= ${binary:Version}),
+ ${misc:Depends},
+Description: Voice noise reduction library
+ C library for audio noise reduction and other spectral effects.
+
+Package: libspecbleach1
+Architecture: any
+Multi-Arch: same
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+Description: Voice noise reduction library
+ C library for audio noise reduction and other spectral effects.
