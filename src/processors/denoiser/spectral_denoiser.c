@@ -82,9 +82,9 @@ SpectralProcessorHandle spectral_denoiser_initialize(
   self->time_smoothing_type = TIME_SMOOTHING_TYPE;
 
   self->gain_spectrum = (float*)calloc(self->fft_size, sizeof(float));
-  initialize_spectrum_with_value(self->gain_spectrum, self->fft_size, 1.F);
+  (void)initialize_spectrum_with_value(self->gain_spectrum, self->fft_size, 1.F);
   self->alpha = (float*)calloc(self->real_spectrum_size, sizeof(float));
-  initialize_spectrum_with_value(self->alpha, self->real_spectrum_size, 1.F);
+  (void)initialize_spectrum_with_value(self->alpha, self->real_spectrum_size, 1.F);
   self->beta = (float*)calloc(self->real_spectrum_size, sizeof(float));
 
   self->noise_profile = noise_profile;

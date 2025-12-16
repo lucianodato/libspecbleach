@@ -69,3 +69,6 @@ meson-info/
 # Vscode files
 .vscode/
 .cache/
+
+# Log files
+*.log

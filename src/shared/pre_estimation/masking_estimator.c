@@ -88,9 +88,9 @@ MaskingEstimator* masking_estimation_initialize(const uint32_t fft_size,
       self->sample_rate, self->fft_size, spectrum_type);
 
   compute_spectral_spreading_function(self);
-  initialize_spectrum_with_value(self->unity_gain_critical_bands_spectrum,
-                                 self->number_critical_bands, 1.F);
-  direct_matrix_to_vector_spectral_convolution(
+  (void)initialize_spectrum_with_value(self->unity_gain_critical_bands_spectrum,
+                                      self->number_critical_bands, 1.F);
+  (void)direct_matrix_to_vector_spectral_convolution(
       self->spectral_spreading_function,
       self->unity_gain_critical_bands_spectrum,
       self->spreaded_unity_gain_critical_bands_spectrum,
@@ -123,7 +123,7 @@ bool compute_masking_thresholds(MaskingEstimator* self, const float* spectrum,
   compute_critical_bands_spectrum(self->critical_bands, spectrum,
                                   self->critical_bands_reference_spectrum);
 
-  direct_matrix_to_vector_spectral_convolution(
+  (void)direct_matrix_to_vector_spectral_convolution(
       self->spectral_spreading_function,
       self->critical_bands_reference_spectrum, self->spreaded_spectrum,
       self->number_critical_bands);

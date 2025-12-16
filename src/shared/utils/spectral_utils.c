@@ -113,8 +113,8 @@ float min_spectral_value(const float* spectrum,
   return min;
 }
 
-bool min_spectrum(float* spectrum_one, const float* spectrum_two,
-                  const uint32_t spectrum_size) {
+bool min_spectrum_float(float* spectrum_one, const float* spectrum_two,
+                        const uint32_t spectrum_size) {
   if (!spectrum_one || !spectrum_two || spectrum_size <= 0U) {
     return false;
   }
@@ -126,14 +126,40 @@ bool min_spectrum(float* spectrum_one, const float* spectrum_two,
   return true;
 }
 
-bool max_spectrum(float* spectrum_one, const float* spectrum_two,
-                  const uint32_t spectrum_size) {
+bool max_spectrum_float(float* spectrum_one, const float* spectrum_two,
+                        const uint32_t spectrum_size) {
   if (!spectrum_one || !spectrum_two || spectrum_size <= 0U) {
     return false;
   }
 
   for (uint32_t k = 0; k < spectrum_size; k++) {
     spectrum_one[k] = fmaxf(spectrum_one[k], spectrum_two[k]);
+  }
+
+  return true;
+}
+
+bool min_spectrum_double(double* spectrum_one, const double* spectrum_two,
+                        const uint32_t spectrum_size) {
+  if (!spectrum_one || !spectrum_two || spectrum_size <= 0U) {
+    return false;
+  }
+
+  for (uint32_t k = 0; k < spectrum_size; k++) {
+    spectrum_one[k] = fmin(spectrum_one[k], spectrum_two[k]);
+  }
+
+  return true;
+}
+
+bool max_spectrum_double(double* spectrum_one, const double* spectrum_two,
+                        const uint32_t spectrum_size) {
+  if (!spectrum_one || !spectrum_two || spectrum_size <= 0U) {
+    return false;
+  }
+
+  for (uint32_t k = 0; k < spectrum_size; k++) {
+    spectrum_one[k] = fmax(spectrum_one[k], spectrum_two[k]);
   }
 
   return true;

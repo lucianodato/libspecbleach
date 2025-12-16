@@ -24,11 +24,19 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdbool.h>
 #include <stdint.h>
 
-typedef enum ZeroPaddingType {
+// C17 enum validation
+enum ZeroPaddingType {
   NEXT_POWER_OF_TWO = 0,
   FIXED_AMOUNT = 1,
   NO_PADDING = 2,
-} ZeroPaddingType;
+};
+
+// Compile-time validation of enum values
+_Static_assert(NEXT_POWER_OF_TWO == 0, "NEXT_POWER_OF_TWO must be 0");
+_Static_assert(FIXED_AMOUNT == 1, "FIXED_AMOUNT must be 1");
+_Static_assert(NO_PADDING == 2, "NO_PADDING must be 2");
+
+typedef enum ZeroPaddingType ZeroPaddingType;
 
 typedef struct FftTransform FftTransform;
 

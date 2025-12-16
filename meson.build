@@ -1,5 +1,5 @@
-project('libspecbleach', 'c', version: '0.1.7', 
-        default_options: ['c_std=c11', 'warning_level=2'])
+project('libspecbleach', 'c', version: '0.2.0',
+        default_options: ['c_std=c17', 'warning_level=2'])
 
 # Note: Meson 0.60.0 or newer is recommended
 

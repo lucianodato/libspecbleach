@@ -167,7 +167,7 @@ static FrameSpectrum* frame_spectrum_initialize(const uint32_t frame_size) {
   self->speech_present_probability_spectrum =
       (float*)calloc(frame_size, sizeof(float));
 
-  initialize_spectrum_with_value(self->local_minimum_spectrum, frame_size,
+  (void)initialize_spectrum_with_value(self->local_minimum_spectrum, frame_size,
                                  FLT_MIN);
 
   return self;

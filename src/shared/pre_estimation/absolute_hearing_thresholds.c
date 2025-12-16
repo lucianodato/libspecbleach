@@ -77,7 +77,7 @@ AbsoluteHearingThresholds* absolute_hearing_thresholds_initialize(
       spectral_features_initialize(self->real_spectrum_size);
 
   generate_sinewave(self);
-  get_fft_window(self->window, self->fft_size, VORBIS_WINDOW);
+  (void)get_fft_window(self->window, self->fft_size, VORBIS_WINDOW);
   compute_spl_reference_spectrum(self);
   compute_absolute_thresholds(self);
 

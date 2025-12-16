@@ -31,6 +31,19 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "utils/spectral_utils.h"
 #include <stdbool.h>
 
+// Compile-time assertions for configuration validity
+_Static_assert(HANN_WINDOW >= 0 && HANN_WINDOW <= 3,
+               "HANN_WINDOW must be between 0 and 3");
+_Static_assert(HAMMING_WINDOW >= 0 && HAMMING_WINDOW <= 3,
+               "HAMMING_WINDOW must be between 0 and 3");
+_Static_assert(BLACKMAN_WINDOW >= 0 && BLACKMAN_WINDOW <= 3,
+               "BLACKMAN_WINDOW must be between 0 and 3");
+_Static_assert(VORBIS_WINDOW >= 0 && VORBIS_WINDOW <= 3,
+               "VORBIS_WINDOW must be between 0 and 3");
+
+// Additional C17 compile-time validations
+_Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
+
 #ifndef M_PI
 #define M_PI 3.1415926535F
 #endif
@@ -43,6 +56,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define REFERENCE_SINE_WAVE_FREQ 1000.F
 #define REFERENCE_LEVEL 90.F
 #define SINE_AMPLITUDE 1.F
+
+// C17 compile-time validations for defined constants
+_Static_assert(REFERENCE_SINE_WAVE_FREQ > 0, "Reference frequency must be positive");
+_Static_assert(REFERENCE_LEVEL >= 0, "Reference level must be non-negative");
 
 // Spectral Whitening
 #define WHITENING_DECAY_RATE 1000.F

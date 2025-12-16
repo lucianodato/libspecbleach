@@ -105,7 +105,7 @@ bool reset_noise_profile(NoiseProfile* self) {
     return false;
   }
 
-  initialize_spectrum_with_value(self->noise_profile, self->noise_profile_size,
+  (void)initialize_spectrum_with_value(self->noise_profile, self->noise_profile_size,
                                  0.F);
   self->noise_profile_blocks_averaged = 0U;
   self->noise_spectrum_available = false;

@@ -24,10 +24,14 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdbool.h>
 #include <stdint.h>
 
-float sanitize_denormal(float value);
-float from_db_to_coefficient(float value_db);
-float remap_percentage_log_like_unity(float value);
-int get_next_divisible_two(int number);
-int get_next_power_two(int number);
+// Compile-time validation
+_Static_assert(sizeof(float) >= 4, "float must be at least 32 bits");
+_Static_assert(sizeof(double) >= 8, "double must be at least 64 bits");
+
+__attribute__((warn_unused_result)) float sanitize_denormal(float value);
+__attribute__((warn_unused_result)) float from_db_to_coefficient(float value_db);
+__attribute__((warn_unused_result)) float remap_percentage_log_like_unity(float value);
+__attribute__((warn_unused_result)) int get_next_divisible_two(int number);
+__attribute__((warn_unused_result)) int get_next_power_two(int number);
 
 #endif

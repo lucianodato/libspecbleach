@@ -31,19 +31,38 @@ typedef enum WindowTypes {
   VORBIS_WINDOW = 3
 } WindowTypes;
 
-bool get_fft_window(float* window, uint32_t fft_size, WindowTypes window_type);
-bool initialize_spectrum_with_value(float* spectrum, uint32_t spectrum_size,
+__attribute__((warn_unused_result)) bool get_fft_window(float* window, uint32_t fft_size, WindowTypes window_type);
+__attribute__((warn_unused_result)) bool initialize_spectrum_with_value(float* spectrum, uint32_t spectrum_size,
                                     float value);
-bool direct_matrix_to_vector_spectral_convolution(const float* matrix_spectum,
+__attribute__((warn_unused_result)) bool direct_matrix_to_vector_spectral_convolution(const float* matrix_spectum,
                                                   const float* spectrum,
                                                   float* out_spectrum,
                                                   uint32_t spectrum_size);
-float max_spectral_value(const float* spectrum, uint32_t real_spectrum_size);
-float min_spectral_value(const float* spectrum, uint32_t real_spectrum_size);
-bool min_spectrum(float* spectrum_one, const float* spectrum_two,
-                  uint32_t spectrum_size);
-bool max_spectrum(float* spectrum_one, const float* spectrum_two,
-                  uint32_t spectrum_size);
+__attribute__((warn_unused_result)) float max_spectral_value(const float* spectrum, uint32_t real_spectrum_size);
+__attribute__((warn_unused_result)) float min_spectral_value(const float* spectrum, uint32_t real_spectrum_size);
+
+#define min_spectrum(spectrum_one, spectrum_two, spectrum_size) \
+  _Generic((spectrum_one), \
+    float*: min_spectrum_float, \
+    double*: min_spectrum_double, \
+    default: min_spectrum_float \
+  )(spectrum_one, spectrum_two, spectrum_size)
+
+#define max_spectrum(spectrum_one, spectrum_two, spectrum_size) \
+  _Generic((spectrum_one), \
+    float*: max_spectrum_float, \
+    double*: max_spectrum_double, \
+    default: max_spectrum_float \
+  )(spectrum_one, spectrum_two, spectrum_size)
+
+__attribute__((warn_unused_result)) bool min_spectrum_float(float* spectrum_one, const float* spectrum_two,
+                       uint32_t spectrum_size);
+__attribute__((warn_unused_result)) bool max_spectrum_float(float* spectrum_one, const float* spectrum_two,
+                       uint32_t spectrum_size);
+__attribute__((warn_unused_result)) bool min_spectrum_double(double* spectrum_one, const double* spectrum_two,
+                        uint32_t spectrum_size);
+__attribute__((warn_unused_result)) bool max_spectrum_double(double* spectrum_one, const double* spectrum_two,
+                        uint32_t spectrum_size);
 float fft_bin_to_freq(uint32_t bin_index, uint32_t sample_rate,
                       uint32_t fft_size);
 uint32_t freq_to_fft_bin(float freq, uint32_t sample_rate, uint32_t fft_size);

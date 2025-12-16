@@ -136,7 +136,7 @@ bool postfilter_apply(PostFilter* self, const float* spectrum,
   }
 
   if (self->preserve_minimun) {
-    min_spectrum(gain_spectrum, self->pf_gain_spectrum, self->fft_size);
+    (void)min_spectrum(gain_spectrum, self->pf_gain_spectrum, self->fft_size);
   } else {
     memcpy(gain_spectrum, self->pf_gain_spectrum,
            self->fft_size * sizeof(float));
