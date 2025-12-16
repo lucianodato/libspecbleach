@@ -106,23 +106,48 @@ static uint32_t calculate_fft_size(FftTransform* self) {
 }
 
 void fft_transform_free(FftTransform* self) {
-  fftwf_free(self->input_fft_buffer);
-  fftwf_free(self->output_fft_buffer);
-  fftwf_destroy_plan(self->forward);
-  fftwf_destroy_plan(self->backward);
+  if (!self) {
+    return;
+  }
+
+  if (self->input_fft_buffer) {
+    fftwf_free(self->input_fft_buffer);
+  }
+  if (self->output_fft_buffer) {
+    fftwf_free(self->output_fft_buffer);
+  }
+
+  // FFTW plans can be NULL if initialization failed
+  if (self->forward) {
+    fftwf_destroy_plan(self->forward);
+  }
+  if (self->backward) {
+    fftwf_destroy_plan(self->backward);
+  }
 
   free(self);
 }
 
 uint32_t get_fft_size(FftTransform* self) {
+  if (!self) {
+    return 0;
+  }
   return self->fft_size;
 }
 uint32_t get_fft_real_spectrum_size(FftTransform* self) {
+  if (!self) {
+    return 0;
+  }
   return self->fft_size / 2U + 1U;
 }
 
 bool fft_load_input_samples(FftTransform* self, const float* input) {
   if (!self || !input) {
+    return false;
+  }
+
+  // Ensure buffer bounds are safe
+  if (self->frame_size + self->copy_position > self->fft_size) {
     return false;
   }
 
@@ -137,6 +162,11 @@ bool fft_load_input_samples(FftTransform* self, const float* input) {
 
 bool fft_get_output_samples(FftTransform* self, float* output) {
   if (!self || !output) {
+    return false;
+  }
+
+  // Ensure buffer bounds are safe
+  if (self->frame_size + self->copy_position > self->fft_size) {
     return false;
   }
 
