@@ -109,7 +109,6 @@ SpacesInContainerLiterals: true
 SpacesInCStyleCastParentheses: false
 SpacesInParentheses: false
 SpacesInSquareBrackets: false
-Standard: C11
 StatementMacros:
   - Q_UNUSED
   - QT_REQUIRE_VERSION
