@@ -67,7 +67,8 @@ SpectralProcessorHandle spectral_denoiser_initialize(
     const uint32_t sample_rate, const uint32_t fft_size,
     const uint32_t overlap_factor, NoiseProfile* noise_profile) {
 
-  if (!noise_profile || sample_rate == 0 || fft_size == 0 || overlap_factor == 0) {
+  if (!noise_profile || sample_rate == 0 || fft_size == 0 ||
+      overlap_factor == 0) {
     return NULL;
   }
 
@@ -93,14 +94,16 @@ SpectralProcessorHandle spectral_denoiser_initialize(
     spectral_denoiser_free(self);
     return NULL;
   }
-  (void)initialize_spectrum_with_value(self->gain_spectrum, self->fft_size, 1.F);
+  (void)initialize_spectrum_with_value(self->gain_spectrum, self->fft_size,
+                                       1.F);
 
   self->alpha = (float*)calloc(self->real_spectrum_size, sizeof(float));
   if (!self->alpha) {
     spectral_denoiser_free(self);
     return NULL;
   }
-  (void)initialize_spectrum_with_value(self->alpha, self->real_spectrum_size, 1.F);
+  (void)initialize_spectrum_with_value(self->alpha, self->real_spectrum_size,
+                                       1.F);
 
   self->beta = (float*)calloc(self->real_spectrum_size, sizeof(float));
   if (!self->beta) {
@@ -109,19 +112,22 @@ SpectralProcessorHandle spectral_denoiser_initialize(
   }
 
   self->noise_profile = noise_profile;
-  self->noise_spectrum = (float*)calloc(self->real_spectrum_size, sizeof(float));
+  self->noise_spectrum =
+      (float*)calloc(self->real_spectrum_size, sizeof(float));
   if (!self->noise_spectrum) {
     spectral_denoiser_free(self);
     return NULL;
   }
 
-  self->noise_estimator = noise_estimation_initialize(self->fft_size, noise_profile);
+  self->noise_estimator =
+      noise_estimation_initialize(self->fft_size, noise_profile);
   if (!self->noise_estimator) {
     spectral_denoiser_free(self);
     return NULL;
   }
 
-  self->spectral_features = spectral_features_initialize(self->real_spectrum_size);
+  self->spectral_features =
+      spectral_features_initialize(self->real_spectrum_size);
   if (!self->spectral_features) {
     spectral_denoiser_free(self);
     return NULL;
@@ -147,7 +153,8 @@ SpectralProcessorHandle spectral_denoiser_initialize(
     return NULL;
   }
 
-  self->mixer = denoise_mixer_initialize(self->fft_size, self->sample_rate, self->hop);
+  self->mixer =
+      denoise_mixer_initialize(self->fft_size, self->sample_rate, self->hop);
   if (!self->mixer) {
     spectral_denoiser_free(self);
     return NULL;

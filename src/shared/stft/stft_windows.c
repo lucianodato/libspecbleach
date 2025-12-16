@@ -45,7 +45,8 @@ StftWindows* stft_window_initialize(const uint32_t stft_frame_size,
   self->output_window = (float*)calloc(self->stft_frame_size, sizeof(float));
 
   (void)get_fft_window(self->input_window, self->stft_frame_size, input_window);
-  (void)get_fft_window(self->output_window, self->stft_frame_size, output_window);
+  (void)get_fft_window(self->output_window, self->stft_frame_size,
+                       output_window);
 
   self->scale_factor = get_windows_scale_factor(self, overlap_factor);
 

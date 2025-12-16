@@ -168,7 +168,7 @@ static FrameSpectrum* frame_spectrum_initialize(const uint32_t frame_size) {
       (float*)calloc(frame_size, sizeof(float));
 
   (void)initialize_spectrum_with_value(self->local_minimum_spectrum, frame_size,
-                                 FLT_MIN);
+                                       FLT_MIN);
 
   return self;
 }

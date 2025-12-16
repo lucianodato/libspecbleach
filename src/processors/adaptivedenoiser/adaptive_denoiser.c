@@ -94,14 +94,16 @@ SpectralProcessorHandle spectral_adaptive_denoiser_initialize(
     spectral_adaptive_denoiser_free(self);
     return NULL;
   }
-  (void)initialize_spectrum_with_value(self->gain_spectrum, self->fft_size, 1.F);
+  (void)initialize_spectrum_with_value(self->gain_spectrum, self->fft_size,
+                                       1.F);
 
   self->alpha = (float*)calloc(self->real_spectrum_size, sizeof(float));
   if (!self->alpha) {
     spectral_adaptive_denoiser_free(self);
     return NULL;
   }
-  (void)initialize_spectrum_with_value(self->alpha, self->real_spectrum_size, 1.F);
+  (void)initialize_spectrum_with_value(self->alpha, self->real_spectrum_size,
+                                       1.F);
 
   self->beta = (float*)calloc(self->real_spectrum_size, sizeof(float));
   if (!self->beta) {
