@@ -31,19 +31,15 @@ typedef enum WindowTypes {
   VORBIS_WINDOW = 3
 } WindowTypes;
 
-__attribute__((warn_unused_result)) bool get_fft_window(
-    float* window, uint32_t fft_size, WindowTypes window_type);
-__attribute__((warn_unused_result)) bool initialize_spectrum_with_value(
-    float* spectrum, uint32_t spectrum_size, float value);
-__attribute__((warn_unused_result)) bool
-direct_matrix_to_vector_spectral_convolution(const float* matrix_spectum,
-                                             const float* spectrum,
-                                             float* out_spectrum,
-                                             uint32_t spectrum_size);
-__attribute__((warn_unused_result)) float max_spectral_value(
-    const float* spectrum, uint32_t real_spectrum_size);
-__attribute__((warn_unused_result)) float min_spectral_value(
-    const float* spectrum, uint32_t real_spectrum_size);
+bool get_fft_window(float* window, uint32_t fft_size, WindowTypes window_type);
+bool initialize_spectrum_with_value(float* spectrum, uint32_t spectrum_size,
+                                    float value);
+bool direct_matrix_to_vector_spectral_convolution(const float* matrix_spectum,
+                                                  const float* spectrum,
+                                                  float* out_spectrum,
+                                                  uint32_t spectrum_size);
+float max_spectral_value(const float* spectrum, uint32_t real_spectrum_size);
+float min_spectral_value(const float* spectrum, uint32_t real_spectrum_size);
 
 #define min_spectrum(spectrum_one, spectrum_two, spectrum_size)                \
   _Generic((spectrum_one),                                                     \
