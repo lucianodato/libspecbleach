@@ -1,5 +1,4 @@
 ---
-Language: C
 BasedOnStyle: LLVM
 IndentWidth: 2
 TabWidth: 2
