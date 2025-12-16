@@ -53,6 +53,15 @@ dkms.conf
 
 # Builds
 build/
+build-*/
+build_*/
+compile_commands.json
+.ninja_*
+.ninja_log
+.ninja_deps
+meson-private/
+meson-logs/
+meson-info/
 
 # Valgrind dumps
 *.valgrind
