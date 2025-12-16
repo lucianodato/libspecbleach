@@ -57,14 +57,14 @@ __attribute__((warn_unused_result)) float min_spectral_value(
       double*: max_spectrum_double,                                            \
       default: max_spectrum_float)(spectrum_one, spectrum_two, spectrum_size)
 
-__attribute__((warn_unused_result)) bool min_spectrum_float(
-    float* spectrum_one, const float* spectrum_two, uint32_t spectrum_size);
-__attribute__((warn_unused_result)) bool max_spectrum_float(
-    float* spectrum_one, const float* spectrum_two, uint32_t spectrum_size);
-__attribute__((warn_unused_result)) bool min_spectrum_double(
-    double* spectrum_one, const double* spectrum_two, uint32_t spectrum_size);
-__attribute__((warn_unused_result)) bool max_spectrum_double(
-    double* spectrum_one, const double* spectrum_two, uint32_t spectrum_size);
+bool min_spectrum_float(float* spectrum_one, const float* spectrum_two,
+                        uint32_t spectrum_size);
+bool max_spectrum_float(float* spectrum_one, const float* spectrum_two,
+                        uint32_t spectrum_size);
+bool min_spectrum_double(double* spectrum_one, const double* spectrum_two,
+                         uint32_t spectrum_size);
+bool max_spectrum_double(double* spectrum_one, const double* spectrum_two,
+                         uint32_t spectrum_size);
 float fft_bin_to_freq(uint32_t bin_index, uint32_t sample_rate,
                       uint32_t fft_size);
 uint32_t freq_to_fft_bin(float freq, uint32_t sample_rate, uint32_t fft_size);

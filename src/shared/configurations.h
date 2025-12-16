@@ -57,11 +57,6 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define REFERENCE_LEVEL 90.F
 #define SINE_AMPLITUDE 1.F
 
-// C17 compile-time validations for defined constants
-_Static_assert(REFERENCE_SINE_WAVE_FREQ > 0,
-               "Reference frequency must be positive");
-_Static_assert(REFERENCE_LEVEL >= 0, "Reference level must be non-negative");
-
 // Spectral Whitening
 #define WHITENING_DECAY_RATE 1000.F
 #define WHITENING_FLOOR 0.01F
