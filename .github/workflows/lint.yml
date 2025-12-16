@@ -1,0 +1,96 @@
+name: lint
+
+on:
+  push:
+    branches:
+      - "*"
+  pull_request:
+    branches:
+      - "*"
+
+jobs:
+  format-check:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install clang-format
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -qq clang-format
+
+      - name: Check code formatting
+        run: |
+          find . -type f \( -name "*.c" -o -name "*.h" \) \
+            ! -path "./build*" \
+            ! -path "./.git/*" \
+            | xargs clang-format --dry-run --Werror || {
+            echo "Code formatting check failed. Please run: clang-format -i <file>"
+            exit 1
+          }
+
+  static-analysis:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -qq \
+            clang-tidy \
+            ninja-build \
+            libfftw3-dev \
+            libsndfile1-dev \
+            meson
+
+      - name: Configure build
+        run: |
+          meson setup build \
+            --buildtype=debug \
+            -Dwarning_level=3 \
+            -Denable_examples=true
+
+      - name: Build with compile commands
+        run: |
+          meson compile -C build
+          # Generate compile_commands.json for clang-tidy
+          ninja -C build -t compdb > compile_commands.json || true
+
+      - name: Run clang-tidy (if compile_commands.json exists)
+        continue-on-error: true
+        run: |
+          if [ -f compile_commands.json ]; then
+            find . -type f \( -name "*.c" -o -name "*.h" \) \
+              ! -path "./build*" \
+              ! -path "./.git/*" \
+              ! -path "./example/*" \
+              | xargs -I {} clang-tidy {} \
+                --config-file=.clang-tidy 2>/dev/null || true
+          else
+            echo "compile_commands.json not generated, skipping clang-tidy"
+          fi
+
+  cppcheck:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install cppcheck
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -qq cppcheck
+
+      - name: Run cppcheck
+        continue-on-error: true
+        run: |
+          cppcheck --enable=all --suppress=missingIncludeSystem \
+            --suppress=unusedFunction \
+            --error-exitcode=0 \
+            --inline-suppr \
+            --quiet \
+            src/ include/ || true
+

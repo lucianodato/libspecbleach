@@ -1,1 +1,7 @@
 option('enable_examples', type : 'boolean', value : false, description : 'Enables building example application')
+option('custom_warning_level', type : 'integer', value : 2, min : 0, max : 3, description : 'Compiler warning level (0=none, 1=basic, 2=all, 3=extra)')
+option('treat_warnings_as_errors', type : 'boolean', value : false, description : 'Treat compiler warnings as errors')
+option('enable_sanitizers', type : 'boolean', value : false, description : 'Enable sanitizers in debug builds')
+option('sanitize_address', type : 'boolean', value : false, description : 'Enable AddressSanitizer')
+option('sanitize_undefined', type : 'boolean', value : false, description : 'Enable UndefinedBehaviorSanitizer')
+option('enable_tests', type : 'boolean', value : false, description : 'Enable building tests')

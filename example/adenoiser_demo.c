@@ -26,12 +26,38 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include <sndfile.h>
 #include <specbleach_adenoiser.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 
-// This is not a deliberate value. The library handles any amount passed through
-// a circular buffer
+// This is not a deliberate value. The library handles any amount passed
+// through a circular buffer
 #define BLOCK_SIZE 512
 #define FRAME_SIZE 20
+
+static void cleanup_resources(SF_INFO *sfinfo, SNDFILE *input_file,
+                              SNDFILE *output_file, float *input_buffer,
+                              float *output_buffer,
+                              SpectralBleachHandle lib_instance) {
+  if (input_file) {
+    sf_close(input_file);
+  }
+  if (output_file) {
+    sf_close(output_file);
+  }
+  if (sfinfo) {
+    free(sfinfo);
+  }
+  if (input_buffer) {
+    free(input_buffer);
+  }
+  if (output_buffer) {
+    free(output_buffer);
+  }
+  if (lib_instance) {
+    specbleach_adaptive_free(lib_instance);
+  }
+}
 
 int main(int argc, char **argv) {
   if (argc != 3) {
@@ -42,51 +68,118 @@ int main(int argc, char **argv) {
   const char *input_file_name = argv[1];
   const char *output_file_name = argv[2];
 
-  SF_INFO *sfinfo = (SF_INFO *)calloc(1, sizeof(SF_INFO));
-  SNDFILE *input_file = sf_open(input_file_name, SFM_READ, sfinfo);
-  SNDFILE *output_file = sf_open(output_file_name, SFM_WRITE, sfinfo);
+  SF_INFO *sfinfo = NULL;
+  SNDFILE *input_file = NULL;
+  SNDFILE *output_file = NULL;
+  float *input_library_buffer = NULL;
+  float *output_library_buffer = NULL;
+  SpectralBleachHandle lib_instance = NULL;
+  int ret = 1;
 
-  // Buffers for input and output to be used by the library
-  float *input_library_buffer = (float *)calloc(BLOCK_SIZE, sizeof(float));
-  float *output_library_buffer = (float *)calloc(BLOCK_SIZE, sizeof(float));
+  do {
+    // Allocate memory for SF_INFO
+    sfinfo = (SF_INFO *)calloc(1, sizeof(SF_INFO));
+    if (!sfinfo) {
+      fprintf(stderr, "Error: Failed to allocate memory for SF_INFO\n");
+      break;
+    }
 
-  // Declaration of the library instance. It needs to know the samplerate of the
-  // audio
-  SpectralBleachHandle lib_instance =
-      specbleach_adaptive_initialize((uint32_t)sfinfo->samplerate, FRAME_SIZE);
+    // Open input file
+    input_file = sf_open(input_file_name, SFM_READ, sfinfo);
+    if (!input_file) {
+      fprintf(stderr, "Error: Failed to open input file '%s': %s\n",
+              input_file_name, sf_strerror(NULL));
+      break;
+    }
 
-  // Configuration of the denoising parameters. These are hardcoded just for the
-  // example
-  SpectralBleachParameters parameters =
-      (SpectralBleachParameters){.residual_listen = false,
-                                 .reduction_amount = 10.F,
-                                 .smoothing_factor = 0.F,
-                                 .whitening_factor = 0.F,
-                                 .noise_scaling_type = 0,
-                                 .noise_rescale = 2.F,
-                                 .post_filter_threshold = -10.F};
+    // Validate audio format
+    if (sfinfo->channels != 1) {
+      fprintf(stderr, "Error: Only mono audio is supported (file has %d "
+                      "channels)\n",
+              sfinfo->channels);
+      break;
+    }
 
-  // Load the parameters before doing the denoising. This can be done during an
-  // audio loop. It's RT safe
-  specbleach_adaptive_load_parameters(lib_instance, parameters);
+    // Open output file
+    output_file = sf_open(output_file_name, SFM_WRITE, sfinfo);
+    if (!output_file) {
+      fprintf(stderr, "Error: Failed to open output file '%s': %s\n",
+              output_file_name, sf_strerror(NULL));
+      break;
+    }
 
-  while (sf_readf_float(input_file, input_library_buffer, BLOCK_SIZE)) {
+    // Allocate buffers
+    input_library_buffer = (float *)calloc(BLOCK_SIZE, sizeof(float));
+    if (!input_library_buffer) {
+      fprintf(stderr, "Error: Failed to allocate input buffer\n");
+      break;
+    }
 
-    // Call to the audio process. Needs to know the number of samples to
-    // receive.
-    specbleach_adaptive_process(lib_instance, (uint32_t)BLOCK_SIZE,
-                                input_library_buffer, output_library_buffer);
+    output_library_buffer = (float *)calloc(BLOCK_SIZE, sizeof(float));
+    if (!output_library_buffer) {
+      fprintf(stderr, "Error: Failed to allocate output buffer\n");
+      break;
+    }
 
-    sf_writef_float(output_file, output_library_buffer, BLOCK_SIZE);
-  }
+    // Initialize library instance
+    lib_instance = specbleach_adaptive_initialize((uint32_t)sfinfo->samplerate,
+                                                 FRAME_SIZE);
+    if (!lib_instance) {
+      fprintf(stderr, "Error: Failed to initialize library instance\n");
+      break;
+    }
 
-  sf_close(input_file);
-  sf_close(output_file);
-  free(sfinfo);
+    // Configuration of the denoising parameters
+    SpectralBleachParameters parameters =
+        (SpectralBleachParameters){.residual_listen = false,
+                                   .reduction_amount = 10.F,
+                                   .smoothing_factor = 0.F,
+                                   .whitening_factor = 0.F,
+                                   .noise_scaling_type = 0,
+                                   .noise_rescale = 2.F,
+                                   .post_filter_threshold = -10.F};
 
-  // Once done you can free the library instance and the buffers used
-  specbleach_adaptive_free(lib_instance);
-  free(input_library_buffer);
-  free(output_library_buffer);
-  return 0;
+    // Load the parameters before doing the denoising
+    if (!specbleach_adaptive_load_parameters(lib_instance, parameters)) {
+      fprintf(stderr, "Error: Failed to load parameters\n");
+      break;
+    }
+
+    // Process audio
+    sf_count_t frames_read;
+    while ((frames_read = sf_readf_float(input_file, input_library_buffer,
+                                         BLOCK_SIZE)) > 0) {
+      // Process the audio
+      if (!specbleach_adaptive_process(lib_instance, (uint32_t)BLOCK_SIZE,
+                                       input_library_buffer,
+                                       output_library_buffer)) {
+        fprintf(stderr, "Error: Failed to process audio\n");
+        break;
+      }
+
+      // Write processed audio
+      sf_count_t frames_written =
+          sf_writef_float(output_file, output_library_buffer, frames_read);
+      if (frames_written != frames_read) {
+        fprintf(stderr,
+                "Error: Failed to write all frames (wrote %ld of %ld)\n",
+                (long)frames_written, (long)frames_read);
+        break;
+      }
+    }
+
+    // Check for read errors
+    if (frames_read < 0) {
+      fprintf(stderr, "Error: Failed to read audio: %s\n",
+              sf_strerror(input_file));
+      break;
+    }
+
+    // Success
+    ret = 0;
+  } while (0);
+
+  cleanup_resources(sfinfo, input_file, output_file, input_library_buffer,
+                    output_library_buffer, lib_instance);
+  return ret;
 }

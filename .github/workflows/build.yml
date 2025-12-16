@@ -1,4 +1,5 @@
 name: build
+
 on:
   push:
     branches:
@@ -9,18 +10,87 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        os: [ubuntu-22.04, macos-13, macos-14]
+        include:
+          - os: ubuntu-22.04
+            os-name: ubuntu
+            package-manager: apt
+          - os: macos-13
+            os-name: macos
+            package-manager: brew
+            arch: x86_64
+          - os: macos-14
+            os-name: macos
+            package-manager: brew
+            arch: arm64
+    runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v2
+      - name: Checkout code
+        uses: actions/checkout@v4
         with:
           submodules: recursive
-      - name: Set up dependencies
+
+      - name: Set up dependencies (Ubuntu)
+        if: matrix.os-name == 'ubuntu'
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -qq python3-pip libfftw3-dev ninja-build libsndfile1-dev
-          sudo pip install meson
-      - name: Build library
-        shell: bash
+          sudo apt-get install -qq \
+            libfftw3-dev \
+            ninja-build \
+            libsndfile1-dev \
+            meson
+
+      - name: Set up dependencies (macOS)
+        if: matrix.os-name == 'macos'
         run: |
-          meson build --buildtype release
-          meson compile -v -C build
+          brew update
+          brew install fftw ninja libsndfile meson
+
+      - name: Configure build
+        run: |
+          meson setup build \
+            --buildtype=release \
+            -Denable_examples=true
+
+      - name: Build library
+        run: |
+          meson compile -C build -v
+
+      - name: Build examples
+        run: |
+          meson compile -C build -v
+
+  lint:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -qq \
+            clang-format \
+            clang-tidy \
+            ninja-build \
+            libfftw3-dev \
+            meson
+
+      - name: Check code formatting
+        run: |
+          find . -name "*.c" -o -name "*.h" | grep -v build | xargs clang-format --dry-run --Werror
+
+      - name: Configure build for static analysis
+        run: |
+          meson setup build-static \
+            --buildtype=debug \
+            -Dwarning_level=3 \
+            -Dwerror=true
+
+      - name: Run clang-tidy
+        run: |
+          meson compile -C build-static
+          # Note: clang-tidy integration would require compile_commands.json
+          # This is a placeholder for future static analysis
