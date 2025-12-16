@@ -26,14 +26,13 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 typedef struct SpectralTrailingBuffer SpectralTrailingBuffer;
 
-SpectralTrailingBuffer *
-spectral_trailing_buffer_initialize(uint32_t real_spectrum_size,
-                                    uint32_t buffer_size);
-void spectral_trailing_buffer_free(SpectralTrailingBuffer *self);
-bool spectral_trailing_buffer_push_back(SpectralTrailingBuffer *self,
-                                        const float *input_spectrum);
-float *get_trailing_spectral_buffer(SpectralTrailingBuffer *self);
-uint32_t get_spectrum_buffer_size(SpectralTrailingBuffer *self);
-uint32_t get_spectrum_size(SpectralTrailingBuffer *self);
+SpectralTrailingBuffer* spectral_trailing_buffer_initialize(
+    uint32_t real_spectrum_size, uint32_t buffer_size);
+void spectral_trailing_buffer_free(SpectralTrailingBuffer* self);
+bool spectral_trailing_buffer_push_back(SpectralTrailingBuffer* self,
+                                        const float* input_spectrum);
+float* get_trailing_spectral_buffer(SpectralTrailingBuffer* self);
+uint32_t get_spectrum_buffer_size(SpectralTrailingBuffer* self);
+uint32_t get_spectrum_size(SpectralTrailingBuffer* self);
 
 #endif

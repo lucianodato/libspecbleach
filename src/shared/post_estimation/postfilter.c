@@ -26,11 +26,11 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <string.h>
 
 struct PostFilter {
-  FftTransform *gain_fft_spectrum;
-  FftTransform *postfilter_fft_spectrum;
+  FftTransform* gain_fft_spectrum;
+  FftTransform* postfilter_fft_spectrum;
 
-  float *postfilter;
-  float *pf_gain_spectrum;
+  float* postfilter;
+  float* pf_gain_spectrum;
 
   uint32_t fft_size;
   uint32_t real_spectrum_size;
@@ -38,8 +38,8 @@ struct PostFilter {
   float default_postfilter_scale;
 };
 
-PostFilter *postfilter_initialize(const uint32_t fft_size) {
-  PostFilter *self = (PostFilter *)calloc(1U, sizeof(PostFilter));
+PostFilter* postfilter_initialize(const uint32_t fft_size) {
+  PostFilter* self = (PostFilter*)calloc(1U, sizeof(PostFilter));
 
   self->fft_size = fft_size;
   self->real_spectrum_size = self->fft_size / 2U + 1U;
@@ -48,14 +48,14 @@ PostFilter *postfilter_initialize(const uint32_t fft_size) {
 
   self->gain_fft_spectrum = fft_transform_initialize_bins(self->fft_size);
   self->postfilter_fft_spectrum = fft_transform_initialize_bins(self->fft_size);
-  self->pf_gain_spectrum = (float *)calloc(self->fft_size, sizeof(float));
+  self->pf_gain_spectrum = (float*)calloc(self->fft_size, sizeof(float));
 
-  self->postfilter = (float *)calloc(self->fft_size, sizeof(float));
+  self->postfilter = (float*)calloc(self->fft_size, sizeof(float));
 
   return self;
 }
 
-void postfilter_free(PostFilter *self) {
+void postfilter_free(PostFilter* self) {
   fft_transform_free(self->gain_fft_spectrum);
   fft_transform_free(self->postfilter_fft_spectrum);
 
@@ -65,9 +65,9 @@ void postfilter_free(PostFilter *self) {
   free(self);
 }
 
-static void calculate_postfilter(PostFilter *self, const float *spectrum,
+static void calculate_postfilter(PostFilter* self, const float* spectrum,
                                  const float snr_threshold,
-                                 const float *gain_spectrum) {
+                                 const float* gain_spectrum) {
   float clean_signal_sum = 0.F;
   float noisy_signa_sum = 0.F;
   float a_priori_snr = 0.F;
@@ -104,8 +104,8 @@ static void calculate_postfilter(PostFilter *self, const float *spectrum,
   }
 }
 
-bool postfilter_apply(PostFilter *self, const float *spectrum,
-                      float *gain_spectrum,
+bool postfilter_apply(PostFilter* self, const float* spectrum,
+                      float* gain_spectrum,
                       const PostFiltersParameters parameters) {
   if (!spectrum || !gain_spectrum) {
     return false;

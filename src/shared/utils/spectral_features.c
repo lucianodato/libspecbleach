@@ -23,31 +23,31 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdlib.h>
 
 struct SpectralFeatures {
-  float *power_spectrum;
-  float *phase_spectrum;
-  float *magnitude_spectrum;
+  float* power_spectrum;
+  float* phase_spectrum;
+  float* magnitude_spectrum;
 
   uint32_t real_spectrum_size;
 };
 
-SpectralFeatures *
-spectral_features_initialize(const uint32_t real_spectrum_size) {
-  SpectralFeatures *self =
-      (SpectralFeatures *)calloc(1U, sizeof(SpectralFeatures));
+SpectralFeatures* spectral_features_initialize(
+    const uint32_t real_spectrum_size) {
+  SpectralFeatures* self =
+      (SpectralFeatures*)calloc(1U, sizeof(SpectralFeatures));
 
   self->real_spectrum_size = real_spectrum_size;
 
   self->power_spectrum =
-      (float *)calloc(self->real_spectrum_size, sizeof(float));
+      (float*)calloc(self->real_spectrum_size, sizeof(float));
   self->phase_spectrum =
-      (float *)calloc(self->real_spectrum_size, sizeof(float));
+      (float*)calloc(self->real_spectrum_size, sizeof(float));
   self->magnitude_spectrum =
-      (float *)calloc(self->real_spectrum_size, sizeof(float));
+      (float*)calloc(self->real_spectrum_size, sizeof(float));
 
   return self;
 }
 
-void spectral_features_free(SpectralFeatures *self) {
+void spectral_features_free(SpectralFeatures* self) {
   free(self->power_spectrum);
   free(self->phase_spectrum);
   free(self->magnitude_spectrum);
@@ -55,18 +55,18 @@ void spectral_features_free(SpectralFeatures *self) {
   free(self);
 }
 
-float *get_power_spectrum(SpectralFeatures *self) {
+float* get_power_spectrum(SpectralFeatures* self) {
   return self->power_spectrum;
 }
-float *get_magnitude_spectrum(SpectralFeatures *self) {
+float* get_magnitude_spectrum(SpectralFeatures* self) {
   return self->magnitude_spectrum;
 }
-float *get_phase_spectrum(SpectralFeatures *self) {
+float* get_phase_spectrum(SpectralFeatures* self) {
   return self->phase_spectrum;
 }
 
-static bool compute_power_spectrum(SpectralFeatures *self,
-                                   const float *fft_spectrum,
+static bool compute_power_spectrum(SpectralFeatures* self,
+                                   const float* fft_spectrum,
                                    const uint32_t fft_spectrum_size) {
   if (!self || !fft_spectrum || !fft_spectrum_size) {
     return false;
@@ -94,8 +94,8 @@ static bool compute_power_spectrum(SpectralFeatures *self,
   return true;
 }
 
-static bool compute_magnitude_spectrum(SpectralFeatures *self,
-                                       const float *fft_spectrum,
+static bool compute_magnitude_spectrum(SpectralFeatures* self,
+                                       const float* fft_spectrum,
                                        const uint32_t fft_spectrum_size) {
   if (!self || !fft_spectrum || !fft_spectrum_size) {
     return false;
@@ -124,8 +124,8 @@ static bool compute_magnitude_spectrum(SpectralFeatures *self,
   return true;
 }
 
-static bool compute_phase_spectrum(SpectralFeatures *self,
-                                   const float *fft_spectrum,
+static bool compute_phase_spectrum(SpectralFeatures* self,
+                                   const float* fft_spectrum,
                                    const uint32_t fft_spectrum_size) {
   if (!self || !fft_spectrum || !fft_spectrum_size) {
     return false;
@@ -152,28 +152,28 @@ static bool compute_phase_spectrum(SpectralFeatures *self,
   return true;
 }
 
-float *get_spectral_feature(SpectralFeatures *self, const float *fft_spectrum,
+float* get_spectral_feature(SpectralFeatures* self, const float* fft_spectrum,
                             uint32_t fft_spectrum_size, SpectrumType type) {
   if (!self || !fft_spectrum || fft_spectrum_size <= 0U) {
     return NULL;
   }
 
   switch (type) {
-  case POWER_SPECTRUM:
-    compute_power_spectrum(self, fft_spectrum, fft_spectrum_size);
-    return get_power_spectrum(self);
-    break;
-  case MAGNITUDE_SPECTRUM:
-    compute_magnitude_spectrum(self, fft_spectrum, fft_spectrum_size);
-    return get_magnitude_spectrum(self);
-    break;
-  case PHASE_SPECTRUM:
-    compute_phase_spectrum(self, fft_spectrum, fft_spectrum_size);
-    return get_phase_spectrum(self);
-    break;
+    case POWER_SPECTRUM:
+      compute_power_spectrum(self, fft_spectrum, fft_spectrum_size);
+      return get_power_spectrum(self);
+      break;
+    case MAGNITUDE_SPECTRUM:
+      compute_magnitude_spectrum(self, fft_spectrum, fft_spectrum_size);
+      return get_magnitude_spectrum(self);
+      break;
+    case PHASE_SPECTRUM:
+      compute_phase_spectrum(self, fft_spectrum, fft_spectrum_size);
+      return get_phase_spectrum(self);
+      break;
 
-  default:
-    return NULL;
-    break;
+    default:
+      return NULL;
+      break;
   }
 }

@@ -36,11 +36,11 @@ typedef struct TimeSmoothingParameters {
 
 typedef struct SpectralSmoother SpectralSmoother;
 
-SpectralSmoother *spectral_smoothing_initialize(uint32_t fft_size,
+SpectralSmoother* spectral_smoothing_initialize(uint32_t fft_size,
                                                 TimeSmoothingType type);
-void spectral_smoothing_free(SpectralSmoother *self);
-bool spectral_smoothing_run(SpectralSmoother *self,
+void spectral_smoothing_free(SpectralSmoother* self);
+bool spectral_smoothing_run(SpectralSmoother* self,
                             TimeSmoothingParameters parameters,
-                            float *signal_spectrum);
+                            float* signal_spectrum);
 
 #endif

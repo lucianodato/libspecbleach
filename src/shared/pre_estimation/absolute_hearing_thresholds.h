@@ -27,11 +27,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 typedef struct AbsoluteHearingThresholds AbsoluteHearingThresholds;
 
-AbsoluteHearingThresholds *
-absolute_hearing_thresholds_initialize(uint32_t sample_rate, uint32_t fft_size,
-                                       SpectrumType spectrum_type);
-void absolute_hearing_thresholds_free(AbsoluteHearingThresholds *self);
-bool apply_thresholds_as_floor(AbsoluteHearingThresholds *self,
-                               float *spectrum);
+AbsoluteHearingThresholds* absolute_hearing_thresholds_initialize(
+    uint32_t sample_rate, uint32_t fft_size, SpectrumType spectrum_type);
+void absolute_hearing_thresholds_free(AbsoluteHearingThresholds* self);
+bool apply_thresholds_as_floor(AbsoluteHearingThresholds* self,
+                               float* spectrum);
 
 #endif

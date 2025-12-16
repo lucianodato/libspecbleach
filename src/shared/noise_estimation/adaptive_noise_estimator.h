@@ -26,11 +26,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 typedef struct AdaptiveNoiseEstimator AdaptiveNoiseEstimator;
 
-AdaptiveNoiseEstimator *
-louizou_estimator_initialize(uint32_t noise_spectrum_size, uint32_t sample_rate,
-                             uint32_t fft_size);
-void louizou_estimator_free(AdaptiveNoiseEstimator *self);
-bool louizou_estimator_run(AdaptiveNoiseEstimator *self, const float *spectrum,
-                           float *noise_spectrum);
+AdaptiveNoiseEstimator* louizou_estimator_initialize(
+    uint32_t noise_spectrum_size, uint32_t sample_rate, uint32_t fft_size);
+void louizou_estimator_free(AdaptiveNoiseEstimator* self);
+bool louizou_estimator_run(AdaptiveNoiseEstimator* self, const float* spectrum,
+                           float* noise_spectrum);
 
 #endif

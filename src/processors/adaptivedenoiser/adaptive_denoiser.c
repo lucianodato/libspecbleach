@@ -44,33 +44,32 @@ typedef struct SpectralAdaptiveDenoiser {
 
   AdaptiveDenoiserParameters parameters;
 
-  float *alpha;
-  float *beta;
-  float *gain_spectrum;
-  float *residual_spectrum;
-  float *denoised_spectrum;
-  float *noise_profile;
+  float* alpha;
+  float* beta;
+  float* gain_spectrum;
+  float* residual_spectrum;
+  float* denoised_spectrum;
+  float* noise_profile;
 
   SpectrumType spectrum_type;
   CriticalBandType band_type;
   GainEstimationType gain_estimation_type;
   TimeSmoothingType time_smoothing_type;
 
-  DenoiseMixer *mixer;
-  NoiseScalingCriterias *noise_scaling_criteria;
-  SpectralSmoother *spectrum_smoothing;
-  PostFilter *postfiltering;
-  AdaptiveNoiseEstimator *adaptive_estimator;
-  SpectralFeatures *spectral_features;
+  DenoiseMixer* mixer;
+  NoiseScalingCriterias* noise_scaling_criteria;
+  SpectralSmoother* spectrum_smoothing;
+  PostFilter* postfiltering;
+  AdaptiveNoiseEstimator* adaptive_estimator;
+  SpectralFeatures* spectral_features;
 } SpectralAdaptiveDenoiser;
 
-SpectralProcessorHandle
-spectral_adaptive_denoiser_initialize(const uint32_t sample_rate,
-                                      const uint32_t fft_size,
-                                      const uint32_t overlap_factor) {
+SpectralProcessorHandle spectral_adaptive_denoiser_initialize(
+    const uint32_t sample_rate, const uint32_t fft_size,
+    const uint32_t overlap_factor) {
 
-  SpectralAdaptiveDenoiser *self =
-      (SpectralAdaptiveDenoiser *)calloc(1U, sizeof(SpectralAdaptiveDenoiser));
+  SpectralAdaptiveDenoiser* self =
+      (SpectralAdaptiveDenoiser*)calloc(1U, sizeof(SpectralAdaptiveDenoiser));
 
   self->fft_size = fft_size;
   self->real_spectrum_size = self->fft_size / 2U + 1U;
@@ -83,19 +82,18 @@ spectral_adaptive_denoiser_initialize(const uint32_t sample_rate,
   self->gain_estimation_type = GAIN_ESTIMATION_TYPE_SPEECH;
   self->time_smoothing_type = TIME_SMOOTHING_TYPE_SPEECH;
 
-  self->gain_spectrum = (float *)calloc(self->fft_size, sizeof(float));
+  self->gain_spectrum = (float*)calloc(self->fft_size, sizeof(float));
   initialize_spectrum_with_value(self->gain_spectrum, self->fft_size, 1.F);
-  self->alpha = (float *)calloc(self->real_spectrum_size, sizeof(float));
+  self->alpha = (float*)calloc(self->real_spectrum_size, sizeof(float));
   initialize_spectrum_with_value(self->alpha, self->real_spectrum_size, 1.F);
-  self->beta = (float *)calloc(self->real_spectrum_size, sizeof(float));
-  self->noise_profile =
-      (float *)calloc(self->real_spectrum_size, sizeof(float));
+  self->beta = (float*)calloc(self->real_spectrum_size, sizeof(float));
+  self->noise_profile = (float*)calloc(self->real_spectrum_size, sizeof(float));
 
   self->adaptive_estimator = louizou_estimator_initialize(
       self->real_spectrum_size, sample_rate, fft_size);
 
-  self->residual_spectrum = (float *)calloc((self->fft_size), sizeof(float));
-  self->denoised_spectrum = (float *)calloc((self->fft_size), sizeof(float));
+  self->residual_spectrum = (float*)calloc((self->fft_size), sizeof(float));
+  self->denoised_spectrum = (float*)calloc((self->fft_size), sizeof(float));
 
   self->postfiltering = postfilter_initialize(self->fft_size);
 
@@ -115,7 +113,7 @@ spectral_adaptive_denoiser_initialize(const uint32_t sample_rate,
 }
 
 void spectral_adaptive_denoiser_free(SpectralProcessorHandle instance) {
-  SpectralAdaptiveDenoiser *self = (SpectralAdaptiveDenoiser *)instance;
+  SpectralAdaptiveDenoiser* self = (SpectralAdaptiveDenoiser*)instance;
 
   louizou_estimator_free(self->adaptive_estimator);
   spectral_features_free(self->spectral_features);
@@ -140,21 +138,21 @@ bool load_adaptive_reduction_parameters(SpectralProcessorHandle instance,
     return false;
   }
 
-  SpectralAdaptiveDenoiser *self = (SpectralAdaptiveDenoiser *)instance;
+  SpectralAdaptiveDenoiser* self = (SpectralAdaptiveDenoiser*)instance;
   self->parameters = parameters;
 
   return true;
 }
 
 bool spectral_adaptive_denoiser_run(SpectralProcessorHandle instance,
-                                    float *fft_spectrum) {
+                                    float* fft_spectrum) {
   if (!fft_spectrum || !instance) {
     return false;
   }
 
-  SpectralAdaptiveDenoiser *self = (SpectralAdaptiveDenoiser *)instance;
+  SpectralAdaptiveDenoiser* self = (SpectralAdaptiveDenoiser*)instance;
 
-  float *reference_spectrum =
+  float* reference_spectrum =
       get_spectral_feature(self->spectral_features, fft_spectrum,
                            self->fft_size, self->spectrum_type);
 

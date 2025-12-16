@@ -30,9 +30,9 @@ typedef struct PostFiltersParameters {
   float snr_threshold;
 } PostFiltersParameters;
 
-PostFilter *postfilter_initialize(uint32_t fft_size);
-void postfilter_free(PostFilter *self);
-bool postfilter_apply(PostFilter *self, const float *spectrum,
-                      float *gain_spectrum, PostFiltersParameters parameters);
+PostFilter* postfilter_initialize(uint32_t fft_size);
+void postfilter_free(PostFilter* self);
+bool postfilter_apply(PostFilter* self, const float* spectrum,
+                      float* gain_spectrum, PostFiltersParameters parameters);
 
 #endif

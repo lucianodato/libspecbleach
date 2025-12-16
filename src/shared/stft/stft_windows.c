@@ -22,27 +22,27 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "../configurations.h"
 #include <stdlib.h>
 
-static float get_windows_scale_factor(StftWindows *self,
+static float get_windows_scale_factor(StftWindows* self,
                                       uint32_t overlap_factor);
 
 struct StftWindows {
-  float *input_window;
-  float *output_window;
+  float* input_window;
+  float* output_window;
 
   uint32_t stft_frame_size;
   float scale_factor;
 };
 
-StftWindows *stft_window_initialize(const uint32_t stft_frame_size,
+StftWindows* stft_window_initialize(const uint32_t stft_frame_size,
                                     const uint32_t overlap_factor,
                                     const WindowTypes input_window,
                                     const WindowTypes output_window) {
-  StftWindows *self = (StftWindows *)calloc(1U, sizeof(StftWindows));
+  StftWindows* self = (StftWindows*)calloc(1U, sizeof(StftWindows));
 
   self->stft_frame_size = stft_frame_size;
 
-  self->input_window = (float *)calloc(self->stft_frame_size, sizeof(float));
-  self->output_window = (float *)calloc(self->stft_frame_size, sizeof(float));
+  self->input_window = (float*)calloc(self->stft_frame_size, sizeof(float));
+  self->output_window = (float*)calloc(self->stft_frame_size, sizeof(float));
 
   get_fft_window(self->input_window, self->stft_frame_size, input_window);
   get_fft_window(self->output_window, self->stft_frame_size, output_window);
@@ -52,14 +52,14 @@ StftWindows *stft_window_initialize(const uint32_t stft_frame_size,
   return self;
 }
 
-void stft_window_free(StftWindows *self) {
+void stft_window_free(StftWindows* self) {
   free(self->input_window);
   free(self->output_window);
 
   free(self);
 }
 
-static float get_windows_scale_factor(StftWindows *self,
+static float get_windows_scale_factor(StftWindows* self,
                                       const uint32_t overlap_factor) {
   if (overlap_factor < 2) {
     return 0.F;
@@ -72,7 +72,7 @@ static float get_windows_scale_factor(StftWindows *self,
   return sum * (float)overlap_factor;
 }
 
-bool stft_window_apply(StftWindows *self, float *frame,
+bool stft_window_apply(StftWindows* self, float* frame,
                        const WindowPlace place) {
   if (!self || !frame) {
     return false;
@@ -80,14 +80,14 @@ bool stft_window_apply(StftWindows *self, float *frame,
 
   for (uint32_t i = 0U; i < self->stft_frame_size; i++) {
     switch (place) {
-    case INPUT_WINDOW:
-      frame[i] *= self->input_window[i];
-      break;
-    case OUTPUT_WINDOW:
-      frame[i] *= self->output_window[i] / self->scale_factor;
-      break;
-    default:
-      break;
+      case INPUT_WINDOW:
+        frame[i] *= self->input_window[i];
+        break;
+      case OUTPUT_WINDOW:
+        frame[i] *= self->output_window[i] / self->scale_factor;
+        break;
+      default:
+        break;
     }
   }
 

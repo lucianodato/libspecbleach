@@ -26,8 +26,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <string.h>
 
 struct SpectralWhitening {
-  float *residual_max_spectrum;
-  float *whitened_residual_spectrum;
+  float* residual_max_spectrum;
+  float* whitened_residual_spectrum;
 
   float max_decay_rate;
   uint32_t whitening_window_count;
@@ -36,19 +36,19 @@ struct SpectralWhitening {
   uint32_t hop;
 };
 
-SpectralWhitening *spectral_whitening_initialize(const uint32_t fft_size,
+SpectralWhitening* spectral_whitening_initialize(const uint32_t fft_size,
                                                  const uint32_t sample_rate,
                                                  const uint32_t hop) {
-  SpectralWhitening *self =
-      (SpectralWhitening *)calloc(1U, sizeof(SpectralWhitening));
+  SpectralWhitening* self =
+      (SpectralWhitening*)calloc(1U, sizeof(SpectralWhitening));
 
   self->fft_size = fft_size;
   self->sample_rate = sample_rate;
   self->hop = hop;
 
   self->whitened_residual_spectrum =
-      (float *)calloc(self->fft_size, sizeof(float));
-  self->residual_max_spectrum = (float *)calloc(self->fft_size, sizeof(float));
+      (float*)calloc(self->fft_size, sizeof(float));
+  self->residual_max_spectrum = (float*)calloc(self->fft_size, sizeof(float));
   self->max_decay_rate =
       expf(-1000.F / (((WHITENING_DECAY_RATE) * (float)self->sample_rate) /
                       (float)self->hop));
@@ -57,15 +57,15 @@ SpectralWhitening *spectral_whitening_initialize(const uint32_t fft_size,
   return self;
 }
 
-void spectral_whitening_free(SpectralWhitening *self) {
+void spectral_whitening_free(SpectralWhitening* self) {
   free(self->whitened_residual_spectrum);
   free(self->residual_max_spectrum);
 
   free(self);
 }
 
-bool spectral_whitening_run(SpectralWhitening *self,
-                            const float whitening_factor, float *fft_spectrum) {
+bool spectral_whitening_run(SpectralWhitening* self,
+                            const float whitening_factor, float* fft_spectrum) {
   if (!self || !fft_spectrum || whitening_factor < 0.F) {
     return false;
   }

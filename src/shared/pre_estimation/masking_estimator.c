@@ -27,9 +27,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdlib.h>
 #include <string.h>
 
-static void compute_spectral_spreading_function(MaskingEstimator *self);
-static float compute_tonality_factor(MaskingEstimator *self,
-                                     const float *spectrum, uint32_t band);
+static void compute_spectral_spreading_function(MaskingEstimator* self);
+static float compute_tonality_factor(MaskingEstimator* self,
+                                     const float* spectrum, uint32_t band);
 
 struct MaskingEstimator {
 
@@ -38,25 +38,25 @@ struct MaskingEstimator {
   uint32_t sample_rate;
   uint32_t number_critical_bands;
 
-  AbsoluteHearingThresholds *reference_spectrum;
-  CriticalBands *critical_bands;
+  AbsoluteHearingThresholds* reference_spectrum;
+  CriticalBands* critical_bands;
   CriticalBandIndexes band_indexes;
 
-  float *spectral_spreading_function;
-  float *unity_gain_critical_bands_spectrum;
-  float *spreaded_unity_gain_critical_bands_spectrum;
-  float *threshold_j;
-  float *masking_offset;
-  float *spreaded_spectrum;
-  float *critical_bands_reference_spectrum;
+  float* spectral_spreading_function;
+  float* unity_gain_critical_bands_spectrum;
+  float* spreaded_unity_gain_critical_bands_spectrum;
+  float* threshold_j;
+  float* masking_offset;
+  float* spreaded_spectrum;
+  float* critical_bands_reference_spectrum;
 };
 
-MaskingEstimator *masking_estimation_initialize(const uint32_t fft_size,
+MaskingEstimator* masking_estimation_initialize(const uint32_t fft_size,
                                                 const uint32_t sample_rate,
                                                 SpectrumType spectrum_type) {
 
-  MaskingEstimator *self =
-      (MaskingEstimator *)calloc(1U, sizeof(MaskingEstimator));
+  MaskingEstimator* self =
+      (MaskingEstimator*)calloc(1U, sizeof(MaskingEstimator));
 
   self->fft_size = fft_size;
   self->real_spectrum_size = self->fft_size / 2U + 1U;
@@ -68,21 +68,21 @@ MaskingEstimator *masking_estimation_initialize(const uint32_t fft_size,
       get_number_of_critical_bands(self->critical_bands);
 
   self->spectral_spreading_function =
-      (float *)calloc(((size_t)self->number_critical_bands *
-                       (size_t)self->number_critical_bands),
-                      sizeof(float));
+      (float*)calloc(((size_t)self->number_critical_bands *
+                      (size_t)self->number_critical_bands),
+                     sizeof(float));
   self->unity_gain_critical_bands_spectrum =
-      (float *)calloc(self->number_critical_bands, sizeof(float));
+      (float*)calloc(self->number_critical_bands, sizeof(float));
   self->spreaded_unity_gain_critical_bands_spectrum =
-      (float *)calloc(self->number_critical_bands, sizeof(float));
+      (float*)calloc(self->number_critical_bands, sizeof(float));
   self->threshold_j =
-      (float *)calloc(self->number_critical_bands, sizeof(float));
+      (float*)calloc(self->number_critical_bands, sizeof(float));
   self->masking_offset =
-      (float *)calloc(self->number_critical_bands, sizeof(float));
+      (float*)calloc(self->number_critical_bands, sizeof(float));
   self->spreaded_spectrum =
-      (float *)calloc(self->number_critical_bands, sizeof(float));
+      (float*)calloc(self->number_critical_bands, sizeof(float));
   self->critical_bands_reference_spectrum =
-      (float *)calloc(self->number_critical_bands, sizeof(float));
+      (float*)calloc(self->number_critical_bands, sizeof(float));
 
   self->reference_spectrum = absolute_hearing_thresholds_initialize(
       self->sample_rate, self->fft_size, spectrum_type);
@@ -99,7 +99,7 @@ MaskingEstimator *masking_estimation_initialize(const uint32_t fft_size,
   return self;
 }
 
-void masking_estimation_free(MaskingEstimator *self) {
+void masking_estimation_free(MaskingEstimator* self) {
   absolute_hearing_thresholds_free(self->reference_spectrum);
   critical_bands_free(self->critical_bands);
 
@@ -114,8 +114,8 @@ void masking_estimation_free(MaskingEstimator *self) {
   free(self);
 }
 
-bool compute_masking_thresholds(MaskingEstimator *self, const float *spectrum,
-                                float *masking_thresholds) {
+bool compute_masking_thresholds(MaskingEstimator* self, const float* spectrum,
+                                float* masking_thresholds) {
   if (!self || !spectrum || !masking_thresholds) {
     return false;
   }
@@ -161,7 +161,7 @@ bool compute_masking_thresholds(MaskingEstimator *self, const float *spectrum,
   return true;
 }
 
-static void compute_spectral_spreading_function(MaskingEstimator *self) {
+static void compute_spectral_spreading_function(MaskingEstimator* self) {
   for (uint32_t i = 0U; i < self->number_critical_bands; i++) {
     for (uint32_t j = 0U; j < self->number_critical_bands; j++) {
       const uint32_t y = (i + 1) - (j + 1);
@@ -178,8 +178,8 @@ static void compute_spectral_spreading_function(MaskingEstimator *self) {
   }
 }
 
-static float compute_tonality_factor(MaskingEstimator *self,
-                                     const float *spectrum, uint32_t band) {
+static float compute_tonality_factor(MaskingEstimator* self,
+                                     const float* spectrum, uint32_t band) {
   float sum_bins = 0.F;
   float sum_log_bins = 0.F;
 

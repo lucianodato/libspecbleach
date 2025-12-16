@@ -26,9 +26,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include <sndfile.h>
 #include <specbleach_denoiser.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdint.h>
 
 // This is not a deliberate value. The library handles any amount passed
 // through a circular buffer
@@ -38,9 +38,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
     // anywhere)
 #define FRAME_SIZE 46
 
-static void cleanup_resources(SF_INFO *sfinfo, SNDFILE *input_file,
-                              SNDFILE *output_file, float *input_buffer,
-                              float *output_buffer,
+static void cleanup_resources(SF_INFO* sfinfo, SNDFILE* input_file,
+                              SNDFILE* output_file, float* input_buffer,
+                              float* output_buffer,
                               SpectralBleachHandle lib_instance) {
   if (input_file) {
     sf_close(input_file);
@@ -62,26 +62,26 @@ static void cleanup_resources(SF_INFO *sfinfo, SNDFILE *input_file,
   }
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   if (argc != 3) {
     fprintf(stderr, "usage: %s <noisy input> <denoised output>\n", argv[0]);
     return 1;
   }
 
-  const char *input_file_name = argv[1];
-  const char *output_file_name = argv[2];
+  const char* input_file_name = argv[1];
+  const char* output_file_name = argv[2];
 
-  SF_INFO *sfinfo = NULL;
-  SNDFILE *input_file = NULL;
-  SNDFILE *output_file = NULL;
-  float *input_library_buffer = NULL;
-  float *output_library_buffer = NULL;
+  SF_INFO* sfinfo = NULL;
+  SNDFILE* input_file = NULL;
+  SNDFILE* output_file = NULL;
+  float* input_library_buffer = NULL;
+  float* output_library_buffer = NULL;
   SpectralBleachHandle lib_instance = NULL;
   int ret = 1;
 
   do {
     // Allocate memory for SF_INFO
-    sfinfo = (SF_INFO *)calloc(1, sizeof(SF_INFO));
+    sfinfo = (SF_INFO*)calloc(1, sizeof(SF_INFO));
     if (!sfinfo) {
       fprintf(stderr, "Error: Failed to allocate memory for SF_INFO\n");
       break;
@@ -97,8 +97,9 @@ int main(int argc, char **argv) {
 
     // Validate audio format
     if (sfinfo->channels != 1) {
-      fprintf(stderr, "Error: Only mono audio is supported (file has %d "
-                      "channels)\n",
+      fprintf(stderr,
+              "Error: Only mono audio is supported (file has %d "
+              "channels)\n",
               sfinfo->channels);
       break;
     }
@@ -112,13 +113,13 @@ int main(int argc, char **argv) {
     }
 
     // Allocate buffers
-    input_library_buffer = (float *)calloc(BLOCK_SIZE, sizeof(float));
+    input_library_buffer = (float*)calloc(BLOCK_SIZE, sizeof(float));
     if (!input_library_buffer) {
       fprintf(stderr, "Error: Failed to allocate input buffer\n");
       break;
     }
 
-    output_library_buffer = (float *)calloc(BLOCK_SIZE, sizeof(float));
+    output_library_buffer = (float*)calloc(BLOCK_SIZE, sizeof(float));
     if (!output_library_buffer) {
       fprintf(stderr, "Error: Failed to allocate output buffer\n");
       break;
@@ -173,8 +174,9 @@ int main(int argc, char **argv) {
       // Process the audio to learn the noise profile
       if (!specbleach_process(lib_instance, (uint32_t)BLOCK_SIZE,
                               input_library_buffer, output_library_buffer)) {
-        fprintf(stderr,
-                "Error: Failed to process audio during noise profile learning\n");
+        fprintf(
+            stderr,
+            "Error: Failed to process audio during noise profile learning\n");
         break;
       }
     }
