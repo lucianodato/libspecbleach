@@ -1,10 +1,2 @@
 CompileFlags:
-  Add:
-    - -I/opt/homebrew/include
-    - -I/usr/local/include
-    - -I/opt/homebrew/Cellar/libsndfile/1.2.2_1/include
   CompilationDatabase: .
-
-Diagnostics:
-  UnusedIncludes: None
-  MissingIncludes: None
