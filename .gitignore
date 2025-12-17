@@ -66,8 +66,9 @@ meson-info/
 # Valgrind dumps
 *.valgrind
 
-# Vscode files
+# IDE files
 .vscode/
+.cursorrules
 .cache/
 
 # Log files
