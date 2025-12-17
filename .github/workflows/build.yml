@@ -47,10 +47,6 @@ jobs:
             --buildtype=release \
             -Denable_examples=true
 
-      - name: Build library
-        run: |
-          meson compile -C build -v
-
-      - name: Build examples
+      - name: Build project
         run: |
           meson compile -C build -v
