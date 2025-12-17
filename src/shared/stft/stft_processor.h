@@ -21,7 +21,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #ifndef STFT_PROCESSOR_H
 #define STFT_PROCESSOR_H
 
-#include "../../interfaces/spectral_processor.h"
+#include "../spectral_processor.h"
 #include "../utils/spectral_utils.h"
 #include "fft_transform.h"
 #include <stdbool.h>

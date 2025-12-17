@@ -21,8 +21,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #ifndef SPECTRAL_DENOISER_H
 #define SPECTRAL_DENOISER_H
 
-#include "../../interfaces/spectral_processor.h"
-#include "../../shared/noise_estimation/noise_profile.h"
+#include "shared/spectral_processor.h"
+#include "shared/noise_estimation/noise_profile.h"
 #include <stdbool.h>
 #include <stdint.h>
 

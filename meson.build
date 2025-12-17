@@ -82,5 +82,5 @@ subdir('src')
 
 # Examples building
 if get_option('enable_examples')
-  subdir('example')
+  subdir('examples')
 endif
