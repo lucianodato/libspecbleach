@@ -28,7 +28,7 @@ extern "C" {
 #include <stdbool.h>
 #include <stdint.h>
 
-typedef void *SpectralBleachHandle;
+typedef void* SpectralBleachHandle;
 
 typedef struct SpectralBleachParameters {
 
@@ -104,8 +104,8 @@ bool specbleach_load_parameters(SpectralBleachHandle instance,
  * Process buffer of a number of samples
  */
 bool specbleach_process(SpectralBleachHandle instance,
-                        uint32_t number_of_samples, const float *input,
-                        float *output);
+                        uint32_t number_of_samples, const float* input,
+                        float* output);
 /**
  * Returns the latency in samples associated with the library instance
  */
@@ -117,12 +117,12 @@ uint32_t specbleach_get_noise_profile_size(SpectralBleachHandle instance);
 /**
  * Returns a pointer to the noise profile calculated inside the instance
  */
-float *specbleach_get_noise_profile(SpectralBleachHandle instance);
+float* specbleach_get_noise_profile(SpectralBleachHandle instance);
 /**
  * Allows to load a custom noise profile
  */
 bool specbleach_load_noise_profile(SpectralBleachHandle instance,
-                                   const float *restored_profile,
+                                   const float* restored_profile,
                                    uint32_t profile_size,
                                    uint32_t profile_blocks);
 /**
@@ -136,8 +136,8 @@ bool specbleach_noise_profile_available(SpectralBleachHandle instance);
 /**
  * Returns the number of blocks used for the noise profile calculation
  */
-uint32_t
-specbleach_get_noise_profile_blocks_averaged(SpectralBleachHandle instance);
+uint32_t specbleach_get_noise_profile_blocks_averaged(
+    SpectralBleachHandle instance);
 
 #ifdef __cplusplus
 }

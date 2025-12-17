@@ -28,33 +28,33 @@ struct StftBuffer {
   uint32_t stft_frame_size;
   uint32_t block_step;
 
-  float *in_fifo;
-  float *out_fifo;
+  float* in_fifo;
+  float* out_fifo;
 };
 
-StftBuffer *stft_buffer_initialize(const uint32_t stft_frame_size,
+StftBuffer* stft_buffer_initialize(const uint32_t stft_frame_size,
                                    const uint32_t start_position,
                                    const uint32_t block_step) {
-  StftBuffer *self = (StftBuffer *)calloc(1U, sizeof(StftBuffer));
+  StftBuffer* self = (StftBuffer*)calloc(1U, sizeof(StftBuffer));
 
   self->stft_frame_size = stft_frame_size;
   self->start_position = start_position;
   self->block_step = block_step;
   self->read_position = self->start_position;
-  self->in_fifo = (float *)calloc(self->stft_frame_size, sizeof(float));
-  self->out_fifo = (float *)calloc(self->stft_frame_size, sizeof(float));
+  self->in_fifo = (float*)calloc(self->stft_frame_size, sizeof(float));
+  self->out_fifo = (float*)calloc(self->stft_frame_size, sizeof(float));
 
   return self;
 }
 
-void stft_buffer_free(StftBuffer *self) {
+void stft_buffer_free(StftBuffer* self) {
   free(self->in_fifo);
   free(self->out_fifo);
 
   free(self);
 }
 
-bool is_buffer_full(StftBuffer *self) {
+bool is_buffer_full(StftBuffer* self) {
   if (self->read_position == self->stft_frame_size) {
     return true;
   }
@@ -62,7 +62,7 @@ bool is_buffer_full(StftBuffer *self) {
   return false;
 }
 
-float stft_buffer_fill(StftBuffer *self, const float input_sample) {
+float stft_buffer_fill(StftBuffer* self, const float input_sample) {
   float sample_value = 0.F;
 
   self->in_fifo[self->read_position] = input_sample;
@@ -74,8 +74,8 @@ float stft_buffer_fill(StftBuffer *self, const float input_sample) {
   return sample_value;
 }
 
-bool stft_buffer_advance_block(StftBuffer *self,
-                               const float *reconstructed_signal) {
+bool stft_buffer_advance_block(StftBuffer* self,
+                               const float* reconstructed_signal) {
   if (!reconstructed_signal) {
     return false;
   }
@@ -91,4 +91,6 @@ bool stft_buffer_advance_block(StftBuffer *self,
   return true;
 }
 
-float *get_full_buffer_block(StftBuffer *self) { return self->in_fifo; }
+float* get_full_buffer_block(StftBuffer* self) {
+  return self->in_fifo;
+}

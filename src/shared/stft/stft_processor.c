@@ -33,58 +33,101 @@ struct StftProcessor {
   uint32_t overlap_factor;
   uint32_t fft_size;
   uint32_t frame_size;
-  float *output_accumulator;
-  float *tmp_buffer;
+  float* output_accumulator;
+  float* tmp_buffer;
 
-  FftTransform *fft_transform;
-  StftBuffer *stft_buffer;
-  StftWindows *stft_windows;
+  FftTransform* fft_transform;
+  StftBuffer* stft_buffer;
+  StftWindows* stft_windows;
 };
 
-StftProcessor *stft_processor_initialize(const uint32_t sample_rate,
+StftProcessor* stft_processor_initialize(const uint32_t sample_rate,
                                          const float stft_frame_size,
                                          const uint32_t overlap_factor,
                                          ZeroPaddingType padding_type,
                                          const uint32_t zeropadding_amount,
                                          WindowTypes input_window,
                                          WindowTypes output_window) {
-  StftProcessor *self = (StftProcessor *)calloc(1U, sizeof(StftProcessor));
+  if (sample_rate == 0 || stft_frame_size <= 0.0f || overlap_factor == 0) {
+    return NULL;
+  }
+
+  StftProcessor* self = (StftProcessor*)calloc(1U, sizeof(StftProcessor));
+  if (!self) {
+    return NULL;
+  }
 
   self->frame_size =
       (uint32_t)((stft_frame_size / 1000.F) * (float)sample_rate);
   self->fft_transform = fft_transform_initialize(self->frame_size, padding_type,
                                                  zeropadding_amount);
+  if (!self->fft_transform) {
+    stft_processor_free(self);
+    return NULL;
+  }
+
   self->fft_size = get_fft_size(self->fft_transform);
   self->overlap_factor = overlap_factor;
   self->hop = self->frame_size / self->overlap_factor;
   self->input_latency = self->frame_size - self->hop;
 
   self->output_accumulator =
-      (float *)calloc(self->frame_size * 2L, sizeof(float));
-  self->tmp_buffer = (float *)calloc(self->frame_size, sizeof(float));
+      (float*)calloc(self->frame_size * 2L, sizeof(float));
+  if (!self->output_accumulator) {
+    stft_processor_free(self);
+    return NULL;
+  }
+
+  self->tmp_buffer = (float*)calloc(self->frame_size, sizeof(float));
+  if (!self->tmp_buffer) {
+    stft_processor_free(self);
+    return NULL;
+  }
 
   self->stft_buffer =
       stft_buffer_initialize(self->frame_size, self->input_latency, self->hop);
+  if (!self->stft_buffer) {
+    stft_processor_free(self);
+    return NULL;
+  }
 
   self->stft_windows = stft_window_initialize(
       self->fft_size, self->overlap_factor, input_window, output_window);
+  if (!self->stft_windows) {
+    stft_processor_free(self);
+    return NULL;
+  }
 
   return self;
 }
 
-void stft_processor_free(StftProcessor *self) {
-  stft_buffer_free(self->stft_buffer);
-  stft_window_free(self->stft_windows);
-  fft_transform_free(self->fft_transform);
+void stft_processor_free(StftProcessor* self) {
+  if (!self) {
+    return;
+  }
 
-  free(self->output_accumulator);
-  free(self->tmp_buffer);
+  if (self->stft_buffer) {
+    stft_buffer_free(self->stft_buffer);
+  }
+  if (self->stft_windows) {
+    stft_window_free(self->stft_windows);
+  }
+  if (self->fft_transform) {
+    fft_transform_free(self->fft_transform);
+  }
+
+  if (self->output_accumulator) {
+    free(self->output_accumulator);
+  }
+  if (self->tmp_buffer) {
+    free(self->tmp_buffer);
+  }
 
   free(self);
 }
 
-bool stft_processor_run(StftProcessor *self, const uint32_t number_of_samples,
-                        const float *input, float *output,
+bool stft_processor_run(StftProcessor* self, const uint32_t number_of_samples,
+                        const float* input, float* output,
                         spectral_processing spectral_processing,
                         SpectralProcessorHandle spectral_processor) {
   if (!self || !input || !output || number_of_samples <= 0U) {
@@ -134,10 +177,23 @@ bool stft_processor_run(StftProcessor *self, const uint32_t number_of_samples,
   return true;
 }
 
-uint32_t get_stft_latency(StftProcessor *self) { return self->input_latency; }
+uint32_t get_stft_latency(StftProcessor* self) {
+  if (!self) {
+    return 0;
+  }
+  return self->input_latency;
+}
 
-uint32_t get_stft_fft_size(StftProcessor *self) { return self->fft_size; }
+uint32_t get_stft_fft_size(StftProcessor* self) {
+  if (!self) {
+    return 0;
+  }
+  return self->fft_size;
+}
 
-uint32_t get_stft_real_spectrum_size(StftProcessor *self) {
+uint32_t get_stft_real_spectrum_size(StftProcessor* self) {
+  if (!self) {
+    return 0;
+  }
   return get_fft_real_spectrum_size(self->fft_transform);
 }

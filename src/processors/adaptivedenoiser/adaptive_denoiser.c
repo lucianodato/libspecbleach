@@ -19,16 +19,16 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 #include "adaptive_denoiser.h"
-#include "../../shared/configurations.h"
-#include "../../shared/gain_estimation/gain_estimators.h"
-#include "../../shared/noise_estimation/adaptive_noise_estimator.h"
-#include "../../shared/post_estimation/postfilter.h"
-#include "../../shared/pre_estimation/critical_bands.h"
-#include "../../shared/pre_estimation/noise_scaling_criterias.h"
-#include "../../shared/pre_estimation/spectral_smoother.h"
-#include "../../shared/utils/denoise_mixer.h"
-#include "../../shared/utils/spectral_features.h"
-#include "../../shared/utils/spectral_utils.h"
+#include "shared/configurations.h"
+#include "shared/gain_estimation/gain_estimators.h"
+#include "shared/noise_estimation/adaptive_noise_estimator.h"
+#include "shared/post_estimation/postfilter.h"
+#include "shared/pre_estimation/critical_bands.h"
+#include "shared/pre_estimation/noise_scaling_criterias.h"
+#include "shared/pre_estimation/spectral_smoother.h"
+#include "shared/utils/denoise_mixer.h"
+#include "shared/utils/spectral_features.h"
+#include "shared/utils/spectral_utils.h"
 #include <float.h>
 #include <math.h>
 #include <stdlib.h>
@@ -44,33 +44,39 @@ typedef struct SpectralAdaptiveDenoiser {
 
   AdaptiveDenoiserParameters parameters;
 
-  float *alpha;
-  float *beta;
-  float *gain_spectrum;
-  float *residual_spectrum;
-  float *denoised_spectrum;
-  float *noise_profile;
+  float* alpha;
+  float* beta;
+  float* gain_spectrum;
+  float* residual_spectrum;
+  float* denoised_spectrum;
+  float* noise_profile;
 
   SpectrumType spectrum_type;
   CriticalBandType band_type;
   GainEstimationType gain_estimation_type;
   TimeSmoothingType time_smoothing_type;
 
-  DenoiseMixer *mixer;
-  NoiseScalingCriterias *noise_scaling_criteria;
-  SpectralSmoother *spectrum_smoothing;
-  PostFilter *postfiltering;
-  AdaptiveNoiseEstimator *adaptive_estimator;
-  SpectralFeatures *spectral_features;
+  DenoiseMixer* mixer;
+  NoiseScalingCriterias* noise_scaling_criteria;
+  SpectralSmoother* spectrum_smoothing;
+  PostFilter* postfiltering;
+  AdaptiveNoiseEstimator* adaptive_estimator;
+  SpectralFeatures* spectral_features;
 } SpectralAdaptiveDenoiser;
 
-SpectralProcessorHandle
-spectral_adaptive_denoiser_initialize(const uint32_t sample_rate,
-                                      const uint32_t fft_size,
-                                      const uint32_t overlap_factor) {
+SpectralProcessorHandle spectral_adaptive_denoiser_initialize(
+    const uint32_t sample_rate, const uint32_t fft_size,
+    const uint32_t overlap_factor) {
 
-  SpectralAdaptiveDenoiser *self =
-      (SpectralAdaptiveDenoiser *)calloc(1U, sizeof(SpectralAdaptiveDenoiser));
+  if (sample_rate == 0 || fft_size == 0 || overlap_factor == 0) {
+    return NULL;
+  }
+
+  SpectralAdaptiveDenoiser* self =
+      (SpectralAdaptiveDenoiser*)calloc(1U, sizeof(SpectralAdaptiveDenoiser));
+  if (!self) {
+    return NULL;
+  }
 
   self->fft_size = fft_size;
   self->real_spectrum_size = self->fft_size / 2U + 1U;
@@ -83,53 +89,134 @@ spectral_adaptive_denoiser_initialize(const uint32_t sample_rate,
   self->gain_estimation_type = GAIN_ESTIMATION_TYPE_SPEECH;
   self->time_smoothing_type = TIME_SMOOTHING_TYPE_SPEECH;
 
-  self->gain_spectrum = (float *)calloc(self->fft_size, sizeof(float));
-  initialize_spectrum_with_value(self->gain_spectrum, self->fft_size, 1.F);
-  self->alpha = (float *)calloc(self->real_spectrum_size, sizeof(float));
-  initialize_spectrum_with_value(self->alpha, self->real_spectrum_size, 1.F);
-  self->beta = (float *)calloc(self->real_spectrum_size, sizeof(float));
-  self->noise_profile =
-      (float *)calloc(self->real_spectrum_size, sizeof(float));
+  self->gain_spectrum = (float*)calloc(self->fft_size, sizeof(float));
+  if (!self->gain_spectrum) {
+    spectral_adaptive_denoiser_free(self);
+    return NULL;
+  }
+  (void)initialize_spectrum_with_value(self->gain_spectrum, self->fft_size,
+                                       1.F);
+
+  self->alpha = (float*)calloc(self->real_spectrum_size, sizeof(float));
+  if (!self->alpha) {
+    spectral_adaptive_denoiser_free(self);
+    return NULL;
+  }
+  (void)initialize_spectrum_with_value(self->alpha, self->real_spectrum_size,
+                                       1.F);
+
+  self->beta = (float*)calloc(self->real_spectrum_size, sizeof(float));
+  if (!self->beta) {
+    spectral_adaptive_denoiser_free(self);
+    return NULL;
+  }
+
+  self->noise_profile = (float*)calloc(self->real_spectrum_size, sizeof(float));
+  if (!self->noise_profile) {
+    spectral_adaptive_denoiser_free(self);
+    return NULL;
+  }
 
   self->adaptive_estimator = louizou_estimator_initialize(
       self->real_spectrum_size, sample_rate, fft_size);
+  if (!self->adaptive_estimator) {
+    spectral_adaptive_denoiser_free(self);
+    return NULL;
+  }
 
-  self->residual_spectrum = (float *)calloc((self->fft_size), sizeof(float));
-  self->denoised_spectrum = (float *)calloc((self->fft_size), sizeof(float));
+  self->residual_spectrum = (float*)calloc((self->fft_size), sizeof(float));
+  if (!self->residual_spectrum) {
+    spectral_adaptive_denoiser_free(self);
+    return NULL;
+  }
+
+  self->denoised_spectrum = (float*)calloc((self->fft_size), sizeof(float));
+  if (!self->denoised_spectrum) {
+    spectral_adaptive_denoiser_free(self);
+    return NULL;
+  }
 
   self->postfiltering = postfilter_initialize(self->fft_size);
+  if (!self->postfiltering) {
+    spectral_adaptive_denoiser_free(self);
+    return NULL;
+  }
 
   self->spectrum_smoothing =
       spectral_smoothing_initialize(self->fft_size, self->time_smoothing_type);
+  if (!self->spectrum_smoothing) {
+    spectral_adaptive_denoiser_free(self);
+    return NULL;
+  }
 
   self->noise_scaling_criteria = noise_scaling_criterias_initialize(
       self->fft_size, self->band_type, self->sample_rate, self->spectrum_type);
+  if (!self->noise_scaling_criteria) {
+    spectral_adaptive_denoiser_free(self);
+    return NULL;
+  }
 
   self->spectral_features =
       spectral_features_initialize(self->real_spectrum_size);
+  if (!self->spectral_features) {
+    spectral_adaptive_denoiser_free(self);
+    return NULL;
+  }
 
   self->mixer =
       denoise_mixer_initialize(self->fft_size, self->sample_rate, self->hop);
+  if (!self->mixer) {
+    spectral_adaptive_denoiser_free(self);
+    return NULL;
+  }
 
   return self;
 }
 
 void spectral_adaptive_denoiser_free(SpectralProcessorHandle instance) {
-  SpectralAdaptiveDenoiser *self = (SpectralAdaptiveDenoiser *)instance;
+  SpectralAdaptiveDenoiser* self = (SpectralAdaptiveDenoiser*)instance;
 
-  louizou_estimator_free(self->adaptive_estimator);
-  spectral_features_free(self->spectral_features);
-  noise_scaling_criterias_free(self->noise_scaling_criteria);
-  spectral_smoothing_free(self->spectrum_smoothing);
-  postfilter_free(self->postfiltering);
-  denoise_mixer_free(self->mixer);
+  if (!self) {
+    return;
+  }
 
-  free(self->residual_spectrum);
-  free(self->denoised_spectrum);
-  free(self->noise_profile);
-  free(self->gain_spectrum);
-  free(self->alpha);
-  free(self->beta);
+  if (self->adaptive_estimator) {
+    louizou_estimator_free(self->adaptive_estimator);
+  }
+  if (self->spectral_features) {
+    spectral_features_free(self->spectral_features);
+  }
+  if (self->noise_scaling_criteria) {
+    noise_scaling_criterias_free(self->noise_scaling_criteria);
+  }
+  if (self->spectrum_smoothing) {
+    spectral_smoothing_free(self->spectrum_smoothing);
+  }
+  if (self->postfiltering) {
+    postfilter_free(self->postfiltering);
+  }
+  if (self->mixer) {
+    denoise_mixer_free(self->mixer);
+  }
+
+  if (self->residual_spectrum) {
+    free(self->residual_spectrum);
+  }
+  if (self->denoised_spectrum) {
+    free(self->denoised_spectrum);
+  }
+  if (self->noise_profile) {
+    free(self->noise_profile);
+  }
+  if (self->gain_spectrum) {
+    free(self->gain_spectrum);
+  }
+  if (self->alpha) {
+    free(self->alpha);
+  }
+  if (self->beta) {
+    free(self->beta);
+  }
 
   free(self);
 }
@@ -140,21 +227,21 @@ bool load_adaptive_reduction_parameters(SpectralProcessorHandle instance,
     return false;
   }
 
-  SpectralAdaptiveDenoiser *self = (SpectralAdaptiveDenoiser *)instance;
+  SpectralAdaptiveDenoiser* self = (SpectralAdaptiveDenoiser*)instance;
   self->parameters = parameters;
 
   return true;
 }
 
 bool spectral_adaptive_denoiser_run(SpectralProcessorHandle instance,
-                                    float *fft_spectrum) {
+                                    float* fft_spectrum) {
   if (!fft_spectrum || !instance) {
     return false;
   }
 
-  SpectralAdaptiveDenoiser *self = (SpectralAdaptiveDenoiser *)instance;
+  SpectralAdaptiveDenoiser* self = (SpectralAdaptiveDenoiser*)instance;
 
-  float *reference_spectrum =
+  float* reference_spectrum =
       get_spectral_feature(self->spectral_features, fft_spectrum,
                            self->fft_size, self->spectrum_type);
 

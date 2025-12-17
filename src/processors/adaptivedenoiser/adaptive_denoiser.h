@@ -21,7 +21,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #ifndef SPECTRAL_ADAPTIVE_DENOISER_H
 #define SPECTRAL_ADAPTIVE_DENOISER_H
 
-#include "../../interfaces/spectral_processor.h"
+#include "shared/spectral_processor.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -35,13 +35,12 @@ typedef struct AdaptiveDenoiserParameters {
   bool residual_listen;
 } AdaptiveDenoiserParameters;
 
-SpectralProcessorHandle
-spectral_adaptive_denoiser_initialize(uint32_t sample_rate, uint32_t fft_size,
-                                      uint32_t overlap_factor);
+SpectralProcessorHandle spectral_adaptive_denoiser_initialize(
+    uint32_t sample_rate, uint32_t fft_size, uint32_t overlap_factor);
 void spectral_adaptive_denoiser_free(SpectralProcessorHandle instance);
 bool load_adaptive_reduction_parameters(SpectralProcessorHandle instance,
                                         AdaptiveDenoiserParameters parameters);
 bool spectral_adaptive_denoiser_run(SpectralProcessorHandle instance,
-                                    float *fft_spectrum);
+                                    float* fft_spectrum);
 
 #endif

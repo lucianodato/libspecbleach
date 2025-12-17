@@ -18,11 +18,11 @@ License along with this library; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#include "../../include/specbleach_adenoiser.h"
-#include "../shared/configurations.h"
-#include "../shared/stft/stft_processor.h"
-#include "../shared/utils/general_utils.h"
+#include "specbleach/specbleach_adenoiser.h"
 #include "adaptivedenoiser/adaptive_denoiser.h"
+#include "shared/configurations.h"
+#include "shared/stft/stft_processor.h"
+#include "shared/utils/general_utils.h"
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -32,13 +32,13 @@ typedef struct SbAdaptiveDenoiser {
   AdaptiveDenoiserParameters denoise_parameters;
 
   SpectralProcessorHandle adaptive_spectral_denoiser;
-  StftProcessor *stft_processor;
+  StftProcessor* stft_processor;
 } SbAdaptiveDenoiser;
 
 SpectralBleachHandle specbleach_adaptive_initialize(const uint32_t sample_rate,
                                                     float frame_size) {
-  SbAdaptiveDenoiser *self =
-      (SbAdaptiveDenoiser *)calloc(1U, sizeof(SbAdaptiveDenoiser));
+  SbAdaptiveDenoiser* self =
+      (SbAdaptiveDenoiser*)calloc(1U, sizeof(SbAdaptiveDenoiser));
 
   self->sample_rate = sample_rate;
 
@@ -66,7 +66,7 @@ SpectralBleachHandle specbleach_adaptive_initialize(const uint32_t sample_rate,
 }
 
 void specbleach_adaptive_free(SpectralBleachHandle instance) {
-  SbAdaptiveDenoiser *self = (SbAdaptiveDenoiser *)instance;
+  SbAdaptiveDenoiser* self = (SbAdaptiveDenoiser*)instance;
 
   spectral_adaptive_denoiser_free(self->adaptive_spectral_denoiser);
   stft_processor_free(self->stft_processor);
@@ -75,19 +75,19 @@ void specbleach_adaptive_free(SpectralBleachHandle instance) {
 }
 
 uint32_t specbleach_adaptive_get_latency(SpectralBleachHandle instance) {
-  SbAdaptiveDenoiser *self = (SbAdaptiveDenoiser *)instance;
+  SbAdaptiveDenoiser* self = (SbAdaptiveDenoiser*)instance;
 
   return get_stft_latency(self->stft_processor);
 }
 
 bool specbleach_adaptive_process(SpectralBleachHandle instance,
                                  const uint32_t number_of_samples,
-                                 const float *input, float *output) {
+                                 const float* input, float* output) {
   if (!instance || number_of_samples == 0 || !input || !output) {
     return false;
   }
 
-  SbAdaptiveDenoiser *self = (SbAdaptiveDenoiser *)instance;
+  SbAdaptiveDenoiser* self = (SbAdaptiveDenoiser*)instance;
 
   stft_processor_run(self->stft_processor, number_of_samples, input, output,
                      &spectral_adaptive_denoiser_run,
@@ -102,7 +102,7 @@ bool specbleach_adaptive_load_parameters(SpectralBleachHandle instance,
     return false;
   }
 
-  SbAdaptiveDenoiser *self = (SbAdaptiveDenoiser *)instance;
+  SbAdaptiveDenoiser* self = (SbAdaptiveDenoiser*)instance;
 
   // clang-format off
   self->denoise_parameters = (AdaptiveDenoiserParameters){

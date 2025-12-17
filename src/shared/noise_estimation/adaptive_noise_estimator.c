@@ -28,50 +28,49 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <string.h>
 
 typedef struct FrameSpectrum {
-  float *smoothed_spectrum;
-  float *local_minimum_spectrum;
-  float *speech_present_probability_spectrum;
+  float* smoothed_spectrum;
+  float* local_minimum_spectrum;
+  float* speech_present_probability_spectrum;
 } FrameSpectrum;
 
-static FrameSpectrum *frame_spectrum_initialize(uint32_t frame_size);
-static void frame_spectrum_free(FrameSpectrum *self);
-static void compute_auto_thresholds(AdaptiveNoiseEstimator *self,
+static FrameSpectrum* frame_spectrum_initialize(uint32_t frame_size);
+static void frame_spectrum_free(FrameSpectrum* self);
+static void compute_auto_thresholds(AdaptiveNoiseEstimator* self,
                                     uint32_t sample_rate,
                                     uint32_t noise_spectrum_size,
                                     uint32_t fft_size);
-static void update_frame_spectums(AdaptiveNoiseEstimator *self,
-                                  const float *noise_spectrum);
+static void update_frame_spectums(AdaptiveNoiseEstimator* self,
+                                  const float* noise_spectrum);
 
 struct AdaptiveNoiseEstimator {
   uint32_t noise_spectrum_size;
   float noisy_speech_ratio;
 
-  FrameSpectrum *current;
-  FrameSpectrum *previous;
+  FrameSpectrum* current;
+  FrameSpectrum* previous;
 
-  float *minimum_detection_thresholds;
-  float *previous_noise_spectrum;
-  float *time_frequency_smoothing_constant;
-  uint32_t *speech_presence_detection;
+  float* minimum_detection_thresholds;
+  float* previous_noise_spectrum;
+  float* time_frequency_smoothing_constant;
+  uint32_t* speech_presence_detection;
 };
 
-AdaptiveNoiseEstimator *
-louizou_estimator_initialize(const uint32_t noise_spectrum_size,
-                             const uint32_t sample_rate,
-                             const uint32_t fft_size) {
-  AdaptiveNoiseEstimator *self =
-      (AdaptiveNoiseEstimator *)calloc(1U, sizeof(AdaptiveNoiseEstimator));
+AdaptiveNoiseEstimator* louizou_estimator_initialize(
+    const uint32_t noise_spectrum_size, const uint32_t sample_rate,
+    const uint32_t fft_size) {
+  AdaptiveNoiseEstimator* self =
+      (AdaptiveNoiseEstimator*)calloc(1U, sizeof(AdaptiveNoiseEstimator));
 
   self->noise_spectrum_size = noise_spectrum_size;
 
   self->minimum_detection_thresholds =
-      (float *)calloc(self->noise_spectrum_size, sizeof(float));
+      (float*)calloc(self->noise_spectrum_size, sizeof(float));
   self->time_frequency_smoothing_constant =
-      (float *)calloc(self->noise_spectrum_size, sizeof(float));
+      (float*)calloc(self->noise_spectrum_size, sizeof(float));
   self->speech_presence_detection =
-      (uint32_t *)calloc(self->noise_spectrum_size, sizeof(uint32_t));
+      (uint32_t*)calloc(self->noise_spectrum_size, sizeof(uint32_t));
   self->previous_noise_spectrum =
-      (float *)calloc(self->noise_spectrum_size, sizeof(float));
+      (float*)calloc(self->noise_spectrum_size, sizeof(float));
 
   compute_auto_thresholds(self, sample_rate, noise_spectrum_size, fft_size);
   self->current = frame_spectrum_initialize(noise_spectrum_size);
@@ -82,7 +81,7 @@ louizou_estimator_initialize(const uint32_t noise_spectrum_size,
   return self;
 }
 
-void louizou_estimator_free(AdaptiveNoiseEstimator *self) {
+void louizou_estimator_free(AdaptiveNoiseEstimator* self) {
   free(self->minimum_detection_thresholds);
   free(self->time_frequency_smoothing_constant);
   free(self->speech_presence_detection);
@@ -94,8 +93,8 @@ void louizou_estimator_free(AdaptiveNoiseEstimator *self) {
   free(self);
 }
 
-bool louizou_estimator_run(AdaptiveNoiseEstimator *self, const float *spectrum,
-                           float *noise_spectrum) {
+bool louizou_estimator_run(AdaptiveNoiseEstimator* self, const float* spectrum,
+                           float* noise_spectrum) {
   if (!self || !spectrum || !noise_spectrum) {
     return false;
   }
@@ -146,8 +145,8 @@ bool louizou_estimator_run(AdaptiveNoiseEstimator *self, const float *spectrum,
   return true;
 }
 
-static void update_frame_spectums(AdaptiveNoiseEstimator *self,
-                                  const float *noise_spectrum) {
+static void update_frame_spectums(AdaptiveNoiseEstimator* self,
+                                  const float* noise_spectrum) {
   memcpy(self->previous_noise_spectrum, noise_spectrum,
          sizeof(float) * self->noise_spectrum_size);
   memcpy(self->previous->local_minimum_spectrum,
@@ -160,21 +159,21 @@ static void update_frame_spectums(AdaptiveNoiseEstimator *self,
          sizeof(float) * self->noise_spectrum_size);
 }
 
-static FrameSpectrum *frame_spectrum_initialize(const uint32_t frame_size) {
-  FrameSpectrum *self = (FrameSpectrum *)calloc(1U, sizeof(FrameSpectrum));
+static FrameSpectrum* frame_spectrum_initialize(const uint32_t frame_size) {
+  FrameSpectrum* self = (FrameSpectrum*)calloc(1U, sizeof(FrameSpectrum));
 
-  self->smoothed_spectrum = (float *)calloc(frame_size, sizeof(float));
-  self->local_minimum_spectrum = (float *)calloc(frame_size, sizeof(float));
+  self->smoothed_spectrum = (float*)calloc(frame_size, sizeof(float));
+  self->local_minimum_spectrum = (float*)calloc(frame_size, sizeof(float));
   self->speech_present_probability_spectrum =
-      (float *)calloc(frame_size, sizeof(float));
+      (float*)calloc(frame_size, sizeof(float));
 
-  initialize_spectrum_with_value(self->local_minimum_spectrum, frame_size,
-                                 FLT_MIN);
+  (void)initialize_spectrum_with_value(self->local_minimum_spectrum, frame_size,
+                                       FLT_MIN);
 
   return self;
 }
 
-static void frame_spectrum_free(FrameSpectrum *self) {
+static void frame_spectrum_free(FrameSpectrum* self) {
   free(self->smoothed_spectrum);
   free(self->local_minimum_spectrum);
   free(self->speech_present_probability_spectrum);
@@ -182,7 +181,7 @@ static void frame_spectrum_free(FrameSpectrum *self) {
   free(self);
 }
 
-static void compute_auto_thresholds(AdaptiveNoiseEstimator *self,
+static void compute_auto_thresholds(AdaptiveNoiseEstimator* self,
                                     const uint32_t sample_rate,
                                     const uint32_t noise_spectrum_size,
                                     const uint32_t fft_size) {

@@ -32,9 +32,9 @@ typedef enum SpectrumType {
   PHASE_SPECTRUM = 2,
 } SpectrumType;
 
-SpectralFeatures *spectral_features_initialize(uint32_t real_spectrum_size);
-void spectral_features_free(SpectralFeatures *self);
-float *get_spectral_feature(SpectralFeatures *self, const float *fft_spectrum,
+SpectralFeatures* spectral_features_initialize(uint32_t real_spectrum_size);
+void spectral_features_free(SpectralFeatures* self);
+float* get_spectral_feature(SpectralFeatures* self, const float* fft_spectrum,
                             uint32_t fft_spectrum_size, SpectrumType type);
 
 #endif

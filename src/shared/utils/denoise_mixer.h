@@ -32,11 +32,11 @@ typedef struct DenoiseMixerParameters {
 
 typedef struct DenoiseMixer DenoiseMixer;
 
-DenoiseMixer *denoise_mixer_initialize(uint32_t fft_size, uint32_t sample_rate,
+DenoiseMixer* denoise_mixer_initialize(uint32_t fft_size, uint32_t sample_rate,
                                        uint32_t hop);
-void denoise_mixer_free(DenoiseMixer *self);
-bool denoise_mixer_run(DenoiseMixer *self, float *fft_spectrum,
-                       const float *gain_spectrum,
+void denoise_mixer_free(DenoiseMixer* self);
+bool denoise_mixer_run(DenoiseMixer* self, float* fft_spectrum,
+                       const float* gain_spectrum,
                        DenoiseMixerParameters parameters);
 
 #endif

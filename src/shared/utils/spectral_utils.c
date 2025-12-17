@@ -46,7 +46,7 @@ static float vorbis(const uint32_t bin_index, const uint32_t fft_size) {
   return sanitize_denormal(sinf(M_PI / 2.F * powf(sinf(M_PI * p), 2.F)));
 }
 
-bool get_fft_window(float *window, const uint32_t fft_size,
+bool get_fft_window(float* window, const uint32_t fft_size,
                     const WindowTypes window_type) {
   if (!window || !fft_size) {
     return false;
@@ -54,27 +54,27 @@ bool get_fft_window(float *window, const uint32_t fft_size,
 
   for (uint32_t k = 0; k < fft_size; k++) {
     switch (window_type) {
-    case HANN_WINDOW:
-      window[k] = hanning(k, fft_size);
-      break;
-    case HAMMING_WINDOW:
-      window[k] = hamming(k, fft_size);
-      break;
-    case BLACKMAN_WINDOW:
-      window[k] = blackman(k, fft_size);
-      break;
-    case VORBIS_WINDOW:
-      window[k] = vorbis(k, fft_size);
-      break;
-    default:
-      break;
+      case HANN_WINDOW:
+        window[k] = hanning(k, fft_size);
+        break;
+      case HAMMING_WINDOW:
+        window[k] = hamming(k, fft_size);
+        break;
+      case BLACKMAN_WINDOW:
+        window[k] = blackman(k, fft_size);
+        break;
+      case VORBIS_WINDOW:
+        window[k] = vorbis(k, fft_size);
+        break;
+      default:
+        break;
     }
   }
 
   return true;
 }
 
-bool initialize_spectrum_with_value(float *spectrum, uint32_t spectrum_size,
+bool initialize_spectrum_with_value(float* spectrum, uint32_t spectrum_size,
                                     const float value) {
   if (!spectrum || spectrum_size <= 0U) {
     return false;
@@ -87,7 +87,7 @@ bool initialize_spectrum_with_value(float *spectrum, uint32_t spectrum_size,
   return true;
 }
 
-float max_spectral_value(const float *spectrum,
+float max_spectral_value(const float* spectrum,
                          const uint32_t real_spectrum_size) {
   if (!spectrum || real_spectrum_size <= 0U) {
     return 0.F;
@@ -100,7 +100,7 @@ float max_spectral_value(const float *spectrum,
   return max;
 }
 
-float min_spectral_value(const float *spectrum,
+float min_spectral_value(const float* spectrum,
                          const uint32_t real_spectrum_size) {
   if (!spectrum || real_spectrum_size <= 0U) {
     return 0.F;
@@ -113,8 +113,8 @@ float min_spectral_value(const float *spectrum,
   return min;
 }
 
-bool min_spectrum(float *spectrum_one, const float *spectrum_two,
-                  const uint32_t spectrum_size) {
+bool min_spectrum_float(float* spectrum_one, const float* spectrum_two,
+                        const uint32_t spectrum_size) {
   if (!spectrum_one || !spectrum_two || spectrum_size <= 0U) {
     return false;
   }
@@ -126,8 +126,8 @@ bool min_spectrum(float *spectrum_one, const float *spectrum_two,
   return true;
 }
 
-bool max_spectrum(float *spectrum_one, const float *spectrum_two,
-                  const uint32_t spectrum_size) {
+bool max_spectrum_float(float* spectrum_one, const float* spectrum_two,
+                        const uint32_t spectrum_size) {
   if (!spectrum_one || !spectrum_two || spectrum_size <= 0U) {
     return false;
   }
@@ -139,9 +139,35 @@ bool max_spectrum(float *spectrum_one, const float *spectrum_two,
   return true;
 }
 
-bool direct_matrix_to_vector_spectral_convolution(const float *matrix_spectum,
-                                                  const float *spectrum,
-                                                  float *out_spectrum,
+bool min_spectrum_double(double* spectrum_one, const double* spectrum_two,
+                         const uint32_t spectrum_size) {
+  if (!spectrum_one || !spectrum_two || spectrum_size <= 0U) {
+    return false;
+  }
+
+  for (uint32_t k = 0; k < spectrum_size; k++) {
+    spectrum_one[k] = fmin(spectrum_one[k], spectrum_two[k]);
+  }
+
+  return true;
+}
+
+bool max_spectrum_double(double* spectrum_one, const double* spectrum_two,
+                         const uint32_t spectrum_size) {
+  if (!spectrum_one || !spectrum_two || spectrum_size <= 0U) {
+    return false;
+  }
+
+  for (uint32_t k = 0; k < spectrum_size; k++) {
+    spectrum_one[k] = fmax(spectrum_one[k], spectrum_two[k]);
+  }
+
+  return true;
+}
+
+bool direct_matrix_to_vector_spectral_convolution(const float* matrix_spectum,
+                                                  const float* spectrum,
+                                                  float* out_spectrum,
                                                   uint32_t spectrum_size) {
   if (!matrix_spectum || !spectrum || !out_spectrum || spectrum_size <= 0) {
     return false;
@@ -167,7 +193,7 @@ uint32_t freq_to_fft_bin(const float freq, const uint32_t sample_rate,
   return (uint32_t)(freq / ((float)sample_rate / (float)fft_size / 2.F));
 }
 
-float spectral_flux(const float *spectrum, const float *previous_spectrum,
+float spectral_flux(const float* spectrum, const float* previous_spectrum,
                     const uint32_t spectrum_size) {
   if (!spectrum || !previous_spectrum || spectrum_size <= 0U) {
     return 0.F;
@@ -182,8 +208,8 @@ float spectral_flux(const float *spectrum, const float *previous_spectrum,
   return spectral_flux;
 }
 
-bool get_rolling_mean_spectrum(float *averaged_spectrum,
-                               const float *current_spectrum,
+bool get_rolling_mean_spectrum(float* averaged_spectrum,
+                               const float* current_spectrum,
                                const uint32_t number_of_blocks,
                                const uint32_t spectrum_size) {
   if (!averaged_spectrum || !current_spectrum || spectrum_size <= 0U) {
@@ -202,14 +228,14 @@ bool get_rolling_mean_spectrum(float *averaged_spectrum,
   return true;
 }
 
-static int min_max_comparator(const void *a, const void *b) {
-  float x = *(const float *)a;
-  float y = *(const float *)b;
+static int min_max_comparator(const void* a, const void* b) {
+  float x = *(const float*)a;
+  float y = *(const float*)b;
 
   return x >= y ? 1 : -1;
 }
 
-static float find_median(const float *array, uint32_t array_size) {
+static float find_median(const float* array, uint32_t array_size) {
   float median = 0.F;
 
   if (array_size % 2 == 0) {
@@ -223,8 +249,8 @@ static float find_median(const float *array, uint32_t array_size) {
   return median;
 }
 
-bool get_rolling_median_spectrum(float *median_spectrum,
-                                 const float *current_spectrum_buffer,
+bool get_rolling_median_spectrum(float* median_spectrum,
+                                 const float* current_spectrum_buffer,
                                  const uint32_t number_of_blocks,
                                  const uint32_t spectrum_size) {
   if (!median_spectrum || !current_spectrum_buffer || spectrum_size <= 0U) {

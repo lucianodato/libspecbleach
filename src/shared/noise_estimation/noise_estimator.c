@@ -29,14 +29,14 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 struct NoiseEstimator {
   uint32_t fft_size;
   uint32_t real_spectrum_size;
-  SpectralTrailingBuffer *median_buffer;
+  SpectralTrailingBuffer* median_buffer;
 
-  NoiseProfile *noise_profile;
+  NoiseProfile* noise_profile;
 };
 
-NoiseEstimator *noise_estimation_initialize(const uint32_t fft_size,
-                                            NoiseProfile *noise_profile) {
-  NoiseEstimator *self = (NoiseEstimator *)calloc(1U, sizeof(NoiseEstimator));
+NoiseEstimator* noise_estimation_initialize(const uint32_t fft_size,
+                                            NoiseProfile* noise_profile) {
+  NoiseEstimator* self = (NoiseEstimator*)calloc(1U, sizeof(NoiseEstimator));
 
   self->fft_size = fft_size;
   self->real_spectrum_size = self->fft_size / 2U + 1U;
@@ -49,7 +49,7 @@ NoiseEstimator *noise_estimation_initialize(const uint32_t fft_size,
   return self;
 }
 
-void noise_estimation_free(NoiseEstimator *self) {
+void noise_estimation_free(NoiseEstimator* self) {
 
   // Don't free noise profile used as reference here
 
@@ -58,40 +58,41 @@ void noise_estimation_free(NoiseEstimator *self) {
   free(self);
 }
 
-bool noise_estimation_run(NoiseEstimator *self,
+bool noise_estimation_run(NoiseEstimator* self,
                           const NoiseEstimatorType noise_estimator_type,
-                          float *signal_spectrum) {
+                          float* signal_spectrum) {
   if (!self || !signal_spectrum) {
     return false;
   }
 
-  float *noise_profile = get_noise_profile(self->noise_profile);
+  float* noise_profile = get_noise_profile(self->noise_profile);
 
   switch (noise_estimator_type) {
-  case ROLLING_MEAN:
-    get_rolling_mean_spectrum(
-        noise_profile, signal_spectrum,
-        get_noise_profile_blocks_averaged(self->noise_profile),
-        self->real_spectrum_size);
-    increment_blocks_averaged(self->noise_profile);
-    break;
-  case MEDIAN:
-    spectral_trailing_buffer_push_back(self->median_buffer, signal_spectrum);
-    bool is_valid_median = get_rolling_median_spectrum(
-        noise_profile, get_trailing_spectral_buffer(self->median_buffer),
-        get_spectrum_buffer_size(self->median_buffer),
-        get_spectrum_size(self->median_buffer));
-    if (is_valid_median) {
+    case ROLLING_MEAN:
+      get_rolling_mean_spectrum(
+          noise_profile, signal_spectrum,
+          get_noise_profile_blocks_averaged(self->noise_profile),
+          self->real_spectrum_size);
+      increment_blocks_averaged(self->noise_profile);
+      break;
+    case MEDIAN:
+      spectral_trailing_buffer_push_back(self->median_buffer, signal_spectrum);
+      bool is_valid_median = get_rolling_median_spectrum(
+          noise_profile, get_trailing_spectral_buffer(self->median_buffer),
+          get_spectrum_buffer_size(self->median_buffer),
+          get_spectrum_size(self->median_buffer));
+      if (is_valid_median) {
+        set_noise_profile_available(self->noise_profile);
+      }
+      break;
+    case MAX:
+      (void)max_spectrum(noise_profile, signal_spectrum,
+                         self->real_spectrum_size);
       set_noise_profile_available(self->noise_profile);
-    }
-    break;
-  case MAX:
-    max_spectrum(noise_profile, signal_spectrum, self->real_spectrum_size);
-    set_noise_profile_available(self->noise_profile);
-    break;
+      break;
 
-  default:
-    break;
+    default:
+      break;
   }
 
   return true;

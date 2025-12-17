@@ -24,10 +24,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <string.h>
 
 struct DenoiseMixer {
-  SpectralWhitening *whitener;
+  SpectralWhitening* whitener;
 
-  float *residual_spectrum;
-  float *denoised_spectrum;
+  float* residual_spectrum;
+  float* denoised_spectrum;
 
   uint32_t fft_size;
   uint32_t real_spectrum_size;
@@ -35,17 +35,17 @@ struct DenoiseMixer {
   uint32_t hop;
 };
 
-DenoiseMixer *denoise_mixer_initialize(uint32_t fft_size, uint32_t sample_rate,
+DenoiseMixer* denoise_mixer_initialize(uint32_t fft_size, uint32_t sample_rate,
                                        uint32_t hop) {
-  DenoiseMixer *self = (DenoiseMixer *)calloc(1U, sizeof(DenoiseMixer));
+  DenoiseMixer* self = (DenoiseMixer*)calloc(1U, sizeof(DenoiseMixer));
 
   self->fft_size = fft_size;
   self->real_spectrum_size = self->fft_size / 2U + 1U;
   self->sample_rate = sample_rate;
   self->hop = hop;
 
-  self->residual_spectrum = (float *)calloc((self->fft_size), sizeof(float));
-  self->denoised_spectrum = (float *)calloc((self->fft_size), sizeof(float));
+  self->residual_spectrum = (float*)calloc((self->fft_size), sizeof(float));
+  self->denoised_spectrum = (float*)calloc((self->fft_size), sizeof(float));
 
   self->whitener = spectral_whitening_initialize(self->fft_size,
                                                  self->sample_rate, self->hop);
@@ -53,7 +53,7 @@ DenoiseMixer *denoise_mixer_initialize(uint32_t fft_size, uint32_t sample_rate,
   return self;
 }
 
-void denoise_mixer_free(DenoiseMixer *self) {
+void denoise_mixer_free(DenoiseMixer* self) {
   spectral_whitening_free(self->whitener);
 
   free(self->residual_spectrum);
@@ -62,8 +62,8 @@ void denoise_mixer_free(DenoiseMixer *self) {
   free(self);
 }
 
-bool denoise_mixer_run(DenoiseMixer *self, float *fft_spectrum,
-                       const float *gain_spectrum,
+bool denoise_mixer_run(DenoiseMixer* self, float* fft_spectrum,
+                       const float* gain_spectrum,
                        DenoiseMixerParameters parameters) {
 
   if (!fft_spectrum || !gain_spectrum) {

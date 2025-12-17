@@ -32,18 +32,18 @@ struct TransientDetector {
   bool transient_present;
   uint32_t window_count;
 
-  float *previous_spectrum;
+  float* previous_spectrum;
 };
 
-TransientDetector *transient_detector_initialize(const uint32_t fft_size) {
-  TransientDetector *self =
-      (TransientDetector *)calloc(1U, sizeof(TransientDetector));
+TransientDetector* transient_detector_initialize(const uint32_t fft_size) {
+  TransientDetector* self =
+      (TransientDetector*)calloc(1U, sizeof(TransientDetector));
 
   self->fft_size = fft_size;
   self->real_spectrum_size = self->fft_size / 2U + 1U;
 
   self->previous_spectrum =
-      (float *)calloc(self->real_spectrum_size, sizeof(float));
+      (float*)calloc(self->real_spectrum_size, sizeof(float));
 
   self->window_count = 0U;
   self->rolling_mean = 0.F;
@@ -52,13 +52,13 @@ TransientDetector *transient_detector_initialize(const uint32_t fft_size) {
   return self;
 }
 
-void transient_detector_free(TransientDetector *self) {
+void transient_detector_free(TransientDetector* self) {
   free(self->previous_spectrum);
 
   free(self);
 }
 
-bool transient_detector_run(TransientDetector *self, const float *spectrum) {
+bool transient_detector_run(TransientDetector* self, const float* spectrum) {
   const float reduction_function = spectral_flux(
       spectrum, self->previous_spectrum, self->real_spectrum_size);
 

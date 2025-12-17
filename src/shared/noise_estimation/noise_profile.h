@@ -26,16 +26,16 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 typedef struct NoiseProfile NoiseProfile;
 
-NoiseProfile *noise_profile_initialize(uint32_t size);
-void noise_profile_free(NoiseProfile *self);
-float *get_noise_profile(NoiseProfile *self);
-uint32_t get_noise_profile_size(NoiseProfile *self);
-uint32_t get_noise_profile_blocks_averaged(NoiseProfile *self);
-bool increment_blocks_averaged(NoiseProfile *self);
-bool set_noise_profile(NoiseProfile *self, const float *noise_profile,
+NoiseProfile* noise_profile_initialize(uint32_t size);
+void noise_profile_free(NoiseProfile* self);
+float* get_noise_profile(NoiseProfile* self);
+uint32_t get_noise_profile_size(NoiseProfile* self);
+uint32_t get_noise_profile_blocks_averaged(NoiseProfile* self);
+bool increment_blocks_averaged(NoiseProfile* self);
+bool set_noise_profile(NoiseProfile* self, const float* noise_profile,
                        uint32_t noise_profile_size, uint32_t averaged_blocks);
-void set_noise_profile_available(NoiseProfile *self);
-bool reset_noise_profile(NoiseProfile *self);
-bool is_noise_estimation_available(NoiseProfile *self);
+void set_noise_profile_available(NoiseProfile* self);
+bool reset_noise_profile(NoiseProfile* self);
+bool is_noise_estimation_available(NoiseProfile* self);
 
 #endif

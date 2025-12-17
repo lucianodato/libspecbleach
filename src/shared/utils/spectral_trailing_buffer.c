@@ -27,33 +27,32 @@ struct SpectralTrailingBuffer {
   uint32_t real_spectrum_size;
   uint32_t buffer_size;
 
-  float *buffer;
+  float* buffer;
 };
 
-SpectralTrailingBuffer *
-spectral_trailing_buffer_initialize(const uint32_t real_spectrum_size,
-                                    const uint32_t buffer_size) {
-  SpectralTrailingBuffer *self =
-      (SpectralTrailingBuffer *)calloc(1U, sizeof(SpectralTrailingBuffer));
+SpectralTrailingBuffer* spectral_trailing_buffer_initialize(
+    const uint32_t real_spectrum_size, const uint32_t buffer_size) {
+  SpectralTrailingBuffer* self =
+      (SpectralTrailingBuffer*)calloc(1U, sizeof(SpectralTrailingBuffer));
 
   self->real_spectrum_size = real_spectrum_size;
   self->buffer_size = buffer_size;
 
-  self->buffer = (float *)calloc(
+  self->buffer = (float*)calloc(
       ((size_t)self->real_spectrum_size * (size_t)self->buffer_size),
       sizeof(float));
 
   return self;
 }
 
-void spectral_trailing_buffer_free(SpectralTrailingBuffer *self) {
+void spectral_trailing_buffer_free(SpectralTrailingBuffer* self) {
   free(self->buffer);
 
   free(self);
 }
 
-bool spectral_trailing_buffer_push_back(SpectralTrailingBuffer *self,
-                                        const float *input_spectrum) {
+bool spectral_trailing_buffer_push_back(SpectralTrailingBuffer* self,
+                                        const float* input_spectrum) {
   if (!input_spectrum) {
     return false;
   }
@@ -67,14 +66,14 @@ bool spectral_trailing_buffer_push_back(SpectralTrailingBuffer *self,
   return true;
 }
 
-float *get_trailing_spectral_buffer(SpectralTrailingBuffer *self) {
+float* get_trailing_spectral_buffer(SpectralTrailingBuffer* self) {
   return self->buffer;
 }
 
-uint32_t get_spectrum_buffer_size(SpectralTrailingBuffer *self) {
+uint32_t get_spectrum_buffer_size(SpectralTrailingBuffer* self) {
   return self->buffer_size;
 }
 
-uint32_t get_spectrum_size(SpectralTrailingBuffer *self) {
+uint32_t get_spectrum_size(SpectralTrailingBuffer* self) {
   return self->real_spectrum_size;
 }

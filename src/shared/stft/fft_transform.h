@@ -24,26 +24,34 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdbool.h>
 #include <stdint.h>
 
-typedef enum ZeroPaddingType {
+// C17 enum validation
+enum ZeroPaddingType {
   NEXT_POWER_OF_TWO = 0,
   FIXED_AMOUNT = 1,
   NO_PADDING = 2,
-} ZeroPaddingType;
+};
+
+// Compile-time validation of enum values
+_Static_assert(NEXT_POWER_OF_TWO == 0, "NEXT_POWER_OF_TWO must be 0");
+_Static_assert(FIXED_AMOUNT == 1, "FIXED_AMOUNT must be 1");
+_Static_assert(NO_PADDING == 2, "NO_PADDING must be 2");
+
+typedef enum ZeroPaddingType ZeroPaddingType;
 
 typedef struct FftTransform FftTransform;
 
-FftTransform *fft_transform_initialize(uint32_t frame_size,
+FftTransform* fft_transform_initialize(uint32_t frame_size,
                                        ZeroPaddingType padding_type,
                                        uint32_t zeropadding_amount);
-FftTransform *fft_transform_initialize_bins(uint32_t fft_size);
-void fft_transform_free(FftTransform *self);
-bool fft_load_input_samples(FftTransform *self, const float *input);
-bool fft_get_output_samples(FftTransform *self, float *output);
-uint32_t get_fft_size(FftTransform *self);
-uint32_t get_fft_real_spectrum_size(FftTransform *self);
-bool compute_forward_fft(FftTransform *self);
-bool compute_backward_fft(FftTransform *self);
-float *get_fft_input_buffer(FftTransform *self);
-float *get_fft_output_buffer(FftTransform *self);
+FftTransform* fft_transform_initialize_bins(uint32_t fft_size);
+void fft_transform_free(FftTransform* self);
+bool fft_load_input_samples(FftTransform* self, const float* input);
+bool fft_get_output_samples(FftTransform* self, float* output);
+uint32_t get_fft_size(FftTransform* self);
+uint32_t get_fft_real_spectrum_size(FftTransform* self);
+bool compute_forward_fft(FftTransform* self);
+bool compute_backward_fft(FftTransform* self);
+float* get_fft_input_buffer(FftTransform* self);
+float* get_fft_output_buffer(FftTransform* self);
 
 #endif

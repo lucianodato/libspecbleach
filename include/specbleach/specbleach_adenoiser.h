@@ -28,7 +28,7 @@ extern "C" {
 #include <stdbool.h>
 #include <stdint.h>
 
-typedef void *SpectralBleachHandle;
+typedef void* SpectralBleachHandle;
 
 typedef struct SpectralBleachParameters {
   /* Enables outputting the residue of the reduction processing. It's either
@@ -97,8 +97,8 @@ uint32_t specbleach_adaptive_get_latency(SpectralBleachHandle instance);
  * Process buffer of a number of samples
  */
 bool specbleach_adaptive_process(SpectralBleachHandle instance,
-                                 uint32_t number_of_samples, const float *input,
-                                 float *output);
+                                 uint32_t number_of_samples, const float* input,
+                                 float* output);
 
 #ifdef __cplusplus
 }

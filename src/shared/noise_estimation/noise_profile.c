@@ -27,45 +27,47 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 struct NoiseProfile {
   uint32_t noise_profile_size;
   uint32_t noise_profile_blocks_averaged;
-  float *noise_profile;
+  float* noise_profile;
   bool noise_spectrum_available;
 };
 
-NoiseProfile *noise_profile_initialize(const uint32_t size) {
-  NoiseProfile *self = (NoiseProfile *)calloc(1U, sizeof(NoiseProfile));
+NoiseProfile* noise_profile_initialize(const uint32_t size) {
+  NoiseProfile* self = (NoiseProfile*)calloc(1U, sizeof(NoiseProfile));
   self->noise_profile_size = size;
   self->noise_profile_blocks_averaged = 0U;
   self->noise_spectrum_available = false;
 
-  self->noise_profile = (float *)calloc(size, sizeof(float));
+  self->noise_profile = (float*)calloc(size, sizeof(float));
 
   return self;
 }
 
-void noise_profile_free(NoiseProfile *self) {
+void noise_profile_free(NoiseProfile* self) {
   free(self->noise_profile);
 
   free(self);
 }
 
-bool is_noise_estimation_available(NoiseProfile *self) {
+bool is_noise_estimation_available(NoiseProfile* self) {
   return self->noise_spectrum_available;
 }
 
-float *get_noise_profile(NoiseProfile *self) { return self->noise_profile; }
+float* get_noise_profile(NoiseProfile* self) {
+  return self->noise_profile;
+}
 
-uint32_t get_noise_profile_size(NoiseProfile *self) {
+uint32_t get_noise_profile_size(NoiseProfile* self) {
   return self->noise_profile_size;
 }
 
-uint32_t get_noise_profile_blocks_averaged(NoiseProfile *self) {
+uint32_t get_noise_profile_blocks_averaged(NoiseProfile* self) {
   return self->noise_profile_blocks_averaged;
 }
-void set_noise_profile_available(NoiseProfile *self) {
+void set_noise_profile_available(NoiseProfile* self) {
   self->noise_spectrum_available = true;
 }
 
-bool set_noise_profile(NoiseProfile *self, const float *noise_profile,
+bool set_noise_profile(NoiseProfile* self, const float* noise_profile,
                        const uint32_t noise_profile_size,
                        const uint32_t noise_profile_blocks_averaged) {
   if (!self || !noise_profile ||
@@ -82,7 +84,7 @@ bool set_noise_profile(NoiseProfile *self, const float *noise_profile,
   return true;
 }
 
-bool increment_blocks_averaged(NoiseProfile *self) {
+bool increment_blocks_averaged(NoiseProfile* self) {
   if (!self) {
     return false;
   }
@@ -98,13 +100,13 @@ bool increment_blocks_averaged(NoiseProfile *self) {
   return true;
 }
 
-bool reset_noise_profile(NoiseProfile *self) {
+bool reset_noise_profile(NoiseProfile* self) {
   if (!self) {
     return false;
   }
 
-  initialize_spectrum_with_value(self->noise_profile, self->noise_profile_size,
-                                 0.F);
+  (void)initialize_spectrum_with_value(self->noise_profile,
+                                       self->noise_profile_size, 0.F);
   self->noise_profile_blocks_averaged = 0U;
   self->noise_spectrum_available = false;
 

@@ -27,18 +27,18 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <math.h>
 #include <stdlib.h>
 
-static void a_posteriori_snr_critical_bands(NoiseScalingCriterias *self,
-                                            const float *spectrum,
-                                            const float *noise_spectrum,
-                                            float *alpha,
+static void a_posteriori_snr_critical_bands(NoiseScalingCriterias* self,
+                                            const float* spectrum,
+                                            const float* noise_spectrum,
+                                            float* alpha,
                                             NoiseScalingParameters parameters);
-static void a_posteriori_snr(NoiseScalingCriterias *self, const float *spectrum,
-                             const float *noise_spectrum, float *alpha,
+static void a_posteriori_snr(NoiseScalingCriterias* self, const float* spectrum,
+                             const float* noise_spectrum, float* alpha,
                              NoiseScalingParameters parameters);
-static void masking_thresholds(NoiseScalingCriterias *self,
-                               const float *spectrum,
-                               const float *noise_spectrum, float *alpha,
-                               float *beta, NoiseScalingParameters parameters);
+static void masking_thresholds(NoiseScalingCriterias* self,
+                               const float* spectrum,
+                               const float* noise_spectrum, float* alpha,
+                               float* beta, NoiseScalingParameters parameters);
 
 struct NoiseScalingCriterias {
   NoiseScalingType noise_scaling_type;
@@ -54,21 +54,21 @@ struct NoiseScalingCriterias {
   CriticalBandIndexes band_indexes;
   CriticalBandType critical_band_type;
 
-  float *masking_thresholds;
-  float *clean_signal_estimation;
-  float *critical_bands_noise_profile;
-  float *critical_bands_reference_spectrum;
+  float* masking_thresholds;
+  float* clean_signal_estimation;
+  float* critical_bands_noise_profile;
+  float* critical_bands_reference_spectrum;
 
-  MaskingEstimator *masking_estimation;
-  CriticalBands *critical_bands;
+  MaskingEstimator* masking_estimation;
+  CriticalBands* critical_bands;
 };
 
-NoiseScalingCriterias *noise_scaling_criterias_initialize(
+NoiseScalingCriterias* noise_scaling_criterias_initialize(
     const uint32_t fft_size, const CriticalBandType critical_band_type,
     const uint32_t sample_rate, SpectrumType spectrum_type) {
 
-  NoiseScalingCriterias *self =
-      (NoiseScalingCriterias *)calloc(1U, sizeof(NoiseScalingCriterias));
+  NoiseScalingCriterias* self =
+      (NoiseScalingCriterias*)calloc(1U, sizeof(NoiseScalingCriterias));
 
   self->fft_size = fft_size;
   self->real_spectrum_size = self->fft_size / 2U + 1U;
@@ -88,19 +88,19 @@ NoiseScalingCriterias *noise_scaling_criterias_initialize(
       get_number_of_critical_bands(self->critical_bands);
 
   self->critical_bands_noise_profile =
-      (float *)calloc(self->number_critical_bands, sizeof(float));
+      (float*)calloc(self->number_critical_bands, sizeof(float));
   self->critical_bands_reference_spectrum =
-      (float *)calloc(self->number_critical_bands, sizeof(float));
+      (float*)calloc(self->number_critical_bands, sizeof(float));
 
   self->masking_thresholds =
-      (float *)calloc(self->real_spectrum_size, sizeof(float));
+      (float*)calloc(self->real_spectrum_size, sizeof(float));
   self->clean_signal_estimation =
-      (float *)calloc(self->real_spectrum_size, sizeof(float));
+      (float*)calloc(self->real_spectrum_size, sizeof(float));
 
   return self;
 }
 
-void noise_scaling_criterias_free(NoiseScalingCriterias *self) {
+void noise_scaling_criterias_free(NoiseScalingCriterias* self) {
   critical_bands_free(self->critical_bands);
   masking_estimation_free(self->masking_estimation);
 
@@ -112,38 +112,39 @@ void noise_scaling_criterias_free(NoiseScalingCriterias *self) {
   free(self);
 }
 
-bool apply_noise_scaling_criteria(NoiseScalingCriterias *self,
-                                  const float *spectrum,
-                                  const float *noise_spectrum, float *alpha,
-                                  float *beta,
+bool apply_noise_scaling_criteria(NoiseScalingCriterias* self,
+                                  const float* spectrum,
+                                  const float* noise_spectrum, float* alpha,
+                                  float* beta,
                                   NoiseScalingParameters parameters) {
   if (!spectrum || !noise_spectrum) {
     return false;
   }
 
   switch ((NoiseScalingType)parameters.scaling_type) {
-  case A_POSTERIORI_SNR:
-    a_posteriori_snr(self, spectrum, noise_spectrum, alpha, parameters);
-    break;
-  case A_POSTERIORI_SNR_CRITICAL_BANDS:
-    a_posteriori_snr_critical_bands(self, spectrum, noise_spectrum, alpha,
-                                    parameters);
-    break;
-  case MASKING_THRESHOLDS:
-    masking_thresholds(self, spectrum, noise_spectrum, alpha, beta, parameters);
-    break;
+    case A_POSTERIORI_SNR:
+      a_posteriori_snr(self, spectrum, noise_spectrum, alpha, parameters);
+      break;
+    case A_POSTERIORI_SNR_CRITICAL_BANDS:
+      a_posteriori_snr_critical_bands(self, spectrum, noise_spectrum, alpha,
+                                      parameters);
+      break;
+    case MASKING_THRESHOLDS:
+      masking_thresholds(self, spectrum, noise_spectrum, alpha, beta,
+                         parameters);
+      break;
 
-  default:
-    break;
+    default:
+      break;
   }
 
   return true;
 }
 
-static void a_posteriori_snr_critical_bands(NoiseScalingCriterias *self,
-                                            const float *spectrum,
-                                            const float *noise_spectrum,
-                                            float *alpha,
+static void a_posteriori_snr_critical_bands(NoiseScalingCriterias* self,
+                                            const float* spectrum,
+                                            const float* noise_spectrum,
+                                            float* alpha,
                                             NoiseScalingParameters parameters) {
 
   compute_critical_bands_spectrum(self->critical_bands, noise_spectrum,
@@ -179,8 +180,8 @@ static void a_posteriori_snr_critical_bands(NoiseScalingCriterias *self,
   }
 }
 
-static void a_posteriori_snr(NoiseScalingCriterias *self, const float *spectrum,
-                             const float *noise_spectrum, float *alpha,
+static void a_posteriori_snr(NoiseScalingCriterias* self, const float* spectrum,
+                             const float* noise_spectrum, float* alpha,
                              NoiseScalingParameters parameters) {
   float a_posteriori_snr = 20.F;
   float oversustraction_factor = 1.F;
@@ -209,10 +210,10 @@ static void a_posteriori_snr(NoiseScalingCriterias *self, const float *spectrum,
   }
 }
 
-static void masking_thresholds(NoiseScalingCriterias *self,
-                               const float *spectrum,
-                               const float *noise_spectrum, float *alpha,
-                               float *beta, NoiseScalingParameters parameters) {
+static void masking_thresholds(NoiseScalingCriterias* self,
+                               const float* spectrum,
+                               const float* noise_spectrum, float* alpha,
+                               float* beta, NoiseScalingParameters parameters) {
 
   for (uint32_t k = 1U; k < self->real_spectrum_size; k++) {
     self->clean_signal_estimation[k] =

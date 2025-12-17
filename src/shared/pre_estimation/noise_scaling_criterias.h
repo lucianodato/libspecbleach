@@ -40,14 +40,14 @@ typedef struct NoiseScalingParameters {
 
 typedef struct NoiseScalingCriterias NoiseScalingCriterias;
 
-NoiseScalingCriterias *noise_scaling_criterias_initialize(
+NoiseScalingCriterias* noise_scaling_criterias_initialize(
     uint32_t fft_size, CriticalBandType critical_band_type,
     uint32_t sample_rate, SpectrumType spectrum_type);
-void noise_scaling_criterias_free(NoiseScalingCriterias *self);
-bool apply_noise_scaling_criteria(NoiseScalingCriterias *self,
-                                  const float *spectrum,
-                                  const float *noise_spectrum, float *alpha,
-                                  float *beta,
+void noise_scaling_criterias_free(NoiseScalingCriterias* self);
+bool apply_noise_scaling_criteria(NoiseScalingCriterias* self,
+                                  const float* spectrum,
+                                  const float* noise_spectrum, float* alpha,
+                                  float* beta,
                                   NoiseScalingParameters parameters);
 
 #endif
