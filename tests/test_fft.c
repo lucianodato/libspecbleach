@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "../src/shared/configurations.h"
 #include "../src/shared/stft/fft_transform.h"
 
 #define TEST_ASSERT(condition, message)                                        \
