@@ -26,7 +26,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <string.h>
 
 static uint32_t calculate_fft_size(FftTransform* self);
-static void allocate_fftw(FftTransform* self);
+static bool allocate_fftw(FftTransform* self);
 
 struct FftTransform {
   fftwf_plan forward;
@@ -55,7 +55,10 @@ FftTransform* fft_transform_initialize(const uint32_t frame_size,
 
   self->copy_position = (self->fft_size / 2U) - (self->frame_size / 2U);
 
-  allocate_fftw(self);
+  if (!allocate_fftw(self)) {
+    fft_transform_free(self);
+    return NULL;
+  }
 
   return self;
 }
@@ -66,15 +69,22 @@ FftTransform* fft_transform_initialize_bins(const uint32_t fft_size) {
   self->fft_size = fft_size;
   self->frame_size = self->fft_size;
 
-  allocate_fftw(self);
+  if (!allocate_fftw(self)) {
+    fft_transform_free(self);
+    return NULL;
+  }
 
   return self;
 }
 
-static void allocate_fftw(FftTransform* self) {
+static bool allocate_fftw(FftTransform* self) {
   self->input_fft_buffer = (float*)fftwf_malloc(self->fft_size * sizeof(float));
   self->output_fft_buffer =
       (float*)fftwf_malloc(self->fft_size * sizeof(float));
+
+  if (!self->input_fft_buffer || !self->output_fft_buffer) {
+    return false;
+  }
 
   memset(self->input_fft_buffer, 0, self->fft_size * sizeof(float));
   memset(self->output_fft_buffer, 0, self->fft_size * sizeof(float));
@@ -85,6 +95,8 @@ static void allocate_fftw(FftTransform* self) {
   self->backward =
       fftwf_plan_r2r_1d((int)self->fft_size, self->output_fft_buffer,
                         self->input_fft_buffer, FFTW_HC2R, FFTW_ESTIMATE);
+
+  return self->forward && self->backward;
 }
 
 static uint32_t calculate_fft_size(FftTransform* self) {

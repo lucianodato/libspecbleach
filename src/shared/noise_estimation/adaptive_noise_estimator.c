@@ -61,6 +61,9 @@ AdaptiveNoiseEstimator* louizou_estimator_initialize(
     const uint32_t fft_size) {
   AdaptiveNoiseEstimator* self =
       (AdaptiveNoiseEstimator*)calloc(1U, sizeof(AdaptiveNoiseEstimator));
+  if (!self) {
+    return NULL;
+  }
 
   self->noise_spectrum_size = noise_spectrum_size;
 
@@ -73,9 +76,21 @@ AdaptiveNoiseEstimator* louizou_estimator_initialize(
   self->previous_noise_spectrum =
       (float*)calloc(self->noise_spectrum_size, sizeof(float));
 
+  if (!self->minimum_detection_thresholds ||
+      !self->time_frequency_smoothing_constant ||
+      !self->speech_presence_detection || !self->previous_noise_spectrum) {
+    louizou_estimator_free(self);
+    return NULL;
+  }
+
   compute_auto_thresholds(self, sample_rate, noise_spectrum_size, fft_size);
   self->current = frame_spectrum_initialize(noise_spectrum_size);
   self->previous = frame_spectrum_initialize(noise_spectrum_size);
+
+  if (!self->current || !self->previous) {
+    louizou_estimator_free(self);
+    return NULL;
+  }
 
   self->noisy_speech_ratio = 0.F;
   self->is_first_frame = true;
@@ -172,11 +187,20 @@ static void update_frame_spectums(AdaptiveNoiseEstimator* self,
 
 static FrameSpectrum* frame_spectrum_initialize(const uint32_t frame_size) {
   FrameSpectrum* self = (FrameSpectrum*)calloc(1U, sizeof(FrameSpectrum));
+  if (!self) {
+    return NULL;
+  }
 
   self->smoothed_spectrum = (float*)calloc(frame_size, sizeof(float));
   self->local_minimum_spectrum = (float*)calloc(frame_size, sizeof(float));
   self->speech_present_probability_spectrum =
       (float*)calloc(frame_size, sizeof(float));
+
+  if (!self->smoothed_spectrum || !self->local_minimum_spectrum ||
+      !self->speech_present_probability_spectrum) {
+    frame_spectrum_free(self);
+    return NULL;
+  }
 
   (void)initialize_spectrum_with_value(self->local_minimum_spectrum, frame_size,
                                        FLT_MIN);

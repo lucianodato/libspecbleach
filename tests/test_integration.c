@@ -76,7 +76,9 @@ void test_spectral_denoiser() {
   printf("  Input RMS: %.4f\n", input_rms);
 
   // Initialize denoiser
-  SpectralBleachHandle handle = specbleach_initialize(SAMPLE_RATE, FRAME_SIZE);
+  float frame_size_ms = 20.0f;
+  SpectralBleachHandle handle =
+      specbleach_initialize(SAMPLE_RATE, frame_size_ms);
   TEST_ASSERT(handle != NULL, "Failed to initialize spectral denoiser");
 
   SpectralBleachParameters parameters =
@@ -146,7 +148,9 @@ void test_different_noise_levels() {
 
   generate_test_audio(input_buffer, BLOCK_SIZE, 1000.0f, 0.05f); // Low noise
 
-  SpectralBleachHandle handle = specbleach_initialize(SAMPLE_RATE, FRAME_SIZE);
+  float frame_size_ms = 20.0f;
+  SpectralBleachHandle handle =
+      specbleach_initialize(SAMPLE_RATE, frame_size_ms);
   TEST_ASSERT(handle != NULL, "Failed to initialize denoiser");
 
   SpectralBleachParameters parameters =

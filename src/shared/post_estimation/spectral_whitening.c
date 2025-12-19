@@ -49,6 +49,12 @@ SpectralWhitening* spectral_whitening_initialize(const uint32_t fft_size,
   self->whitened_residual_spectrum =
       (float*)calloc(self->fft_size, sizeof(float));
   self->residual_max_spectrum = (float*)calloc(self->fft_size, sizeof(float));
+
+  if (!self->whitened_residual_spectrum || !self->residual_max_spectrum) {
+    spectral_whitening_free(self);
+    return NULL;
+  }
+
   self->max_decay_rate =
       expf(-1000.F / (((WHITENING_DECAY_RATE) * (float)self->sample_rate) /
                       (float)self->hop));
@@ -70,25 +76,41 @@ bool spectral_whitening_run(SpectralWhitening* self,
     return false;
   }
 
+  const uint32_t real_spectrum_size = self->fft_size / 2U + 1U;
   self->whitening_window_count++;
 
-  for (uint32_t k = 0U; k < self->fft_size; k++) {
+  for (uint32_t k = 0U; k < real_spectrum_size; k++) {
+    float real, imag;
+    if (k == 0 || (self->fft_size % 2 == 0 && k == self->fft_size / 2)) {
+      real = fft_spectrum[k];
+      imag = 0.F;
+    } else {
+      real = fft_spectrum[k];
+      imag = fft_spectrum[self->fft_size - k];
+    }
+
+    float magnitude = sqrtf(real * real + imag * imag);
+
     if (self->whitening_window_count > 1U) {
       self->residual_max_spectrum[k] =
-          fmaxf(fmaxf(fft_spectrum[k], WHITENING_FLOOR),
+          fmaxf(fmaxf(magnitude, WHITENING_FLOOR),
                 self->residual_max_spectrum[k] * self->max_decay_rate);
     } else {
-      self->residual_max_spectrum[k] = fmaxf(fft_spectrum[k], WHITENING_FLOOR);
+      self->residual_max_spectrum[k] = fmaxf(magnitude, WHITENING_FLOOR);
     }
-  }
 
-  for (uint32_t k = 0U; k < self->fft_size; k++) {
-    if (fft_spectrum[k] > FLT_MIN) {
-      self->whitened_residual_spectrum[k] =
-          fft_spectrum[k] / self->residual_max_spectrum[k];
+    float gain = 1.0F;
+    if (self->residual_max_spectrum[k] > FLT_MIN) {
+      float whitened_magnitude = magnitude / self->residual_max_spectrum[k];
+      gain = (1.F - whitening_factor) +
+             whitening_factor * (whitened_magnitude / (magnitude + 1e-12F));
+    }
 
-      fft_spectrum[k] = (1.F - whitening_factor) * fft_spectrum[k] +
-                        whitening_factor * self->whitened_residual_spectrum[k];
+    if (k == 0 || (self->fft_size % 2 == 0 && k == self->fft_size / 2)) {
+      fft_spectrum[k] *= gain;
+    } else {
+      fft_spectrum[k] *= gain;
+      fft_spectrum[self->fft_size - k] *= gain;
     }
   }
 
