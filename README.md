@@ -1,7 +1,7 @@
 # libspecbleach
 
 [![build](https://github.com/lucianodato/libspecbleach/actions/workflows/build.yml/badge.svg)](https://github.com/lucianodato/libspecbleach/actions/workflows/build.yml)
-[![codecov](https://codecov.io/gh/lucianodato/libspecbleach/branch/master/graph/badge.svg)](https://codecov.io/gh/lucianodato/libspecbleach)
+[![codecov](https://codecov.io/gh/lucianodato/libspecbleach/branch/main/graph/badge.svg)](https://codecov.io/gh/lucianodato/libspecbleach)
 [![License: LGPL v2.1](https://img.shields.io/badge/License-LGPL%20v2.1-blue.svg)](https://www.gnu.org/licenses/lgpl-2.1)
 
 C library for audio noise reduction and other spectral effects
