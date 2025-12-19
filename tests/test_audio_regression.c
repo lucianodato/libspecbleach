@@ -12,14 +12,17 @@
 #include "../src/shared/configurations.h"
 
 // Include the public API
+#include "specbleach/specbleach_adenoiser.h"
 #include "specbleach/specbleach_denoiser.h"
 
 // Function prototypes
 void generate_test_signal(float* buffer, int length, unsigned int seed);
 void process_audio(const float* input, float* output, int length);
+void process_audio_adaptive(const float* input, float* output, int length);
 float calculate_snr(const float* original, const float* processed, int length);
 void test_deterministic_processing(void);
 void test_noise_reduction(void);
+void test_adaptive_denoising(void);
 void test_snr_improvement(void);
 
 #define TEST_ASSERT(condition, message)                                        \
@@ -98,6 +101,42 @@ void process_audio(const float* input, float* output, int length) {
   }
 
   specbleach_free(handle);
+}
+
+// Process audio through adaptive denoiser
+void process_audio_adaptive(const float* input, float* output, int length) {
+  float frame_size_ms = 20.0f;
+  SpectralBleachHandle handle =
+      specbleach_adaptive_initialize(SAMPLE_RATE, frame_size_ms);
+  TEST_ASSERT(handle != NULL, "Failed to initialize adaptive denoiser");
+
+  SpectralBleachParameters parameters =
+      (SpectralBleachParameters){.reduction_amount = 20.0f,
+                                 .smoothing_factor = 0.0f,
+                                 .noise_rescale = 0.0f,
+                                 .noise_scaling_type = 0,
+                                 .post_filter_threshold = 0.0f,
+                                 .residual_listen = false,
+                                 .transient_protection = false,
+                                 .whitening_factor = 0.0f};
+
+  specbleach_adaptive_load_parameters(handle, parameters);
+
+  int processed = 0;
+  while (processed < length) {
+    int block_size = FRAME_SIZE;
+    if (processed + block_size > length) {
+      block_size = length - processed;
+    }
+
+    bool result = specbleach_adaptive_process(
+        handle, block_size, input + processed, output + processed);
+    TEST_ASSERT(result == true, "Adaptive processing failed");
+
+    processed += block_size;
+  }
+
+  specbleach_adaptive_free(handle);
 }
 
 // Calculate SNR (Signal-to-Noise Ratio)
@@ -242,12 +281,65 @@ void test_valid_output() {
   printf("✓ Valid output test passed\n");
 }
 
+// Test that adaptive denoiser works and is different from static
+void test_adaptive_denoising() {
+  printf("Testing adaptive denoiser effectiveness...\n");
+
+  float* input = calloc(TEST_SAMPLES, sizeof(float));
+  float* output_static = calloc(TEST_SAMPLES, sizeof(float));
+  float* output_adaptive = calloc(TEST_SAMPLES, sizeof(float));
+  TEST_ASSERT(input && output_static && output_adaptive,
+              "Failed to allocate test buffers");
+
+  // Generate noisy signal
+  generate_test_signal(input, TEST_SAMPLES, 99999);
+
+  // Process through both denoisers
+  process_audio(input, output_static, TEST_SAMPLES);
+  process_audio_adaptive(input, output_adaptive, TEST_SAMPLES);
+
+  // Verify adaptive denoiser reduced noise
+  double input_power = 0.0;
+  double adaptive_output_power = 0.0;
+  for (int i = 0; i < TEST_SAMPLES; i++) {
+    input_power += input[i] * input[i];
+    adaptive_output_power += output_adaptive[i] * output_adaptive[i];
+  }
+  input_power /= TEST_SAMPLES;
+  adaptive_output_power /= TEST_SAMPLES;
+
+  printf("  Input power: %.6f\n", input_power);
+  printf("  Adaptive output power: %.6f\n", adaptive_output_power);
+
+  TEST_ASSERT(adaptive_output_power < input_power * 0.95f,
+              "Adaptive denoising should reduce signal power");
+
+  // Verify they are NOT identical (especially since they use different
+  // overlap/windows by default)
+  bool identical = true;
+  for (int i = 5000; i < TEST_SAMPLES; i++) { // Skip initial frames
+    if (fabsf(output_static[i] - output_adaptive[i]) > 1e-4f) {
+      identical = false;
+      break;
+    }
+  }
+  TEST_ASSERT(!identical,
+              "Adaptive and Static denoisers should not be identical");
+
+  free(input);
+  free(output_static);
+  free(output_adaptive);
+
+  printf("✓ Adaptive denoiser test passed\n");
+}
+
 int main() {
   printf("Running audio regression tests...\n\n");
 
   test_deterministic_processing();
   test_noise_reduction();
   test_valid_output();
+  test_adaptive_denoising();
 
   printf("\n✅ All audio regression tests passed!\n");
   return 0;

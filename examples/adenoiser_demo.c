@@ -133,10 +133,10 @@ int main(int argc, char** argv) {
     // Configuration of the denoising parameters
     SpectralBleachParameters parameters =
         (SpectralBleachParameters){.residual_listen = false,
-                                   .reduction_amount = 10.F,
+                                   .reduction_amount = 20.F,
                                    .smoothing_factor = 0.F,
-                                   .whitening_factor = 0.F,
-                                   .noise_scaling_type = 0,
+                                   .whitening_factor = 100.F,
+                                   .noise_scaling_type = 2,
                                    .noise_rescale = 2.F,
                                    .post_filter_threshold = -10.F};
 

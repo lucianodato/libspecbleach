@@ -92,15 +92,15 @@ void test_spectral_denoiser() {
 
   specbleach_load_parameters(handle, parameters);
 
-  // Process first block in learn mode
-  specbleach_process(handle, FRAME_SIZE, input_buffer, output_buffer);
+  // Process first blocks in learn mode (at least 10 frames)
+  specbleach_process(handle, FRAME_SIZE * 10, input_buffer, output_buffer);
 
   // Switch to reduction mode
   parameters.learn_noise = 0;
   specbleach_load_parameters(handle, parameters);
 
   // Process remaining blocks
-  int processed_samples = FRAME_SIZE;
+  int processed_samples = FRAME_SIZE * 10;
   while (processed_samples < BLOCK_SIZE) {
     int block_size = FRAME_SIZE;
     if (processed_samples + block_size > BLOCK_SIZE) {
@@ -162,16 +162,16 @@ void test_different_noise_levels() {
 
   specbleach_load_parameters(handle, parameters);
 
-  // Learn a bit
-  specbleach_process(handle, 1000, input_buffer, output_buffer);
+  // Learn a bit (at least 10 frames)
+  specbleach_process(handle, 5000, input_buffer, output_buffer);
 
   // Process remaining with reduction
   parameters.learn_noise = 0;
   specbleach_load_parameters(handle, parameters);
 
   // Process all at once for simplicity
-  bool result = specbleach_process(handle, BLOCK_SIZE - 1000,
-                                   input_buffer + 1000, output_buffer + 1000);
+  bool result = specbleach_process(handle, BLOCK_SIZE - 5000,
+                                   input_buffer + 5000, output_buffer + 5000);
   TEST_ASSERT(result == true, "Processing failed");
 
   float input_rms = calculate_rms(input_buffer, BLOCK_SIZE);

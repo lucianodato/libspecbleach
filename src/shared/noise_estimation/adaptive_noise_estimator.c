@@ -53,6 +53,7 @@ struct AdaptiveNoiseEstimator {
   float* previous_noise_spectrum;
   float* time_frequency_smoothing_constant;
   uint32_t* speech_presence_detection;
+  bool is_first_frame;
 };
 
 AdaptiveNoiseEstimator* louizou_estimator_initialize(
@@ -77,6 +78,7 @@ AdaptiveNoiseEstimator* louizou_estimator_initialize(
   self->previous = frame_spectrum_initialize(noise_spectrum_size);
 
   self->noisy_speech_ratio = 0.F;
+  self->is_first_frame = true;
 
   return self;
 }
@@ -99,15 +101,13 @@ bool louizou_estimator_run(AdaptiveNoiseEstimator* self, const float* spectrum,
     return false;
   }
 
-  static bool is_first_frame = true;
-
-  if (is_first_frame) {
+  if (self->is_first_frame) {
     for (uint32_t k = 0U; k < self->noise_spectrum_size; k++) {
       self->current->smoothed_spectrum[k] = spectrum[k];
       self->current->local_minimum_spectrum[k] = spectrum[k];
       noise_spectrum[k] = spectrum[k];
     }
-    is_first_frame = false;
+    self->is_first_frame = false;
   } else {
     for (uint32_t k = 0U; k < self->noise_spectrum_size; k++) {
       self->current->smoothed_spectrum[k] =
