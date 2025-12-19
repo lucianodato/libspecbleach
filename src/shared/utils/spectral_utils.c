@@ -190,7 +190,7 @@ float fft_bin_to_freq(const uint32_t bin_index, const uint32_t sample_rate,
 
 uint32_t freq_to_fft_bin(const float freq, const uint32_t sample_rate,
                          const uint32_t fft_size) {
-  return (uint32_t)(freq / ((float)sample_rate / (float)fft_size / 2.F));
+  return (uint32_t)(freq / ((float)sample_rate / (float)fft_size) + 0.5f);
 }
 
 float spectral_flux(const float* spectrum, const float* previous_spectrum,
