@@ -57,11 +57,21 @@ test_spectral_whitening = executable('test_spectral_whitening',
   include_directories: inc
 )
 
+# STFT Latency tests
+test_stft_latency = executable('test_stft_latency',
+  sources: ['test_stft_latency.c'],
+  dependencies: [libspecbleach_dep, m_dep, fftw_dep],
+  c_args: test_c_args,
+  include_directories: inc
+)
+
 # Run tests
 test('utils', test_utils)
 test('fft', test_fft)
 test('spectral_whitening', test_spectral_whitening)
+test('stft_latency', test_stft_latency)
 test('integration', test_integration)
 test('audio_regression', test_audio_regression)
 test('audio_files', test_audio_files)
 test('audio_file_regression', test_audio_file_regression)
+

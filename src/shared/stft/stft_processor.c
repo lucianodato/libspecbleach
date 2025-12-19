@@ -19,11 +19,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 #include "stft_processor.h"
-#include "../configurations.h"
-#include "../utils/spectral_features.h"
 #include "stft_buffer.h"
 #include "stft_windows.h"
-#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -69,7 +66,7 @@ StftProcessor* stft_processor_initialize(const uint32_t sample_rate,
   self->fft_size = get_fft_size(self->fft_transform);
   self->overlap_factor = overlap_factor;
   self->hop = self->frame_size / self->overlap_factor;
-  self->input_latency = self->frame_size - self->hop;
+  self->input_latency = self->frame_size;
 
   self->output_accumulator =
       (float*)calloc(self->frame_size * 2L, sizeof(float));
@@ -84,8 +81,8 @@ StftProcessor* stft_processor_initialize(const uint32_t sample_rate,
     return NULL;
   }
 
-  self->stft_buffer =
-      stft_buffer_initialize(self->frame_size, self->input_latency, self->hop);
+  self->stft_buffer = stft_buffer_initialize(
+      self->frame_size, self->input_latency - self->hop, self->hop);
   if (!self->stft_buffer) {
     stft_processor_free(self);
     return NULL;
