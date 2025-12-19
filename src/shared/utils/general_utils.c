@@ -31,7 +31,7 @@ float sanitize_denormal(float value) {
 }
 
 float from_db_to_coefficient(const float value_db) {
-  return expf(value_db / 10.F * logf(10.F));
+  return expf(value_db / 20.F * logf(10.F));
 }
 
 float remap_percentage_log_like_unity(const float value) {

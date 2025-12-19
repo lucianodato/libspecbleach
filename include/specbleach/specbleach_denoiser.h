@@ -43,7 +43,8 @@ typedef struct SpectralBleachParameters {
   bool residual_listen;
 
   /* Sets the amount of dBs that the noise will be attenuated. It goes from 0 dB
-   * to 40 dB */
+   * to 40 dB. This controls both the gain attenuation strength and the residual
+   * noise mixing level for optimal noise reduction. */
   float reduction_amount;
 
   /* Percentage of smoothing to apply. Averages the reduction calculation frame

@@ -19,7 +19,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 #include "fft_transform.h"
-#include "../configurations.h"
 #include "../utils/general_utils.h"
 
 #include <fftw3.h>
@@ -76,12 +75,16 @@ static void allocate_fftw(FftTransform* self) {
   self->input_fft_buffer = (float*)fftwf_malloc(self->fft_size * sizeof(float));
   self->output_fft_buffer =
       (float*)fftwf_malloc(self->fft_size * sizeof(float));
+
+  memset(self->input_fft_buffer, 0, self->fft_size * sizeof(float));
+  memset(self->output_fft_buffer, 0, self->fft_size * sizeof(float));
+
   self->forward =
       fftwf_plan_r2r_1d((int)self->fft_size, self->input_fft_buffer,
-                        self->output_fft_buffer, FFTW_FORWARD, FFTW_ESTIMATE);
+                        self->output_fft_buffer, FFTW_R2HC, FFTW_ESTIMATE);
   self->backward =
       fftwf_plan_r2r_1d((int)self->fft_size, self->output_fft_buffer,
-                        self->input_fft_buffer, FFTW_BACKWARD, FFTW_ESTIMATE);
+                        self->input_fft_buffer, FFTW_HC2R, FFTW_ESTIMATE);
 }
 
 static uint32_t calculate_fft_size(FftTransform* self) {

@@ -99,45 +99,56 @@ bool louizou_estimator_run(AdaptiveNoiseEstimator* self, const float* spectrum,
     return false;
   }
 
-  for (uint32_t k = 1U; k < self->noise_spectrum_size; k++) {
-    self->current->smoothed_spectrum[k] =
-        N_SMOOTH * self->previous->smoothed_spectrum[k] +
-        (1.F - N_SMOOTH) * spectrum[k];
+  static bool is_first_frame = true;
 
-    if (self->previous->local_minimum_spectrum[k] <
-        self->current->smoothed_spectrum[k]) {
-      self->current->local_minimum_spectrum[k] =
-          GAMMA * self->previous->local_minimum_spectrum[k] +
-          ((1.F - GAMMA) / (1.F - BETA_AT)) *
-              (self->current->smoothed_spectrum[k] -
-               BETA_AT * self->previous->smoothed_spectrum[k]);
-    } else {
-      self->current->local_minimum_spectrum[k] =
-          self->current->smoothed_spectrum[k];
+  if (is_first_frame) {
+    for (uint32_t k = 0U; k < self->noise_spectrum_size; k++) {
+      self->current->smoothed_spectrum[k] = spectrum[k];
+      self->current->local_minimum_spectrum[k] = spectrum[k];
+      noise_spectrum[k] = spectrum[k];
     }
+    is_first_frame = false;
+  } else {
+    for (uint32_t k = 0U; k < self->noise_spectrum_size; k++) {
+      self->current->smoothed_spectrum[k] =
+          N_SMOOTH * self->previous->smoothed_spectrum[k] +
+          (1.F - N_SMOOTH) * spectrum[k];
 
-    self->noisy_speech_ratio =
-        sanitize_denormal(self->current->smoothed_spectrum[k] /
-                          self->current->local_minimum_spectrum[k]);
+      if (self->previous->local_minimum_spectrum[k] <
+          self->current->smoothed_spectrum[k]) {
+        self->current->local_minimum_spectrum[k] =
+            GAMMA * self->previous->local_minimum_spectrum[k] +
+            ((1.F - GAMMA) / (1.F - BETA_AT)) *
+                (self->current->smoothed_spectrum[k] -
+                 BETA_AT * self->previous->smoothed_spectrum[k]);
+      } else {
+        self->current->local_minimum_spectrum[k] =
+            self->current->smoothed_spectrum[k];
+      }
 
-    if (self->noisy_speech_ratio > self->minimum_detection_thresholds[k]) {
-      self->speech_presence_detection[k] = 1U;
-    } else {
-      self->speech_presence_detection[k] = 0U;
+      self->noisy_speech_ratio = sanitize_denormal(
+          self->current->smoothed_spectrum[k] /
+          (self->current->local_minimum_spectrum[k] + 1e-12F));
+
+      if (self->noisy_speech_ratio > self->minimum_detection_thresholds[k]) {
+        self->speech_presence_detection[k] = 1U;
+      } else {
+        self->speech_presence_detection[k] = 0U;
+      }
+
+      self->current->speech_present_probability_spectrum[k] =
+          ALPHA_P * self->previous->speech_present_probability_spectrum[k] +
+          (1.F - ALPHA_P) * (float)self->speech_presence_detection[k];
+
+      self->time_frequency_smoothing_constant[k] =
+          ALPHA_D + (1.F - ALPHA_D) *
+                        self->current->speech_present_probability_spectrum[k];
+
+      noise_spectrum[k] =
+          self->time_frequency_smoothing_constant[k] *
+              self->previous_noise_spectrum[k] +
+          (1.F - self->time_frequency_smoothing_constant[k]) * spectrum[k];
     }
-
-    self->current->speech_present_probability_spectrum[k] =
-        ALPHA_P * self->previous->speech_present_probability_spectrum[k] +
-        (1.F - ALPHA_P) * (float)self->speech_presence_detection[k];
-
-    self->time_frequency_smoothing_constant[k] =
-        ALPHA_D +
-        (1.F - ALPHA_D) * self->current->speech_present_probability_spectrum[k];
-
-    noise_spectrum[k] =
-        self->time_frequency_smoothing_constant[k] *
-            self->previous_noise_spectrum[k] +
-        (1.F - self->time_frequency_smoothing_constant[k]) * spectrum[k];
   }
 
   update_frame_spectums(self, noise_spectrum);

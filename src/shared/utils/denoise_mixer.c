@@ -71,12 +71,12 @@ bool denoise_mixer_run(DenoiseMixer* self, float* fft_spectrum,
   }
 
   // Get denoised spectrum - Apply to both real and complex parts
-  for (uint32_t k = 1U; k < self->fft_size; k++) {
+  for (uint32_t k = 0U; k < self->fft_size; k++) {
     self->denoised_spectrum[k] = fft_spectrum[k] * gain_spectrum[k];
   }
 
   // Get residual spectrum - Apply to both real and complex parts
-  for (uint32_t k = 1U; k < self->fft_size; k++) {
+  for (uint32_t k = 0U; k < self->fft_size; k++) {
     self->residual_spectrum[k] = fft_spectrum[k] - self->denoised_spectrum[k];
   }
 
@@ -87,11 +87,11 @@ bool denoise_mixer_run(DenoiseMixer* self, float* fft_spectrum,
 
   // Mix denoised and residual
   if (parameters.residual_listen) {
-    for (uint32_t k = 1U; k < self->fft_size; k++) {
+    for (uint32_t k = 0U; k < self->fft_size; k++) {
       fft_spectrum[k] = self->residual_spectrum[k];
     }
   } else {
-    for (uint32_t k = 1U; k < self->fft_size; k++) {
+    for (uint32_t k = 0U; k < self->fft_size; k++) {
       fft_spectrum[k] = self->denoised_spectrum[k] +
                         self->residual_spectrum[k] * parameters.noise_level;
     }

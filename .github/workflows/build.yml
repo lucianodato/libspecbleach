@@ -45,8 +45,13 @@ jobs:
         run: |
           meson setup build \
             --buildtype=release \
-            -Denable_examples=true
+            -Denable_examples=true \
+            -Denable_tests=true
 
       - name: Build project
         run: |
           meson compile -C build -v
+
+      - name: Run tests
+        run: |
+          meson test -C build

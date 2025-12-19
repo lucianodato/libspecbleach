@@ -36,7 +36,8 @@ typedef struct SpectralBleachParameters {
   bool residual_listen;
 
   /* Sets the amount of dBs that the noise will be attenuated. It goes from 0 dB
-   * to 20 dB */
+   * to 40 dB. This controls both the gain attenuation strength and the residual
+   * noise mixing level for optimal noise reduction. */
   float reduction_amount;
 
   /* Percentage of smoothing to apply. Averages the reduction calculation frame
@@ -44,6 +45,11 @@ typedef struct SpectralBleachParameters {
    * if too strong it can blur transient and reduce high frequencies. It goes
    * from 0 to 100 percent */
   float smoothing_factor;
+
+  /* Enables or disables the transient protection when smoothing_factor is being
+   * used. This can help to preserve transient content when smoothing is strong.
+   */
+  bool transient_protection;
 
   /* Percentage of whitening that is going to be applied to the residue of the
    * reduction. It modifies the noise floor to be more like white noise. This

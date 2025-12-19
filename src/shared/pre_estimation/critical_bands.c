@@ -23,6 +23,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "../utils/spectral_utils.h"
 #include <math.h>
 #include <stdlib.h>
+#include <string.h>
 
 static const float bark_bands[24] = {
     100.F,  200.F,  300.F,  400.F,  510.F,  630.F,  770.F,   920.F,
@@ -159,15 +160,15 @@ static uint32_t get_last_valid_band_for_samplerate(CriticalBands* self,
 
   return last_valid_band;
 }
-
 bool compute_critical_bands_spectrum(CriticalBands* self, const float* spectrum,
                                      float* critical_bands) {
-  if (!spectrum) {
+  if (!self || !spectrum || !critical_bands) {
     return false;
   }
 
-  for (uint32_t j = 0U; j < self->number_bands; j++) {
+  memset(critical_bands, 0, self->number_bands * sizeof(float));
 
+  for (uint32_t j = 0U; j < self->number_bands; j++) {
     self->band_indexes = get_band_indexes(self, j);
 
     for (uint32_t k = self->band_indexes.start_position;

@@ -72,7 +72,7 @@ bool transient_detector_run(TransientDetector* self, const float* spectrum) {
   }
 
   const float adapted_threshold =
-      (UPPER_LIMIT - DEFAULT_TRANSIENT_THRESHOLD) * self->rolling_mean;
+      (UPPER_LIMIT - DEFAULT_TRANSIENT_THRESHOLD) * self->rolling_mean + 1e-6F;
 
   memcpy(self->previous_spectrum, spectrum,
          sizeof(float) * self->real_spectrum_size);

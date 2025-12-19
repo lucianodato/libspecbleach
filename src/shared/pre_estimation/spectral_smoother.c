@@ -115,7 +115,7 @@ static void spectrum_transient_aware_time_smoothing(SpectralSmoother* self,
                                                     float* spectrum) {
 
   if (!transient_detector_run(self->transient_detection, spectrum)) {
-    for (uint32_t k = 1U; k < self->real_spectrum_size; k++) {
+    for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
       if (self->smoothed_spectrum[k] > self->smoothed_spectrum_previous[k]) {
         self->smoothed_spectrum[k] =
             smoothing * self->smoothed_spectrum_previous[k] +
@@ -127,7 +127,7 @@ static void spectrum_transient_aware_time_smoothing(SpectralSmoother* self,
 
 static void spectrum_time_smoothing(SpectralSmoother* self,
                                     const float smoothing) {
-  for (uint32_t k = 1U; k < self->real_spectrum_size; k++) {
+  for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
     if (self->smoothed_spectrum[k] > self->smoothed_spectrum_previous[k]) {
       self->smoothed_spectrum[k] =
           smoothing * self->smoothed_spectrum_previous[k] +
