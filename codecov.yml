@@ -1,10 +1,14 @@
-ignore:
-  - "tests/**/*"
-  - "examples/**/*"
-
 coverage:
   status:
     project:
       default:
         target: auto
         threshold: 1%
+        paths:
+          - src/
+  
+  ignore:
+    - "tests"
+    - "examples"
+    - "**/*test*.c"
+    - "**/*test*.h"
