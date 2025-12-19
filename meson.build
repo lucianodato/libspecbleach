@@ -72,6 +72,13 @@ endif
 # Dependencies for libspecbleach
 m_dep = meson.get_compiler('c').find_library('m', required: true)
 fftw_dep = dependency('fftw3f', required: true)
+
+# Optional dependency for examples and tests
+sndfile_dep = dependency('', required: false)
+if get_option('enable_examples') or get_option('enable_tests')
+  sndfile_dep = dependency('sndfile', required: true)
+endif
+
 dep = [m_dep, fftw_dep]
 
 # Public Headers
@@ -84,3 +91,16 @@ subdir('src')
 if get_option('enable_examples')
   subdir('examples')
 endif
+
+# Tests building
+if get_option('enable_tests')
+  subdir('tests')
+endif
+
+# Code formatting target
+run_target('format',
+  command: [
+    'sh', '-c',
+    'find "@SOURCE_ROOT@" -name "*.[ch]" -o -name "*.cpp" -o -name "*.hpp" | grep -v "/build/" | xargs clang-format -i && echo "Code formatting complete!"'
+  ]
+)

@@ -24,8 +24,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  * with the algorithm and write it to an output file
  */
 
+#include <getopt.h>
 #include <sndfile.h>
 #include <specbleach_adenoiser.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -34,6 +36,25 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 // through a circular buffer
 #define BLOCK_SIZE 512
 #define FRAME_SIZE 20
+
+static void print_usage(const char* prog_name) {
+  fprintf(stderr, "Usage: %s [options] <noisy input> <denoised output>\n",
+          prog_name);
+  fprintf(stderr, "Options:\n");
+  fprintf(stderr,
+          "  --reduction <val>      Reduction amount in dB (default: 20.0)\n");
+  fprintf(stderr,
+          "  --whitening <val>      Whitening factor (default: 50.0)\n");
+  fprintf(stderr, "  --smoothing <val>      Smoothing factor (default: 0.0)\n");
+  fprintf(stderr,
+          "  --rescale <val>        Noise rescale in dB (default: 6.0)\n");
+  fprintf(stderr,
+          "  --scaling-type <val>   Noise scaling type (0-2, default: 2)\n");
+  fprintf(stderr,
+          "  --threshold <val>      Post-filter threshold in dB (default: "
+          "-10.0)\n");
+  fprintf(stderr, "  --help                Show this help message\n");
+}
 
 static void cleanup_resources(SF_INFO* sfinfo, SNDFILE* input_file,
                               SNDFILE* output_file, float* input_buffer,
@@ -60,13 +81,61 @@ static void cleanup_resources(SF_INFO* sfinfo, SNDFILE* input_file,
 }
 
 int main(int argc, char** argv) {
-  if (argc != 3) {
-    fprintf(stderr, "usage: %s <noisy input> <denoised output>\n", argv[0]);
+  SpectralBleachParameters parameters =
+      (SpectralBleachParameters){.residual_listen = false,
+                                 .reduction_amount = 20.F,
+                                 .smoothing_factor = 0.F,
+                                 .whitening_factor = 50.F,
+                                 .noise_scaling_type = 2,
+                                 .noise_rescale = 6.F,
+                                 .post_filter_threshold = -10.F};
+
+  static struct option long_options[] = {
+      {"reduction", required_argument, 0, 'r'},
+      {"whitening", required_argument, 0, 'w'},
+      {"smoothing", required_argument, 0, 's'},
+      {"rescale", required_argument, 0, 'e'},
+      {"scaling-type", required_argument, 0, 't'},
+      {"threshold", required_argument, 0, 'h'},
+      {"help", no_argument, 0, '?'},
+      {0, 0, 0, 0}};
+
+  int opt;
+  while ((opt = getopt_long(argc, argv, "r:w:s:e:t:h:", long_options, NULL)) !=
+         -1) {
+    switch (opt) {
+      case 'r':
+        parameters.reduction_amount = (float)atof(optarg);
+        break;
+      case 'w':
+        parameters.whitening_factor = (float)atof(optarg);
+        break;
+      case 's':
+        parameters.smoothing_factor = (float)atof(optarg);
+        break;
+      case 'e':
+        parameters.noise_rescale = (float)atof(optarg);
+        break;
+      case 't':
+        parameters.noise_scaling_type = atoi(optarg);
+        break;
+      case 'h':
+        parameters.post_filter_threshold = (float)atof(optarg);
+        break;
+      case '?':
+      default:
+        print_usage(argv[0]);
+        return 1;
+    }
+  }
+
+  if (argc - optind != 2) {
+    print_usage(argv[0]);
     return 1;
   }
 
-  const char* input_file_name = argv[1];
-  const char* output_file_name = argv[2];
+  const char* input_file_name = argv[optind];
+  const char* output_file_name = argv[optind + 1];
 
   SF_INFO* sfinfo = NULL;
   SNDFILE* input_file = NULL;
@@ -129,16 +198,6 @@ int main(int argc, char** argv) {
       fprintf(stderr, "Error: Failed to initialize library instance\n");
       break;
     }
-
-    // Configuration of the denoising parameters
-    SpectralBleachParameters parameters =
-        (SpectralBleachParameters){.residual_listen = false,
-                                   .reduction_amount = 10.F,
-                                   .smoothing_factor = 0.F,
-                                   .whitening_factor = 0.F,
-                                   .noise_scaling_type = 0,
-                                   .noise_rescale = 2.F,
-                                   .post_filter_threshold = -10.F};
 
     // Load the parameters before doing the denoising
     if (!specbleach_adaptive_load_parameters(lib_instance, parameters)) {

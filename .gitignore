@@ -63,13 +63,20 @@ meson-private/
 meson-logs/
 meson-info/
 
+# Test outputs (temporary files generated during testing)
+tests/test_data/*_output.wav
+tests/test_data/*_processed.wav
+tests/test_data/*_denoised.wav
+
 # Valgrind dumps
 *.valgrind
 
 # IDE files
 .vscode/
-.cursorrules
+.agent/
+.cursor/
 .cache/
 
 # Log files
 *.log
+.DS_Store

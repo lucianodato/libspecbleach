@@ -42,9 +42,13 @@ NoiseEstimator* noise_estimation_initialize(const uint32_t fft_size,
   self->real_spectrum_size = self->fft_size / 2U + 1U;
 
   self->noise_profile = noise_profile;
-
   self->median_buffer = spectral_trailing_buffer_initialize(
       self->real_spectrum_size, NUMBER_OF_MEDIAN_SPECTRUM);
+
+  if (!self->median_buffer) {
+    noise_estimation_free(self);
+    return NULL;
+  }
 
   return self;
 }

@@ -1,6 +1,7 @@
 # libspecbleach
 
 [![build](https://github.com/lucianodato/libspecbleach/actions/workflows/build.yml/badge.svg)](https://github.com/lucianodato/libspecbleach/actions/workflows/build.yml)
+[![codecov](https://codecov.io/gh/lucianodato/libspecbleach/branch/master/graph/badge.svg)](https://codecov.io/gh/lucianodato/libspecbleach)
 [![License: LGPL v2.1](https://img.shields.io/badge/License-LGPL%20v2.1-blue.svg)](https://www.gnu.org/licenses/lgpl-2.1)
 
 C library for audio noise reduction and other spectral effects
@@ -83,7 +84,7 @@ meson compile -C build
 The project uses `clang-format` for code formatting. To format the code:
 
 ```bash
-find . -type f \( -name "*.c" -o -name "*.h" \) ! -path "./build*" | xargs clang-format -i
+meson compile format -C build
 ```
 
 ### Running Tests
@@ -94,6 +95,19 @@ If tests are enabled:
 meson setup build -Denable_tests=true
 meson test -C build
 ```
+
+### Coverage
+
+To generate coverage reports locally, you will need `gcovr` or `lcov` installed.
+
+```bash
+meson setup build --buildtype=debug -Db_coverage=true
+meson compile -C build
+meson test -C build
+ninja -C build coverage-html
+```
+
+The report will be available in `build/meson-logs/coveragereport/index.html`.
 
 ## Contributing
 

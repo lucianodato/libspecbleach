@@ -187,8 +187,9 @@ static float compute_tonality_factor(MaskingEstimator* self,
 
   for (uint32_t k = self->band_indexes.start_position;
        k < self->band_indexes.end_position; k++) {
-    sum_bins += spectrum[k];
-    sum_log_bins += log10f(spectrum[k]);
+    const float val = fmaxf(spectrum[k], 1e-12F);
+    sum_bins += val;
+    sum_log_bins += log10f(val);
   }
 
   float bins_in_band = (float)self->band_indexes.end_position -

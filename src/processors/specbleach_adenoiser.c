@@ -39,6 +39,9 @@ SpectralBleachHandle specbleach_adaptive_initialize(const uint32_t sample_rate,
                                                     float frame_size) {
   SbAdaptiveDenoiser* self =
       (SbAdaptiveDenoiser*)calloc(1U, sizeof(SbAdaptiveDenoiser));
+  if (!self) {
+    return NULL;
+  }
 
   self->sample_rate = sample_rate;
 
@@ -68,8 +71,16 @@ SpectralBleachHandle specbleach_adaptive_initialize(const uint32_t sample_rate,
 void specbleach_adaptive_free(SpectralBleachHandle instance) {
   SbAdaptiveDenoiser* self = (SbAdaptiveDenoiser*)instance;
 
-  spectral_adaptive_denoiser_free(self->adaptive_spectral_denoiser);
-  stft_processor_free(self->stft_processor);
+  if (!self) {
+    return;
+  }
+
+  if (self->adaptive_spectral_denoiser) {
+    spectral_adaptive_denoiser_free(self->adaptive_spectral_denoiser);
+  }
+  if (self->stft_processor) {
+    stft_processor_free(self->stft_processor);
+  }
 
   free(self);
 }

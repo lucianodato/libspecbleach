@@ -33,11 +33,18 @@ struct NoiseProfile {
 
 NoiseProfile* noise_profile_initialize(const uint32_t size) {
   NoiseProfile* self = (NoiseProfile*)calloc(1U, sizeof(NoiseProfile));
+  if (!self) {
+    return NULL;
+  }
   self->noise_profile_size = size;
   self->noise_profile_blocks_averaged = 0U;
   self->noise_spectrum_available = false;
 
   self->noise_profile = (float*)calloc(size, sizeof(float));
+  if (!self->noise_profile) {
+    noise_profile_free(self);
+    return NULL;
+  }
 
   return self;
 }

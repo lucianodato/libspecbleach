@@ -188,7 +188,7 @@ static void a_posteriori_snr(NoiseScalingCriterias* self, const float* spectrum,
   float noisy_spectrum_sum = 0.F;
   float noise_spectrum_sum = 0.F;
 
-  for (uint32_t k = 1U; k < self->real_spectrum_size; k++) {
+  for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
     noisy_spectrum_sum += spectrum[k];
     noise_spectrum_sum += noise_spectrum[k];
   }
@@ -205,7 +205,7 @@ static void a_posteriori_snr(NoiseScalingCriterias* self, const float* spectrum,
     oversustraction_factor = 1.F;
   }
 
-  for (uint32_t k = 1U; k < self->real_spectrum_size; k++) {
+  for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
     alpha[k] = oversustraction_factor;
   }
 }
@@ -215,7 +215,7 @@ static void masking_thresholds(NoiseScalingCriterias* self,
                                const float* noise_spectrum, float* alpha,
                                float* beta, NoiseScalingParameters parameters) {
 
-  for (uint32_t k = 1U; k < self->real_spectrum_size; k++) {
+  for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
     self->clean_signal_estimation[k] =
         fmaxf(spectrum[k] - noise_spectrum[k], 0.F);
   }
@@ -229,7 +229,7 @@ static void masking_thresholds(NoiseScalingCriterias* self,
   float min_masked_value =
       min_spectral_value(self->masking_thresholds, self->real_spectrum_size);
 
-  for (uint32_t k = 1U; k < self->real_spectrum_size; k++) {
+  for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
     if (self->masking_thresholds[k] == max_masked_value) {
       alpha[k] = self->alpha_minimun;
       beta[k] = self->beta_minimun;

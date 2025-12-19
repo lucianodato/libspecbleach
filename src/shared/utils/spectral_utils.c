@@ -93,8 +93,8 @@ float max_spectral_value(const float* spectrum,
     return 0.F;
   }
 
-  float max = spectrum[1];
-  for (uint32_t k = 2U; k < real_spectrum_size; k++) {
+  float max = spectrum[0];
+  for (uint32_t k = 1U; k < real_spectrum_size; k++) {
     max = fmaxf(spectrum[k], max);
   }
   return max;
@@ -106,8 +106,8 @@ float min_spectral_value(const float* spectrum,
     return 0.F;
   }
 
-  float min = spectrum[1];
-  for (uint32_t k = 2U; k < real_spectrum_size; k++) {
+  float min = spectrum[0];
+  for (uint32_t k = 1U; k < real_spectrum_size; k++) {
     min = fminf(spectrum[k], min);
   }
   return min;
@@ -216,7 +216,7 @@ bool get_rolling_mean_spectrum(float* averaged_spectrum,
     return false;
   }
 
-  for (uint32_t k = 1U; k < spectrum_size; k++) {
+  for (uint32_t k = 0U; k < spectrum_size; k++) {
     if (number_of_blocks <= 1U) {
       averaged_spectrum[k] = current_spectrum[k];
     } else {
@@ -259,7 +259,7 @@ bool get_rolling_median_spectrum(float* median_spectrum,
 
   float tmp_buffer[number_of_blocks];
 
-  for (uint32_t i = 1U; i < spectrum_size; i++) {
+  for (uint32_t i = 0U; i < spectrum_size; i++) {
     for (uint32_t j = 0U; j < number_of_blocks; j++) {
       tmp_buffer[j] = current_spectrum_buffer[j * spectrum_size + i];
     }

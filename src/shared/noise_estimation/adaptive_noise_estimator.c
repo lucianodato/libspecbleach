@@ -53,6 +53,7 @@ struct AdaptiveNoiseEstimator {
   float* previous_noise_spectrum;
   float* time_frequency_smoothing_constant;
   uint32_t* speech_presence_detection;
+  bool is_first_frame;
 };
 
 AdaptiveNoiseEstimator* louizou_estimator_initialize(
@@ -60,6 +61,9 @@ AdaptiveNoiseEstimator* louizou_estimator_initialize(
     const uint32_t fft_size) {
   AdaptiveNoiseEstimator* self =
       (AdaptiveNoiseEstimator*)calloc(1U, sizeof(AdaptiveNoiseEstimator));
+  if (!self) {
+    return NULL;
+  }
 
   self->noise_spectrum_size = noise_spectrum_size;
 
@@ -72,11 +76,24 @@ AdaptiveNoiseEstimator* louizou_estimator_initialize(
   self->previous_noise_spectrum =
       (float*)calloc(self->noise_spectrum_size, sizeof(float));
 
+  if (!self->minimum_detection_thresholds ||
+      !self->time_frequency_smoothing_constant ||
+      !self->speech_presence_detection || !self->previous_noise_spectrum) {
+    louizou_estimator_free(self);
+    return NULL;
+  }
+
   compute_auto_thresholds(self, sample_rate, noise_spectrum_size, fft_size);
   self->current = frame_spectrum_initialize(noise_spectrum_size);
   self->previous = frame_spectrum_initialize(noise_spectrum_size);
 
+  if (!self->current || !self->previous) {
+    louizou_estimator_free(self);
+    return NULL;
+  }
+
   self->noisy_speech_ratio = 0.F;
+  self->is_first_frame = true;
 
   return self;
 }
@@ -99,45 +116,54 @@ bool louizou_estimator_run(AdaptiveNoiseEstimator* self, const float* spectrum,
     return false;
   }
 
-  for (uint32_t k = 1U; k < self->noise_spectrum_size; k++) {
-    self->current->smoothed_spectrum[k] =
-        N_SMOOTH * self->previous->smoothed_spectrum[k] +
-        (1.F - N_SMOOTH) * spectrum[k];
-
-    if (self->previous->local_minimum_spectrum[k] <
-        self->current->smoothed_spectrum[k]) {
-      self->current->local_minimum_spectrum[k] =
-          GAMMA * self->previous->local_minimum_spectrum[k] +
-          ((1.F - GAMMA) / (1.F - BETA_AT)) *
-              (self->current->smoothed_spectrum[k] -
-               BETA_AT * self->previous->smoothed_spectrum[k]);
-    } else {
-      self->current->local_minimum_spectrum[k] =
-          self->current->smoothed_spectrum[k];
+  if (self->is_first_frame) {
+    for (uint32_t k = 0U; k < self->noise_spectrum_size; k++) {
+      self->current->smoothed_spectrum[k] = spectrum[k];
+      self->current->local_minimum_spectrum[k] = spectrum[k];
+      noise_spectrum[k] = spectrum[k];
     }
+    self->is_first_frame = false;
+  } else {
+    for (uint32_t k = 0U; k < self->noise_spectrum_size; k++) {
+      self->current->smoothed_spectrum[k] =
+          N_SMOOTH * self->previous->smoothed_spectrum[k] +
+          (1.F - N_SMOOTH) * spectrum[k];
 
-    self->noisy_speech_ratio =
-        sanitize_denormal(self->current->smoothed_spectrum[k] /
-                          self->current->local_minimum_spectrum[k]);
+      if (self->previous->local_minimum_spectrum[k] <
+          self->current->smoothed_spectrum[k]) {
+        self->current->local_minimum_spectrum[k] =
+            GAMMA * self->previous->local_minimum_spectrum[k] +
+            ((1.F - GAMMA) / (1.F - BETA_AT)) *
+                (self->current->smoothed_spectrum[k] -
+                 BETA_AT * self->previous->smoothed_spectrum[k]);
+      } else {
+        self->current->local_minimum_spectrum[k] =
+            self->current->smoothed_spectrum[k];
+      }
 
-    if (self->noisy_speech_ratio > self->minimum_detection_thresholds[k]) {
-      self->speech_presence_detection[k] = 1U;
-    } else {
-      self->speech_presence_detection[k] = 0U;
+      self->noisy_speech_ratio = sanitize_denormal(
+          self->current->smoothed_spectrum[k] /
+          (self->current->local_minimum_spectrum[k] + 1e-12F));
+
+      if (self->noisy_speech_ratio > self->minimum_detection_thresholds[k]) {
+        self->speech_presence_detection[k] = 1U;
+      } else {
+        self->speech_presence_detection[k] = 0U;
+      }
+
+      self->current->speech_present_probability_spectrum[k] =
+          ALPHA_P * self->previous->speech_present_probability_spectrum[k] +
+          (1.F - ALPHA_P) * (float)self->speech_presence_detection[k];
+
+      self->time_frequency_smoothing_constant[k] =
+          ALPHA_D + (1.F - ALPHA_D) *
+                        self->current->speech_present_probability_spectrum[k];
+
+      noise_spectrum[k] =
+          self->time_frequency_smoothing_constant[k] *
+              self->previous_noise_spectrum[k] +
+          (1.F - self->time_frequency_smoothing_constant[k]) * spectrum[k];
     }
-
-    self->current->speech_present_probability_spectrum[k] =
-        ALPHA_P * self->previous->speech_present_probability_spectrum[k] +
-        (1.F - ALPHA_P) * (float)self->speech_presence_detection[k];
-
-    self->time_frequency_smoothing_constant[k] =
-        ALPHA_D +
-        (1.F - ALPHA_D) * self->current->speech_present_probability_spectrum[k];
-
-    noise_spectrum[k] =
-        self->time_frequency_smoothing_constant[k] *
-            self->previous_noise_spectrum[k] +
-        (1.F - self->time_frequency_smoothing_constant[k]) * spectrum[k];
   }
 
   update_frame_spectums(self, noise_spectrum);
@@ -161,11 +187,20 @@ static void update_frame_spectums(AdaptiveNoiseEstimator* self,
 
 static FrameSpectrum* frame_spectrum_initialize(const uint32_t frame_size) {
   FrameSpectrum* self = (FrameSpectrum*)calloc(1U, sizeof(FrameSpectrum));
+  if (!self) {
+    return NULL;
+  }
 
   self->smoothed_spectrum = (float*)calloc(frame_size, sizeof(float));
   self->local_minimum_spectrum = (float*)calloc(frame_size, sizeof(float));
   self->speech_present_probability_spectrum =
       (float*)calloc(frame_size, sizeof(float));
+
+  if (!self->smoothed_spectrum || !self->local_minimum_spectrum ||
+      !self->speech_present_probability_spectrum) {
+    frame_spectrum_free(self);
+    return NULL;
+  }
 
   (void)initialize_spectrum_with_value(self->local_minimum_spectrum, frame_size,
                                        FLT_MIN);
