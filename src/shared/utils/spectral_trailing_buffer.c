@@ -34,6 +34,9 @@ SpectralTrailingBuffer* spectral_trailing_buffer_initialize(
     const uint32_t real_spectrum_size, const uint32_t buffer_size) {
   SpectralTrailingBuffer* self =
       (SpectralTrailingBuffer*)calloc(1U, sizeof(SpectralTrailingBuffer));
+  if (!self) {
+    return NULL;
+  }
 
   self->real_spectrum_size = real_spectrum_size;
   self->buffer_size = buffer_size;
@@ -41,6 +44,11 @@ SpectralTrailingBuffer* spectral_trailing_buffer_initialize(
   self->buffer = (float*)calloc(
       ((size_t)self->real_spectrum_size * (size_t)self->buffer_size),
       sizeof(float));
+
+  if (!self->buffer) {
+    spectral_trailing_buffer_free(self);
+    return NULL;
+  }
 
   return self;
 }

@@ -38,6 +38,9 @@ struct DenoiseMixer {
 DenoiseMixer* denoise_mixer_initialize(uint32_t fft_size, uint32_t sample_rate,
                                        uint32_t hop) {
   DenoiseMixer* self = (DenoiseMixer*)calloc(1U, sizeof(DenoiseMixer));
+  if (!self) {
+    return NULL;
+  }
 
   self->fft_size = fft_size;
   self->real_spectrum_size = self->fft_size / 2U + 1U;
@@ -49,6 +52,11 @@ DenoiseMixer* denoise_mixer_initialize(uint32_t fft_size, uint32_t sample_rate,
 
   self->whitener = spectral_whitening_initialize(self->fft_size,
                                                  self->sample_rate, self->hop);
+
+  if (!self->residual_spectrum || !self->denoised_spectrum || !self->whitener) {
+    denoise_mixer_free(self);
+    return NULL;
+  }
 
   return self;
 }

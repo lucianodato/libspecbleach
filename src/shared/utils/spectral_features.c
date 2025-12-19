@@ -34,6 +34,9 @@ SpectralFeatures* spectral_features_initialize(
     const uint32_t real_spectrum_size) {
   SpectralFeatures* self =
       (SpectralFeatures*)calloc(1U, sizeof(SpectralFeatures));
+  if (!self) {
+    return NULL;
+  }
 
   self->real_spectrum_size = real_spectrum_size;
 
@@ -43,6 +46,12 @@ SpectralFeatures* spectral_features_initialize(
       (float*)calloc(self->real_spectrum_size, sizeof(float));
   self->magnitude_spectrum =
       (float*)calloc(self->real_spectrum_size, sizeof(float));
+
+  if (!self->power_spectrum || !self->phase_spectrum ||
+      !self->magnitude_spectrum) {
+    spectral_features_free(self);
+    return NULL;
+  }
 
   return self;
 }

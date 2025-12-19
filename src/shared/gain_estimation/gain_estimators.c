@@ -35,9 +35,11 @@ static void wiener_subtraction(const uint32_t real_spectrum_size,
       } else {
         gain_spectrum[k] = 0.F;
       }
-      gain_spectrum[fft_size - k] = gain_spectrum[k];
     } else {
       gain_spectrum[k] = 1.F;
+    }
+
+    if (k > 0U && k < (fft_size - k)) {
       gain_spectrum[fft_size - k] = gain_spectrum[k];
     }
   }
@@ -53,9 +55,11 @@ static void spectral_gating(const uint32_t real_spectrum_size,
       } else {
         gain_spectrum[k] = 0.F;
       }
-      gain_spectrum[fft_size - k] = gain_spectrum[k];
     } else {
       gain_spectrum[k] = 1.F;
+    }
+
+    if (k > 0U && k < (fft_size - k)) {
       gain_spectrum[fft_size - k] = gain_spectrum[k];
     }
   }
@@ -81,9 +85,11 @@ static void generalized_spectral_subtraction(
                 1.F / GSS_EXPONENT),
             0.F);
       }
-      gain_spectrum[fft_size - k] = gain_spectrum[k];
     } else {
       gain_spectrum[k] = 1.F;
+    }
+
+    if (k > 0U && k < (fft_size - k)) {
       gain_spectrum[fft_size - k] = gain_spectrum[k];
     }
   }
