@@ -83,7 +83,7 @@ meson compile -C build
 The project uses `clang-format` for code formatting. To format the code:
 
 ```bash
-find . -type f \( -name "*.c" -o -name "*.h" \) ! -path "./build*" | xargs clang-format -i
+meson compile format -C build
 ```
 
 ### Running Tests

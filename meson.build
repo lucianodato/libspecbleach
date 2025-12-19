@@ -101,9 +101,6 @@ endif
 run_target('format',
   command: [
     'sh', '-c',
-    'find . -name "*.c" -o -name "*.h" -o -name "*.cpp" -o -name "*.hpp" | ' +
-    'grep -v build | ' +
-    'while read -r file; do clang-format -i "$file"; done && ' +
-    'echo "Code formatting complete!"'
+    'find "@SOURCE_ROOT@" -name "*.[ch]" -o -name "*.cpp" -o -name "*.hpp" | grep -v "/build/" | xargs clang-format -i && echo "Code formatting complete!"'
   ]
 )
