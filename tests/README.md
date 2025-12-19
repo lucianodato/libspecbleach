@@ -36,6 +36,13 @@ meson compile -C build
 ./build/examples/adenoiser_demo --reduction 20.0 --whitening 50.0 --smoothing 0.0 --rescale 6.0 --scaling-type 2 --threshold -10.0 tests/test_data/Speech.wav tests/test_data/Speech_adaptive_denoised.wav
 ```
 
+### Why Reference Files Aren't Committed
+
+- **Large binary files**: Audio files are large and bloat the repository.
+- **Regenerable**: They can be recreated from the original audio using the algorithms.
+- **Version control**: Focus on committing the source audio, not processed outputs.
+- **CI/CD**: Reference files are generated during testing if needed.
+
 ## Running Tests
 
 ```bash

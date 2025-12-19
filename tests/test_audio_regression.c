@@ -2,6 +2,7 @@
  * Audio regression tests - compare processed audio against reference files
  */
 
+#include "../src/shared/configurations.h"
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>

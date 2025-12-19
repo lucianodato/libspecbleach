@@ -2,6 +2,7 @@
  * Integration tests for the full denoising pipeline
  */
 
+#include "../src/shared/configurations.h"
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
