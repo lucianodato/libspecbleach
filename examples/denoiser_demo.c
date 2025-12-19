@@ -24,8 +24,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  * with the algorithm and write it to an output file
  */
 
+#include <getopt.h>
 #include <sndfile.h>
 #include <specbleach_denoiser.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -38,10 +40,24 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
     // anywhere)
 #define FRAME_SIZE 46
 
+static void print_usage(const char* prog_name) {
+  fprintf(stderr, "Usage: %s [options] <noisy input> <denoised output>\n",
+          prog_name);
+  fprintf(stderr, "Options:\n");
+  fprintf(stderr, "  --reduction <val>      Reduction amount in dB (default: 20.0)\n");
+  fprintf(stderr, "  --whitening <val>      Whitening factor (default: 50.0)\n");
+  fprintf(stderr, "  --smoothing <val>      Smoothing factor (default: 0.0)\n");
+  fprintf(stderr, "  --rescale <val>        Noise rescale in dB (default: 6.0)\n");
+  fprintf(stderr, "  --scaling-type <val>   Noise scaling type (0-2, default: 2)\n");
+  fprintf(stderr, "  --threshold <val>      Post-filter threshold in dB (default: -10.0)\n");
+  fprintf(stderr, "  --learn-avg <val>      Learn average mode (0-3, default: 3)\n");
+  fprintf(stderr, "  --help                Show this help message\n");
+}
+
 static void cleanup_resources(SF_INFO* sfinfo, SNDFILE* input_file,
-                              SNDFILE* output_file, float* input_buffer,
-                              float* output_buffer,
-                              SpectralBleachHandle lib_instance) {
+                               SNDFILE* output_file, float* input_buffer,
+                               float* output_buffer,
+                               SpectralBleachHandle lib_instance) {
   if (input_file) {
     sf_close(input_file);
   }
@@ -63,13 +79,66 @@ static void cleanup_resources(SF_INFO* sfinfo, SNDFILE* input_file,
 }
 
 int main(int argc, char** argv) {
-  if (argc != 3) {
-    fprintf(stderr, "usage: %s <noisy input> <denoised output>\n", argv[0]);
+  SpectralBleachParameters parameters =
+      (SpectralBleachParameters){.residual_listen = false,
+                                 .learn_noise = 3, // average learn
+                                 .reduction_amount = 20.F,
+                                 .smoothing_factor = 0.F,
+                                 .whitening_factor = 50.F,
+                                 .noise_scaling_type = 2,
+                                 .noise_rescale = 6.F,
+                                 .post_filter_threshold = -10.F};
+
+  static struct option long_options[] = {
+      {"reduction", required_argument, 0, 'r'},
+      {"whitening", required_argument, 0, 'w'},
+      {"smoothing", required_argument, 0, 's'},
+      {"rescale", required_argument, 0, 'e'},
+      {"scaling-type", required_argument, 0, 't'},
+      {"threshold", required_argument, 0, 'h'},
+      {"learn-avg", required_argument, 0, 'l'},
+      {"help", no_argument, 0, '?'},
+      {0, 0, 0, 0}};
+
+  int opt;
+  while ((opt = getopt_long(argc, argv, "r:w:s:e:t:h:l:", long_options,
+                            NULL)) != -1) {
+    switch (opt) {
+    case 'r':
+      parameters.reduction_amount = (float)atof(optarg);
+      break;
+    case 'w':
+      parameters.whitening_factor = (float)atof(optarg);
+      break;
+    case 's':
+      parameters.smoothing_factor = (float)atof(optarg);
+      break;
+    case 'e':
+      parameters.noise_rescale = (float)atof(optarg);
+      break;
+    case 't':
+      parameters.noise_scaling_type = atoi(optarg);
+      break;
+    case 'h':
+      parameters.post_filter_threshold = (float)atof(optarg);
+      break;
+    case 'l':
+      parameters.learn_noise = atoi(optarg);
+      break;
+    case '?':
+    default:
+      print_usage(argv[0]);
+      return 1;
+    }
+  }
+
+  if (argc - optind != 2) {
+    print_usage(argv[0]);
     return 1;
   }
 
-  const char* input_file_name = argv[1];
-  const char* output_file_name = argv[2];
+  const char* input_file_name = argv[optind];
+  const char* output_file_name = argv[optind + 1];
 
   SF_INFO* sfinfo = NULL;
   SNDFILE* input_file = NULL;
@@ -135,16 +204,8 @@ int main(int argc, char** argv) {
 
     // NOISE PROFILE LEARN STAGE
 
-    // Configuration of the denoising parameters
-    SpectralBleachParameters parameters =
-        (SpectralBleachParameters){.residual_listen = false,
-                                   .learn_noise = 3, // average learn
-                                   .reduction_amount = 20.F,
-                                   .smoothing_factor = 0.F,
-                                   .whitening_factor = 100.F,
-                                   .noise_scaling_type = 2,
-                                   .noise_rescale = 2.F,
-                                   .post_filter_threshold = -10.F};
+    // Capture the requested learn mode for later reversal
+    int original_learn_noise = parameters.learn_noise;
 
     // Load the parameters before doing the denoising or profile learning
     if (!specbleach_load_parameters(lib_instance, parameters)) {
@@ -173,7 +234,7 @@ int main(int argc, char** argv) {
 
       // Process the audio to learn the noise profile
       if (!specbleach_process(lib_instance, (uint32_t)BLOCK_SIZE,
-                              input_library_buffer, output_library_buffer)) {
+                               input_library_buffer, output_library_buffer)) {
         fprintf(
             stderr,
             "Error: Failed to process audio during noise profile learning\n");
@@ -198,13 +259,16 @@ int main(int argc, char** argv) {
       break;
     }
 
+    // Restore parameters for potentially other uses, although not needed here
+    parameters.learn_noise = original_learn_noise;
+
     // Iterate over the audio to apply denoising
     sf_count_t frames_read;
     while ((frames_read = sf_readf_float(input_file, input_library_buffer,
-                                         BLOCK_SIZE)) > 0) {
+                                          BLOCK_SIZE)) > 0) {
       // Process the audio
       if (!specbleach_process(lib_instance, (uint32_t)BLOCK_SIZE,
-                              input_library_buffer, output_library_buffer)) {
+                               input_library_buffer, output_library_buffer)) {
         fprintf(stderr, "Error: Failed to process audio\n");
         break;
       }
@@ -230,6 +294,7 @@ int main(int argc, char** argv) {
     // Success
     ret = 0;
   } while (0);
+
 
   cleanup_resources(sfinfo, input_file, output_file, input_library_buffer,
                     output_library_buffer, lib_instance);

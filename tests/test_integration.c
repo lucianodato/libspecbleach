@@ -9,7 +9,6 @@
 #include <string.h>
 
 // Include internal headers for testing
-#include "../src/shared/configurations.h"
 
 // Include the public API
 #include "specbleach/specbleach_denoiser.h"
@@ -60,7 +59,7 @@ float calculate_rms(const float* buffer, int length) {
 }
 
 // Test spectral denoiser with synthetic audio
-void test_spectral_denoiser() {
+void test_spectral_denoiser(void) {
   printf("Testing spectral denoiser integration...\n");
 
   // Create test audio with signal + noise
@@ -138,7 +137,7 @@ void test_spectral_denoiser() {
 }
 
 // Test denoiser with different noise levels
-void test_different_noise_levels() {
+void test_different_noise_levels(void) {
   printf("Testing denoiser with different noise levels...\n");
 
   // Test with low noise
@@ -192,7 +191,7 @@ void test_different_noise_levels() {
 }
 
 // Test library information functions
-void test_library_info() {
+void test_library_info(void) {
   printf("Testing library information functions...\n");
 
   // Test spectral denoiser info
@@ -219,7 +218,7 @@ void test_library_info() {
   printf("✓ Library information tests passed\n");
 }
 
-int main() {
+int main(void) {
   printf("Running integration tests...\n\n");
 
   // Seed random number generator for reproducible tests

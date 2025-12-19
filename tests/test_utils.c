@@ -2,13 +2,11 @@
  * Unit tests for utility functions
  */
 
-#include <assert.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 // Include internal headers for testing
-#include "../src/shared/configurations.h"
 #include "../src/shared/utils/general_utils.h"
 #include "../src/shared/utils/spectral_utils.h"
 
@@ -30,7 +28,7 @@ void test_remap_percentage_log_like_unity(void);
 #define TEST_FLOAT_CLOSE(a, b, tolerance)                                      \
   TEST_ASSERT(fabsf((a) - (b)) < (tolerance), "Float values not close enough")
 
-void test_sanitize_denormal() {
+void test_sanitize_denormal(void) {
   printf("Testing sanitize_denormal...\n");
 
   // Test normal values
@@ -48,7 +46,7 @@ void test_sanitize_denormal() {
   printf("✓ sanitize_denormal tests passed\n");
 }
 
-void test_from_db_to_coefficient() {
+void test_from_db_to_coefficient(void) {
   printf("Testing from_db_to_coefficient...\n");
 
   // Test 0 dB = 1.0 coefficient
@@ -67,7 +65,7 @@ void test_from_db_to_coefficient() {
   printf("✓ from_db_to_coefficient tests passed\n");
 }
 
-void test_get_next_divisible_two() {
+void test_get_next_divisible_two(void) {
   printf("Testing get_next_divisible_two...\n");
 
   TEST_ASSERT(get_next_divisible_two(1) == 2, "1 -> 2");
@@ -82,7 +80,7 @@ void test_get_next_divisible_two() {
   printf("✓ get_next_divisible_two tests passed\n");
 }
 
-void test_get_next_power_two() {
+void test_get_next_power_two(void) {
   printf("Testing get_next_power_two...\n");
 
   TEST_ASSERT(get_next_power_two(1) == 1, "1 -> 1 (2^0)");
@@ -100,7 +98,7 @@ void test_get_next_power_two() {
   printf("✓ get_next_power_two tests passed\n");
 }
 
-void test_remap_percentage_log_like_unity() {
+void test_remap_percentage_log_like_unity(void) {
   printf("Testing remap_percentage_log_like_unity...\n");
 
   // Test edge cases
@@ -117,7 +115,7 @@ void test_remap_percentage_log_like_unity() {
   printf("✓ remap_percentage_log_like_unity tests passed\n");
 }
 
-int main() {
+int main(void) {
   printf("Running utility function tests...\n\n");
 
   test_sanitize_denormal();

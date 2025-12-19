@@ -7,7 +7,7 @@
 #include <string.h>
 
 // Test that essential test data files exist and are readable
-void test_data_files_exist() {
+void test_data_files_exist(void) {
   printf("Testing essential test data file accessibility...\n");
 
   // Check if Speech.wav exists (required)
@@ -42,7 +42,7 @@ void test_data_files_exist() {
 }
 
 // Test basic file I/O operations
-void test_file_operations() {
+void test_file_operations(void) {
   printf("Testing basic file operations...\n");
 
   const char* test_filename = "../tests/test_data/test_output.tmp";
@@ -81,7 +81,7 @@ void test_file_operations() {
   printf("✓ File operations work correctly\n");
 }
 
-int main() {
+int main(void) {
   printf("Running audio file validation tests...\n\n");
 
   test_data_files_exist();

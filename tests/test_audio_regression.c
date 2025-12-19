@@ -9,7 +9,6 @@
 #include <string.h>
 
 // Include internal headers for testing
-#include "../src/shared/configurations.h"
 
 // Include the public API
 #include "specbleach/specbleach_adenoiser.h"
@@ -160,7 +159,7 @@ float calculate_snr(const float* original, const float* processed, int length) {
 }
 
 // Test that denoising produces consistent results
-void test_deterministic_processing() {
+void test_deterministic_processing(void) {
   printf("Testing deterministic processing...\n");
 
   float* input1 = calloc(TEST_SAMPLES, sizeof(float));
@@ -193,7 +192,7 @@ void test_deterministic_processing() {
 }
 
 // Test that denoising actually reduces noise
-void test_noise_reduction() {
+void test_noise_reduction(void) {
   printf("Testing noise reduction effectiveness...\n");
 
   float* input = calloc(TEST_SAMPLES, sizeof(float));
@@ -237,7 +236,7 @@ void test_noise_reduction() {
 }
 
 // Test that denoising produces valid output
-void test_valid_output() {
+void test_valid_output(void) {
   printf("Testing valid output generation...\n");
 
   float* input = calloc(TEST_SAMPLES, sizeof(float));
@@ -282,7 +281,7 @@ void test_valid_output() {
 }
 
 // Test that adaptive denoiser works and is different from static
-void test_adaptive_denoising() {
+void test_adaptive_denoising(void) {
   printf("Testing adaptive denoiser effectiveness...\n");
 
   float* input = calloc(TEST_SAMPLES, sizeof(float));
@@ -333,7 +332,7 @@ void test_adaptive_denoising() {
   printf("✓ Adaptive denoiser test passed\n");
 }
 
-int main() {
+int main(void) {
   printf("Running audio regression tests...\n\n");
 
   test_deterministic_processing();

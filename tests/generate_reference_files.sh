@@ -29,12 +29,27 @@ else
 fi
 meson compile -C build
 
-# Generate reference files
+# Generate reference files with explicit parameters to ensure consistency
 echo "Generating spectral denoiser reference..."
-./build/examples/denoiser_demo tests/test_data/Speech.wav tests/test_data/Speech_denoised.wav
+./build/examples/denoiser_demo \
+    --reduction 20.0 \
+    --whitening 50.0 \
+    --smoothing 0.0 \
+    --rescale 6.0 \
+    --scaling-type 2 \
+    --threshold -10.0 \
+    tests/test_data/Speech.wav tests/test_data/Speech_denoised.wav
 
 echo "Generating adaptive denoiser reference..."
-./build/examples/adenoiser_demo tests/test_data/Speech.wav tests/test_data/Speech_adaptive_denoised.wav
+./build/examples/adenoiser_demo \
+    --reduction 20.0 \
+    --whitening 50.0 \
+    --smoothing 0.0 \
+    --rescale 6.0 \
+    --scaling-type 2 \
+    --threshold -10.0 \
+    tests/test_data/Speech.wav tests/test_data/Speech_adaptive_denoised.wav
+
 
 echo "Reference files generated successfully!"
 echo "Files created:"

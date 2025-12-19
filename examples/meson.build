@@ -1,4 +1,3 @@
-sndfile_dep = dependency('sndfile', required: true)
 
 executable('adenoiser_demo',
   sources: 'adenoiser_demo.c',

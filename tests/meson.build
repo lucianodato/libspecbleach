@@ -33,8 +33,17 @@ test_audio_files = executable('test_audio_files',
   include_directories: inc
 )
 
+# Audio file regression tests
+test_audio_file_regression = executable('test_audio_file_regression',
+  sources: ['test_audio_file_regression.c'],
+  dependencies: [libspecbleach_dep, m_dep, sndfile_dep],
+  c_args: test_c_args,
+  include_directories: inc
+)
+
 # Run tests
 test('utils', test_utils)
 test('integration', test_integration)
 test('audio_regression', test_audio_regression)
 test('audio_files', test_audio_files)
+test('audio_file_regression', test_audio_file_regression)
