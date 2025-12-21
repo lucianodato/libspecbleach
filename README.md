@@ -12,7 +12,7 @@ C library for audio noise reduction and other spectral effects
 - [De-noise Algorithms](#de-noise-algorithms)
 - [Build](#build)
 - [Installation](#installation)
-- [Example](#example)
+- [Usage Examples](#usage-examples)
 - [Development](#development)
 - [Contributing](#contributing)
 - [License](#license)
@@ -45,7 +45,7 @@ sudo meson install -C build
 ```
 
 
-## Example
+## Usage Examples
 
 Simple console apps examples are provided to demonstrate how to use the library. It needs libsndfile to compile successfully. You can build them with:
 
@@ -72,10 +72,10 @@ It will recognize any libsndfile supported format.
 
 ### Building for Development
 
-For development builds with debugging symbols and warnings:
+For development builds with debugging symbols:
 
 ```bash
-meson setup build --buildtype=debug -Dwarning_level=3
+meson setup build --buildtype=debug
 meson compile -C build
 ```
 
@@ -108,10 +108,6 @@ ninja -C build coverage-html
 ```
 
 The report will be available in `build/meson-logs/coveragereport/index.html`.
-
-## Contributing
-
-Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to contribute to this project.
 
 ## License
 
