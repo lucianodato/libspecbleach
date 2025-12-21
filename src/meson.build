@@ -10,6 +10,8 @@ libspecbleach = library('specbleach',
   c_args: lib_c_args,
   dependencies: dep,
   include_directories: inc,
+  version: meson.project_version(),
+  soversion: '0',
   install: true)
 
 # Generate package module configuration
