@@ -104,6 +104,15 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define BAND_2_LEVEL 2.F
 #define BAND_3_LEVEL 5.F
 
+// SPP-MMSE Estimator Constants
+#define SPP_PRIOR_H1 0.5F          // P(H1) - Speech present prior
+#define SPP_PRIOR_H0 0.5F          // P(H0) - Speech absent prior
+#define SPP_FIXED_XI_H1 31.62F     // Fixed a priori SNR (15 dB in linear)
+#define SPP_ALPHA_POW 0.8F         // Power spectrum smoothing factor
+#define SPP_SMOOTH_SPP 0.9F        // SPP smoothing for stagnation control
+#define SPP_CURRENT_SPP 0.1F       // Current SPP weighting for stagnation control
+#define SPP_STAGNATION_CAP 0.99F   // Maximum SPP value to prevent locking
+
 /* --------------------------------------------------------------- */
 /* ------------------- Denoiser configurations ------------------- */
 /* --------------------------------------------------------------- */

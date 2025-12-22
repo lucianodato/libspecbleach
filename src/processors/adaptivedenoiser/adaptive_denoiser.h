@@ -25,6 +25,15 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdbool.h>
 #include <stdint.h>
 
+#ifndef ADAPTIVE_NOISE_ESTIMATION_METHOD_DEFINED
+#define ADAPTIVE_NOISE_ESTIMATION_METHOD_DEFINED
+// Forward declaration of the adaptive noise estimation method enum
+typedef enum AdaptiveNoiseEstimationMethod {
+  LOUIZOU_METHOD = 0,     // Original minimum statistics method (default)
+  SPP_MMSE_METHOD = 1,    // Speech Presence Probability - MMSE method
+} AdaptiveNoiseEstimationMethod;
+#endif
+
 typedef struct AdaptiveDenoiserParameters {
   float reduction_amount;
   int noise_scaling_type;
@@ -33,6 +42,12 @@ typedef struct AdaptiveDenoiserParameters {
   float whitening_factor;
   float post_filter_threshold;
   bool residual_listen;
+
+  /* Method used for adaptive noise estimation.
+   * LOUIZOU_METHOD uses minimum statistics (default), SPP_MMSE_METHOD uses
+   * Speech Presence Probability with MMSE estimation for lower complexity
+   * and unbiased noise tracking. */
+  AdaptiveNoiseEstimationMethod noise_estimation_method;
 } AdaptiveDenoiserParameters;
 
 SpectralProcessorHandle spectral_adaptive_denoiser_initialize(

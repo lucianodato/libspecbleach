@@ -32,4 +32,11 @@ void louizou_estimator_free(AdaptiveNoiseEstimator* self);
 bool louizou_estimator_run(AdaptiveNoiseEstimator* self, const float* spectrum,
                            float* noise_spectrum);
 
+// SPP-MMSE based adaptive noise estimator (Real-Time Unbiased MMSE Noise PSD Tracking)
+AdaptiveNoiseEstimator* spp_mmse_estimator_initialize(
+    uint32_t noise_spectrum_size, uint32_t sample_rate, uint32_t fft_size);
+void spp_mmse_estimator_free(AdaptiveNoiseEstimator* self);
+bool spp_mmse_estimator_run(AdaptiveNoiseEstimator* self, const float* spectrum,
+                           float* noise_spectrum);
+
 #endif

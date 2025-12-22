@@ -181,7 +181,11 @@ void spectral_adaptive_denoiser_free(SpectralProcessorHandle instance) {
   }
 
   if (self->adaptive_estimator) {
-    louizou_estimator_free(self->adaptive_estimator);
+    if (self->parameters.noise_estimation_method == SPP_MMSE_METHOD) {
+      spp_mmse_estimator_free(self->adaptive_estimator);
+    } else {
+      louizou_estimator_free(self->adaptive_estimator);
+    }
   }
   if (self->spectral_features) {
     spectral_features_free(self->spectral_features);
@@ -228,7 +232,32 @@ bool load_adaptive_reduction_parameters(SpectralProcessorHandle instance,
   }
 
   SpectralAdaptiveDenoiser* self = (SpectralAdaptiveDenoiser*)instance;
+
+  // Check if noise estimation method has changed
+  bool method_changed = (self->parameters.noise_estimation_method !=
+                        parameters.noise_estimation_method);
+
   self->parameters = parameters;
+
+  // If method changed, reinitialize the adaptive estimator
+  if (method_changed && self->adaptive_estimator) {
+    louizou_estimator_free(self->adaptive_estimator);
+    self->adaptive_estimator = NULL;
+
+    // Initialize the appropriate estimator based on the method
+    if (self->parameters.noise_estimation_method == SPP_MMSE_METHOD) {
+      self->adaptive_estimator = spp_mmse_estimator_initialize(
+          self->real_spectrum_size, self->sample_rate, self->fft_size);
+    } else {
+      // Default to Louizou method
+      self->adaptive_estimator = louizou_estimator_initialize(
+          self->real_spectrum_size, self->sample_rate, self->fft_size);
+    }
+
+    if (!self->adaptive_estimator) {
+      return false;
+    }
+  }
 
   return true;
 }
@@ -245,9 +274,15 @@ bool spectral_adaptive_denoiser_run(SpectralProcessorHandle instance,
       get_spectral_feature(self->spectral_features, fft_spectrum,
                            self->fft_size, self->spectrum_type);
 
-  // Estimate noise
-  louizou_estimator_run(self->adaptive_estimator, reference_spectrum,
-                        self->noise_profile);
+  // Estimate noise using the selected method
+  if (self->parameters.noise_estimation_method == SPP_MMSE_METHOD) {
+    spp_mmse_estimator_run(self->adaptive_estimator, reference_spectrum,
+                          self->noise_profile);
+  } else {
+    // Default to Louizou method
+    louizou_estimator_run(self->adaptive_estimator, reference_spectrum,
+                         self->noise_profile);
+  }
 
   // Scale estimated noise profile for oversubtraction
   NoiseScalingParameters oversubtraction_parameters = (NoiseScalingParameters){

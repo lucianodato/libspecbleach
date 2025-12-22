@@ -53,6 +53,8 @@ static void print_usage(const char* prog_name) {
   fprintf(stderr,
           "  --threshold <val>      Post-filter threshold in dB (default: "
           "-10.0)\n");
+  fprintf(stderr,
+          "  --method <val>         Noise estimation method (0=Louizou, 1=SPP-MMSE, default: 0)\n");
   fprintf(stderr, "  --help                Show this help message\n");
 }
 
@@ -88,7 +90,8 @@ int main(int argc, char** argv) {
                                  .whitening_factor = 50.F,
                                  .noise_scaling_type = 2,
                                  .noise_rescale = 6.F,
-                                 .post_filter_threshold = -10.F};
+                                 .post_filter_threshold = -10.F,
+                                 .noise_estimation_method = LOUIZOU_METHOD};
 
   static struct option long_options[] = {
       {"reduction", required_argument, 0, 'r'},
@@ -97,11 +100,12 @@ int main(int argc, char** argv) {
       {"rescale", required_argument, 0, 'e'},
       {"scaling-type", required_argument, 0, 't'},
       {"threshold", required_argument, 0, 'h'},
+      {"method", required_argument, 0, 'm'},
       {"help", no_argument, 0, '?'},
       {0, 0, 0, 0}};
 
   int opt;
-  while ((opt = getopt_long(argc, argv, "r:w:s:e:t:h:", long_options, NULL)) !=
+  while ((opt = getopt_long(argc, argv, "r:w:s:e:t:h:m:", long_options, NULL)) !=
          -1) {
     switch (opt) {
       case 'r':
@@ -121,6 +125,9 @@ int main(int argc, char** argv) {
         break;
       case 'h':
         parameters.post_filter_threshold = (float)atof(optarg);
+        break;
+      case 'm':
+        parameters.noise_estimation_method = atoi(optarg);
         break;
       case '?':
       default:

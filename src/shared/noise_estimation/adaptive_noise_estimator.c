@@ -42,6 +42,13 @@ static void compute_auto_thresholds(AdaptiveNoiseEstimator* self,
 static void update_frame_spectums(AdaptiveNoiseEstimator* self,
                                   const float* noise_spectrum);
 
+// SPP-MMSE helper functions
+static float compute_spp_probability(float observation_power,
+                                   float previous_noise_psd);
+static float compute_mmse_noise_estimate(float spp_h1, float spp_h0,
+                                       float observation_power,
+                                       float previous_noise_psd);
+
 struct AdaptiveNoiseEstimator {
   uint32_t noise_spectrum_size;
   float noisy_speech_ratio;
@@ -54,7 +61,50 @@ struct AdaptiveNoiseEstimator {
   float* time_frequency_smoothing_constant;
   uint32_t* speech_presence_detection;
   bool is_first_frame;
+
+  // SPP-MMSE specific fields (optional, used when SPP method is selected)
+  float* spp_previous_noise_psd;     // σ_N²(l-1) - Previous noise PSD estimate
+  float* spp_smoothed_spp;           // P̄(l-1) - Smoothed SPP for stagnation control
 };
+
+// SPP-MMSE helper function implementations
+static float compute_spp_probability(float observation_power,
+                                   float previous_noise_psd) {
+  // Avoid division by zero and ensure numerical stability
+  if (previous_noise_psd < 1e-12F) {
+    previous_noise_psd = 1e-12F;
+  }
+
+  // Compute the exponent: -(|y|^2 / σ_N²(l-1)) * (ξ_H1 / (1 + ξ_H1))
+  float ratio = observation_power / previous_noise_psd;
+  float exponent = -ratio * (SPP_FIXED_XI_H1 / (1.F + SPP_FIXED_XI_H1));
+
+  // Compute exp(exponent) with numerical stability check
+  float exp_term = expf(exponent);
+  if (!isfinite(exp_term)) {
+    exp_term = (exponent > 0.F) ? FLT_MAX : 0.F;
+  }
+
+  // Compute the ratio: P(H0)/P(H1) * (1 + ξ_H1) * exp(...)
+  // Since P(H0) = P(H1) = 0.5, P(H0)/P(H1) = 1
+  float denominator_ratio = (1.F + SPP_FIXED_XI_H1) * exp_term;
+
+  // Compute SPP: 1 / (1 + denominator_ratio)
+  float spp = 1.F / (1.F + denominator_ratio);
+
+  // Ensure SPP is in valid range [0, 1]
+  spp = fmaxf(0.F, fminf(1.F, spp));
+
+  return spp;
+}
+
+static float compute_mmse_noise_estimate(float spp_h1, float spp_h0,
+                                       float observation_power,
+                                       float previous_noise_psd) {
+  // MMSE estimate: E{|N|²|y} = P(H0|y) * |y|² + P(H1|y) * σ_N²(l-1)
+  return spp_h0 * observation_power + spp_h1 * previous_noise_psd;
+}
+
 
 AdaptiveNoiseEstimator* louizou_estimator_initialize(
     const uint32_t noise_spectrum_size, const uint32_t sample_rate,
@@ -75,10 +125,15 @@ AdaptiveNoiseEstimator* louizou_estimator_initialize(
       (uint32_t*)calloc(self->noise_spectrum_size, sizeof(uint32_t));
   self->previous_noise_spectrum =
       (float*)calloc(self->noise_spectrum_size, sizeof(float));
+  self->spp_previous_noise_psd =
+      (float*)calloc(self->noise_spectrum_size, sizeof(float));
+  self->spp_smoothed_spp =
+      (float*)calloc(self->noise_spectrum_size, sizeof(float));
 
   if (!self->minimum_detection_thresholds ||
       !self->time_frequency_smoothing_constant ||
-      !self->speech_presence_detection || !self->previous_noise_spectrum) {
+      !self->speech_presence_detection || !self->previous_noise_spectrum ||
+      !self->spp_previous_noise_psd || !self->spp_smoothed_spp) {
     louizou_estimator_free(self);
     return NULL;
   }
@@ -98,11 +153,64 @@ AdaptiveNoiseEstimator* louizou_estimator_initialize(
   return self;
 }
 
+AdaptiveNoiseEstimator* spp_mmse_estimator_initialize(
+    const uint32_t noise_spectrum_size, const uint32_t sample_rate,
+    const uint32_t fft_size) {
+  AdaptiveNoiseEstimator* self =
+      (AdaptiveNoiseEstimator*)calloc(1U, sizeof(AdaptiveNoiseEstimator));
+  if (!self) {
+    return NULL;
+  }
+
+  self->noise_spectrum_size = noise_spectrum_size;
+
+  self->minimum_detection_thresholds =
+      (float*)calloc(self->noise_spectrum_size, sizeof(float));
+  self->time_frequency_smoothing_constant =
+      (float*)calloc(self->noise_spectrum_size, sizeof(float));
+  self->speech_presence_detection =
+      (uint32_t*)calloc(self->noise_spectrum_size, sizeof(uint32_t));
+  self->previous_noise_spectrum =
+      (float*)calloc(self->noise_spectrum_size, sizeof(float));
+  self->spp_previous_noise_psd =
+      (float*)calloc(self->noise_spectrum_size, sizeof(float));
+  self->spp_smoothed_spp =
+      (float*)calloc(self->noise_spectrum_size, sizeof(float));
+
+  if (!self->minimum_detection_thresholds ||
+      !self->time_frequency_smoothing_constant ||
+      !self->speech_presence_detection || !self->previous_noise_spectrum ||
+      !self->spp_previous_noise_psd || !self->spp_smoothed_spp) {
+    spp_mmse_estimator_free(self);
+    return NULL;
+  }
+
+  compute_auto_thresholds(self, sample_rate, noise_spectrum_size, fft_size);
+  self->current = frame_spectrum_initialize(noise_spectrum_size);
+  self->previous = frame_spectrum_initialize(noise_spectrum_size);
+
+  if (!self->current || !self->previous) {
+    spp_mmse_estimator_free(self);
+    return NULL;
+  }
+
+  self->noisy_speech_ratio = 0.F;
+  self->is_first_frame = true;
+
+  return self;
+}
+
+void spp_mmse_estimator_free(AdaptiveNoiseEstimator* self) {
+  louizou_estimator_free(self);  // Reuse the same cleanup logic
+}
+
 void louizou_estimator_free(AdaptiveNoiseEstimator* self) {
   free(self->minimum_detection_thresholds);
   free(self->time_frequency_smoothing_constant);
   free(self->speech_presence_detection);
   free(self->previous_noise_spectrum);
+  free(self->spp_previous_noise_psd);
+  free(self->spp_smoothed_spp);
 
   frame_spectrum_free(self->current);
   frame_spectrum_free(self->previous);
@@ -166,6 +274,59 @@ bool louizou_estimator_run(AdaptiveNoiseEstimator* self, const float* spectrum,
     }
   }
 
+  update_frame_spectums(self, noise_spectrum);
+
+  return true;
+}
+
+bool spp_mmse_estimator_run(AdaptiveNoiseEstimator* self, const float* spectrum,
+                           float* noise_spectrum) {
+  if (!self || !spectrum || !noise_spectrum) {
+    return false;
+  }
+
+  if (self->is_first_frame) {
+    // Initialize with first frame (assume noise-only)
+    for (uint32_t k = 0U; k < self->noise_spectrum_size; k++) {
+      self->spp_previous_noise_psd[k] = spectrum[k];
+      self->spp_smoothed_spp[k] = 0.F;  // Initialize smoothed SPP to 0
+      noise_spectrum[k] = spectrum[k];
+    }
+    self->is_first_frame = false;
+  } else {
+    for (uint32_t k = 0U; k < self->noise_spectrum_size; k++) {
+      // Step 1: Compute A Posteriori Speech Presence Probability
+      float spp_h1 = compute_spp_probability(spectrum[k],
+                                           self->spp_previous_noise_psd[k]);
+
+      // Step 2: Apply stagnation control
+      // If smoothed SPP > 0.99, cap current SPP at 0.99 to allow noise update
+      if (self->spp_smoothed_spp[k] > SPP_STAGNATION_CAP) {
+        spp_h1 = fminf(spp_h1, SPP_STAGNATION_CAP);
+      }
+      float spp_h0 = 1.F - spp_h1;
+
+      // Step 3: Compute MMSE noise periodogram estimate
+      float mmse_noise_estimate = compute_mmse_noise_estimate(spp_h1, spp_h0,
+                                                            spectrum[k],
+                                                            self->spp_previous_noise_psd[k]);
+
+      // Step 4: Temporal smoothing
+      // σ_N²(l) = α_pow * σ_N²(l-1) + (1 - α_pow) * E{|N|²|y}
+      noise_spectrum[k] = SPP_ALPHA_POW * self->spp_previous_noise_psd[k] +
+                         (1.F - SPP_ALPHA_POW) * mmse_noise_estimate;
+
+      // Step 5: Update smoothed SPP for next frame's stagnation control
+      // P̄(l) = 0.9 * P̄(l-1) + 0.1 * P(H1|y)
+      self->spp_smoothed_spp[k] = SPP_SMOOTH_SPP * self->spp_smoothed_spp[k] +
+                                SPP_CURRENT_SPP * spp_h1;
+
+      // Step 6: Store current noise estimate for next frame
+      self->spp_previous_noise_psd[k] = noise_spectrum[k];
+    }
+  }
+
+  // Update frame spectrums (reuse existing infrastructure for compatibility)
   update_frame_spectums(self, noise_spectrum);
 
   return true;
