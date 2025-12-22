@@ -64,7 +64,7 @@ struct AdaptiveNoiseEstimator {
 
   // SPP-MMSE specific fields (optional, used when SPP method is selected)
   float* spp_previous_noise_psd; // σ_N²(l-1) - Previous noise PSD estimate
-  float* spp_smoothed_spp;       // P̄(l-1) - Smoothed SPP for stagnation control
+  float* spp_smoothed_spp; // P̄(l-1) - Smoothed SPP for stagnation control
 };
 
 // SPP-MMSE helper function implementations

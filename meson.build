@@ -87,6 +87,10 @@ subdir('include')
 # Build library
 subdir('src')
 
+# Export dependency for parent projects
+libspecbleach_dep = declare_dependency(include_directories: inc,
+  link_with: libspecbleach)
+
 # Examples building
 if get_option('enable_examples')
   subdir('examples')
@@ -96,10 +100,6 @@ endif
 if get_option('enable_tests')
   subdir('tests')
 endif
-
-# Export dependency for parent projects
-libspecbleach_dep = declare_dependency(include_directories: inc,
-  link_with: libspecbleach)
 
 # Code formatting target
 run_target('format',
