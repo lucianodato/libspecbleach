@@ -54,7 +54,8 @@ static void print_usage(const char* prog_name) {
           "  --threshold <val>      Post-filter threshold in dB (default: "
           "-10.0)\n");
   fprintf(stderr,
-          "  --method <val>         Noise estimation method (0=Louizou, 1=SPP-MMSE, default: 0)\n");
+          "  --method <val>         Noise estimation method (0=Louizou, "
+          "1=SPP-MMSE, default: 0)\n");
   fprintf(stderr, "  --help                Show this help message\n");
 }
 
@@ -105,8 +106,8 @@ int main(int argc, char** argv) {
       {0, 0, 0, 0}};
 
   int opt;
-  while ((opt = getopt_long(argc, argv, "r:w:s:e:t:h:m:", long_options, NULL)) !=
-         -1) {
+  while ((opt = getopt_long(argc, argv, "r:w:s:e:t:h:m:", long_options,
+                            NULL)) != -1) {
     switch (opt) {
       case 'r':
         parameters.reduction_amount = (float)atof(optarg);

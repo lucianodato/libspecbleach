@@ -44,10 +44,10 @@ static void update_frame_spectums(AdaptiveNoiseEstimator* self,
 
 // SPP-MMSE helper functions
 static float compute_spp_probability(float observation_power,
-                                   float previous_noise_psd);
+                                     float previous_noise_psd);
 static float compute_mmse_noise_estimate(float spp_h1, float spp_h0,
-                                       float observation_power,
-                                       float previous_noise_psd);
+                                         float observation_power,
+                                         float previous_noise_psd);
 
 struct AdaptiveNoiseEstimator {
   uint32_t noise_spectrum_size;
@@ -63,13 +63,13 @@ struct AdaptiveNoiseEstimator {
   bool is_first_frame;
 
   // SPP-MMSE specific fields (optional, used when SPP method is selected)
-  float* spp_previous_noise_psd;     // σ_N²(l-1) - Previous noise PSD estimate
-  float* spp_smoothed_spp;           // P̄(l-1) - Smoothed SPP for stagnation control
+  float* spp_previous_noise_psd; // σ_N²(l-1) - Previous noise PSD estimate
+  float* spp_smoothed_spp;       // P̄(l-1) - Smoothed SPP for stagnation control
 };
 
 // SPP-MMSE helper function implementations
 static float compute_spp_probability(float observation_power,
-                                   float previous_noise_psd) {
+                                     float previous_noise_psd) {
   // Avoid division by zero and ensure numerical stability
   if (previous_noise_psd < 1e-12F) {
     previous_noise_psd = 1e-12F;
@@ -99,12 +99,11 @@ static float compute_spp_probability(float observation_power,
 }
 
 static float compute_mmse_noise_estimate(float spp_h1, float spp_h0,
-                                       float observation_power,
-                                       float previous_noise_psd) {
+                                         float observation_power,
+                                         float previous_noise_psd) {
   // MMSE estimate: E{|N|²|y} = P(H0|y) * |y|² + P(H1|y) * σ_N²(l-1)
   return spp_h0 * observation_power + spp_h1 * previous_noise_psd;
 }
-
 
 AdaptiveNoiseEstimator* louizou_estimator_initialize(
     const uint32_t noise_spectrum_size, const uint32_t sample_rate,
@@ -201,7 +200,7 @@ AdaptiveNoiseEstimator* spp_mmse_estimator_initialize(
 }
 
 void spp_mmse_estimator_free(AdaptiveNoiseEstimator* self) {
-  louizou_estimator_free(self);  // Reuse the same cleanup logic
+  louizou_estimator_free(self); // Reuse the same cleanup logic
 }
 
 void louizou_estimator_free(AdaptiveNoiseEstimator* self) {
@@ -280,7 +279,7 @@ bool louizou_estimator_run(AdaptiveNoiseEstimator* self, const float* spectrum,
 }
 
 bool spp_mmse_estimator_run(AdaptiveNoiseEstimator* self, const float* spectrum,
-                           float* noise_spectrum) {
+                            float* noise_spectrum) {
   if (!self || !spectrum || !noise_spectrum) {
     return false;
   }
@@ -289,15 +288,15 @@ bool spp_mmse_estimator_run(AdaptiveNoiseEstimator* self, const float* spectrum,
     // Initialize with first frame (assume noise-only)
     for (uint32_t k = 0U; k < self->noise_spectrum_size; k++) {
       self->spp_previous_noise_psd[k] = spectrum[k];
-      self->spp_smoothed_spp[k] = 0.F;  // Initialize smoothed SPP to 0
+      self->spp_smoothed_spp[k] = 0.F; // Initialize smoothed SPP to 0
       noise_spectrum[k] = spectrum[k];
     }
     self->is_first_frame = false;
   } else {
     for (uint32_t k = 0U; k < self->noise_spectrum_size; k++) {
       // Step 1: Compute A Posteriori Speech Presence Probability
-      float spp_h1 = compute_spp_probability(spectrum[k],
-                                           self->spp_previous_noise_psd[k]);
+      float spp_h1 =
+          compute_spp_probability(spectrum[k], self->spp_previous_noise_psd[k]);
 
       // Step 2: Apply stagnation control
       // If smoothed SPP > 0.99, cap current SPP at 0.99 to allow noise update
@@ -307,19 +306,18 @@ bool spp_mmse_estimator_run(AdaptiveNoiseEstimator* self, const float* spectrum,
       float spp_h0 = 1.F - spp_h1;
 
       // Step 3: Compute MMSE noise periodogram estimate
-      float mmse_noise_estimate = compute_mmse_noise_estimate(spp_h1, spp_h0,
-                                                            spectrum[k],
-                                                            self->spp_previous_noise_psd[k]);
+      float mmse_noise_estimate = compute_mmse_noise_estimate(
+          spp_h1, spp_h0, spectrum[k], self->spp_previous_noise_psd[k]);
 
       // Step 4: Temporal smoothing
       // σ_N²(l) = α_pow * σ_N²(l-1) + (1 - α_pow) * E{|N|²|y}
       noise_spectrum[k] = SPP_ALPHA_POW * self->spp_previous_noise_psd[k] +
-                         (1.F - SPP_ALPHA_POW) * mmse_noise_estimate;
+                          (1.F - SPP_ALPHA_POW) * mmse_noise_estimate;
 
       // Step 5: Update smoothed SPP for next frame's stagnation control
       // P̄(l) = 0.9 * P̄(l-1) + 0.1 * P(H1|y)
-      self->spp_smoothed_spp[k] = SPP_SMOOTH_SPP * self->spp_smoothed_spp[k] +
-                                SPP_CURRENT_SPP * spp_h1;
+      self->spp_smoothed_spp[k] =
+          SPP_SMOOTH_SPP * self->spp_smoothed_spp[k] + SPP_CURRENT_SPP * spp_h1;
 
       // Step 6: Store current noise estimate for next frame
       self->spp_previous_noise_psd[k] = noise_spectrum[k];

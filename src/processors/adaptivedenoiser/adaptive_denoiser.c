@@ -235,7 +235,7 @@ bool load_adaptive_reduction_parameters(SpectralProcessorHandle instance,
 
   // Check if noise estimation method has changed
   bool method_changed = (self->parameters.noise_estimation_method !=
-                        parameters.noise_estimation_method);
+                         parameters.noise_estimation_method);
 
   self->parameters = parameters;
 
@@ -277,11 +277,11 @@ bool spectral_adaptive_denoiser_run(SpectralProcessorHandle instance,
   // Estimate noise using the selected method
   if (self->parameters.noise_estimation_method == SPP_MMSE_METHOD) {
     spp_mmse_estimator_run(self->adaptive_estimator, reference_spectrum,
-                          self->noise_profile);
+                           self->noise_profile);
   } else {
     // Default to Louizou method
     louizou_estimator_run(self->adaptive_estimator, reference_spectrum,
-                         self->noise_profile);
+                          self->noise_profile);
   }
 
   // Scale estimated noise profile for oversubtraction
