@@ -88,6 +88,22 @@ bool specbleach_noise_profile_available(SpectralBleachHandle instance);
 uint32_t specbleach_get_noise_profile_blocks_averaged(
     SpectralBleachHandle instance);
 
+/**
+ * Returns the number of blocks used for the noise profile calculation for a specific mode
+ */
+uint32_t specbleach_get_noise_profile_blocks_averaged_for_mode(
+    SpectralBleachHandle instance, int mode);
+
+/**
+ * Returns a pointer to the noise profile for a specific mode
+ */
+float* specbleach_get_noise_profile_for_mode(SpectralBleachHandle instance, int mode);
+
+/**
+ * Returns if the instance has a noise profile calculated for a specific mode
+ */
+bool specbleach_noise_profile_available_for_mode(SpectralBleachHandle instance, int mode);
+
 #ifdef __cplusplus
 }
 #endif

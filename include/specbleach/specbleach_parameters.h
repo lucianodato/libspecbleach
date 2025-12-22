@@ -25,11 +25,15 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 typedef struct SpectralBleachParameters {
   /* Sets the processor in listening mode to capture the noise profile.
-   * 0 is disabled, 1 will learn the average profile, 2 will learn the maximum
-   * median profile and 3 will learn the max profile.
-   * For the average and median profile you need at least 5 frames of audio.
+   * 0 is disabled, 1 will learn all profile types simultaneously.
    * Note: This parameter is ignored by the adaptive denoiser. */
   int learn_noise;
+
+  /* Sets the noise reduction mode to use when learning is disabled.
+   * 1 will use the average profile, 2 will use the median profile
+   * and 3 will use the max profile.
+   * Note: This parameter is ignored by the adaptive denoiser. */
+  int noise_reduction_mode;
 
   /* Enables outputting the residue of the reduction processing. It's either
    * true or false */

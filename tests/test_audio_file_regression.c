@@ -26,7 +26,8 @@
 // Canonical parameters used in generate_reference_files.sh
 static const SpectralBleachParameters CANONICAL_PARAMS = {
     .residual_listen = false,
-    .learn_noise = 3, // average learn
+    .learn_noise = 1, // Learn all modes
+    .noise_reduction_mode = 3, // Use maximum profile
     .reduction_amount = 20.0f,
     .smoothing_factor = 0.0f,
     .whitening_factor = 50.0f,

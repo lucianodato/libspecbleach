@@ -67,7 +67,8 @@ void process_audio(const float* input, float* output, int length) {
   TEST_ASSERT(handle != NULL, "Failed to initialize denoiser");
 
   SpectralBleachParameters parameters =
-      (SpectralBleachParameters){.learn_noise = 1, // Average
+      (SpectralBleachParameters){.learn_noise = 1, // Learn all modes
+                                 .noise_reduction_mode = 1, // Use average when processing
                                  .reduction_amount = 20.0f,
                                  .smoothing_factor = 0.0f,
                                  .noise_rescale = 0.0f,
