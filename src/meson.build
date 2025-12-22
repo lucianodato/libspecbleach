@@ -21,6 +21,4 @@ pkg_mod.generate(libraries: libspecbleach,
                  name: 'libspecbleach',
                  description: 'C library for audio noise reduction and other spectral effects')
 
-# Declare libspecbleach dependency
-libspecbleach_dep = declare_dependency(include_directories: inc,
-  link_with: libspecbleach)
+# Note: libspecbleach_dep is now declared in the root meson.build
