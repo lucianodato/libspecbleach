@@ -81,16 +81,17 @@ void test_spectral_denoiser(void) {
       specbleach_initialize(SAMPLE_RATE, frame_size_ms);
   TEST_ASSERT(handle != NULL, "Failed to initialize spectral denoiser");
 
-  SpectralBleachParameters parameters =
-      (SpectralBleachParameters){.learn_noise = 1, // Average
-                                 .reduction_amount = 20.0f,
-                                 .smoothing_factor = 0.0f,
-                                 .noise_rescale = 0.0f,
-                                 .noise_scaling_type = 0,
-                                 .post_filter_threshold = 0.0f,
-                                 .residual_listen = false,
-                                 .transient_protection = false,
-                                 .whitening_factor = 0.0f};
+  SpectralBleachParameters parameters = (SpectralBleachParameters){
+      .learn_noise = 1,          // Learn all modes
+      .noise_reduction_mode = 1, // Use average when processing
+      .reduction_amount = 20.0f,
+      .smoothing_factor = 0.0f,
+      .noise_rescale = 0.0f,
+      .noise_scaling_type = 0,
+      .post_filter_threshold = 0.0f,
+      .residual_listen = false,
+      .transient_protection = false,
+      .whitening_factor = 0.0f};
 
   specbleach_load_parameters(handle, parameters);
 

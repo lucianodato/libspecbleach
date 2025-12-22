@@ -69,15 +69,16 @@ bool noise_estimation_run(NoiseEstimator* self,
     return false;
   }
 
-  float* noise_profile = get_noise_profile(self->noise_profile);
+  float* noise_profile =
+      get_noise_profile(self->noise_profile, noise_estimator_type);
 
   switch (noise_estimator_type) {
     case ROLLING_MEAN:
-      get_rolling_mean_spectrum(
-          noise_profile, signal_spectrum,
-          get_noise_profile_blocks_averaged(self->noise_profile),
-          self->real_spectrum_size);
-      increment_blocks_averaged(self->noise_profile);
+      get_rolling_mean_spectrum(noise_profile, signal_spectrum,
+                                get_noise_profile_blocks_averaged(
+                                    self->noise_profile, noise_estimator_type),
+                                self->real_spectrum_size);
+      increment_blocks_averaged(self->noise_profile, noise_estimator_type);
       break;
     case MEDIAN:
       spectral_trailing_buffer_push_back(self->median_buffer, signal_spectrum);
@@ -86,13 +87,13 @@ bool noise_estimation_run(NoiseEstimator* self,
           get_spectrum_buffer_size(self->median_buffer),
           get_spectrum_size(self->median_buffer));
       if (is_valid_median) {
-        set_noise_profile_available(self->noise_profile);
+        set_noise_profile_available(self->noise_profile, noise_estimator_type);
       }
       break;
     case MAX:
       (void)max_spectrum(noise_profile, signal_spectrum,
                          self->real_spectrum_size);
-      set_noise_profile_available(self->noise_profile);
+      set_noise_profile_available(self->noise_profile, noise_estimator_type);
       break;
 
     default:

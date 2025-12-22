@@ -86,15 +86,16 @@ static void cleanup_resources(SF_INFO* sfinfo, SNDFILE* input_file,
 }
 
 int main(int argc, char** argv) {
-  SpectralBleachParameters parameters =
-      (SpectralBleachParameters){.residual_listen = false,
-                                 .learn_noise = 3, // average learn
-                                 .reduction_amount = 20.F,
-                                 .smoothing_factor = 0.F,
-                                 .whitening_factor = 50.F,
-                                 .noise_scaling_type = 2,
-                                 .noise_rescale = 6.F,
-                                 .post_filter_threshold = -10.F};
+  SpectralBleachParameters parameters = (SpectralBleachParameters){
+      .residual_listen = false,
+      .learn_noise = 1,          // Learn all modes
+      .noise_reduction_mode = 3, // Use maximum mode for processing
+      .reduction_amount = 20.F,
+      .smoothing_factor = 0.F,
+      .whitening_factor = 50.F,
+      .noise_scaling_type = 2,
+      .noise_rescale = 6.F,
+      .post_filter_threshold = -10.F};
 
   static struct option long_options[] = {
       {"reduction", required_argument, 0, 'r'},
@@ -130,7 +131,7 @@ int main(int argc, char** argv) {
         parameters.post_filter_threshold = (float)atof(optarg);
         break;
       case 'l':
-        parameters.learn_noise = atoi(optarg);
+        parameters.noise_reduction_mode = atoi(optarg);
         break;
       case '?':
       default:
@@ -211,9 +212,6 @@ int main(int argc, char** argv) {
 
     // NOISE PROFILE LEARN STAGE
 
-    // Capture the requested learn mode for later reversal
-    int original_learn_noise = parameters.learn_noise;
-
     // Load the parameters before doing the denoising or profile learning
     if (!specbleach_load_parameters(lib_instance, parameters)) {
       fprintf(stderr, "Error: Failed to load parameters\n");
@@ -257,7 +255,7 @@ int main(int argc, char** argv) {
 
     // NOISE REDUCTION STAGE
 
-    // Turn off noise profile learn to start applying reduction
+    // Turn off noise profile learning to start applying reduction
     parameters.learn_noise = 0;
 
     // Reload parameters with noise learn off
@@ -265,9 +263,6 @@ int main(int argc, char** argv) {
       fprintf(stderr, "Error: Failed to reload parameters\n");
       break;
     }
-
-    // Restore parameters for potentially other uses, although not needed here
-    parameters.learn_noise = original_learn_noise;
 
     // Iterate over the audio to apply denoising
     sf_count_t frames_read;
