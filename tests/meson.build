@@ -89,6 +89,22 @@ test_postfilter = executable('test_postfilter',
   include_directories: inc
 )
 
+# Noise profile tests
+test_noise_profile = executable('test_noise_profile',
+  sources: ['test_noise_profile.c'],
+  dependencies: [libspecbleach_dep, m_dep],
+  c_args: test_c_args,
+  include_directories: inc
+)
+
+# Specbleach denoiser tests
+test_specbleach_denoiser = executable('test_specbleach_denoiser',
+  sources: ['test_specbleach_denoiser.c'],
+  dependencies: [libspecbleach_dep, m_dep],
+  c_args: test_c_args,
+  include_directories: inc
+)
+
 # Run tests
 test('utils', test_utils)
 test('fft', test_fft)
@@ -101,4 +117,6 @@ test('audio_file_regression', test_audio_file_regression)
 test('gain_estimation', test_gain_estimation)
 test('pre_estimation', test_pre_estimation)
 test('postfilter', test_postfilter)
+test('noise_profile', test_noise_profile)
+test('specbleach_denoiser', test_specbleach_denoiser)
 
