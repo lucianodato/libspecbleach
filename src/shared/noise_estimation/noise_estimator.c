@@ -69,14 +69,15 @@ bool noise_estimation_run(NoiseEstimator* self,
     return false;
   }
 
-  float* noise_profile = get_noise_profile(self->noise_profile, noise_estimator_type);
+  float* noise_profile =
+      get_noise_profile(self->noise_profile, noise_estimator_type);
 
   switch (noise_estimator_type) {
     case ROLLING_MEAN:
-      get_rolling_mean_spectrum(
-          noise_profile, signal_spectrum,
-          get_noise_profile_blocks_averaged(self->noise_profile, noise_estimator_type),
-          self->real_spectrum_size);
+      get_rolling_mean_spectrum(noise_profile, signal_spectrum,
+                                get_noise_profile_blocks_averaged(
+                                    self->noise_profile, noise_estimator_type),
+                                self->real_spectrum_size);
       increment_blocks_averaged(self->noise_profile, noise_estimator_type);
       break;
     case MEDIAN:

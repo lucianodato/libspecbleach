@@ -146,7 +146,8 @@ uint32_t specbleach_get_noise_profile_blocks_averaged(
     return 0;
   }
 
-  return get_noise_profile_blocks_averaged(self->noise_profile, self->denoise_parameters.noise_reduction_mode);
+  return get_noise_profile_blocks_averaged(
+      self->noise_profile, self->denoise_parameters.noise_reduction_mode);
 }
 
 float* specbleach_get_noise_profile(SpectralBleachHandle instance) {
@@ -156,7 +157,8 @@ float* specbleach_get_noise_profile(SpectralBleachHandle instance) {
     return NULL;
   }
 
-  return get_noise_profile(self->noise_profile, self->denoise_parameters.noise_reduction_mode);
+  return get_noise_profile(self->noise_profile,
+                           self->denoise_parameters.noise_reduction_mode);
 }
 
 bool specbleach_load_noise_profile(SpectralBleachHandle instance,
@@ -173,8 +175,9 @@ bool specbleach_load_noise_profile(SpectralBleachHandle instance,
     return false;
   }
 
-  set_noise_profile(self->noise_profile, self->denoise_parameters.noise_reduction_mode, restored_profile, profile_size,
-                   averaged_blocks);
+  set_noise_profile(self->noise_profile,
+                    self->denoise_parameters.noise_reduction_mode,
+                    restored_profile, profile_size, averaged_blocks);
 
   return true;
 }
@@ -194,25 +197,31 @@ bool specbleach_reset_noise_profile(SpectralBleachHandle instance) {
 bool specbleach_noise_profile_available(SpectralBleachHandle instance) {
   SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
 
-  return is_noise_estimation_available(self->noise_profile, self->denoise_parameters.noise_reduction_mode);
+  return is_noise_estimation_available(
+      self->noise_profile, self->denoise_parameters.noise_reduction_mode);
 }
 
 uint32_t specbleach_get_noise_profile_blocks_averaged_for_mode(
     SpectralBleachHandle instance, int mode) {
   SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
-  if (!self || mode < 1 || mode > 3) return 0;
+  if (!self || mode < 1 || mode > 3)
+    return 0;
   return get_noise_profile_blocks_averaged(self->noise_profile, mode);
 }
 
-float* specbleach_get_noise_profile_for_mode(SpectralBleachHandle instance, int mode) {
+float* specbleach_get_noise_profile_for_mode(SpectralBleachHandle instance,
+                                             int mode) {
   SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
-  if (!self || mode < 1 || mode > 3) return NULL;
+  if (!self || mode < 1 || mode > 3)
+    return NULL;
   return get_noise_profile(self->noise_profile, mode);
 }
 
-bool specbleach_noise_profile_available_for_mode(SpectralBleachHandle instance, int mode) {
+bool specbleach_noise_profile_available_for_mode(SpectralBleachHandle instance,
+                                                 int mode) {
   SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
-  if (!self || mode < 1 || mode > 3) return false;
+  if (!self || mode < 1 || mode > 3)
+    return false;
   return is_noise_estimation_available(self->noise_profile, mode);
 }
 

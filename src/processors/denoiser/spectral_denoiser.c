@@ -234,13 +234,15 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
   if (self->denoise_parameters.learn_noise > 0) {
     // Learn all modes simultaneously
     for (int mode = ROLLING_MEAN; mode <= MAX; mode++) {
-      noise_estimation_run(
-          self->noise_estimator,
-          (NoiseEstimatorType)mode,
-          reference_spectrum);
+      noise_estimation_run(self->noise_estimator, (NoiseEstimatorType)mode,
+                           reference_spectrum);
     }
-  } else if (is_noise_estimation_available(self->noise_profile, self->denoise_parameters.noise_reduction_mode)) {
-    memcpy(self->noise_spectrum, get_noise_profile(self->noise_profile, self->denoise_parameters.noise_reduction_mode),
+  } else if (is_noise_estimation_available(
+                 self->noise_profile,
+                 self->denoise_parameters.noise_reduction_mode)) {
+    memcpy(self->noise_spectrum,
+           get_noise_profile(self->noise_profile,
+                             self->denoise_parameters.noise_reduction_mode),
            self->real_spectrum_size * sizeof(float));
 
     NoiseScalingParameters oversubtraction_parameters =

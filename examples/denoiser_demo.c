@@ -86,16 +86,16 @@ static void cleanup_resources(SF_INFO* sfinfo, SNDFILE* input_file,
 }
 
 int main(int argc, char** argv) {
-  SpectralBleachParameters parameters =
-      (SpectralBleachParameters){.residual_listen = false,
-                                 .learn_noise = 1, // Learn all modes
-                                 .noise_reduction_mode = 3, // Use maximum mode for processing
-                                 .reduction_amount = 20.F,
-                                 .smoothing_factor = 0.F,
-                                 .whitening_factor = 50.F,
-                                 .noise_scaling_type = 2,
-                                 .noise_rescale = 6.F,
-                                 .post_filter_threshold = -10.F};
+  SpectralBleachParameters parameters = (SpectralBleachParameters){
+      .residual_listen = false,
+      .learn_noise = 1,          // Learn all modes
+      .noise_reduction_mode = 3, // Use maximum mode for processing
+      .reduction_amount = 20.F,
+      .smoothing_factor = 0.F,
+      .whitening_factor = 50.F,
+      .noise_scaling_type = 2,
+      .noise_rescale = 6.F,
+      .post_filter_threshold = -10.F};
 
   static struct option long_options[] = {
       {"reduction", required_argument, 0, 'r'},
