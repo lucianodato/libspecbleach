@@ -310,11 +310,51 @@ void test_specbleach_reset_noise_profile(void) {
   printf("✓ Specbleach reset noise profile tests passed\n");
 }
 
+void test_specbleach_load_noise_profile_for_mode(void) {
+  printf("Testing specbleach load noise profile for mode...\n");
+
+  SpectralBleachHandle handle = specbleach_initialize(44100, 20.0f);
+  TEST_ASSERT(handle != NULL, "Denoiser initialization should succeed");
+
+  // Get profile size
+  uint32_t profile_size = specbleach_get_noise_profile_size(handle);
+  TEST_ASSERT(profile_size > 0, "Profile size should be valid");
+
+  // Create test profile
+  float* test_profile = (float*)malloc(profile_size * sizeof(float));
+  TEST_ASSERT(test_profile != NULL, "Profile allocation should succeed");
+
+  for (uint32_t i = 0; i < profile_size; i++) {
+    test_profile[i] = 0.1f + (float)i * 0.001f;
+  }
+
+  // Test loading profile for each mode directly
+  for (int mode = 1; mode <= 3; mode++) {
+    TEST_ASSERT(specbleach_load_noise_profile_for_mode(
+                    handle, test_profile, profile_size, 10, mode) == true,
+                "Loading noise profile for mode should succeed");
+  }
+
+  // Test invalid mode
+  TEST_ASSERT(specbleach_load_noise_profile_for_mode(
+                  handle, test_profile, profile_size, 10, 0) == false,
+              "Loading noise profile for invalid mode should fail");
+  TEST_ASSERT(specbleach_load_noise_profile_for_mode(
+                  handle, test_profile, profile_size, 10, 4) == false,
+              "Loading noise profile for invalid mode should fail");
+
+  free(test_profile);
+  specbleach_free(handle);
+
+  printf("✓ Specbleach load noise profile for mode tests passed\n");
+}
+
 int main(void) {
   printf("Running specbleach denoiser tests...\n");
 
   test_specbleach_noise_profile_mode_functions();
   test_specbleach_load_noise_profile_with_mode();
+  test_specbleach_load_noise_profile_for_mode();
   test_specbleach_mode_switching();
   test_specbleach_reset_noise_profile();
 
