@@ -29,11 +29,11 @@ void test_gain_estimation_wiener(void) {
   float spectrum[5] = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f};
   float noise_spectrum[5] = {0.5f, 1.0f, 1.5f, 2.0f, 2.5f};
   float gain_spectrum[5] = {0.0f};
-  float alpha = 1.0f;
-  float beta = 1.0f;
+  float alpha[5] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+  float beta[5] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
 
   estimate_gains(real_spectrum_size, fft_size, spectrum, noise_spectrum,
-                 gain_spectrum, &alpha, &beta, WIENER);
+                 gain_spectrum, alpha, beta, WIENER);
 
   // Wiener in this lib: gain = (spectrum - noise) / spectrum
   // For each bin: gain = (spectrum - noise) / spectrum
@@ -52,11 +52,11 @@ void test_gain_estimation_gates(void) {
   float spectrum[5] = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f};
   float noise_spectrum[5] = {0.5f, 1.0f, 1.5f, 2.0f, 2.5f};
   float gain_spectrum[5] = {0.0f};
-  float alpha = 1.0f;
-  float beta = 1.0f;
+  float alpha[5] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+  float beta[5] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
 
   estimate_gains(real_spectrum_size, fft_size, spectrum, noise_spectrum,
-                 gain_spectrum, &alpha, &beta, GATES);
+                 gain_spectrum, alpha, beta, GATES);
 
   // Gates: gain = 1 if spectrum > noise, 0 otherwise
   // gain[0] = 1.0 > 0.5 = 1.0
@@ -80,11 +80,11 @@ void test_gain_estimation_spectral_subtraction(void) {
   float spectrum[5] = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f};
   float noise_spectrum[5] = {0.5f, 1.0f, 1.5f, 2.0f, 2.5f};
   float gain_spectrum[5] = {0.0f};
-  float alpha = 1.0f;
-  float beta = 1.0f;
+  float alpha[5] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+  float beta[5] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
 
   estimate_gains(real_spectrum_size, fft_size, spectrum, noise_spectrum,
-                 gain_spectrum, &alpha, &beta, GENERALIZED_SPECTRALSUBTRACION);
+                 gain_spectrum, alpha, beta, GENERALIZED_SPECTRALSUBTRACION);
 
   // Generalized spectral subtraction: gain = sqrt(max(0, (spectrum^2 -
   // alpha*noise^2) / spectrum^2)) For each bin: gain = sqrt(max(0, (spectrum^2
@@ -104,12 +104,12 @@ void test_gain_estimation_edge_cases(void) {
   float spectrum[5] = {0.0f, 0.0f, 1.0f, 2.0f, 3.0f};
   float noise_spectrum[5] = {0.0f, 1.0f, 1.0f, 2.0f, 2.0f};
   float gain_spectrum[5] = {0.0f};
-  float alpha = 1.0f;
-  float beta = 1.0f;
+  float alpha[5] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+  float beta[5] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
 
   // Test with zero spectrum values
   estimate_gains(real_spectrum_size, fft_size, spectrum, noise_spectrum,
-                 gain_spectrum, &alpha, &beta, WIENER);
+                 gain_spectrum, alpha, beta, WIENER);
 
   // Should handle division by zero gracefully
   TEST_ASSERT(gain_spectrum[0] >= 0.0f && gain_spectrum[0] <= 1.0f,

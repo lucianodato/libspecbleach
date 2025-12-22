@@ -36,15 +36,14 @@ void test_postfilter_apply(void) {
   printf("Testing Post-filter apply...\n");
 
   uint32_t fft_size = 1024;
-  uint32_t real_spectrum_size = fft_size / 2 + 1;
 
   PostFilter* pf = postfilter_initialize(fft_size);
   TEST_ASSERT(pf != NULL, "Post-filter initialization should succeed");
 
-  float spectrum[513] = {0.0f};
-  float gain_spectrum[513] = {0.0f};
+  float spectrum[1024] = {0.0f};
+  float gain_spectrum[1024] = {0.0f};
 
-  // Create test data
+  // Create test data (only fill real spectrum part)
   for (int i = 0; i < 513; i++) {
     spectrum[i] = 1.0f + (float)i * 0.01f;
     gain_spectrum[i] = 0.8f; // 80% gain
@@ -58,7 +57,7 @@ void test_postfilter_apply(void) {
               "Post-filter apply should succeed");
 
   // Check that gains are in valid range [0, 1]
-  for (int i = 0; i < 513; i++) {
+  for (int i = 0; i < 1024; i++) {
     TEST_ASSERT(gain_spectrum[i] >= 0.0f && gain_spectrum[i] <= 1.0f,
                 "Post-filter gain should be in [0, 1] range");
   }
@@ -75,10 +74,10 @@ void test_postfilter_parameters(void) {
   PostFilter* pf = postfilter_initialize(fft_size);
   TEST_ASSERT(pf != NULL, "Post-filter initialization should succeed");
 
-  float spectrum[513] = {0.0f};
-  float gain_spectrum[513] = {0.0f};
+  float spectrum[1024] = {0.0f};
+  float gain_spectrum[1024] = {0.0f};
 
-  // Create test spectrum with high SNR
+  // Create test spectrum with high SNR (only fill real spectrum part)
   for (int i = 0; i < 513; i++) {
     spectrum[i] = 10.0f; // High signal
     gain_spectrum[i] = 1.0f;
@@ -94,7 +93,7 @@ void test_postfilter_parameters(void) {
   PostFiltersParameters params_lenient = {.snr_threshold = 10.0f};
 
   // Reset gain spectrum
-  for (int i = 0; i < 513; i++) {
+  for (int i = 0; i < 1024; i++) {
     gain_spectrum[i] = 1.0f;
   }
 
