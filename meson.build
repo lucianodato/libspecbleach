@@ -97,6 +97,10 @@ if get_option('enable_tests')
   subdir('tests')
 endif
 
+# Export dependency for parent projects
+libspecbleach_dep = declare_dependency(include_directories: inc,
+  link_with: libspecbleach)
+
 # Code formatting target
 run_target('format',
   command: [
