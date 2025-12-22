@@ -75,6 +75,13 @@ bool specbleach_load_noise_profile(SpectralBleachHandle instance,
                                    uint32_t profile_size,
                                    uint32_t profile_blocks);
 /**
+ * Allows to load a custom noise profile for a specific mode
+ */
+bool specbleach_load_noise_profile_for_mode(SpectralBleachHandle instance,
+                                            const float* restored_profile,
+                                            uint32_t profile_size,
+                                            uint32_t profile_blocks, int mode);
+/**
  * Resets the internal noise profile of the library instance
  */
 bool specbleach_reset_noise_profile(SpectralBleachHandle instance);

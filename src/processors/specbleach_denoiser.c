@@ -182,6 +182,27 @@ bool specbleach_load_noise_profile(SpectralBleachHandle instance,
   return true;
 }
 
+bool specbleach_load_noise_profile_for_mode(SpectralBleachHandle instance,
+                                            const float* restored_profile,
+                                            const uint32_t profile_size,
+                                            const uint32_t averaged_blocks,
+                                            const int mode) {
+  if (!instance || !restored_profile || mode < 1 || mode > 3) {
+    return false;
+  }
+
+  SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
+
+  if (profile_size != get_noise_profile_size(self->noise_profile)) {
+    return false;
+  }
+
+  set_noise_profile(self->noise_profile, mode, restored_profile, profile_size,
+                    averaged_blocks);
+
+  return true;
+}
+
 bool specbleach_reset_noise_profile(SpectralBleachHandle instance) {
   if (!instance) {
     return false;
