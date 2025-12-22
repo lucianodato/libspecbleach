@@ -51,7 +51,7 @@ void test_postfilter_apply(void) {
   }
 
   PostFiltersParameters params = {
-    .snr_threshold = -10.0f  // -10 dB SNR threshold
+      .snr_threshold = -10.0f // -10 dB SNR threshold
   };
 
   TEST_ASSERT(postfilter_apply(pf, spectrum, gain_spectrum, params),
@@ -80,22 +80,18 @@ void test_postfilter_parameters(void) {
 
   // Create test spectrum with high SNR
   for (int i = 0; i < 513; i++) {
-    spectrum[i] = 10.0f;  // High signal
+    spectrum[i] = 10.0f; // High signal
     gain_spectrum[i] = 1.0f;
   }
 
   // Test with very low SNR threshold (should apply more filtering)
-  PostFiltersParameters params_strict = {
-    .snr_threshold = -20.0f
-  };
+  PostFiltersParameters params_strict = {.snr_threshold = -20.0f};
 
   TEST_ASSERT(postfilter_apply(pf, spectrum, gain_spectrum, params_strict),
               "Post-filter apply with strict threshold should succeed");
 
   // Test with high SNR threshold (should apply less filtering)
-  PostFiltersParameters params_lenient = {
-    .snr_threshold = 10.0f
-  };
+  PostFiltersParameters params_lenient = {.snr_threshold = 10.0f};
 
   // Reset gain spectrum
   for (int i = 0; i < 513; i++) {

@@ -41,7 +41,8 @@ void test_absolute_hearing_thresholds(void) {
     spectrum[i] = 0.001f; // Set low values that should be floored
   }
 
-  TEST_ASSERT(apply_thresholds_as_floor(aht, spectrum), "Apply thresholds should succeed");
+  TEST_ASSERT(apply_thresholds_as_floor(aht, spectrum),
+              "Apply thresholds should succeed");
 
   // Check that some values were floored to hearing thresholds
   bool some_values_changed = false;
@@ -51,7 +52,8 @@ void test_absolute_hearing_thresholds(void) {
       break;
     }
   }
-  TEST_ASSERT(some_values_changed, "Some spectrum values should be floored to hearing thresholds");
+  TEST_ASSERT(some_values_changed,
+              "Some spectrum values should be floored to hearing thresholds");
 
   absolute_hearing_thresholds_free(aht);
   printf("✓ Absolute Hearing Thresholds tests passed\n");
@@ -63,7 +65,8 @@ void test_critical_bands(void) {
   uint32_t fft_size = 1024;
   uint32_t sample_rate = 44100;
 
-  CriticalBands* cb = critical_bands_initialize(sample_rate, fft_size, BARK_SCALE);
+  CriticalBands* cb =
+      critical_bands_initialize(sample_rate, fft_size, BARK_SCALE);
   TEST_ASSERT(cb != NULL, "Critical bands initialization should succeed");
 
   uint32_t num_bands = get_number_of_critical_bands(cb);
@@ -72,8 +75,10 @@ void test_critical_bands(void) {
   // Test getting band indexes
   for (uint32_t i = 0; i < num_bands; i++) {
     CriticalBandIndexes indexes = get_band_indexes(cb, i);
-    TEST_ASSERT(indexes.start_position < indexes.end_position, "Band start should be before end");
-    TEST_ASSERT(indexes.end_position <= fft_size / 2 + 1, "Band end should be within spectrum bounds");
+    TEST_ASSERT(indexes.start_position < indexes.end_position,
+                "Band start should be before end");
+    TEST_ASSERT(indexes.end_position <= fft_size / 2 + 1,
+                "Band end should be within spectrum bounds");
   }
 
   // Test computing critical bands spectrum
@@ -84,8 +89,9 @@ void test_critical_bands(void) {
     spectrum[i] = (float)i * 0.1f;
   }
 
-  TEST_ASSERT(compute_critical_bands_spectrum(cb, spectrum, critical_bands_spectrum),
-              "Compute critical bands should succeed");
+  TEST_ASSERT(
+      compute_critical_bands_spectrum(cb, spectrum, critical_bands_spectrum),
+      "Compute critical bands should succeed");
 
   critical_bands_free(cb);
   printf("✓ Critical Bands tests passed\n");
@@ -97,7 +103,8 @@ void test_masking_estimator(void) {
   uint32_t fft_size = 1024;
   uint32_t sample_rate = 44100;
 
-  MaskingEstimator* me = masking_estimation_initialize(fft_size, sample_rate, POWER_SPECTRUM);
+  MaskingEstimator* me =
+      masking_estimation_initialize(fft_size, sample_rate, POWER_SPECTRUM);
   TEST_ASSERT(me != NULL, "Masking estimator initialization should succeed");
 
   float spectrum[513] = {0.0f};
@@ -113,7 +120,8 @@ void test_masking_estimator(void) {
 
   // Check that masking thresholds are reasonable
   for (int i = 0; i < 513; i++) {
-    TEST_ASSERT(masking_thresholds[i] >= 0.0f, "Masking thresholds should be non-negative");
+    TEST_ASSERT(masking_thresholds[i] >= 0.0f,
+                "Masking thresholds should be non-negative");
   }
 
   masking_estimation_free(me);
@@ -126,8 +134,10 @@ void test_noise_scaling_criterias(void) {
   uint32_t fft_size = 1024;
   uint32_t sample_rate = 44100;
 
-  NoiseScalingCriterias* nsc = noise_scaling_criterias_initialize(fft_size, BARK_SCALE, sample_rate, POWER_SPECTRUM);
-  TEST_ASSERT(nsc != NULL, "Noise scaling criterias initialization should succeed");
+  NoiseScalingCriterias* nsc = noise_scaling_criterias_initialize(
+      fft_size, BARK_SCALE, sample_rate, POWER_SPECTRUM);
+  TEST_ASSERT(nsc != NULL,
+              "Noise scaling criterias initialization should succeed");
 
   float spectrum[513] = {0.0f};
   float noise_spectrum[513] = {0.0f};
@@ -140,19 +150,20 @@ void test_noise_scaling_criterias(void) {
     noise_spectrum[i] = 0.1f;
   }
 
-  NoiseScalingParameters params = {
-    .undersubtraction = 1.0f,
-    .oversubtraction = 1.0f,
-    .scaling_type = A_POSTERIORI_SNR
-  };
+  NoiseScalingParameters params = {.undersubtraction = 1.0f,
+                                   .oversubtraction = 1.0f,
+                                   .scaling_type = A_POSTERIORI_SNR};
 
-  TEST_ASSERT(apply_noise_scaling_criteria(nsc, spectrum, noise_spectrum, alpha, beta, params),
+  TEST_ASSERT(apply_noise_scaling_criteria(nsc, spectrum, noise_spectrum, alpha,
+                                           beta, params),
               "Apply noise scaling criteria should succeed");
 
   // Check that alpha and beta are in reasonable ranges
   for (int i = 0; i < 513; i++) {
-    TEST_ASSERT(alpha[i] >= 0.0f && alpha[i] <= 10.0f, "Alpha should be in reasonable range");
-    TEST_ASSERT(beta[i] >= 0.0f && beta[i] <= 10.0f, "Beta should be in reasonable range");
+    TEST_ASSERT(alpha[i] >= 0.0f && alpha[i] <= 10.0f,
+                "Alpha should be in reasonable range");
+    TEST_ASSERT(beta[i] >= 0.0f && beta[i] <= 10.0f,
+                "Beta should be in reasonable range");
   }
 
   noise_scaling_criterias_free(nsc);
@@ -174,17 +185,16 @@ void test_spectral_smoother(void) {
     spectrum[i] = 1.0f + 0.5f * sinf((float)i * 0.1f);
   }
 
-  TimeSmoothingParameters params = {
-    .smoothing = 0.8f,
-    .transient_protection_enabled = false
-  };
+  TimeSmoothingParameters params = {.smoothing = 0.8f,
+                                    .transient_protection_enabled = false};
 
   TEST_ASSERT(spectral_smoothing_run(ss, params, spectrum),
               "Spectral smoothing should succeed");
 
   // Check that output is reasonable
   for (int i = 0; i < 513; i++) {
-    TEST_ASSERT(spectrum[i] >= 0.0f, "Smoothed spectrum should be non-negative");
+    TEST_ASSERT(spectrum[i] >= 0.0f,
+                "Smoothed spectrum should be non-negative");
   }
 
   spectral_smoothing_free(ss);
@@ -214,10 +224,13 @@ void test_transient_detector(void) {
   // Second run with different spectrum - may or may not detect transient
   bool result2 = transient_detector_run(td, different_spectrum);
 
-  // The function should run without error (return value is boolean indicating transient presence)
-  // We just test that it doesn't crash and returns a valid boolean
-  TEST_ASSERT(result1 == true || result1 == false, "First run should return boolean");
-  TEST_ASSERT(result2 == true || result2 == false, "Second run should return boolean");
+  // The function should run without error (return value is boolean indicating
+  // transient presence) We just test that it doesn't crash and returns a valid
+  // boolean
+  TEST_ASSERT(result1 == true || result1 == false,
+              "First run should return boolean");
+  TEST_ASSERT(result2 == true || result2 == false,
+              "Second run should return boolean");
 
   transient_detector_free(td);
   printf("✓ Transient Detector tests passed\n");

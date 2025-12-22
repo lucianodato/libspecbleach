@@ -33,7 +33,7 @@ void test_gain_estimation_wiener(void) {
   float beta = 1.0f;
 
   estimate_gains(real_spectrum_size, fft_size, spectrum, noise_spectrum,
-                gain_spectrum, &alpha, &beta, WIENER);
+                 gain_spectrum, &alpha, &beta, WIENER);
 
   // Wiener in this lib: gain = (spectrum - noise) / spectrum
   // For each bin: gain = (spectrum - noise) / spectrum
@@ -56,7 +56,7 @@ void test_gain_estimation_gates(void) {
   float beta = 1.0f;
 
   estimate_gains(real_spectrum_size, fft_size, spectrum, noise_spectrum,
-                gain_spectrum, &alpha, &beta, GATES);
+                 gain_spectrum, &alpha, &beta, GATES);
 
   // Gates: gain = 1 if spectrum > noise, 0 otherwise
   // gain[0] = 1.0 > 0.5 = 1.0
@@ -84,11 +84,12 @@ void test_gain_estimation_spectral_subtraction(void) {
   float beta = 1.0f;
 
   estimate_gains(real_spectrum_size, fft_size, spectrum, noise_spectrum,
-                gain_spectrum, &alpha, &beta, GENERALIZED_SPECTRALSUBTRACION);
+                 gain_spectrum, &alpha, &beta, GENERALIZED_SPECTRALSUBTRACION);
 
-  // Generalized spectral subtraction: gain = sqrt(max(0, (spectrum^2 - alpha*noise^2) / spectrum^2))
-  // For each bin: gain = sqrt(max(0, (spectrum^2 - alpha*noise^2) / spectrum^2))
-  // gain[0] = sqrt(max(0, (1.0^2 - 1.0*0.5^2) / 1.0^2)) = sqrt(max(0, (1.0 - 0.25) / 1.0)) = sqrt(0.75) ≈ 0.866
+  // Generalized spectral subtraction: gain = sqrt(max(0, (spectrum^2 -
+  // alpha*noise^2) / spectrum^2)) For each bin: gain = sqrt(max(0, (spectrum^2
+  // - alpha*noise^2) / spectrum^2)) gain[0] = sqrt(max(0, (1.0^2 - 1.0*0.5^2)
+  // / 1.0^2)) = sqrt(max(0, (1.0 - 0.25) / 1.0)) = sqrt(0.75) ≈ 0.866
   TEST_FLOAT_CLOSE(gain_spectrum[0], 0.866f, 0.01f);
 
   printf("✓ Generalized Spectral Subtraction gain estimation tests passed\n");
@@ -108,11 +109,13 @@ void test_gain_estimation_edge_cases(void) {
 
   // Test with zero spectrum values
   estimate_gains(real_spectrum_size, fft_size, spectrum, noise_spectrum,
-                gain_spectrum, &alpha, &beta, WIENER);
+                 gain_spectrum, &alpha, &beta, WIENER);
 
   // Should handle division by zero gracefully
-  TEST_ASSERT(gain_spectrum[0] >= 0.0f && gain_spectrum[0] <= 1.0f, "Gain should be in valid range");
-  TEST_ASSERT(gain_spectrum[1] >= 0.0f && gain_spectrum[1] <= 1.0f, "Gain should be in valid range");
+  TEST_ASSERT(gain_spectrum[0] >= 0.0f && gain_spectrum[0] <= 1.0f,
+              "Gain should be in valid range");
+  TEST_ASSERT(gain_spectrum[1] >= 0.0f && gain_spectrum[1] <= 1.0f,
+              "Gain should be in valid range");
 
   printf("✓ Gain estimation edge cases tests passed\n");
 }
