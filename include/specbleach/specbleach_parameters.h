@@ -23,15 +23,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include <stdbool.h>
 
-#ifndef ADAPTIVE_NOISE_ESTIMATION_METHOD_DEFINED
-#define ADAPTIVE_NOISE_ESTIMATION_METHOD_DEFINED
-// Forward declaration of the adaptive noise estimation method enum
-typedef enum AdaptiveNoiseEstimationMethod {
-  LOUIZOU_METHOD = 0,  // Original minimum statistics method (default)
-  SPP_MMSE_METHOD = 1, // Speech Presence Probability - MMSE method
-} AdaptiveNoiseEstimationMethod;
-#endif
-
 typedef struct SpectralBleachParameters {
   /* Sets the processor in listening mode to capture the noise profile.
    * 0 is disabled, 1 will learn all profile types simultaneously.
@@ -59,11 +50,6 @@ typedef struct SpectralBleachParameters {
    * from 0 to 100 percent */
   float smoothing_factor;
 
-  /* Enables or disables the transient protection when smoothing_factor is being
-   * used. This can help to preserve transient content when smoothing is strong.
-   */
-  bool transient_protection;
-
   /* Percentage of whitening that is going to be applied to the residue of the
    * reduction. It modifies the noise floor to be more like white noise. This
    * can help hide musical noise when the noise is colored. It goes from 0 to
@@ -73,7 +59,8 @@ typedef struct SpectralBleachParameters {
   /* Type of algorithm used to scale noise in order to apply over or under
    * subtraction in different parts of the spectrum while calculating the
    * reduction. 0 is a-posteriori snr scaling using the complete spectrum, 1 is
-   * a-posteriori using critical bands and 2 is using masking thresholds
+   * a-posteriori using critical bands, 2 is using masking thresholds and 3 is
+   * disabled.
    */
   int noise_scaling_type;
 
@@ -90,10 +77,10 @@ typedef struct SpectralBleachParameters {
   float post_filter_threshold;
 
   /* Method used for adaptive noise estimation in the adaptive denoiser.
-   * LOUIZOU_METHOD uses minimum statistics (default), SPP_MMSE_METHOD uses
-   * Speech Presence Probability with MMSE estimation for lower complexity
-   * and unbiased noise tracking. */
-  AdaptiveNoiseEstimationMethod noise_estimation_method;
+   * 0: LOUIZOU_METHOD uses minimum statistics (default)
+   * 1: SPP_MMSE_METHOD uses Speech Presence Probability with MMSE estimation
+   * for lower complexity and unbiased noise tracking. */
+  int noise_estimation_method;
 } SpectralBleachParameters;
 
 #endif

@@ -185,8 +185,7 @@ void test_spectral_smoother(void) {
     spectrum[i] = 1.0f + 0.5f * sinf((float)i * 0.1f);
   }
 
-  TimeSmoothingParameters params = {.smoothing = 0.8f,
-                                    .transient_protection_enabled = false};
+  TimeSmoothingParameters params = {.smoothing = 0.8f};
 
   TEST_ASSERT(spectral_smoothing_run(ss, params, spectrum),
               "Spectral smoothing should succeed");

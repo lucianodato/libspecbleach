@@ -77,6 +77,7 @@ tests/test_data/*_denoised.wav
 .cursor/
 .cache/
 
-# Log files
+# Other files
 *.log
 .DS_Store
+/docs

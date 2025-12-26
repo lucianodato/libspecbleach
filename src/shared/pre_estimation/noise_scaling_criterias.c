@@ -134,6 +134,13 @@ bool apply_noise_scaling_criteria(NoiseScalingCriterias* self,
                          parameters);
       break;
 
+    case NO_SCALING:
+      for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
+        alpha[k] = self->alpha_minimun;
+        beta[k] = self->beta_minimun;
+      }
+      break;
+
     default:
       break;
   }

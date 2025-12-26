@@ -73,8 +73,9 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #endif
 
 // Postfilter SNR Threshold
-#define POSTFILTER_SCALE 20.0F
+#define POSTFILTER_SCALE 10.0F
 #define PRESERVE_MINIMUN_GAIN true
+#define POSTFILTER_MIN_GAIN_DB -15.0F
 
 // Gain Estimators
 #define GSS_EXPONENT                                                           \
@@ -141,10 +142,17 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define NUMBER_OF_MEDIAN_SPECTRUM 5
 
 // Noise Scaling strategy
+#define NOISE_SCALING_TYPE_GENERAL MASKING_THRESHOLDS
 #define GAIN_ESTIMATION_TYPE WIENER
 
 // Time Smoothing
 #define TIME_SMOOTHING_TYPE TRANSIENT_AWARE
+
+// Postfilter
+#define POSTFILTER_ENABLED_GENERAL true
+
+// Whitening
+#define WHITENING_ENABLED_GENERAL true
 
 /* ------------------------------------------------------------------------ */
 /* ------------------- Adaptive Denoiser configurations ------------------- */
@@ -166,9 +174,16 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define CRITICAL_BANDS_TYPE_SPEECH OPUS_SCALE
 
 // Noise Scaling strategy
+#define NOISE_SCALING_TYPE_SPEECH MASKING_THRESHOLDS
 #define GAIN_ESTIMATION_TYPE_SPEECH WIENER
 
 // Time Smoothing
 #define TIME_SMOOTHING_TYPE_SPEECH FIXED
+
+// Postfilter
+#define POSTFILTER_ENABLED_SPEECH true
+
+// Whitening
+#define WHITENING_ENABLED_SPEECH true
 
 #endif // ifndef

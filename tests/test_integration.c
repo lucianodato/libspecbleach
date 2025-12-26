@@ -90,7 +90,6 @@ void test_spectral_denoiser(void) {
       .noise_scaling_type = 0,
       .post_filter_threshold = 0.0f,
       .residual_listen = false,
-      .transient_protection = false,
       .whitening_factor = 0.0f};
 
   specbleach_load_parameters(handle, parameters);
@@ -162,7 +161,6 @@ void test_different_noise_levels(void) {
                                  .noise_scaling_type = 0,
                                  .post_filter_threshold = 0.0f,
                                  .residual_listen = false,
-                                 .transient_protection = false,
                                  .whitening_factor = 0.0f};
 
   specbleach_load_parameters(handle, parameters);

@@ -24,6 +24,11 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdbool.h>
 #include <stdint.h>
 
+typedef enum AdaptiveNoiseEstimationMethod {
+  LOUIZOU_METHOD = 0,  // Original minimum statistics method (default)
+  SPP_MMSE_METHOD = 1, // Speech Presence Probability - MMSE method
+} AdaptiveNoiseEstimationMethod;
+
 typedef struct AdaptiveNoiseEstimator AdaptiveNoiseEstimator;
 
 AdaptiveNoiseEstimator* louizou_estimator_initialize(
