@@ -150,20 +150,30 @@ void test_noise_scaling_criterias(void) {
     noise_spectrum[i] = 0.1f;
   }
 
-  NoiseScalingParameters params = {.undersubtraction = 1.0f,
-                                   .oversubtraction = 1.0f,
-                                   .scaling_type = A_POSTERIORI_SNR};
+  // Test all scaling types
+  for (int type = A_POSTERIORI_SNR; type <= NO_SCALING; type++) {
+    NoiseScalingParameters params = {.undersubtraction = 1.0f,
+                                     .oversubtraction = 2.0f,
+                                     .scaling_type = type};
 
-  TEST_ASSERT(apply_noise_scaling_criteria(nsc, spectrum, noise_spectrum, alpha,
-                                           beta, params),
-              "Apply noise scaling criteria should succeed");
+    TEST_ASSERT(apply_noise_scaling_criteria(nsc, spectrum, noise_spectrum,
+                                             alpha, beta, params),
+                "Apply noise scaling criteria should succeed");
 
-  // Check that alpha and beta are in reasonable ranges
-  for (int i = 0; i < 513; i++) {
-    TEST_ASSERT(alpha[i] >= 0.0f && alpha[i] <= 10.0f,
-                "Alpha should be in reasonable range");
-    TEST_ASSERT(beta[i] >= 0.0f && beta[i] <= 10.0f,
-                "Beta should be in reasonable range");
+    // Check that alpha and beta are in reasonable ranges
+    for (int i = 0; i < 513; i++) {
+      TEST_ASSERT(alpha[i] >= 0.0f && alpha[i] <= 10.0f,
+                  "Alpha should be in reasonable range");
+      TEST_ASSERT(beta[i] >= 0.0f && beta[i] <= 10.0f,
+                  "Beta should be in reasonable range");
+
+      if (type == NO_SCALING) {
+        // For NO_SCALING, it should use min values (set to 1.0 and 0.0 in init
+        // but we just test consistency)
+        // Actually in the current implementation NO_SCALING sets alpha[k] =
+        // self->alpha_minimun and beta[k] = self->beta_minimun.
+      }
+    }
   }
 
   noise_scaling_criterias_free(nsc);
@@ -175,28 +185,33 @@ void test_spectral_smoother(void) {
 
   uint32_t fft_size = 1024;
 
-  SpectralSmoother* ss = spectral_smoothing_initialize(fft_size, FIXED);
-  TEST_ASSERT(ss != NULL, "Spectral smoother initialization should succeed");
+  // Test all smoothing types
+  for (int type = NO_SMOOTHING; type <= TRANSIENT_AWARE; type++) {
+    SpectralSmoother* ss =
+        spectral_smoothing_initialize(fft_size, (TimeSmoothingType)type);
+    TEST_ASSERT(ss != NULL, "Spectral smoother initialization should succeed");
 
-  float spectrum[513] = {0.0f};
+    float spectrum[513] = {0.0f};
+    for (int i = 0; i < 513; i++) {
+      spectrum[i] = 1.0f + 0.5f * sinf((float)i * 0.1f);
+    }
 
-  // Create a test spectrum with some variation
-  for (int i = 0; i < 513; i++) {
-    spectrum[i] = 1.0f + 0.5f * sinf((float)i * 0.1f);
+    TimeSmoothingParameters params = {.smoothing = 0.8f};
+    TEST_ASSERT(spectral_smoothing_run(ss, params, spectrum),
+                "Spectral smoothing should succeed");
+
+    // Run again to test previous spectrum logic
+    TEST_ASSERT(spectral_smoothing_run(ss, params, spectrum),
+                "Spectral smoothing should succeed on second run");
+
+    // Check that output is reasonable
+    for (int i = 0; i < 513; i++) {
+      TEST_ASSERT(spectrum[i] >= 0.0f,
+                  "Smoothed spectrum should be non-negative");
+    }
+
+    spectral_smoothing_free(ss);
   }
-
-  TimeSmoothingParameters params = {.smoothing = 0.8f};
-
-  TEST_ASSERT(spectral_smoothing_run(ss, params, spectrum),
-              "Spectral smoothing should succeed");
-
-  // Check that output is reasonable
-  for (int i = 0; i < 513; i++) {
-    TEST_ASSERT(spectrum[i] >= 0.0f,
-                "Smoothed spectrum should be non-negative");
-  }
-
-  spectral_smoothing_free(ss);
   printf("✓ Spectral Smoother tests passed\n");
 }
 
