@@ -25,14 +25,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdbool.h>
 #include <stdint.h>
 
-#ifndef ADAPTIVE_NOISE_ESTIMATION_METHOD_DEFINED
-#define ADAPTIVE_NOISE_ESTIMATION_METHOD_DEFINED
-// Forward declaration of the adaptive noise estimation method enum
-typedef enum AdaptiveNoiseEstimationMethod {
-  LOUIZOU_METHOD = 0,  // Original minimum statistics method (default)
-  SPP_MMSE_METHOD = 1, // Speech Presence Probability - MMSE method
-} AdaptiveNoiseEstimationMethod;
-#endif
+#include "shared/noise_estimation/adaptive_noise_estimator.h"
 
 typedef struct AdaptiveDenoiserParameters {
   float reduction_amount;

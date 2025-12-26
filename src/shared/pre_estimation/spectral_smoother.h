@@ -25,13 +25,13 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdint.h>
 
 typedef enum TimeSmoothingType {
+  NO_SMOOTHING = 0,
   FIXED = 1,
   TRANSIENT_AWARE = 2,
 } TimeSmoothingType;
 
 typedef struct TimeSmoothingParameters {
   float smoothing;
-  bool transient_protection_enabled;
 } TimeSmoothingParameters;
 
 typedef struct SpectralSmoother SpectralSmoother;

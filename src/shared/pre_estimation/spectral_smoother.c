@@ -91,12 +91,8 @@ bool spectral_smoothing_run(SpectralSmoother* self,
       spectrum_time_smoothing(self, parameters.smoothing);
       break;
     case TRANSIENT_AWARE:
-      if (parameters.transient_protection_enabled) {
-        spectrum_transient_aware_time_smoothing(self, parameters.smoothing,
-                                                signal_spectrum);
-      } else {
-        spectrum_time_smoothing(self, parameters.smoothing);
-      }
+      spectrum_transient_aware_time_smoothing(self, parameters.smoothing,
+                                              signal_spectrum);
       break;
     default:
       break;

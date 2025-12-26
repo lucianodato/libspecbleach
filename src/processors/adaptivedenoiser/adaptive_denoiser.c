@@ -62,6 +62,8 @@ typedef struct SpectralAdaptiveDenoiser {
   PostFilter* postfiltering;
   AdaptiveNoiseEstimator* adaptive_estimator;
   SpectralFeatures* spectral_features;
+  bool postfiltering_enabled;
+  bool whitening_enabled;
 } SpectralAdaptiveDenoiser;
 
 SpectralProcessorHandle spectral_adaptive_denoiser_initialize(
@@ -88,6 +90,8 @@ SpectralProcessorHandle spectral_adaptive_denoiser_initialize(
   self->band_type = CRITICAL_BANDS_TYPE_SPEECH;
   self->gain_estimation_type = GAIN_ESTIMATION_TYPE_SPEECH;
   self->time_smoothing_type = TIME_SMOOTHING_TYPE_SPEECH;
+  self->postfiltering_enabled = POSTFILTER_ENABLED_SPEECH;
+  self->whitening_enabled = WHITENING_ENABLED_SPEECH;
 
   self->gain_spectrum = (float*)calloc(self->fft_size, sizeof(float));
   if (!self->gain_spectrum) {
@@ -136,10 +140,12 @@ SpectralProcessorHandle spectral_adaptive_denoiser_initialize(
     return NULL;
   }
 
-  self->postfiltering = postfilter_initialize(self->fft_size);
-  if (!self->postfiltering) {
-    spectral_adaptive_denoiser_free(self);
-    return NULL;
+  if (self->postfiltering_enabled) {
+    self->postfiltering = postfilter_initialize(self->fft_size);
+    if (!self->postfiltering) {
+      spectral_adaptive_denoiser_free(self);
+      return NULL;
+    }
   }
 
   self->spectrum_smoothing =
@@ -307,18 +313,20 @@ bool spectral_adaptive_denoiser_run(SpectralProcessorHandle instance,
                  self->noise_profile, self->gain_spectrum, self->alpha,
                  self->beta, self->gain_estimation_type);
 
-  // Apply post filtering to reduce residual noise on low SNR frames
-  PostFiltersParameters post_filter_parameters = (PostFiltersParameters){
-      .snr_threshold = self->parameters.post_filter_threshold,
-  };
-  postfilter_apply(self->postfiltering, fft_spectrum, self->gain_spectrum,
-                   post_filter_parameters);
+  if (self->postfiltering_enabled) {
+    PostFiltersParameters post_filter_parameters = (PostFiltersParameters){
+        .snr_threshold = self->parameters.post_filter_threshold,
+    };
+    postfilter_apply(self->postfiltering, fft_spectrum, self->gain_spectrum,
+                     post_filter_parameters);
+  }
 
   // Mix results
   DenoiseMixerParameters mixer_parameters = (DenoiseMixerParameters){
       .noise_level = self->parameters.reduction_amount,
       .residual_listen = self->parameters.residual_listen,
-      .whitening_amount = self->parameters.whitening_factor,
+      .whitening_amount =
+          self->whitening_enabled ? self->parameters.whitening_factor : 0.0f,
   };
 
   denoise_mixer_run(self->mixer, fft_spectrum, self->gain_spectrum,

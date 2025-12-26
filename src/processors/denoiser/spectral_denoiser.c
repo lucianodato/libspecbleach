@@ -61,6 +61,8 @@ typedef struct SbSpectralDenoiser {
   DenoiseMixer* mixer;
   NoiseScalingCriterias* noise_scaling_criteria;
   SpectralSmoother* spectrum_smoothing;
+  bool postfiltering_enabled;
+  bool whitening_enabled;
 } SbSpectralDenoiser;
 
 SpectralProcessorHandle spectral_denoiser_initialize(
@@ -88,6 +90,8 @@ SpectralProcessorHandle spectral_denoiser_initialize(
   self->default_undersubtraction = DEFAULT_UNDERSUBTRACTION;
   self->gain_estimation_type = GAIN_ESTIMATION_TYPE;
   self->time_smoothing_type = TIME_SMOOTHING_TYPE;
+  self->postfiltering_enabled = POSTFILTER_ENABLED_GENERAL;
+  self->whitening_enabled = WHITENING_ENABLED_GENERAL;
 
   self->gain_spectrum = (float*)calloc(self->fft_size, sizeof(float));
   if (!self->gain_spectrum) {
@@ -133,10 +137,12 @@ SpectralProcessorHandle spectral_denoiser_initialize(
     return NULL;
   }
 
-  self->postfiltering = postfilter_initialize(self->fft_size);
-  if (!self->postfiltering) {
-    spectral_denoiser_free(self);
-    return NULL;
+  if (self->postfiltering_enabled) {
+    self->postfiltering = postfilter_initialize(self->fft_size);
+    if (!self->postfiltering) {
+      spectral_denoiser_free(self);
+      return NULL;
+    }
   }
 
   self->spectrum_smoothing =
@@ -259,8 +265,6 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
     TimeSmoothingParameters spectral_smoothing_parameters =
         (TimeSmoothingParameters){
             .smoothing = self->denoise_parameters.smoothing_factor,
-            .transient_protection_enabled =
-                self->denoise_parameters.transient_protection,
         };
     spectral_smoothing_run(self->spectrum_smoothing,
                            spectral_smoothing_parameters, reference_spectrum);
@@ -270,17 +274,20 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
                    self->noise_spectrum, self->gain_spectrum, self->alpha,
                    self->beta, self->gain_estimation_type);
 
-    // Apply post filtering to reduce residual noise on low SNR frames
-    PostFiltersParameters post_filter_parameters = (PostFiltersParameters){
-        .snr_threshold = self->denoise_parameters.post_filter_threshold,
-    };
-    postfilter_apply(self->postfiltering, fft_spectrum, self->gain_spectrum,
-                     post_filter_parameters);
+    if (self->postfiltering_enabled) {
+      PostFiltersParameters post_filter_parameters = (PostFiltersParameters){
+          .snr_threshold = self->denoise_parameters.post_filter_threshold,
+      };
+      postfilter_apply(self->postfiltering, fft_spectrum, self->gain_spectrum,
+                       post_filter_parameters);
+    }
 
     DenoiseMixerParameters mixer_parameters = (DenoiseMixerParameters){
         .noise_level = self->denoise_parameters.reduction_amount,
         .residual_listen = self->denoise_parameters.residual_listen,
-        .whitening_amount = self->denoise_parameters.whitening_factor,
+        .whitening_amount = self->whitening_enabled
+                                ? self->denoise_parameters.whitening_factor
+                                : 0.0f,
     };
 
     denoise_mixer_run(self->mixer, fft_spectrum, self->gain_spectrum,

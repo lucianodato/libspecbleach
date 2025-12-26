@@ -30,6 +30,7 @@ typedef enum NoiseScalingType {
   A_POSTERIORI_SNR = 0,
   A_POSTERIORI_SNR_CRITICAL_BANDS = 1,
   MASKING_THRESHOLDS = 2,
+  NO_SCALING = 3,
 } NoiseScalingType;
 
 typedef struct NoiseScalingParameters {

@@ -77,7 +77,6 @@ void process_audio(const float* input, float* output, int length) {
       .noise_scaling_type = 0,
       .post_filter_threshold = 0.0f,
       .residual_listen = false,
-      .transient_protection = false,
       .whitening_factor = 0.0f};
 
   specbleach_load_parameters(handle, parameters);
@@ -120,7 +119,6 @@ void process_audio_adaptive(const float* input, float* output, int length) {
                                  .noise_scaling_type = 0,
                                  .post_filter_threshold = 0.0f,
                                  .residual_listen = false,
-                                 .transient_protection = false,
                                  .whitening_factor = 0.0f};
 
   specbleach_adaptive_load_parameters(handle, parameters);
@@ -358,9 +356,8 @@ void test_noise_estimation_methods(void) {
                                  .noise_scaling_type = 0,
                                  .post_filter_threshold = 0.0f,
                                  .residual_listen = false,
-                                 .transient_protection = false,
                                  .whitening_factor = 0.0f,
-                                 .noise_estimation_method = LOUIZOU_METHOD};
+                                 .noise_estimation_method = 0};
 
   SpectralBleachHandle handle_louizou =
       specbleach_adaptive_initialize(SAMPLE_RATE, frame_size_ms);
@@ -388,9 +385,8 @@ void test_noise_estimation_methods(void) {
                                  .noise_scaling_type = 0,
                                  .post_filter_threshold = 0.0f,
                                  .residual_listen = false,
-                                 .transient_protection = false,
                                  .whitening_factor = 0.0f,
-                                 .noise_estimation_method = SPP_MMSE_METHOD};
+                                 .noise_estimation_method = 1};
 
   SpectralBleachHandle handle_spp_mmse =
       specbleach_adaptive_initialize(SAMPLE_RATE, frame_size_ms);

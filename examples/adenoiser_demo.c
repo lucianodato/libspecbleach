@@ -92,7 +92,7 @@ int main(int argc, char** argv) {
                                  .noise_scaling_type = 2,
                                  .noise_rescale = 6.F,
                                  .post_filter_threshold = -10.F,
-                                 .noise_estimation_method = LOUIZOU_METHOD};
+                                 .noise_estimation_method = 0};
 
   static struct option long_options[] = {
       {"reduction", required_argument, 0, 'r'},
