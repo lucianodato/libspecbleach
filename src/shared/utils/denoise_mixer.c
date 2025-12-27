@@ -24,8 +24,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <string.h>
 
 struct DenoiseMixer {
-  SpectralWhitening* whitener;
-
   float* residual_spectrum;
   float* denoised_spectrum;
 
@@ -50,10 +48,7 @@ DenoiseMixer* denoise_mixer_initialize(uint32_t fft_size, uint32_t sample_rate,
   self->residual_spectrum = (float*)calloc((self->fft_size), sizeof(float));
   self->denoised_spectrum = (float*)calloc((self->fft_size), sizeof(float));
 
-  self->whitener = spectral_whitening_initialize(self->fft_size,
-                                                 self->sample_rate, self->hop);
-
-  if (!self->residual_spectrum || !self->denoised_spectrum || !self->whitener) {
+  if (!self->residual_spectrum || !self->denoised_spectrum) {
     denoise_mixer_free(self);
     return NULL;
   }
@@ -62,8 +57,6 @@ DenoiseMixer* denoise_mixer_initialize(uint32_t fft_size, uint32_t sample_rate,
 }
 
 void denoise_mixer_free(DenoiseMixer* self) {
-  spectral_whitening_free(self->whitener);
-
   free(self->residual_spectrum);
   free(self->denoised_spectrum);
 
@@ -88,20 +81,14 @@ bool denoise_mixer_run(DenoiseMixer* self, float* fft_spectrum,
     self->residual_spectrum[k] = fft_spectrum[k] - self->denoised_spectrum[k];
   }
 
-  if (parameters.whitening_amount > 0.F) {
-    spectral_whitening_run(self->whitener, parameters.whitening_amount,
-                           self->residual_spectrum);
-  }
-
-  // Mix denoised and residual
+  // Mix denoised and residual - Now a simple toggle
   if (parameters.residual_listen) {
     for (uint32_t k = 0U; k < self->fft_size; k++) {
       fft_spectrum[k] = self->residual_spectrum[k];
     }
   } else {
     for (uint32_t k = 0U; k < self->fft_size; k++) {
-      fft_spectrum[k] = self->denoised_spectrum[k] +
-                        self->residual_spectrum[k] * parameters.noise_level;
+      fft_spectrum[k] = self->denoised_spectrum[k];
     }
   }
 

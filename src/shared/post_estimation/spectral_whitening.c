@@ -20,99 +20,73 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "spectral_whitening.h"
 #include "../configurations.h"
-#include <float.h>
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
 struct SpectralWhitening {
-  float* residual_max_spectrum;
-  float* whitened_residual_spectrum;
-
-  float max_decay_rate;
-  uint32_t whitening_window_count;
+  float* tapering_window;
   uint32_t fft_size;
-  uint32_t sample_rate;
-  uint32_t hop;
+  uint32_t real_spectrum_size;
 };
 
-SpectralWhitening* spectral_whitening_initialize(const uint32_t fft_size,
-                                                 const uint32_t sample_rate,
-                                                 const uint32_t hop) {
+SpectralWhitening* spectral_whitening_initialize(const uint32_t fft_size) {
   SpectralWhitening* self =
       (SpectralWhitening*)calloc(1U, sizeof(SpectralWhitening));
-
-  self->fft_size = fft_size;
-  self->sample_rate = sample_rate;
-  self->hop = hop;
-
-  self->whitened_residual_spectrum =
-      (float*)calloc(self->fft_size, sizeof(float));
-  self->residual_max_spectrum = (float*)calloc(self->fft_size, sizeof(float));
-
-  if (!self->whitened_residual_spectrum || !self->residual_max_spectrum) {
-    spectral_whitening_free(self);
+  if (!self) {
     return NULL;
   }
 
-  self->max_decay_rate =
-      expf(-1000.F / (((WHITENING_DECAY_RATE) * (float)self->sample_rate) /
-                      (float)self->hop));
-  self->whitening_window_count = 0U;
+  self->fft_size = fft_size;
+  self->real_spectrum_size = self->fft_size / 2U + 1U;
+
+  self->tapering_window =
+      (float*)calloc(self->real_spectrum_size, sizeof(float));
+  if (!self->tapering_window) {
+    free(self);
+    return NULL;
+  }
+
+  // Pre-calculate Right half of Hamming window for HF tapering
+  uint32_t N = self->real_spectrum_size * 2 - 1;
+  for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
+    uint32_t n = k + self->real_spectrum_size - 1;
+    self->tapering_window[k] =
+        0.54f - 0.46f * cosf(2.0f * (float)M_PI * (float)n / (float)(N - 1));
+  }
 
   return self;
 }
 
 void spectral_whitening_free(SpectralWhitening* self) {
-  free(self->whitened_residual_spectrum);
-  free(self->residual_max_spectrum);
-
+  if (!self)
+    return;
+  if (self->tapering_window)
+    free(self->tapering_window);
   free(self);
 }
 
-bool spectral_whitening_run(SpectralWhitening* self,
-                            const float whitening_factor, float* fft_spectrum) {
-  if (!self || !fft_spectrum || whitening_factor < 0.F) {
-    return false;
-  }
+void spectral_whitening_get_weights(SpectralWhitening* self,
+                                    float whitening_factor,
+                                    const float* noise_profile,
+                                    float* weights_out) {
+  if (!self || !weights_out || !noise_profile)
+    return;
 
-  const uint32_t real_spectrum_size = self->fft_size / 2U + 1U;
-  self->whitening_window_count++;
-
-  for (uint32_t k = 0U; k < real_spectrum_size; k++) {
-    float real, imag;
-    if (k == 0 || (self->fft_size % 2 == 0 && k == self->fft_size / 2)) {
-      real = fft_spectrum[k];
-      imag = 0.F;
-    } else {
-      real = fft_spectrum[k];
-      imag = fft_spectrum[self->fft_size - k];
-    }
-
-    float magnitude = sqrtf(real * real + imag * imag);
-
-    if (self->whitening_window_count > 1U) {
-      self->residual_max_spectrum[k] =
-          fmaxf(fmaxf(magnitude, WHITENING_FLOOR),
-                self->residual_max_spectrum[k] * self->max_decay_rate);
-    } else {
-      self->residual_max_spectrum[k] = fmaxf(magnitude, WHITENING_FLOOR);
-    }
-
-    float gain = 1.0F;
-    if (self->residual_max_spectrum[k] > FLT_MIN) {
-      float whitened_magnitude = magnitude / self->residual_max_spectrum[k];
-      gain = (1.F - whitening_factor) +
-             whitening_factor * (whitened_magnitude / (magnitude + 1e-12F));
-    }
-
-    if (k == 0 || (self->fft_size % 2 == 0 && k == self->fft_size / 2)) {
-      fft_spectrum[k] *= gain;
-    } else {
-      fft_spectrum[k] *= gain;
-      fft_spectrum[self->fft_size - k] *= gain;
+  float noise_peak = 1e-12f;
+  for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
+    if (noise_profile[k] > noise_peak) {
+      noise_peak = noise_profile[k];
     }
   }
 
-  return true;
+  for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
+    float weight = 1.0f;
+    if (whitening_factor > 0.0f && noise_profile[k] > 1e-12f) {
+      // Power-law valley filling
+      weight = powf(noise_peak / noise_profile[k], whitening_factor);
+    }
+    // Weights include tapering
+    weights_out[k] = weight * self->tapering_window[k];
+  }
 }

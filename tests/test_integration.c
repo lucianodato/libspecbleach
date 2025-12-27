@@ -220,6 +220,36 @@ void test_library_info(void) {
   printf("✓ Library information tests passed\n");
 }
 
+void test_adaptive_features(void) {
+  printf("Testing adaptive denoiser features...\n");
+
+  float* input = calloc(BLOCK_SIZE, sizeof(float));
+  float* output = calloc(BLOCK_SIZE, sizeof(float));
+  generate_test_audio(input, BLOCK_SIZE, 1000.0f, 0.1f);
+
+  SpectralBleachHandle handle =
+      specbleach_adaptive_initialize(SAMPLE_RATE, 20.0f);
+  TEST_ASSERT(handle != NULL, "Initialization failed");
+
+  SpectralBleachParameters params = {
+      .reduction_amount = 20.0f,
+      .smoothing_factor = 50.0f,
+      .noise_rescale = 0.0f,
+      .noise_scaling_type = 0,
+      .post_filter_threshold = -30.0f,
+      .residual_listen = true,  // Test partial branch in mixer
+      .whitening_factor = 1.0f, // Test whitening branch
+      .noise_reduction_mode = 1};
+
+  specbleach_adaptive_load_parameters(handle, params);
+  specbleach_adaptive_process(handle, BLOCK_SIZE, input, output);
+
+  specbleach_adaptive_free(handle);
+  free(input);
+  free(output);
+  printf("✓ Adaptive features tests passed\n");
+}
+
 int main(void) {
   printf("Running integration tests...\n\n");
 
@@ -229,6 +259,7 @@ int main(void) {
   test_spectral_denoiser();
   test_different_noise_levels();
   test_adaptive_denoiser();
+  test_adaptive_features();
   test_library_info();
 
   printf("\n✅ All integration tests passed!\n");
