@@ -23,6 +23,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "../utils/general_utils.h"
 #include <float.h>
 #include <math.h>
+#include <stddef.h>
 
 static void wiener_subtraction(const uint32_t real_spectrum_size,
                                const uint32_t fft_size, const float* spectrum,

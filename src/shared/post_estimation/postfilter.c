@@ -159,10 +159,10 @@ bool postfilter_apply(PostFilter* self, const float* spectrum,
     }
   }
 
-  // Apply gain floor as per Esch recommendation
+  // Apply gain floor
   for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
-    if (gain_spectrum[k] < self->min_gain_coefficient) {
-      gain_spectrum[k] = self->min_gain_coefficient;
+    if (gain_spectrum[k] < parameters.gain_floor) {
+      gain_spectrum[k] = parameters.gain_floor;
     }
   }
 

@@ -50,8 +50,8 @@ void test_postfilter_apply(void) {
   }
 
   PostFiltersParameters params = {
-      .snr_threshold = -10.0f // -10 dB SNR threshold
-  };
+      .snr_threshold = -10.0f, // -10 dB SNR threshold
+      .gain_floor = 0.01f};
 
   TEST_ASSERT(postfilter_apply(pf, spectrum, gain_spectrum, params),
               "Post-filter apply should succeed");
@@ -84,13 +84,15 @@ void test_postfilter_parameters(void) {
   }
 
   // Test with very low SNR threshold (should apply more filtering)
-  PostFiltersParameters params_strict = {.snr_threshold = -20.0f};
+  PostFiltersParameters params_strict = {.snr_threshold = -20.0f,
+                                         .gain_floor = 0.01f};
 
   TEST_ASSERT(postfilter_apply(pf, spectrum, gain_spectrum, params_strict),
               "Post-filter apply with strict threshold should succeed");
 
   // Test with high SNR threshold (should apply less filtering)
-  PostFiltersParameters params_lenient = {.snr_threshold = 10.0f};
+  PostFiltersParameters params_lenient = {.snr_threshold = 10.0f,
+                                          .gain_floor = 0.01f};
 
   // Reset gain spectrum
   for (int i = 0; i < 1024; i++) {
@@ -117,7 +119,7 @@ int main(void) {
   PostFilter* pf = postfilter_initialize(fft_size);
   float spectrum[513] = {0.0f};
   float gain_spectrum[513] = {1.0f};
-  PostFiltersParameters params = {.snr_threshold = 0.5f};
+  PostFiltersParameters params = {.snr_threshold = 0.5f, .gain_floor = 0.01f};
 
   // 1. Zero energy spectrum (hits line 81 in postfilter.c)
   TEST_ASSERT(postfilter_apply(pf, spectrum, gain_spectrum, params),
@@ -142,7 +144,8 @@ int main(void) {
   PostFilter* pf_small = postfilter_initialize(16); // small real_spectrum_size
   float spectrum_small[16] = {1.0f};
   float gain_small[16] = {0.5f};
-  PostFiltersParameters params_strict = {.snr_threshold = 1.0f};
+  PostFiltersParameters params_strict = {.snr_threshold = 1.0f,
+                                         .gain_floor = 0.01f};
   TEST_ASSERT(
       postfilter_apply(pf_small, spectrum_small, gain_small, params_strict),
       "Large window apply should succeed");

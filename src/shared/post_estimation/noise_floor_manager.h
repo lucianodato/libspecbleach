@@ -18,20 +18,23 @@ License along with this library; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#ifndef SPECTRAL_WHITENER_H
-#define SPECTRAL_WHITENER_H
+#ifndef NO_FLOOR_MANAGER_H
+#define NO_FLOOR_MANAGER_H
 
+#include <stdbool.h>
 #include <stdint.h>
 
-typedef struct SpectralWhitening SpectralWhitening;
+typedef struct NoiseFloorManager NoiseFloorManager;
 
-SpectralWhitening* spectral_whitening_initialize(uint32_t fft_size);
+NoiseFloorManager* noise_floor_manager_initialize(uint32_t fft_size,
+                                                  uint32_t sample_rate,
+                                                  uint32_t hop);
 
-void spectral_whitening_free(SpectralWhitening* self);
+void noise_floor_manager_free(NoiseFloorManager* self);
 
-void spectral_whitening_get_weights(SpectralWhitening* self,
-                                    float whitening_factor,
-                                    const float* noise_profile,
-                                    float* weights_out);
+void noise_floor_manager_apply(NoiseFloorManager* self,
+                               uint32_t real_spectrum_size, uint32_t fft_size,
+                               float* gain_spectrum, const float* noise_profile,
+                               float reduction_amount, float whitening_factor);
 
 #endif

@@ -28,6 +28,7 @@ typedef struct PostFilter PostFilter;
 
 typedef struct PostFiltersParameters {
   float snr_threshold;
+  float gain_floor;
 } PostFiltersParameters;
 
 PostFilter* postfilter_initialize(uint32_t fft_size);
