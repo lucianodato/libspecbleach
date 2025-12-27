@@ -232,21 +232,27 @@ static void masking_thresholds(NoiseScalingCriterias* self,
                              self->masking_thresholds);
 
   float max_masked_value =
-      max_spectral_value(self->masking_thresholds, self->real_spectrum_size);
+      10.F * log10f(max_spectral_value(self->masking_thresholds,
+                                       self->real_spectrum_size) +
+                    1e-12F);
   float min_masked_value =
-      min_spectral_value(self->masking_thresholds, self->real_spectrum_size);
+      10.F * log10f(min_spectral_value(self->masking_thresholds,
+                                       self->real_spectrum_size) +
+                    1e-12F);
 
   for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
-    if (self->masking_thresholds[k] == max_masked_value) {
+    const float current_masked_value =
+        10.F * log10f(self->masking_thresholds[k] + 1e-12F);
+
+    if (current_masked_value >= max_masked_value) {
       alpha[k] = self->alpha_minimun;
       beta[k] = self->beta_minimun;
-    } else if (self->masking_thresholds[k] == min_masked_value) {
+    } else if (current_masked_value <= min_masked_value) {
       alpha[k] = parameters.oversubtraction;
       beta[k] = parameters.undersubtraction;
     } else {
-      const float normalized_value =
-          (self->masking_thresholds[k] - min_masked_value) /
-          (max_masked_value - min_masked_value);
+      const float normalized_value = (current_masked_value - min_masked_value) /
+                                     (max_masked_value - min_masked_value);
 
       alpha[k] = (1.F - normalized_value) * parameters.oversubtraction +
                  normalized_value * self->alpha_minimun;
