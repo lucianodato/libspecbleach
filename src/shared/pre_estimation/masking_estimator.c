@@ -143,10 +143,11 @@ bool compute_masking_thresholds(MaskingEstimator* self, const float* spectrum,
     }
 #endif
 
-    self->threshold_j[j] =
-        powf(10.F, log10f(self->spreaded_spectrum[j]) -
-                       (self->masking_offset[j] / 10.F)) -
-        (10.F * log10f(self->spreaded_unity_gain_critical_bands_spectrum[j]));
+    self->threshold_j[j] = powf(
+        10.F, (log10f(self->spreaded_spectrum[j] + 1e-12F) -
+               (self->masking_offset[j] / 10.F) -
+               log10f(self->spreaded_unity_gain_critical_bands_spectrum[j] +
+                      1e-12F)));
 
     self->band_indexes = get_band_indexes(self->critical_bands, j);
 

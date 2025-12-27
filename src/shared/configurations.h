@@ -146,7 +146,7 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define GAIN_ESTIMATION_TYPE WIENER
 
 // Time Smoothing
-#define TIME_SMOOTHING_TYPE TRANSIENT_AWARE
+#define TIME_SMOOTHING_TYPE FIXED
 
 // Postfilter
 #define POSTFILTER_ENABLED_GENERAL true
