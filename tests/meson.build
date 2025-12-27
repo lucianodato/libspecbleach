@@ -105,10 +105,19 @@ test_specbleach_denoiser = executable('test_specbleach_denoiser',
   include_directories: inc
 )
 
+# Noise Floor Manager tests
+test_noise_floor_manager = executable('test_noise_floor_manager',
+  sources: ['test_noise_floor_manager.c'],
+  dependencies: [libspecbleach_dep, m_dep],
+  c_args: test_c_args,
+  include_directories: inc
+)
+
 # Run tests
 test('utils', test_utils)
 test('fft', test_fft)
 test('spectral_whitening', test_spectral_whitening)
+test('noise_floor_manager', test_noise_floor_manager)
 test('stft_latency', test_stft_latency)
 test('integration', test_integration)
 test('audio_regression', test_audio_regression)

@@ -345,6 +345,52 @@ void test_specbleach_load_noise_profile_for_mode(void) {
   printf("✓ Specbleach load noise profile for mode tests passed\n");
 }
 
+void test_specbleach_run_features(void) {
+  printf("Testing specbleach denoiser features (run)...\n");
+
+  SpectralBleachHandle handle = specbleach_initialize(44100, 20.0f);
+  TEST_ASSERT(handle != NULL, "Initialization should succeed");
+
+  uint32_t profile_size = specbleach_get_noise_profile_size(handle);
+  float* input = (float*)calloc(1024, sizeof(float));
+  float* output = (float*)calloc(1024, sizeof(float));
+  float* profile = (float*)calloc(profile_size, sizeof(float));
+
+  for (int i = 0; i < 1024; i++)
+    input[i] = 0.5f;
+  for (uint32_t i = 0; i < profile_size; i++)
+    profile[i] = 0.1f;
+
+  specbleach_load_noise_profile(handle, profile, profile_size, 1);
+
+  SpectralBleachParameters params = {
+      .learn_noise = false,
+      .noise_reduction_mode = 1,
+      .residual_listen = false,
+      .noise_scaling_type = 0,
+      .reduction_amount = 20.0f,
+      .noise_rescale = 1.0f,
+      .smoothing_factor = 50.0f,
+      .whitening_factor = 1.0f, // Test whitening
+      .post_filter_threshold = -30.0f,
+  };
+
+  specbleach_load_parameters(handle, params);
+  specbleach_process(handle, 1024, input, output);
+
+  // Test residual listen
+  params.residual_listen = true;
+  params.whitening_factor = 0.0f;
+  specbleach_load_parameters(handle, params);
+  specbleach_process(handle, 1024, input, output);
+
+  free(input);
+  free(output);
+  free(profile);
+  specbleach_free(handle);
+  printf("✓ Specbleach denoiser features tests passed\n");
+}
+
 int main(void) {
   printf("Running specbleach denoiser tests...\n");
 
@@ -353,6 +399,7 @@ int main(void) {
   test_specbleach_load_noise_profile_for_mode();
   test_specbleach_mode_switching();
   test_specbleach_reset_noise_profile();
+  test_specbleach_run_features();
 
   printf("✅ All specbleach denoiser tests passed!\n");
   return 0;
