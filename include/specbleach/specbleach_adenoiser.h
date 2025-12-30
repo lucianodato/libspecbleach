@@ -25,12 +25,11 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 extern "C" {
 #endif
 
+#include <specbleach/specbleach_parameters.h>
 #include <stdbool.h>
 #include <stdint.h>
 
 typedef void* SpectralBleachHandle;
-
-#include "specbleach_parameters.h"
 
 /**
  * Returns a handle to an instance of the library for the adaptive based
