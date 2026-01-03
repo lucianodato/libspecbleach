@@ -44,6 +44,25 @@ meson compile -C build
 sudo meson install -C build
 ```
 
+## Build Options
+
+You can configure the build using `-Doption=value`:
+
+- `enable_examples`: Build example applications (default: `false`). Requires `libsndfile`.
+- `enable_tests`: Build unit and integration tests (default: `false`). Requires `libsndfile`.
+- `static_deps`: Link internal dependencies (like FFTW3) statically (default: `false`). Useful for creating self-contained libraries.
+- `custom_warning_level`: 0-3 (default: `2`). Controls compiler warning verbosity.
+- `treat_warnings_as_errors`: Treat compiler warnings as errors (default: `false`).
+- `enable_sanitizers`: Enable sanitizers in debug builds (default: `false`).
+- `sanitize_address`: Enable AddressSanitizer (default: `false`).
+- `sanitize_undefined`: Enable UndefinedBehaviorSanitizer (default: `false`).
+
+Example for a static build with examples:
+```bash
+meson setup build -Dstatic_deps=true -Denable_examples=true
+meson compile -C build
+```
+
 
 ## Usage Examples
 
