@@ -5,3 +5,4 @@ option('enable_sanitizers', type : 'boolean', value : false, description : 'Enab
 option('sanitize_address', type : 'boolean', value : false, description : 'Enable AddressSanitizer')
 option('sanitize_undefined', type : 'boolean', value : false, description : 'Enable UndefinedBehaviorSanitizer')
 option('enable_tests', type : 'boolean', value : false, description : 'Enable building tests')
+option('static_deps', type : 'boolean', value : false, description : 'Link dependencies (fftw3, etc) statically')

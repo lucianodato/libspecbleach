@@ -71,7 +71,7 @@ endif
 
 # Dependencies for libspecbleach
 m_dep = meson.get_compiler('c').find_library('m', required: true)
-fftw_dep = dependency('fftw3f', required: true)
+fftw_dep = dependency('fftw3f', required: true, static: get_option('static_deps'))
 
 # Optional dependency for examples and tests
 sndfile_dep = dependency('', required: false)
