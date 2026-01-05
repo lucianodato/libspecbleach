@@ -18,23 +18,19 @@ License along with this library; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#ifndef SPECBLEACH_PARAMETERS_H_INCLUDED
-#define SPECBLEACH_PARAMETERS_H_INCLUDED
+#ifndef SPECBLEACH_ADENOISER_H_INCLUDED
+#define SPECBLEACH_ADENOISER_H_INCLUDED
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <stdbool.h>
+#include <stdint.h>
 
-typedef struct SpectralBleachParameters {
-  /* Sets the processor in listening mode to capture the noise profile.
-   * 0 is disabled, 1 will learn all profile types simultaneously.
-   * Note: This parameter is ignored by the adaptive denoiser. */
-  int learn_noise;
+typedef void* SpectralBleachHandle;
 
-  /* Sets the noise reduction mode to use when learning is disabled.
-   * 1 will use the average profile, 2 will use the median profile
-   * and 3 will use the max profile.
-   * Note: This parameter is ignored by the adaptive denoiser. */
-  int noise_reduction_mode;
-
+typedef struct SpectralBleachAdaptiveParameters {
   /* Enables outputting the residue of the reduction processing. It's either
    * true or false */
   bool residual_listen;
@@ -81,6 +77,38 @@ typedef struct SpectralBleachParameters {
    * 1: SPP_MMSE_METHOD uses Speech Presence Probability with MMSE estimation
    * for lower complexity and unbiased noise tracking. */
   int noise_estimation_method;
-} SpectralBleachParameters;
+} SpectralBleachAdaptiveParameters;
 
+/**
+ * Returns a handle to an instance of the library for the adaptive based
+ * noise reduction. Sample rate could be anything from 4000hz to 192khz.
+ * Recommended frame size range is between 20ms and 100ms
+ */
+SpectralBleachHandle specbleach_adaptive_initialize(uint32_t sample_rate,
+                                                    float frame_size);
+
+/**
+ * Free instance associated to the handle passed
+ */
+void specbleach_adaptive_free(SpectralBleachHandle instance);
+/**
+ * Loads the parameters for the reduction.
+ * This has to be called before processing
+ */
+bool specbleach_adaptive_load_parameters(
+    SpectralBleachHandle instance, SpectralBleachAdaptiveParameters parameters);
+/**
+ * Returns the latency in samples associated with the library instance
+ */
+uint32_t specbleach_adaptive_get_latency(SpectralBleachHandle instance);
+/**
+ * Process buffer of a number of samples
+ */
+bool specbleach_adaptive_process(SpectralBleachHandle instance,
+                                 uint32_t number_of_samples, const float* input,
+                                 float* output);
+
+#ifdef __cplusplus
+}
+#endif
 #endif

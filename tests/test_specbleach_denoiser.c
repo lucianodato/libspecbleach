@@ -7,8 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "specbleach/specbleach_denoiser.h"
-#include "specbleach/specbleach_parameters.h"
+#include "specbleach_denoiser.h"
 
 #define TEST_ASSERT(condition, message)                                        \
   do {                                                                         \
@@ -29,7 +28,7 @@ void test_specbleach_noise_profile_mode_functions(void) {
   TEST_ASSERT(handle != NULL, "Denoiser initialization should succeed");
 
   // Load parameters with mode 2
-  SpectralBleachParameters params = {
+  SpectralBleachDenoiserParameters params = {
       .learn_noise = true,
       .noise_reduction_mode = 2, // Use mode 2
       .residual_listen = false,
@@ -94,7 +93,7 @@ void test_specbleach_load_noise_profile_with_mode(void) {
   TEST_ASSERT(handle != NULL, "Denoiser initialization should succeed");
 
   // Load parameters
-  SpectralBleachParameters params = {
+  SpectralBleachDenoiserParameters params = {
       .learn_noise = true,
       .noise_reduction_mode = 1,
       .residual_listen = false,
@@ -175,10 +174,10 @@ void test_specbleach_mode_switching(void) {
   }
 
   // Load profiles for each mode
-  SpectralBleachParameters params;
+  SpectralBleachDenoiserParameters params;
 
   // Mode 1
-  params = (SpectralBleachParameters){
+  params = (SpectralBleachDenoiserParameters){
       .learn_noise = true,
       .noise_reduction_mode = 1,
       .residual_listen = false,
@@ -265,7 +264,7 @@ void test_specbleach_reset_noise_profile(void) {
   }
 
   // Load parameters and profile
-  SpectralBleachParameters params = {
+  SpectralBleachDenoiserParameters params = {
       .learn_noise = true,
       .noise_reduction_mode = 1,
       .residual_listen = false,
@@ -363,7 +362,7 @@ void test_specbleach_run_features(void) {
 
   specbleach_load_noise_profile(handle, profile, profile_size, 1);
 
-  SpectralBleachParameters params = {
+  SpectralBleachDenoiserParameters params = {
       .learn_noise = false,
       .noise_reduction_mode = 1,
       .residual_listen = false,

@@ -18,7 +18,7 @@ License along with this library; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#include "specbleach/specbleach_adenoiser.h"
+#include "specbleach_adenoiser.h"
 #include "adaptivedenoiser/adaptive_denoiser.h"
 #include "shared/configurations.h"
 #include "shared/stft/stft_processor.h"
@@ -107,8 +107,9 @@ bool specbleach_adaptive_process(SpectralBleachHandle instance,
   return true;
 }
 
-bool specbleach_adaptive_load_parameters(SpectralBleachHandle instance,
-                                         SpectralBleachParameters parameters) {
+bool specbleach_adaptive_load_parameters(
+    SpectralBleachHandle instance,
+    SpectralBleachAdaptiveParameters parameters) {
   if (!instance) {
     return false;
   }
