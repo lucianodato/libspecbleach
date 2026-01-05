@@ -12,8 +12,8 @@
 // Include internal headers for testing
 
 // Include the public API
-#include "specbleach/specbleach_adenoiser.h"
-#include "specbleach/specbleach_denoiser.h"
+#include "specbleach_adenoiser.h"
+#include "specbleach_denoiser.h"
 
 // Function prototypes
 void test_spectral_denoiser(void);
@@ -83,16 +83,17 @@ void test_spectral_denoiser(void) {
       specbleach_initialize(SAMPLE_RATE, frame_size_ms);
   TEST_ASSERT(handle != NULL, "Failed to initialize spectral denoiser");
 
-  SpectralBleachParameters parameters = (SpectralBleachParameters){
-      .learn_noise = 1,          // Learn all modes
-      .noise_reduction_mode = 1, // Use average when processing
-      .reduction_amount = 20.0f,
-      .smoothing_factor = 0.0f,
-      .noise_rescale = 0.0f,
-      .noise_scaling_type = 0,
-      .post_filter_threshold = 0.0f,
-      .residual_listen = false,
-      .whitening_factor = 0.0f};
+  SpectralBleachDenoiserParameters parameters =
+      (SpectralBleachDenoiserParameters){
+          .learn_noise = 1,          // Learn all modes
+          .noise_reduction_mode = 1, // Use average when processing
+          .reduction_amount = 20.0f,
+          .smoothing_factor = 0.0f,
+          .noise_rescale = 0.0f,
+          .noise_scaling_type = 0,
+          .post_filter_threshold = 0.0f,
+          .residual_listen = false,
+          .whitening_factor = 0.0f};
 
   specbleach_load_parameters(handle, parameters);
 
@@ -155,15 +156,15 @@ void test_different_noise_levels(void) {
       specbleach_initialize(SAMPLE_RATE, frame_size_ms);
   TEST_ASSERT(handle != NULL, "Failed to initialize denoiser");
 
-  SpectralBleachParameters parameters =
-      (SpectralBleachParameters){.learn_noise = 1, // Average
-                                 .reduction_amount = 20.0f,
-                                 .smoothing_factor = 0.0f,
-                                 .noise_rescale = 0.0f,
-                                 .noise_scaling_type = 0,
-                                 .post_filter_threshold = 0.0f,
-                                 .residual_listen = false,
-                                 .whitening_factor = 0.0f};
+  SpectralBleachDenoiserParameters parameters =
+      (SpectralBleachDenoiserParameters){.learn_noise = 1, // Average
+                                         .reduction_amount = 20.0f,
+                                         .smoothing_factor = 0.0f,
+                                         .noise_rescale = 0.0f,
+                                         .noise_scaling_type = 0,
+                                         .post_filter_threshold = 0.0f,
+                                         .residual_listen = false,
+                                         .whitening_factor = 0.0f};
 
   specbleach_load_parameters(handle, parameters);
 
@@ -231,15 +232,14 @@ void test_adaptive_features(void) {
       specbleach_adaptive_initialize(SAMPLE_RATE, 20.0f);
   TEST_ASSERT(handle != NULL, "Initialization failed");
 
-  SpectralBleachParameters params = {
+  SpectralBleachAdaptiveParameters params = {
       .reduction_amount = 20.0f,
       .smoothing_factor = 50.0f,
       .noise_rescale = 0.0f,
       .noise_scaling_type = 0,
       .post_filter_threshold = -30.0f,
-      .residual_listen = true,  // Test partial branch in mixer
-      .whitening_factor = 1.0f, // Test whitening branch
-      .noise_reduction_mode = 1};
+      .residual_listen = true, // Test partial branch in mixer
+      .whitening_factor = 1.0f};
 
   specbleach_adaptive_load_parameters(handle, params);
   specbleach_adaptive_process(handle, BLOCK_SIZE, input, output);
@@ -280,15 +280,15 @@ void test_adaptive_denoiser(void) {
       specbleach_adaptive_initialize(SAMPLE_RATE, frame_size_ms);
   TEST_ASSERT(handle != NULL, "Failed to initialize adaptive denoiser");
 
-  SpectralBleachParameters parameters =
-      (SpectralBleachParameters){.reduction_amount = 20.0f,
-                                 .smoothing_factor = 50.0f,
-                                 .noise_rescale = 0.0f,
-                                 .noise_scaling_type = 2, // MASKING_THRESHOLDS
-                                 .post_filter_threshold = -30.0f,
-                                 .residual_listen = false,
-                                 .whitening_factor = 50.0f,
-                                 .noise_reduction_mode = 1};
+  SpectralBleachAdaptiveParameters parameters =
+      (SpectralBleachAdaptiveParameters){
+          .reduction_amount = 20.0f,
+          .smoothing_factor = 50.0f,
+          .noise_rescale = 0.0f,
+          .noise_scaling_type = 2, // MASKING_THRESHOLDS
+          .post_filter_threshold = -30.0f,
+          .residual_listen = false,
+          .whitening_factor = 50.0f};
 
   specbleach_adaptive_load_parameters(handle, parameters);
 

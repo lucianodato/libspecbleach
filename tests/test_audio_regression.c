@@ -12,8 +12,8 @@
 // Include internal headers for testing
 
 // Include the public API
-#include "specbleach/specbleach_adenoiser.h"
-#include "specbleach/specbleach_denoiser.h"
+#include "specbleach_adenoiser.h"
+#include "specbleach_denoiser.h"
 
 // Function prototypes
 void generate_test_signal(float* buffer, int length, unsigned int seed);
@@ -68,16 +68,17 @@ void process_audio(const float* input, float* output, int length) {
       specbleach_initialize(SAMPLE_RATE, frame_size_ms);
   TEST_ASSERT(handle != NULL, "Failed to initialize denoiser");
 
-  SpectralBleachParameters parameters = (SpectralBleachParameters){
-      .learn_noise = 1,          // Learn all modes
-      .noise_reduction_mode = 1, // Use average when processing
-      .reduction_amount = 20.0f,
-      .smoothing_factor = 0.0f,
-      .noise_rescale = 0.0f,
-      .noise_scaling_type = 0,
-      .post_filter_threshold = 0.0f,
-      .residual_listen = false,
-      .whitening_factor = 0.0f};
+  SpectralBleachDenoiserParameters parameters =
+      (SpectralBleachDenoiserParameters){
+          .learn_noise = 1,          // Learn all modes
+          .noise_reduction_mode = 1, // Use average when processing
+          .reduction_amount = 20.0f,
+          .smoothing_factor = 0.0f,
+          .noise_rescale = 0.0f,
+          .noise_scaling_type = 0,
+          .post_filter_threshold = 0.0f,
+          .residual_listen = false,
+          .whitening_factor = 0.0f};
 
   specbleach_load_parameters(handle, parameters);
 
@@ -112,14 +113,14 @@ void process_audio_adaptive(const float* input, float* output, int length) {
       specbleach_adaptive_initialize(SAMPLE_RATE, frame_size_ms);
   TEST_ASSERT(handle != NULL, "Failed to initialize adaptive denoiser");
 
-  SpectralBleachParameters parameters =
-      (SpectralBleachParameters){.reduction_amount = 20.0f,
-                                 .smoothing_factor = 0.0f,
-                                 .noise_rescale = 0.0f,
-                                 .noise_scaling_type = 0,
-                                 .post_filter_threshold = 0.0f,
-                                 .residual_listen = false,
-                                 .whitening_factor = 0.0f};
+  SpectralBleachAdaptiveParameters parameters =
+      (SpectralBleachAdaptiveParameters){.reduction_amount = 20.0f,
+                                         .smoothing_factor = 0.0f,
+                                         .noise_rescale = 0.0f,
+                                         .noise_scaling_type = 0,
+                                         .post_filter_threshold = 0.0f,
+                                         .residual_listen = false,
+                                         .whitening_factor = 0.0f};
 
   specbleach_adaptive_load_parameters(handle, parameters);
 
@@ -349,15 +350,15 @@ void test_noise_estimation_methods(void) {
   generate_test_signal(input, TEST_SAMPLES, 12345);
 
   // Process with Louizou method (default)
-  SpectralBleachParameters params_louizou =
-      (SpectralBleachParameters){.reduction_amount = 20.0f,
-                                 .smoothing_factor = 0.0f,
-                                 .noise_rescale = 0.0f,
-                                 .noise_scaling_type = 0,
-                                 .post_filter_threshold = 0.0f,
-                                 .residual_listen = false,
-                                 .whitening_factor = 0.0f,
-                                 .noise_estimation_method = 0};
+  SpectralBleachAdaptiveParameters params_louizou =
+      (SpectralBleachAdaptiveParameters){.reduction_amount = 20.0f,
+                                         .smoothing_factor = 0.0f,
+                                         .noise_rescale = 0.0f,
+                                         .noise_scaling_type = 0,
+                                         .post_filter_threshold = 0.0f,
+                                         .residual_listen = false,
+                                         .whitening_factor = 0.0f,
+                                         .noise_estimation_method = 0};
 
   SpectralBleachHandle handle_louizou =
       specbleach_adaptive_initialize(SAMPLE_RATE, frame_size_ms);
@@ -378,15 +379,15 @@ void test_noise_estimation_methods(void) {
   specbleach_adaptive_free(handle_louizou);
 
   // Process with SPP-MMSE method
-  SpectralBleachParameters params_spp_mmse =
-      (SpectralBleachParameters){.reduction_amount = 20.0f,
-                                 .smoothing_factor = 0.0f,
-                                 .noise_rescale = 0.0f,
-                                 .noise_scaling_type = 0,
-                                 .post_filter_threshold = 0.0f,
-                                 .residual_listen = false,
-                                 .whitening_factor = 0.0f,
-                                 .noise_estimation_method = 1};
+  SpectralBleachAdaptiveParameters params_spp_mmse =
+      (SpectralBleachAdaptiveParameters){.reduction_amount = 20.0f,
+                                         .smoothing_factor = 0.0f,
+                                         .noise_rescale = 0.0f,
+                                         .noise_scaling_type = 0,
+                                         .post_filter_threshold = 0.0f,
+                                         .residual_listen = false,
+                                         .whitening_factor = 0.0f,
+                                         .noise_estimation_method = 1};
 
   SpectralBleachHandle handle_spp_mmse =
       specbleach_adaptive_initialize(SAMPLE_RATE, frame_size_ms);

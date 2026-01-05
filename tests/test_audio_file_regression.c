@@ -4,8 +4,8 @@
 
 #include <math.h>
 #include <sndfile.h>
-#include <specbleach/specbleach_adenoiser.h>
-#include <specbleach/specbleach_denoiser.h>
+#include <specbleach_adenoiser.h>
+#include <specbleach_denoiser.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -24,7 +24,7 @@
 #define FRAME_SIZE_ADAPTIVE_MS 20.0f
 
 // Canonical parameters used in generate_reference_files.sh
-static const SpectralBleachParameters CANONICAL_PARAMS = {
+static const SpectralBleachDenoiserParameters CANONICAL_DENOISER_PARAMS = {
     .residual_listen = false,
     .learn_noise = 1,          // Learn all modes
     .noise_reduction_mode = 3, // Use maximum profile
@@ -34,6 +34,16 @@ static const SpectralBleachParameters CANONICAL_PARAMS = {
     .noise_scaling_type = 2,
     .noise_rescale = 6.0f,
     .post_filter_threshold = -10.0f};
+
+static const SpectralBleachAdaptiveParameters CANONICAL_ADENOISER_PARAMS = {
+    .residual_listen = false,
+    .reduction_amount = 20.0f,
+    .smoothing_factor = 0.0f,
+    .whitening_factor = 50.0f,
+    .noise_scaling_type = 2,
+    .noise_rescale = 6.0f,
+    .post_filter_threshold = -10.0f,
+    .noise_estimation_method = 0};
 
 void test_denoiser_file_regression(void) {
   printf("Testing spectral denoiser file regression...\n");
@@ -60,7 +70,7 @@ void test_denoiser_file_regression(void) {
       specbleach_initialize((uint32_t)in_info.samplerate, FRAME_SIZE_MS);
   TEST_ASSERT(handle != NULL, "Failed to initialize denoiser");
 
-  SpectralBleachParameters params = CANONICAL_PARAMS;
+  SpectralBleachDenoiserParameters params = CANONICAL_DENOISER_PARAMS;
   specbleach_load_parameters(handle, params);
 
   float* in_buf = malloc(BLOCK_SIZE * sizeof(float));
@@ -131,7 +141,7 @@ void test_adenoiser_file_regression(void) {
       (uint32_t)in_info.samplerate, FRAME_SIZE_ADAPTIVE_MS);
   TEST_ASSERT(handle != NULL, "Failed to initialize adaptive denoiser");
 
-  SpectralBleachParameters params = CANONICAL_PARAMS;
+  SpectralBleachAdaptiveParameters params = CANONICAL_ADENOISER_PARAMS;
   specbleach_adaptive_load_parameters(handle, params);
 
   float* in_buf = malloc(BLOCK_SIZE * sizeof(float));

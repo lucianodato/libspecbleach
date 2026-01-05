@@ -1,11 +1,8 @@
-subdir('specbleach')
-
 specbleach_headers = files(
-  'specbleach/specbleach_adenoiser.h',
-  'specbleach/specbleach_denoiser.h',
-  'specbleach/specbleach_parameters.h',
+  'specbleach_adenoiser.h',
+  'specbleach_denoiser.h',
 )
 
-install_headers(specbleach_headers, subdir: 'specbleach')
+install_headers(specbleach_headers)
 
-inc = include_directories('.', 'specbleach')
+inc = include_directories('.')

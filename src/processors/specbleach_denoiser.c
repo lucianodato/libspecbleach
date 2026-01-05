@@ -18,7 +18,7 @@ License along with this library; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#include "specbleach/specbleach_denoiser.h"
+#include "specbleach_denoiser.h"
 #include "denoiser/spectral_denoiser.h"
 #include "shared/configurations.h"
 #include "shared/noise_estimation/noise_profile.h"
@@ -247,7 +247,7 @@ bool specbleach_noise_profile_available_for_mode(SpectralBleachHandle instance,
 }
 
 bool specbleach_load_parameters(SpectralBleachHandle instance,
-                                SpectralBleachParameters parameters) {
+                                SpectralBleachDenoiserParameters parameters) {
   if (!instance) {
     return false;
   }
