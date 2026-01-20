@@ -63,10 +63,12 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define BIAS false
 #define HIGH_FREQ_BIAS 20.F
 #if BIAS
+// clang-format off
 #define relative_thresholds                                                    \
   (float[25]){-16.F, -17.F, -18.F, -19.F, -20.F, -21.F, -22.F, -23.F, -24.F,   \
               -25.F, -25.F, -25.F, -25.F, -25.F, -25.F, -24.F, -23.F, -22.F,   \
               -19.F, -18.F, -18.F, -18.F, -18.F, -18.F, -18.F}
+// clang-format on
 #endif
 
 // Postfilter SNR Threshold
