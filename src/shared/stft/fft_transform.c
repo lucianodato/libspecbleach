@@ -46,6 +46,9 @@ FftTransform* fft_transform_initialize(const uint32_t frame_size,
                                        const ZeroPaddingType padding_type,
                                        const uint32_t zeropadding_amount) {
   FftTransform* self = (FftTransform*)calloc(1U, sizeof(FftTransform));
+  if (!self) {
+    return NULL;
+  }
 
   self->padding_type = padding_type;
   self->zeropadding_amount = zeropadding_amount;
@@ -65,6 +68,9 @@ FftTransform* fft_transform_initialize(const uint32_t frame_size,
 
 FftTransform* fft_transform_initialize_bins(const uint32_t fft_size) {
   FftTransform* self = (FftTransform*)calloc(1U, sizeof(FftTransform));
+  if (!self) {
+    return NULL;
+  }
 
   self->fft_size = fft_size;
   self->frame_size = self->fft_size;
@@ -153,7 +159,7 @@ uint32_t get_fft_real_spectrum_size(FftTransform* self) {
   if (!self) {
     return 0;
   }
-  return self->fft_size / 2U + 1U;
+  return (self->fft_size / 2U) + 1U;
 }
 
 bool fft_load_input_samples(FftTransform* self, const float* input) {

@@ -48,8 +48,12 @@ SpectralSmoother* spectral_smoothing_initialize(const uint32_t fft_size,
   SpectralSmoother* self =
       (SpectralSmoother*)calloc(1U, sizeof(SpectralSmoother));
 
+  if (!self) {
+    return NULL;
+  }
+
   self->fft_size = fft_size;
-  self->real_spectrum_size = self->fft_size / 2U + 1U;
+  self->real_spectrum_size = (self->fft_size / 2U) + 1U;
   self->type = type;
   self->previous_adaptive_coefficient = 0.F;
   self->adaptive_coefficient = 0.F;
@@ -63,10 +67,19 @@ SpectralSmoother* spectral_smoothing_initialize(const uint32_t fft_size,
 
   self->transient_detection = transient_detector_initialize(self->fft_size);
 
+  if (!self->noise_spectrum || !self->smoothed_spectrum ||
+      !self->smoothed_spectrum_previous || !self->transient_detection) {
+    spectral_smoothing_free(self);
+    return NULL;
+  }
+
   return self;
 }
 
 void spectral_smoothing_free(SpectralSmoother* self) {
+  if (!self) {
+    return;
+  }
   transient_detector_free(self->transient_detection);
 
   free(self->noise_spectrum);
@@ -114,8 +127,8 @@ static void spectrum_transient_aware_time_smoothing(SpectralSmoother* self,
     for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
       if (self->smoothed_spectrum[k] > self->smoothed_spectrum_previous[k]) {
         self->smoothed_spectrum[k] =
-            smoothing * self->smoothed_spectrum_previous[k] +
-            (1.F - smoothing) * self->smoothed_spectrum[k];
+            (smoothing * self->smoothed_spectrum_previous[k]) +
+            ((1.F - smoothing) * self->smoothed_spectrum[k]);
       }
     }
   }
@@ -126,8 +139,8 @@ static void spectrum_time_smoothing(SpectralSmoother* self,
   for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
     if (self->smoothed_spectrum[k] > self->smoothed_spectrum_previous[k]) {
       self->smoothed_spectrum[k] =
-          smoothing * self->smoothed_spectrum_previous[k] +
-          (1.F - smoothing) * self->smoothed_spectrum[k];
+          (smoothing * self->smoothed_spectrum_previous[k]) +
+          ((1.F - smoothing) * self->smoothed_spectrum[k]);
     }
   }
 }

@@ -54,8 +54,12 @@ AbsoluteHearingThresholds* absolute_hearing_thresholds_initialize(
   AbsoluteHearingThresholds* self =
       (AbsoluteHearingThresholds*)calloc(1U, sizeof(AbsoluteHearingThresholds));
 
+  if (!self) {
+    return NULL;
+  }
+
   self->fft_size = fft_size;
-  self->real_spectrum_size = self->fft_size / 2U + 1U;
+  self->real_spectrum_size = (self->fft_size / 2U) + 1U;
   self->sample_rate = sample_rate;
   self->spectrum_type = spectrum_type;
   self->sine_wave_amplitude = SINE_AMPLITUDE;
@@ -76,6 +80,13 @@ AbsoluteHearingThresholds* absolute_hearing_thresholds_initialize(
   self->spectral_features =
       spectral_features_initialize(self->real_spectrum_size);
 
+  if (!self->fft_transform || !self->spl_reference_values ||
+      !self->absolute_thresholds || !self->sinewave || !self->window ||
+      !self->spectral_features) {
+    absolute_hearing_thresholds_free(self);
+    return NULL;
+  }
+
   generate_sinewave(self);
   (void)get_fft_window(self->window, self->fft_size, VORBIS_WINDOW);
   compute_spl_reference_spectrum(self);
@@ -85,6 +96,9 @@ AbsoluteHearingThresholds* absolute_hearing_thresholds_initialize(
 }
 
 void absolute_hearing_thresholds_free(AbsoluteHearingThresholds* self) {
+  if (!self) {
+    return;
+  }
   fft_transform_free(self->fft_transform);
   spectral_features_free(self->spectral_features);
 
@@ -100,7 +114,7 @@ static void generate_sinewave(AbsoluteHearingThresholds* self) {
   for (uint32_t k = 0U; k < self->fft_size; k++) {
     self->sinewave[k] =
         self->sine_wave_amplitude *
-        sinf((2.F * M_PI * (float)k * self->sine_wave_frequency) /
+        sinf((2.F * M_PIf * (float)k * self->sine_wave_frequency) /
              (float)self->sample_rate);
   }
 }
@@ -119,7 +133,7 @@ static void compute_spl_reference_spectrum(AbsoluteHearingThresholds* self) {
 
   for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
     self->spl_reference_values[k] =
-        self->reference_level - 10.F * log10f(reference_spectrum[k] + 1e-12F);
+        self->reference_level - (10.F * log10f(reference_spectrum[k] + 1e-12F));
   }
 }
 
@@ -131,7 +145,7 @@ bool apply_thresholds_as_floor(AbsoluteHearingThresholds* self,
 
   for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
     const float spl_level =
-        10.F * log10f(spectrum[k] + 1e-12F) + self->spl_reference_values[k];
+        (10.F * log10f(spectrum[k] + 1e-12F)) + self->spl_reference_values[k];
     spectrum[k] =
         powf(10.F, fmaxf(spl_level, self->absolute_thresholds[k]) / 10.F);
   }
@@ -144,8 +158,8 @@ static void compute_absolute_thresholds(AbsoluteHearingThresholds* self) {
     const float frequency =
         fmaxf(fft_bin_to_freq(k, self->sample_rate, self->fft_size), 20.F);
     self->absolute_thresholds[k] =
-        3.64F * powf((frequency / 1000.F), -0.8F) -
-        6.5F * expf(-0.6F * powf((frequency / 1000.F - 3.3F), 2.F)) +
-        powf(10.F, -3.F) * powf((frequency / 1000.F), 4.F);
+        (3.64F * powf((frequency / 1000.F), -0.8F)) -
+        (6.5F * expf(-0.6F * powf(((frequency / 1000.F) - 3.3F), 2.F))) +
+        (powf(10.F, -3.F) * powf((frequency / 1000.F), 4.F));
   }
 }

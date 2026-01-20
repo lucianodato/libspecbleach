@@ -66,6 +66,13 @@ meson compile -C build
 - Add tests for new functionality
 - Update documentation for API changes
 
+### Safety and Robustness
+
+1.  **Robust Freeing:** Every `_free` function MUST include a NULL check: `if (!self) return;`.
+2.  **Atomic Initialization:** Initialization functions should handle partial allocation failures gracefully. If a sub-allocation fails, all previously allocated resources within that function must be freed before returning `NULL`.
+3.  **FFT Buffer Sizing:** Always use the correct buffer size for FFT operations. Remember that for real-to-complex FFTs of size `N`, the real spectrum size is `N/2 + 1`.
+4.  **Verification:** Always run your changes through `scan-build` and with sanitizers enabled (`-Denable_sanitizers=true`).
+
 ## License
 
 By contributing, you agree that your contributions will be licensed under its LGPL-2.1 License.

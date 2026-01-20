@@ -21,15 +21,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #ifndef MODULES_CONFIGURATIONS_H
 #define MODULES_CONFIGURATIONS_H
 
-#include "gain_estimation/gain_estimators.h"
-#include "noise_estimation/noise_estimator.h"
-#include "pre_estimation/critical_bands.h"
-#include "pre_estimation/noise_scaling_criterias.h"
-#include "pre_estimation/spectral_smoother.h"
-#include "stft/fft_transform.h"
-#include "utils/spectral_features.h"
 #include "utils/spectral_utils.h"
 #include <stdbool.h>
+#include <stdint.h>
 
 // Compile-time assertions for configuration validity
 _Static_assert(HANN_WINDOW >= 0 && HANN_WINDOW <= 3,
@@ -45,7 +39,11 @@ _Static_assert(VORBIS_WINDOW >= 0 && VORBIS_WINDOW <= 3,
 _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 
 #ifndef M_PI
-#define M_PI 3.1415926535F
+#define M_PI (3.14159265358979323846)
+#endif
+
+#ifndef M_PIf
+#define M_PIf (3.14159265358979323846F)
 #endif
 
 /* --------------------------------------------------------------------- */
@@ -53,29 +51,30 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 /* --------------------------------------------------------------------- */
 
 // Absolute hearing thresholds
-#define REFERENCE_SINE_WAVE_FREQ 1000.F
-#define REFERENCE_LEVEL 90.F
-#define SINE_AMPLITUDE 1.F
+#define REFERENCE_SINE_WAVE_FREQ (1000.F)
+#define REFERENCE_LEVEL (90.F)
+#define SINE_AMPLITUDE (1.F)
 
 // Spectral Whitening
-#define WHITENING_DECAY_RATE 1000.F
-#define WHITENING_FLOOR 0.01F
+#define WHITENING_DECAY_RATE (1000.F)
+#define WHITENING_FLOOR (0.01F)
 
 // Masking Thresholds
 #define BIAS false
 #define HIGH_FREQ_BIAS 20.F
 #if BIAS
+// clang-format off
 #define relative_thresholds                                                    \
-  [N_BARK_BANDS] = {-16.F, -17.F, -18.F, -19.F, -20.F, -21.F, -22.F,           \
-                    -23.F, -24.F, -25.F, -25.F, -25.F, -25.F, -25.F,           \
-                    -25.F, -24.F, -23.F, -22.F, -19.F, -18.F, -18.F,           \
-                    -18.F, -18.F, -18.F, -18.F}
+  (float[25]){-16.F, -17.F, -18.F, -19.F, -20.F, -21.F, -22.F, -23.F, -24.F,   \
+              -25.F, -25.F, -25.F, -25.F, -25.F, -25.F, -24.F, -23.F, -22.F,   \
+              -19.F, -18.F, -18.F, -18.F, -18.F, -18.F, -18.F}
+// clang-format on
 #endif
 
 // Postfilter SNR Threshold
-#define POSTFILTER_SCALE 10.0F
-#define PRESERVE_MINIMUN_GAIN true
-#define POSTFILTER_MIN_GAIN_DB -15.0F
+#define POSTFILTER_SCALE (10.0F)
+#define PRESERVE_MINIMUN_GAIN (true)
+#define POSTFILTER_MIN_GAIN_DB (-15.0F)
 
 // Gain Estimators
 #define GSS_EXPONENT                                                           \
@@ -83,36 +82,36 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
        // Subtraction
 
 // Oversubtraction criteria
-#define ALPHA_MAX 6.F
-#define ALPHA_MIN 1.F
-#define BETA_MAX 0.01F
-#define BETA_MIN 0.F
-#define DEFAULT_OVERSUBTRACTION ALPHA_MIN
-#define DEFAULT_UNDERSUBTRACTION BETA_MAX
-#define LOWER_SNR 0.F
-#define HIGHER_SNR 20.F
+#define ALPHA_MAX (6.F)
+#define ALPHA_MIN (1.F)
+#define BETA_MAX (0.01F)
+#define BETA_MIN (0.F)
+#define DEFAULT_OVERSUBTRACTION (ALPHA_MIN)
+#define DEFAULT_UNDERSUBTRACTION (BETA_MAX)
+#define LOWER_SNR (0.F)
+#define HIGHER_SNR (20.F)
 
 // Adaptive Estimator
-#define N_SMOOTH 0.7F
-#define BETA_AT 0.8F
-#define GAMMA 0.998F
-#define ALPHA_P 0.2F
-#define ALPHA_D 0.85F
+#define N_SMOOTH (0.7F)
+#define BETA_AT (0.8F)
+#define GAMMA (0.998F)
+#define ALPHA_P (0.2F)
+#define ALPHA_D (0.85F)
 
-#define CROSSOVER_POINT1 1000.F
-#define CROSSOVER_POINT2 3000.F
-#define BAND_1_LEVEL 2.F
-#define BAND_2_LEVEL 2.F
-#define BAND_3_LEVEL 5.F
+#define CROSSOVER_POINT1 (1000.F)
+#define CROSSOVER_POINT2 (3000.F)
+#define BAND_1_LEVEL (2.F)
+#define BAND_2_LEVEL (2.F)
+#define BAND_3_LEVEL (5.F)
 
 // SPP-MMSE Estimator Constants
-#define SPP_PRIOR_H1 0.5F        // P(H1) - Speech present prior
-#define SPP_PRIOR_H0 0.5F        // P(H0) - Speech absent prior
-#define SPP_FIXED_XI_H1 31.62F   // Fixed a priori SNR (15 dB in linear)
-#define SPP_ALPHA_POW 0.8F       // Power spectrum smoothing factor
-#define SPP_SMOOTH_SPP 0.9F      // SPP smoothing for stagnation control
-#define SPP_CURRENT_SPP 0.1F     // Current SPP weighting for stagnation control
-#define SPP_STAGNATION_CAP 0.99F // Maximum SPP value to prevent locking
+#define SPP_PRIOR_H1 (0.5F)      // P(H1) - Speech present prior
+#define SPP_PRIOR_H0 (0.5F)      // P(H0) - Speech absent prior
+#define SPP_FIXED_XI_H1 (31.62F) // Fixed a priori SNR (15 dB in linear)
+#define SPP_ALPHA_POW (0.8F)     // Power spectrum smoothing factor
+#define SPP_SMOOTH_SPP (0.9F)    // SPP smoothing for stagnation control
+#define SPP_CURRENT_SPP (0.1F)   // Current SPP weighting for stagnation control
+#define SPP_STAGNATION_CAP (0.99F) // Maximum SPP value to prevent locking
 
 /* --------------------------------------------------------------- */
 /* ------------------- Denoiser configurations ------------------- */
@@ -131,8 +130,8 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define SPECTRAL_TYPE_GENERAL POWER_SPECTRUM
 
 // Transient protection
-#define UPPER_LIMIT 5.F
-#define DEFAULT_TRANSIENT_THRESHOLD 2.F
+#define UPPER_LIMIT (5.F)
+#define DEFAULT_TRANSIENT_THRESHOLD (2.F)
 
 // Masking
 #define CRITICAL_BANDS_TYPE OPUS_SCALE

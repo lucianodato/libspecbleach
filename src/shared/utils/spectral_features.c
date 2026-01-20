@@ -57,6 +57,9 @@ SpectralFeatures* spectral_features_initialize(
 }
 
 void spectral_features_free(SpectralFeatures* self) {
+  if (!self) {
+    return;
+  }
   free(self->power_spectrum);
   free(self->phase_spectrum);
   free(self->magnitude_spectrum);
@@ -92,7 +95,7 @@ static bool compute_power_spectrum(SpectralFeatures* self,
   for (uint32_t k = 1U; k < n2; k++) {
     float real = fft_spectrum[k];
     float imag = fft_spectrum[n - k];
-    self->power_spectrum[k] = real * real + imag * imag;
+    self->power_spectrum[k] = (real * real) + (imag * imag);
   }
 
   // Nyquist bin
@@ -161,7 +164,7 @@ static bool compute_phase_spectrum(SpectralFeatures* self,
 
 float* get_spectral_feature(SpectralFeatures* self, const float* fft_spectrum,
                             uint32_t fft_spectrum_size, SpectrumType type) {
-  if (!self || !fft_spectrum || fft_spectrum_size <= 0U) {
+  if (!self || !fft_spectrum || fft_spectrum_size == 0U) {
     return NULL;
   }
 

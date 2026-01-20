@@ -36,8 +36,9 @@ void test_spectral_trailing_buffer(void) {
               "Buffer size check");
 
   float test_spec[512];
-  for (int i = 0; i < 512; i++)
+  for (int i = 0; i < 512; i++) {
     test_spec[i] = (float)i;
+  }
 
   TEST_ASSERT(spectral_trailing_buffer_push_back(stbuff, test_spec),
               "Push should succeed");
@@ -247,6 +248,75 @@ void test_min_max_spectrum_float(void) {
   printf("✓ min/max spectrum float tests passed\n");
 }
 
+void test_spectral_utils_null_and_edge_cases(void) {
+  printf("Testing spectral_utils NULL pointer and edge cases...\n");
+
+  float spectrum[10] = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f,
+                        6.0f, 7.0f, 8.0f, 9.0f, 10.0f};
+  float spectrum2[10] = {10.0f, 9.0f, 8.0f, 7.0f, 6.0f,
+                         5.0f,  4.0f, 3.0f, 2.0f, 1.0f};
+
+  // Test NULL pointer handling
+  TEST_ASSERT(!initialize_spectrum_with_value(NULL, 10, 1.0f),
+              "initialize_spectrum_with_value should fail with NULL");
+  TEST_ASSERT(!initialize_spectrum_with_value(spectrum, 0, 1.0f),
+              "initialize_spectrum_with_value should fail with size 0");
+
+  TEST_FLOAT_CLOSE(max_spectral_value(NULL, 10), 0.0f, 1e-6f);
+  TEST_FLOAT_CLOSE(max_spectral_value(spectrum, 0), 0.0f, 1e-6f);
+
+  TEST_FLOAT_CLOSE(min_spectral_value(NULL, 10), 0.0f, 1e-6f);
+  TEST_FLOAT_CLOSE(min_spectral_value(spectrum, 0), 0.0f, 1e-6f);
+
+  TEST_ASSERT(!min_spectrum_float(NULL, spectrum2, 10),
+              "min_spectrum_float should fail with NULL spectrum_one");
+  TEST_ASSERT(!min_spectrum_float(spectrum, NULL, 10),
+              "min_spectrum_float should fail with NULL spectrum_two");
+  TEST_ASSERT(!min_spectrum_float(spectrum, spectrum2, 0),
+              "min_spectrum_float should fail with size 0");
+
+  TEST_ASSERT(!max_spectrum_float(NULL, spectrum2, 10),
+              "max_spectrum_float should fail with NULL spectrum_one");
+  TEST_ASSERT(!max_spectrum_float(spectrum, NULL, 10),
+              "max_spectrum_float should fail with NULL spectrum_two");
+  TEST_ASSERT(!max_spectrum_float(spectrum, spectrum2, 0),
+              "max_spectrum_float should fail with size 0");
+
+  // Test double version edge cases
+  double dspectrum[10] = {1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0};
+  double dspectrum2[10] = {10.0, 9.0, 8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0};
+
+  TEST_ASSERT(!min_spectrum_double(NULL, dspectrum2, 10),
+              "min_spectrum_double should fail with NULL");
+  TEST_ASSERT(!min_spectrum_double(dspectrum, NULL, 10),
+              "min_spectrum_double should fail with NULL");
+  TEST_ASSERT(!min_spectrum_double(dspectrum, dspectrum2, 0),
+              "min_spectrum_double should fail with size 0");
+
+  TEST_ASSERT(!max_spectrum_double(NULL, dspectrum2, 10),
+              "max_spectrum_double should fail with NULL");
+  TEST_ASSERT(!max_spectrum_double(dspectrum, NULL, 10),
+              "max_spectrum_double should fail with NULL");
+  TEST_ASSERT(!max_spectrum_double(dspectrum, dspectrum2, 0),
+              "max_spectrum_double should fail with size 0");
+
+  // Test get_fft_window edge cases
+  float window[10];
+  TEST_ASSERT(!get_fft_window(NULL, 10, HANN_WINDOW),
+              "get_fft_window should fail with NULL");
+  TEST_ASSERT(!get_fft_window(window, 0, HANN_WINDOW),
+              "get_fft_window should fail with size 0");
+
+  // Test BLACKMAN and VORBIS windows
+  float bwindow[64];
+  TEST_ASSERT(get_fft_window(bwindow, 64, BLACKMAN_WINDOW),
+              "BLACKMAN window should succeed");
+  TEST_ASSERT(get_fft_window(bwindow, 64, VORBIS_WINDOW),
+              "VORBIS window should succeed");
+
+  printf("✓ spectral_utils NULL/edge case tests passed\n");
+}
+
 int main(void) {
   printf("Running utility function tests...\n\n");
 
@@ -260,6 +330,7 @@ int main(void) {
   test_spectral_min_max();
   test_fft_frequency_conversions();
   test_min_max_spectrum_float();
+  test_spectral_utils_null_and_edge_cases();
   test_denoise_mixer();
   test_spectral_trailing_buffer();
 

@@ -19,7 +19,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 #include "denoise_mixer.h"
-#include "../post_estimation/spectral_whitening.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -41,7 +40,7 @@ DenoiseMixer* denoise_mixer_initialize(uint32_t fft_size, uint32_t sample_rate,
   }
 
   self->fft_size = fft_size;
-  self->real_spectrum_size = self->fft_size / 2U + 1U;
+  self->real_spectrum_size = (self->fft_size / 2U) + 1U;
   self->sample_rate = sample_rate;
   self->hop = hop;
 
@@ -57,6 +56,9 @@ DenoiseMixer* denoise_mixer_initialize(uint32_t fft_size, uint32_t sample_rate,
 }
 
 void denoise_mixer_free(DenoiseMixer* self) {
+  if (!self) {
+    return;
+  }
   free(self->residual_spectrum);
   free(self->denoised_spectrum);
 

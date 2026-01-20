@@ -39,11 +39,20 @@ TransientDetector* transient_detector_initialize(const uint32_t fft_size) {
   TransientDetector* self =
       (TransientDetector*)calloc(1U, sizeof(TransientDetector));
 
+  if (!self) {
+    return NULL;
+  }
+
   self->fft_size = fft_size;
-  self->real_spectrum_size = self->fft_size / 2U + 1U;
+  self->real_spectrum_size = (self->fft_size / 2U) + 1U;
 
   self->previous_spectrum =
       (float*)calloc(self->real_spectrum_size, sizeof(float));
+
+  if (!self->previous_spectrum) {
+    transient_detector_free(self);
+    return NULL;
+  }
 
   self->window_count = 0U;
   self->rolling_mean = 0.F;
@@ -53,6 +62,9 @@ TransientDetector* transient_detector_initialize(const uint32_t fft_size) {
 }
 
 void transient_detector_free(TransientDetector* self) {
+  if (!self) {
+    return;
+  }
   free(self->previous_spectrum);
 
   free(self);
@@ -72,7 +84,8 @@ bool transient_detector_run(TransientDetector* self, const float* spectrum) {
   }
 
   const float adapted_threshold =
-      (UPPER_LIMIT - DEFAULT_TRANSIENT_THRESHOLD) * self->rolling_mean + 1e-6F;
+      ((UPPER_LIMIT - DEFAULT_TRANSIENT_THRESHOLD) * self->rolling_mean) +
+      1e-6F;
 
   memcpy(self->previous_spectrum, spectrum,
          sizeof(float) * self->real_spectrum_size);

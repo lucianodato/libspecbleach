@@ -83,7 +83,7 @@ SpectralProcessorHandle spectral_adaptive_denoiser_initialize(
   }
 
   self->fft_size = fft_size;
-  self->real_spectrum_size = self->fft_size / 2U + 1U;
+  self->real_spectrum_size = (self->fft_size / 2U) + 1U;
   self->sample_rate = sample_rate;
   self->hop = self->fft_size / overlap_factor;
   self->default_oversubtraction = DEFAULT_OVERSUBTRACTION;
