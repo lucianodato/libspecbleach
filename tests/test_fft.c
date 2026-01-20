@@ -59,8 +59,9 @@ void test_fft_load_store(void) {
 
   float input[128];
   float output[128];
-  for (int i = 0; i < 128; i++)
+  for (int i = 0; i < 128; i++) {
     input[i] = (float)i;
+  }
 
   TEST_ASSERT(fft_load_input_samples(fft, input),
               "Load samples should succeed");
@@ -85,7 +86,7 @@ void test_fft_computation(void) {
   float output[1024];
   // Simple sine wave
   for (int i = 0; i < 1024; i++) {
-    input[i] = sinf(2.0f * M_PI * 10.0f * (float)i / 1024.0f);
+    input[i] = sinf(2.0f * (float)M_PI * 10.0f * (float)i / 1024.0f);
   }
 
   fft_load_input_samples(fft, input);
@@ -103,6 +104,41 @@ void test_fft_computation(void) {
   printf("✓ FFT computation tests passed\n");
 }
 
+void test_fft_edge_cases(void) {
+  printf("Testing FFT edge cases...\n");
+
+  // Test NULL handling
+  fft_transform_free(NULL); // Should not crash
+
+  uint32_t frame_size = 256;
+  FftTransform* fft = fft_transform_initialize(frame_size, NO_PADDING, 0);
+  float input[256] = {0.0f};
+  float output[256] = {0.0f};
+
+  // Test NULL pointer handling
+  TEST_ASSERT(!fft_load_input_samples(NULL, input),
+              "fft_load_input_samples should fail with NULL fft");
+  TEST_ASSERT(!fft_load_input_samples(fft, NULL),
+              "fft_load_input_samples should fail with NULL input");
+
+  TEST_ASSERT(!fft_get_output_samples(NULL, output),
+              "fft_get_output_samples should fail with NULL fft");
+  TEST_ASSERT(!fft_get_output_samples(fft, NULL),
+              "fft_get_output_samples should fail with NULL output");
+
+  TEST_ASSERT(!compute_forward_fft(NULL),
+              "compute_forward_fft should fail with NULL");
+  TEST_ASSERT(!compute_backward_fft(NULL),
+              "compute_backward_fft should fail with NULL");
+
+  TEST_ASSERT(get_fft_size(NULL) == 0, "get_fft_size should return 0 for NULL");
+  TEST_ASSERT(get_fft_real_spectrum_size(NULL) == 0,
+              "get_fft_real_spectrum_size should return 0 for NULL");
+
+  fft_transform_free(fft);
+  printf("✓ FFT edge case tests passed\n");
+}
+
 int main(void) {
   printf("Running FFT transform tests...\n\n");
 
@@ -110,6 +146,7 @@ int main(void) {
   test_fft_padding();
   test_fft_load_store();
   test_fft_computation();
+  test_fft_edge_cases();
 
   printf("\n✅ All FFT transform tests passed!\n");
   return 0;
