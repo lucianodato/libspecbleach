@@ -10,7 +10,19 @@ on:
 
 jobs:
   build:
+    name: ${{ matrix.config.name }}
     runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - name: "Standard + Coverage"
+            meson_args: "-Db_coverage=true"
+            run_coverage: true
+          - name: "Sanitizers (ASan + UBSan)"
+            meson_args: "-Denable_sanitizers=true -Dsanitize_address=true -Dsanitize_undefined=true"
+            run_coverage: false
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -33,7 +45,7 @@ jobs:
             --buildtype=debug \
             -Denable_examples=true \
             -Denable_tests=true \
-            -Db_coverage=true
+            ${{ matrix.config.meson_args }}
 
       - name: Build project
         run: |
@@ -41,13 +53,15 @@ jobs:
 
       - name: Run tests
         run: |
-          meson test -C build
+          meson test -C build --print-errorlogs
 
       - name: Generate coverage report
+        if: matrix.config.run_coverage
         run: |
           ninja -C build coverage-xml
 
       - name: Upload coverage to Codecov
+        if: matrix.config.run_coverage
         uses: codecov/codecov-action@v5
         with:
           files: build/meson-logs/coverage.xml
