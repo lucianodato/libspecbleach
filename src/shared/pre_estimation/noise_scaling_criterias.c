@@ -70,6 +70,10 @@ NoiseScalingCriterias* noise_scaling_criterias_initialize(
   NoiseScalingCriterias* self =
       (NoiseScalingCriterias*)calloc(1U, sizeof(NoiseScalingCriterias));
 
+  if (!self) {
+    return NULL;
+  }
+
   self->fft_size = fft_size;
   self->real_spectrum_size = self->fft_size / 2U + 1U;
   self->critical_band_type = critical_band_type;
@@ -84,6 +88,12 @@ NoiseScalingCriterias* noise_scaling_criterias_initialize(
       self->sample_rate, self->fft_size, self->critical_band_type);
   self->masking_estimation = masking_estimation_initialize(
       self->fft_size, self->sample_rate, self->spectrum_type);
+
+  if (!self->critical_bands || !self->masking_estimation) {
+    noise_scaling_criterias_free(self);
+    return NULL;
+  }
+
   self->number_critical_bands =
       get_number_of_critical_bands(self->critical_bands);
 
@@ -97,10 +107,20 @@ NoiseScalingCriterias* noise_scaling_criterias_initialize(
   self->clean_signal_estimation =
       (float*)calloc(self->real_spectrum_size, sizeof(float));
 
+  if (!self->critical_bands_noise_profile ||
+      !self->critical_bands_reference_spectrum || !self->masking_thresholds ||
+      !self->clean_signal_estimation) {
+    noise_scaling_criterias_free(self);
+    return NULL;
+  }
+
   return self;
 }
 
 void noise_scaling_criterias_free(NoiseScalingCriterias* self) {
+  if (!self) {
+    return;
+  }
   critical_bands_free(self->critical_bands);
   masking_estimation_free(self->masking_estimation);
 

@@ -19,7 +19,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 #include "stft_windows.h"
-#include "../configurations.h"
 #include <stdlib.h>
 
 static float get_windows_scale_factor(StftWindows* self,
@@ -38,11 +37,19 @@ StftWindows* stft_window_initialize(const uint32_t stft_frame_size,
                                     const WindowTypes input_window,
                                     const WindowTypes output_window) {
   StftWindows* self = (StftWindows*)calloc(1U, sizeof(StftWindows));
+  if (!self) {
+    return NULL;
+  }
 
   self->stft_frame_size = stft_frame_size;
 
   self->input_window = (float*)calloc(self->stft_frame_size, sizeof(float));
   self->output_window = (float*)calloc(self->stft_frame_size, sizeof(float));
+
+  if (!self->input_window || !self->output_window) {
+    stft_window_free(self);
+    return NULL;
+  }
 
   (void)get_fft_window(self->input_window, self->stft_frame_size, input_window);
   (void)get_fft_window(self->output_window, self->stft_frame_size,
@@ -54,6 +61,9 @@ StftWindows* stft_window_initialize(const uint32_t stft_frame_size,
 }
 
 void stft_window_free(StftWindows* self) {
+  if (!self) {
+    return;
+  }
   free(self->input_window);
   free(self->output_window);
 

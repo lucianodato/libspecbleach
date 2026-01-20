@@ -66,6 +66,10 @@ CriticalBands* critical_bands_initialize(const uint32_t sample_rate,
 
   CriticalBands* self = (CriticalBands*)calloc(1U, sizeof(CriticalBands));
 
+  if (!self) {
+    return NULL;
+  }
+
   self->fft_size = fft_size;
   self->real_spectrum_size = fft_size / 2U + 1U;
   self->sample_rate = sample_rate;
@@ -78,12 +82,20 @@ CriticalBands* critical_bands_initialize(const uint32_t sample_rate,
   self->number_bins_per_band =
       (uint32_t*)calloc(self->number_bands, sizeof(uint32_t));
 
+  if (!self->band_delimiter_bins || !self->number_bins_per_band) {
+    critical_bands_free(self);
+    return NULL;
+  }
+
   compute_band_indexes(self);
 
   return self;
 }
 
 void critical_bands_free(CriticalBands* self) {
+  if (!self) {
+    return;
+  }
   free(self->band_delimiter_bins);
   free(self->number_bins_per_band);
 

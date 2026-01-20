@@ -38,6 +38,10 @@ NoiseEstimator* noise_estimation_initialize(const uint32_t fft_size,
                                             NoiseProfile* noise_profile) {
   NoiseEstimator* self = (NoiseEstimator*)calloc(1U, sizeof(NoiseEstimator));
 
+  if (!self) {
+    return NULL;
+  }
+
   self->fft_size = fft_size;
   self->real_spectrum_size = self->fft_size / 2U + 1U;
 
@@ -54,6 +58,9 @@ NoiseEstimator* noise_estimation_initialize(const uint32_t fft_size,
 }
 
 void noise_estimation_free(NoiseEstimator* self) {
+  if (!self) {
+    return;
+  }
 
   // Don't free noise profile used as reference here
 

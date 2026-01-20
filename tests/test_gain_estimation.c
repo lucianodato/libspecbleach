@@ -26,11 +26,11 @@ void test_gain_estimation_wiener(void) {
   uint32_t fft_size = 8;
   uint32_t real_spectrum_size = fft_size / 2 + 1;
 
-  float spectrum[5] = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f};
-  float noise_spectrum[5] = {0.5f, 1.0f, 1.5f, 2.0f, 2.5f};
-  float gain_spectrum[5] = {0.0f};
-  float alpha[5] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
-  float beta[5] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+  float spectrum[8] = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 0.0f, 0.0f, 0.0f};
+  float noise_spectrum[8] = {0.5f, 1.0f, 1.5f, 2.0f, 2.5f, 0.0f, 0.0f, 0.0f};
+  float gain_spectrum[8] = {0.0f};
+  float alpha[8] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+  float beta[8] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
 
   estimate_gains(real_spectrum_size, fft_size, spectrum, noise_spectrum,
                  gain_spectrum, alpha, beta, WIENER);
@@ -49,11 +49,11 @@ void test_gain_estimation_gates(void) {
   uint32_t fft_size = 8;
   uint32_t real_spectrum_size = fft_size / 2 + 1;
 
-  float spectrum[5] = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f};
-  float noise_spectrum[5] = {0.5f, 1.0f, 1.5f, 2.0f, 2.5f};
-  float gain_spectrum[5] = {0.0f};
-  float alpha[5] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
-  float beta[5] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+  float spectrum[8] = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 0.0f, 0.0f, 0.0f};
+  float noise_spectrum[8] = {0.5f, 1.0f, 1.5f, 2.0f, 2.5f, 0.0f, 0.0f, 0.0f};
+  float gain_spectrum[8] = {0.0f};
+  float alpha[8] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+  float beta[8] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
 
   estimate_gains(real_spectrum_size, fft_size, spectrum, noise_spectrum,
                  gain_spectrum, alpha, beta, GATES);
@@ -77,11 +77,11 @@ void test_gain_estimation_spectral_subtraction(void) {
   uint32_t fft_size = 8;
   uint32_t real_spectrum_size = fft_size / 2 + 1;
 
-  float spectrum[5] = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f};
-  float noise_spectrum[5] = {0.5f, 1.0f, 1.5f, 2.0f, 2.5f};
-  float gain_spectrum[5] = {0.0f};
-  float alpha[5] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
-  float beta[5] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+  float spectrum[8] = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 0.0f, 0.0f, 0.0f};
+  float noise_spectrum[8] = {0.5f, 1.0f, 1.5f, 2.0f, 2.5f, 0.0f, 0.0f, 0.0f};
+  float gain_spectrum[8] = {0.0f};
+  float alpha[8] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+  float beta[8] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
 
   estimate_gains(real_spectrum_size, fft_size, spectrum, noise_spectrum,
                  gain_spectrum, alpha, beta, GENERALIZED_SPECTRALSUBTRACION);
@@ -101,11 +101,11 @@ void test_gain_estimation_edge_cases(void) {
   uint32_t fft_size = 8;
   uint32_t real_spectrum_size = fft_size / 2 + 1;
 
-  float spectrum[5] = {0.0f, 0.0f, 1.0f, 2.0f, 3.0f};
-  float noise_spectrum[5] = {0.0f, 1.0f, 1.0f, 2.0f, 2.0f};
-  float gain_spectrum[5] = {0.0f};
-  float alpha[5] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
-  float beta[5] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+  float spectrum[8] = {0.0f, 0.0f, 1.0f, 2.0f, 3.0f, 0.0f, 0.0f, 0.0f};
+  float noise_spectrum[8] = {0.0f, 1.0f, 1.0f, 2.0f, 2.0f, 0.0f, 0.0f, 0.0f};
+  float gain_spectrum[8] = {0.0f};
+  float alpha[8] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+  float beta[8] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
 
   // Test with zero spectrum values
   estimate_gains(real_spectrum_size, fft_size, spectrum, noise_spectrum,

@@ -36,6 +36,9 @@ StftBuffer* stft_buffer_initialize(const uint32_t stft_frame_size,
                                    const uint32_t start_position,
                                    const uint32_t block_step) {
   StftBuffer* self = (StftBuffer*)calloc(1U, sizeof(StftBuffer));
+  if (!self) {
+    return NULL;
+  }
 
   self->stft_frame_size = stft_frame_size;
   self->start_position = start_position;
@@ -44,10 +47,18 @@ StftBuffer* stft_buffer_initialize(const uint32_t stft_frame_size,
   self->in_fifo = (float*)calloc(self->stft_frame_size, sizeof(float));
   self->out_fifo = (float*)calloc(self->stft_frame_size, sizeof(float));
 
+  if (!self->in_fifo || !self->out_fifo) {
+    stft_buffer_free(self);
+    return NULL;
+  }
+
   return self;
 }
 
 void stft_buffer_free(StftBuffer* self) {
+  if (!self) {
+    return;
+  }
   free(self->in_fifo);
   free(self->out_fifo);
 

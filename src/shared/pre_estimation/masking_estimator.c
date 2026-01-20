@@ -58,12 +58,20 @@ MaskingEstimator* masking_estimation_initialize(const uint32_t fft_size,
   MaskingEstimator* self =
       (MaskingEstimator*)calloc(1U, sizeof(MaskingEstimator));
 
+  if (!self) {
+    return NULL;
+  }
+
   self->fft_size = fft_size;
   self->real_spectrum_size = self->fft_size / 2U + 1U;
   self->sample_rate = sample_rate;
 
   self->critical_bands = critical_bands_initialize(
       self->sample_rate, self->fft_size, CRITICAL_BANDS_TYPE);
+  if (!self->critical_bands) {
+    masking_estimation_free(self);
+    return NULL;
+  }
   self->number_critical_bands =
       get_number_of_critical_bands(self->critical_bands);
 
@@ -87,6 +95,15 @@ MaskingEstimator* masking_estimation_initialize(const uint32_t fft_size,
   self->reference_spectrum = absolute_hearing_thresholds_initialize(
       self->sample_rate, self->fft_size, spectrum_type);
 
+  if (!self->spectral_spreading_function ||
+      !self->unity_gain_critical_bands_spectrum ||
+      !self->spreaded_unity_gain_critical_bands_spectrum ||
+      !self->threshold_j || !self->masking_offset || !self->spreaded_spectrum ||
+      !self->critical_bands_reference_spectrum || !self->reference_spectrum) {
+    masking_estimation_free(self);
+    return NULL;
+  }
+
   compute_spectral_spreading_function(self);
   (void)initialize_spectrum_with_value(self->unity_gain_critical_bands_spectrum,
                                        self->number_critical_bands, 1.F);
@@ -100,6 +117,9 @@ MaskingEstimator* masking_estimation_initialize(const uint32_t fft_size,
 }
 
 void masking_estimation_free(MaskingEstimator* self) {
+  if (!self) {
+    return;
+  }
   absolute_hearing_thresholds_free(self->reference_spectrum);
   critical_bands_free(self->critical_bands);
 

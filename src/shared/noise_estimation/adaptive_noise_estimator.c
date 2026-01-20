@@ -204,6 +204,9 @@ void spp_mmse_estimator_free(AdaptiveNoiseEstimator* self) {
 }
 
 void louizou_estimator_free(AdaptiveNoiseEstimator* self) {
+  if (!self) {
+    return;
+  }
   free(self->minimum_detection_thresholds);
   free(self->time_frequency_smoothing_constant);
   free(self->speech_presence_detection);
@@ -368,6 +371,9 @@ static FrameSpectrum* frame_spectrum_initialize(const uint32_t frame_size) {
 }
 
 static void frame_spectrum_free(FrameSpectrum* self) {
+  if (!self) {
+    return;
+  }
   free(self->smoothed_spectrum);
   free(self->local_minimum_spectrum);
   free(self->speech_present_probability_spectrum);

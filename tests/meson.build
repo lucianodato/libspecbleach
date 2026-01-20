@@ -113,6 +113,14 @@ test_noise_floor_manager = executable('test_noise_floor_manager',
   include_directories: inc
 )
 
+# Adaptive noise estimator tests
+test_adaptive_noise_estimator_null = executable('test_adaptive_noise_estimator_null',
+  sources: ['test_adaptive_noise_estimator_null.c'],
+  dependencies: [libspecbleach_dep, m_dep],
+  c_args: test_c_args,
+  include_directories: inc
+)
+
 # Run tests
 test('utils', test_utils)
 test('fft', test_fft)
@@ -128,4 +136,5 @@ test('pre_estimation', test_pre_estimation)
 test('postfilter', test_postfilter)
 test('noise_profile', test_noise_profile)
 test('specbleach_denoiser', test_specbleach_denoiser)
+test('adaptive_noise_estimator_null', test_adaptive_noise_estimator_null)
 

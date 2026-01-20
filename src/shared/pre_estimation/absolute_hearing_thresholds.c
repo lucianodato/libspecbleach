@@ -54,6 +54,10 @@ AbsoluteHearingThresholds* absolute_hearing_thresholds_initialize(
   AbsoluteHearingThresholds* self =
       (AbsoluteHearingThresholds*)calloc(1U, sizeof(AbsoluteHearingThresholds));
 
+  if (!self) {
+    return NULL;
+  }
+
   self->fft_size = fft_size;
   self->real_spectrum_size = self->fft_size / 2U + 1U;
   self->sample_rate = sample_rate;
@@ -76,6 +80,13 @@ AbsoluteHearingThresholds* absolute_hearing_thresholds_initialize(
   self->spectral_features =
       spectral_features_initialize(self->real_spectrum_size);
 
+  if (!self->fft_transform || !self->spl_reference_values ||
+      !self->absolute_thresholds || !self->sinewave || !self->window ||
+      !self->spectral_features) {
+    absolute_hearing_thresholds_free(self);
+    return NULL;
+  }
+
   generate_sinewave(self);
   (void)get_fft_window(self->window, self->fft_size, VORBIS_WINDOW);
   compute_spl_reference_spectrum(self);
@@ -85,6 +96,9 @@ AbsoluteHearingThresholds* absolute_hearing_thresholds_initialize(
 }
 
 void absolute_hearing_thresholds_free(AbsoluteHearingThresholds* self) {
+  if (!self) {
+    return;
+  }
   fft_transform_free(self->fft_transform);
   spectral_features_free(self->spectral_features);
 

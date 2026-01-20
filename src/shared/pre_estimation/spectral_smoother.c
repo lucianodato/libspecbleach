@@ -48,6 +48,10 @@ SpectralSmoother* spectral_smoothing_initialize(const uint32_t fft_size,
   SpectralSmoother* self =
       (SpectralSmoother*)calloc(1U, sizeof(SpectralSmoother));
 
+  if (!self) {
+    return NULL;
+  }
+
   self->fft_size = fft_size;
   self->real_spectrum_size = self->fft_size / 2U + 1U;
   self->type = type;
@@ -63,10 +67,19 @@ SpectralSmoother* spectral_smoothing_initialize(const uint32_t fft_size,
 
   self->transient_detection = transient_detector_initialize(self->fft_size);
 
+  if (!self->noise_spectrum || !self->smoothed_spectrum ||
+      !self->smoothed_spectrum_previous || !self->transient_detection) {
+    spectral_smoothing_free(self);
+    return NULL;
+  }
+
   return self;
 }
 
 void spectral_smoothing_free(SpectralSmoother* self) {
+  if (!self) {
+    return;
+  }
   transient_detector_free(self->transient_detection);
 
   free(self->noise_spectrum);

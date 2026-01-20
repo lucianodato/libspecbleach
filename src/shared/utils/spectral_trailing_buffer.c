@@ -54,6 +54,9 @@ SpectralTrailingBuffer* spectral_trailing_buffer_initialize(
 }
 
 void spectral_trailing_buffer_free(SpectralTrailingBuffer* self) {
+  if (!self) {
+    return;
+  }
   free(self->buffer);
 
   free(self);
