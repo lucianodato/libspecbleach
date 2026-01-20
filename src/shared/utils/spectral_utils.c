@@ -76,7 +76,7 @@ bool get_fft_window(float* window, const uint32_t fft_size,
 
 bool initialize_spectrum_with_value(float* spectrum, uint32_t spectrum_size,
                                     const float value) {
-  if (!spectrum || spectrum_size <= 0U) {
+  if (!spectrum || spectrum_size == 0U) {
     return false;
   }
 
@@ -89,7 +89,7 @@ bool initialize_spectrum_with_value(float* spectrum, uint32_t spectrum_size,
 
 float max_spectral_value(const float* spectrum,
                          const uint32_t real_spectrum_size) {
-  if (!spectrum || real_spectrum_size <= 0U) {
+  if (!spectrum || real_spectrum_size == 0U) {
     return 0.F;
   }
 
@@ -102,7 +102,7 @@ float max_spectral_value(const float* spectrum,
 
 float min_spectral_value(const float* spectrum,
                          const uint32_t real_spectrum_size) {
-  if (!spectrum || real_spectrum_size <= 0U) {
+  if (!spectrum || real_spectrum_size == 0U) {
     return 0.F;
   }
 
@@ -115,7 +115,7 @@ float min_spectral_value(const float* spectrum,
 
 bool min_spectrum_float(float* spectrum_one, const float* spectrum_two,
                         const uint32_t spectrum_size) {
-  if (!spectrum_one || !spectrum_two || spectrum_size <= 0U) {
+  if (!spectrum_one || !spectrum_two || spectrum_size == 0U) {
     return false;
   }
 
@@ -128,7 +128,7 @@ bool min_spectrum_float(float* spectrum_one, const float* spectrum_two,
 
 bool max_spectrum_float(float* spectrum_one, const float* spectrum_two,
                         const uint32_t spectrum_size) {
-  if (!spectrum_one || !spectrum_two || spectrum_size <= 0U) {
+  if (!spectrum_one || !spectrum_two || spectrum_size == 0U) {
     return false;
   }
 
@@ -141,7 +141,7 @@ bool max_spectrum_float(float* spectrum_one, const float* spectrum_two,
 
 bool min_spectrum_double(double* spectrum_one, const double* spectrum_two,
                          const uint32_t spectrum_size) {
-  if (!spectrum_one || !spectrum_two || spectrum_size <= 0U) {
+  if (!spectrum_one || !spectrum_two || spectrum_size == 0U) {
     return false;
   }
 
@@ -154,7 +154,7 @@ bool min_spectrum_double(double* spectrum_one, const double* spectrum_two,
 
 bool max_spectrum_double(double* spectrum_one, const double* spectrum_two,
                          const uint32_t spectrum_size) {
-  if (!spectrum_one || !spectrum_two || spectrum_size <= 0U) {
+  if (!spectrum_one || !spectrum_two || spectrum_size == 0U) {
     return false;
   }
 
@@ -169,7 +169,7 @@ bool direct_matrix_to_vector_spectral_convolution(const float* matrix_spectum,
                                                   const float* spectrum,
                                                   float* out_spectrum,
                                                   uint32_t spectrum_size) {
-  if (!matrix_spectum || !spectrum || !out_spectrum || spectrum_size <= 0) {
+  if (!matrix_spectum || !spectrum || !out_spectrum || spectrum_size == 0U) {
     return false;
   }
 
@@ -196,7 +196,7 @@ uint32_t freq_to_fft_bin(const float freq, const uint32_t sample_rate,
 
 float spectral_flux(const float* spectrum, const float* previous_spectrum,
                     const uint32_t spectrum_size) {
-  if (!spectrum || !previous_spectrum || spectrum_size <= 0U) {
+  if (!spectrum || !previous_spectrum || spectrum_size == 0U) {
     return 0.F;
   }
 
@@ -213,7 +213,7 @@ bool get_rolling_mean_spectrum(float* averaged_spectrum,
                                const float* current_spectrum,
                                const uint32_t number_of_blocks,
                                const uint32_t spectrum_size) {
-  if (!averaged_spectrum || !current_spectrum || spectrum_size <= 0U) {
+  if (!averaged_spectrum || !current_spectrum || spectrum_size == 0U) {
     return false;
   }
 
@@ -254,7 +254,7 @@ bool get_rolling_median_spectrum(float* median_spectrum,
                                  const float* current_spectrum_buffer,
                                  const uint32_t number_of_blocks,
                                  const uint32_t spectrum_size) {
-  if (!median_spectrum || !current_spectrum_buffer || spectrum_size <= 0U) {
+  if (!median_spectrum || !current_spectrum_buffer || spectrum_size == 0U) {
     return false;
   }
 

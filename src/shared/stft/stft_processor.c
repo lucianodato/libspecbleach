@@ -127,7 +127,7 @@ bool stft_processor_run(StftProcessor* self, const uint32_t number_of_samples,
                         const float* input, float* output,
                         spectral_processing spectral_processing,
                         SpectralProcessorHandle spectral_processor) {
-  if (!self || !input || !output || number_of_samples <= 0U) {
+  if (!self || !input || !output || number_of_samples == 0U) {
     return false;
   }
 
@@ -160,8 +160,8 @@ bool stft_processor_run(StftProcessor* self, const uint32_t number_of_samples,
       fft_get_output_samples(self->fft_transform, self->tmp_buffer);
 
       // STFT Overlap Add
-      for (uint32_t k = 0U; k < self->frame_size; k++) {
-        self->output_accumulator[k] += self->tmp_buffer[k];
+      for (uint32_t j = 0U; j < self->frame_size; j++) {
+        self->output_accumulator[j] += self->tmp_buffer[j];
       }
 
       stft_buffer_advance_block(self->stft_buffer, self->output_accumulator);

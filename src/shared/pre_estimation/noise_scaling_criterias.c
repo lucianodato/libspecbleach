@@ -179,24 +179,21 @@ static void a_posteriori_snr_critical_bands(NoiseScalingCriterias* self,
   compute_critical_bands_spectrum(self->critical_bands, spectrum,
                                   self->critical_bands_reference_spectrum);
 
-  float a_posteriori_snr = 20.F;
   float oversustraction_factor = 1.F;
 
   for (uint32_t j = 0U; j < self->number_critical_bands; j++) {
 
     self->band_indexes = get_band_indexes(self->critical_bands, j);
 
-    a_posteriori_snr =
+    const float snr_db =
         10.F * log10f(self->critical_bands_reference_spectrum[j] /
                       self->critical_bands_noise_profile[j]);
 
-    if (a_posteriori_snr >= self->lower_snr &&
-        a_posteriori_snr <= self->higher_snr) {
-      oversustraction_factor =
-          (-0.05F * (a_posteriori_snr)) + parameters.oversubtraction;
-    } else if (a_posteriori_snr < 0.F) {
+    if (snr_db >= self->lower_snr && snr_db <= self->higher_snr) {
+      oversustraction_factor = (-0.05F * (snr_db)) + parameters.oversubtraction;
+    } else if (snr_db < 0.F) {
       oversustraction_factor = parameters.oversubtraction;
-    } else if (a_posteriori_snr > 20.F) {
+    } else if (snr_db > 20.F) {
       oversustraction_factor = 1.F;
     }
 
@@ -210,8 +207,6 @@ static void a_posteriori_snr_critical_bands(NoiseScalingCriterias* self,
 static void a_posteriori_snr(NoiseScalingCriterias* self, const float* spectrum,
                              const float* noise_spectrum, float* alpha,
                              NoiseScalingParameters parameters) {
-  float a_posteriori_snr = 20.F;
-  float oversustraction_factor = 1.F;
   float noisy_spectrum_sum = 0.F;
   float noise_spectrum_sum = 0.F;
 
@@ -220,15 +215,14 @@ static void a_posteriori_snr(NoiseScalingCriterias* self, const float* spectrum,
     noise_spectrum_sum += noise_spectrum[k];
   }
 
-  a_posteriori_snr = 10.F * log10f(noisy_spectrum_sum / noise_spectrum_sum);
+  const float snr_db = 10.F * log10f(noisy_spectrum_sum / noise_spectrum_sum);
 
-  if (a_posteriori_snr >= self->lower_snr &&
-      a_posteriori_snr <= self->higher_snr) {
-    oversustraction_factor =
-        (-0.05F * (a_posteriori_snr)) + parameters.oversubtraction;
-  } else if (a_posteriori_snr < 0.F) {
+  float oversustraction_factor;
+  if (snr_db >= self->lower_snr && snr_db <= self->higher_snr) {
+    oversustraction_factor = (-0.05F * (snr_db)) + parameters.oversubtraction;
+  } else if (snr_db < 0.F) {
     oversustraction_factor = parameters.oversubtraction;
-  } else if (a_posteriori_snr > 20.F) {
+  } else {
     oversustraction_factor = 1.F;
   }
 

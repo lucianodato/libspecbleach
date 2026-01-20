@@ -5,7 +5,8 @@ Checks: 'clang-diagnostic-*,clang-analyzer-*,bugprone-*,performance-*,portabilit
   -readability-function-cognitive-complexity,
   -misc-include-cleaner,
   -bugprone-easily-swappable-parameters,
-  -readability-identifier-length'
+  -readability-identifier-length,
+  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling'
 WarningsAsErrors: '*'
 HeaderFilterRegex: 'src/.*|include/.*'
 # AnalyzeTemporaryDtors is deprecated/removed in newer clang-tidy versions
