@@ -27,23 +27,23 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 static float blackman(const uint32_t bin_index, const uint32_t fft_size) {
   const float p = ((float)(bin_index)) / ((float)(fft_size));
-  return sanitize_denormal(0.42F - (0.5F * cosf(2.F * M_PI * p)) +
-                           (0.08F * cosf(4.F * M_PI * p)));
+  return sanitize_denormal(0.42F - (0.5F * cosf(2.F * M_PIf * p)) +
+                           (0.08F * cosf(4.F * M_PIf * p)));
 }
 
 static float hanning(const uint32_t bin_index, const uint32_t fft_size) {
   const float p = ((float)(bin_index)) / ((float)(fft_size));
-  return sanitize_denormal(0.5F - (0.5F * cosf(2.F * M_PI * p)));
+  return sanitize_denormal(0.5F - (0.5F * cosf(2.F * M_PIf * p)));
 }
 
 static float hamming(const uint32_t bin_index, const uint32_t fft_size) {
   const float p = ((float)(bin_index)) / ((float)(fft_size));
-  return sanitize_denormal(0.54F - (0.46F * cosf(2.F * M_PI * p)));
+  return sanitize_denormal(0.54F - (0.46F * cosf(2.F * M_PIf * p)));
 }
 
 static float vorbis(const uint32_t bin_index, const uint32_t fft_size) {
   const float p = ((float)(bin_index)) / ((float)(fft_size));
-  return sanitize_denormal(sinf(M_PI / 2.F * powf(sinf(M_PI * p), 2.F)));
+  return sanitize_denormal(sinf(M_PIf / 2.F * powf(sinf(M_PIf * p), 2.F)));
 }
 
 bool get_fft_window(float* window, const uint32_t fft_size,
@@ -176,7 +176,8 @@ bool direct_matrix_to_vector_spectral_convolution(const float* matrix_spectum,
   for (uint32_t i = 0U; i < spectrum_size; i++) {
     out_spectrum[i] = 0.F;
     for (uint32_t j = 0U; j < spectrum_size; j++) {
-      out_spectrum[i] += matrix_spectum[i * spectrum_size + j] * spectrum[j];
+      out_spectrum[i] +=
+          (matrix_spectum[(i * spectrum_size) + j] * spectrum[j]);
     }
   }
 
@@ -190,7 +191,7 @@ float fft_bin_to_freq(const uint32_t bin_index, const uint32_t sample_rate,
 
 uint32_t freq_to_fft_bin(const float freq, const uint32_t sample_rate,
                          const uint32_t fft_size) {
-  return (uint32_t)(freq / ((float)sample_rate / (float)fft_size) + 0.5f);
+  return (uint32_t)((freq / ((float)sample_rate / (float)fft_size)) + 0.5f);
 }
 
 float spectral_flux(const float* spectrum, const float* previous_spectrum,
@@ -261,7 +262,7 @@ bool get_rolling_median_spectrum(float* median_spectrum,
 
   for (uint32_t i = 0U; i < spectrum_size; i++) {
     for (uint32_t j = 0U; j < number_of_blocks; j++) {
-      tmp_buffer[j] = current_spectrum_buffer[j * spectrum_size + i];
+      tmp_buffer[j] = current_spectrum_buffer[(j * spectrum_size) + i];
     }
 
     // Sorting array

@@ -53,7 +53,7 @@ SpectralSmoother* spectral_smoothing_initialize(const uint32_t fft_size,
   }
 
   self->fft_size = fft_size;
-  self->real_spectrum_size = self->fft_size / 2U + 1U;
+  self->real_spectrum_size = (self->fft_size / 2U) + 1U;
   self->type = type;
   self->previous_adaptive_coefficient = 0.F;
   self->adaptive_coefficient = 0.F;
@@ -127,8 +127,8 @@ static void spectrum_transient_aware_time_smoothing(SpectralSmoother* self,
     for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
       if (self->smoothed_spectrum[k] > self->smoothed_spectrum_previous[k]) {
         self->smoothed_spectrum[k] =
-            smoothing * self->smoothed_spectrum_previous[k] +
-            (1.F - smoothing) * self->smoothed_spectrum[k];
+            (smoothing * self->smoothed_spectrum_previous[k]) +
+            ((1.F - smoothing) * self->smoothed_spectrum[k]);
       }
     }
   }
@@ -139,8 +139,8 @@ static void spectrum_time_smoothing(SpectralSmoother* self,
   for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
     if (self->smoothed_spectrum[k] > self->smoothed_spectrum_previous[k]) {
       self->smoothed_spectrum[k] =
-          smoothing * self->smoothed_spectrum_previous[k] +
-          (1.F - smoothing) * self->smoothed_spectrum[k];
+          (smoothing * self->smoothed_spectrum_previous[k]) +
+          ((1.F - smoothing) * self->smoothed_spectrum[k]);
     }
   }
 }

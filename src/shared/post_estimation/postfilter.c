@@ -41,7 +41,7 @@ PostFilter* postfilter_initialize(const uint32_t fft_size) {
   }
 
   self->fft_size = fft_size;
-  self->real_spectrum_size = self->fft_size / 2U + 1U;
+  self->real_spectrum_size = (self->fft_size / 2U) + 1U;
   self->preserve_minimum = (bool)PRESERVE_MINIMUN_GAIN;
   self->default_postfilter_scale = POSTFILTER_SCALE;
   self->min_gain_coefficient = powf(10.F, (float)POSTFILTER_MIN_GAIN_DB / 20.F);
@@ -89,8 +89,8 @@ static uint32_t get_adaptive_window_size(const PostFilter* self,
     return 1U;
   }
 
-  const float n = 2.F * roundf(self->default_postfilter_scale *
-                               (1.F - zeta_t / snr_threshold)) +
+  const float n = (2.F * roundf(self->default_postfilter_scale *
+                                (1.F - (zeta_t / snr_threshold)))) +
                   1.F;
 
   return (uint32_t)n;
@@ -109,10 +109,12 @@ static void moving_average(const float* in, float* out, uint32_t size,
   // Initial window sum (boundary handling: use clamping for start)
   for (int i = -(int)half; i <= (int)half; i++) {
     int idx = i;
-    if (idx < 0)
+    if (idx < 0) {
       idx = 0;
-    if (idx >= (int)size)
+    }
+    if (idx >= (int)size) {
       idx = (int)size - 1;
+    }
     current_sum += (double)in[idx];
   }
 
@@ -124,10 +126,12 @@ static void moving_average(const float* in, float* out, uint32_t size,
       int old_idx = (int)i - (int)half;
       int new_idx = (int)i + (int)half + 1;
 
-      if (old_idx < 0)
+      if (old_idx < 0) {
         old_idx = 0;
-      if (new_idx >= (int)size)
+      }
+      if (new_idx >= (int)size) {
         new_idx = (int)size - 1;
+      }
 
       current_sum -= (double)in[old_idx];
       current_sum += (double)in[new_idx];

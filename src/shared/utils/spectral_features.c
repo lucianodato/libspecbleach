@@ -95,7 +95,7 @@ static bool compute_power_spectrum(SpectralFeatures* self,
   for (uint32_t k = 1U; k < n2; k++) {
     float real = fft_spectrum[k];
     float imag = fft_spectrum[n - k];
-    self->power_spectrum[k] = real * real + imag * imag;
+    self->power_spectrum[k] = (real * real) + (imag * imag);
   }
 
   // Nyquist bin

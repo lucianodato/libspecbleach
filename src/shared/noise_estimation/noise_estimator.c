@@ -20,7 +20,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "noise_estimator.h"
 #include "../configurations.h"
-#include "../utils/spectral_features.h"
 #include "../utils/spectral_trailing_buffer.h"
 #include "../utils/spectral_utils.h"
 #include <stdlib.h>
@@ -43,7 +42,7 @@ NoiseEstimator* noise_estimation_initialize(const uint32_t fft_size,
   }
 
   self->fft_size = fft_size;
-  self->real_spectrum_size = self->fft_size / 2U + 1U;
+  self->real_spectrum_size = (self->fft_size / 2U) + 1U;
 
   self->noise_profile = noise_profile;
   self->median_buffer = spectral_trailing_buffer_initialize(

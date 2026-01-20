@@ -63,14 +63,16 @@ void noise_profile_free(NoiseProfile* self) {
 }
 
 bool is_noise_estimation_available(NoiseProfile* self, int mode) {
-  if (mode < 1 || mode > 3)
+  if (mode < 1 || mode > 3) {
     return false;
+  }
   return self->noise_spectrum_available[mode - 1];
 }
 
 float* get_noise_profile(NoiseProfile* self, int mode) {
-  if (mode < 1 || mode > 3)
+  if (mode < 1 || mode > 3) {
     return NULL;
+  }
   return self->noise_profiles[mode - 1];
 }
 
@@ -79,8 +81,9 @@ uint32_t get_noise_profile_size(NoiseProfile* self) {
 }
 
 uint32_t get_noise_profile_blocks_averaged(NoiseProfile* self, int mode) {
-  if (mode < 1 || mode > 3)
+  if (mode < 1 || mode > 3) {
     return 0;
+  }
   return self->noise_profile_blocks_averaged[mode - 1];
 }
 void set_noise_profile_available(NoiseProfile* self, int mode) {

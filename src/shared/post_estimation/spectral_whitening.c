@@ -20,6 +20,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "spectral_whitening.h"
 #include "../configurations.h"
+#include "../utils/spectral_utils.h"
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -38,7 +39,7 @@ SpectralWhitening* spectral_whitening_initialize(const uint32_t fft_size) {
   }
 
   self->fft_size = fft_size;
-  self->real_spectrum_size = self->fft_size / 2U + 1U;
+  self->real_spectrum_size = (self->fft_size / 2U) + 1U;
 
   self->tapering_window =
       (float*)calloc(self->real_spectrum_size, sizeof(float));
@@ -48,21 +49,24 @@ SpectralWhitening* spectral_whitening_initialize(const uint32_t fft_size) {
   }
 
   // Pre-calculate Right half of Hamming window for HF tapering
-  uint32_t N = self->real_spectrum_size * 2 - 1;
+  uint32_t n_samples = (self->real_spectrum_size * 2U) - 1U;
   for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
-    uint32_t n = k + self->real_spectrum_size - 1;
+    uint32_t n = (k + self->real_spectrum_size) - 1U;
     self->tapering_window[k] =
-        0.54f - 0.46f * cosf(2.0f * (float)M_PI * (float)n / (float)(N - 1));
+        0.54f - (0.46f * cosf((2.0f * (float)M_PI * (float)n) /
+                              (float)(n_samples - 1U)));
   }
 
   return self;
 }
 
 void spectral_whitening_free(SpectralWhitening* self) {
-  if (!self)
+  if (!self) {
     return;
-  if (self->tapering_window)
+  }
+  if (self->tapering_window) {
     free(self->tapering_window);
+  }
   free(self);
 }
 
@@ -70,8 +74,9 @@ void spectral_whitening_get_weights(SpectralWhitening* self,
                                     float whitening_factor,
                                     const float* noise_profile,
                                     float* weights_out) {
-  if (!self || !weights_out || !noise_profile)
+  if (!self || !weights_out || !noise_profile) {
     return;
+  }
 
   float noise_peak = 1e-12f;
   for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {

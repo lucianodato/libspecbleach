@@ -75,7 +75,7 @@ NoiseScalingCriterias* noise_scaling_criterias_initialize(
   }
 
   self->fft_size = fft_size;
-  self->real_spectrum_size = self->fft_size / 2U + 1U;
+  self->real_spectrum_size = (self->fft_size / 2U) + 1U;
   self->critical_band_type = critical_band_type;
   self->sample_rate = sample_rate;
   self->spectrum_type = spectrum_type;
@@ -193,7 +193,7 @@ static void a_posteriori_snr_critical_bands(NoiseScalingCriterias* self,
     if (a_posteriori_snr >= self->lower_snr &&
         a_posteriori_snr <= self->higher_snr) {
       oversustraction_factor =
-          -0.05F * (a_posteriori_snr) + parameters.oversubtraction;
+          (-0.05F * (a_posteriori_snr)) + parameters.oversubtraction;
     } else if (a_posteriori_snr < 0.F) {
       oversustraction_factor = parameters.oversubtraction;
     } else if (a_posteriori_snr > 20.F) {
@@ -225,7 +225,7 @@ static void a_posteriori_snr(NoiseScalingCriterias* self, const float* spectrum,
   if (a_posteriori_snr >= self->lower_snr &&
       a_posteriori_snr <= self->higher_snr) {
     oversustraction_factor =
-        -0.05F * (a_posteriori_snr) + parameters.oversubtraction;
+        (-0.05F * (a_posteriori_snr)) + parameters.oversubtraction;
   } else if (a_posteriori_snr < 0.F) {
     oversustraction_factor = parameters.oversubtraction;
   } else if (a_posteriori_snr > 20.F) {
@@ -274,10 +274,10 @@ static void masking_thresholds(NoiseScalingCriterias* self,
       const float normalized_value = (current_masked_value - min_masked_value) /
                                      (max_masked_value - min_masked_value);
 
-      alpha[k] = (1.F - normalized_value) * parameters.oversubtraction +
-                 normalized_value * self->alpha_minimun;
-      beta[k] = (1.F - normalized_value) * parameters.undersubtraction +
-                normalized_value * self->beta_minimun;
+      alpha[k] = ((1.F - normalized_value) * parameters.oversubtraction) +
+                 (normalized_value * self->alpha_minimun);
+      beta[k] = ((1.F - normalized_value) * parameters.undersubtraction) +
+                (normalized_value * self->beta_minimun);
     }
   }
 }

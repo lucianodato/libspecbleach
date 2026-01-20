@@ -156,10 +156,10 @@ bool compute_masking_thresholds(MaskingEstimator* self, const float* spectrum,
                               (5.5F * (1.F - tonality_factor));
 
 #if BIAS
-    masking_offset[j] = relative_thresholds[j];
+    self->masking_offset[j] = relative_thresholds[j];
 
     if (j > 15) {
-      masking_offset[j] += HIGH_FREQ_BIAS;
+      self->masking_offset[j] += HIGH_FREQ_BIAS;
     }
 #endif
 

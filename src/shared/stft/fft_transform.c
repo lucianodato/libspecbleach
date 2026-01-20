@@ -159,7 +159,7 @@ uint32_t get_fft_real_spectrum_size(FftTransform* self) {
   if (!self) {
     return 0;
   }
-  return self->fft_size / 2U + 1U;
+  return (self->fft_size / 2U) + 1U;
 }
 
 bool fft_load_input_samples(FftTransform* self, const float* input) {

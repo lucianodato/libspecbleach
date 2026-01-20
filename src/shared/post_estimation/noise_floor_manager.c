@@ -20,7 +20,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "noise_floor_manager.h"
 #include "spectral_whitening.h"
-#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -39,7 +38,7 @@ NoiseFloorManager* noise_floor_manager_initialize(const uint32_t fft_size,
     return NULL;
   }
 
-  self->real_spectrum_size = fft_size / 2U + 1U;
+  self->real_spectrum_size = (fft_size / 2U) + 1U;
 
   self->whitening = spectral_whitening_initialize(fft_size);
   if (!self->whitening) {
@@ -86,8 +85,9 @@ void noise_floor_manager_apply(NoiseFloorManager* self,
   // 2. Apply biasing + frequency-dependent floor
   for (uint32_t k = 0U; k < real_spectrum_size; k++) {
     float floor = reduction_amount * self->whitening_weights[k];
-    if (floor > 1.0f)
+    if (floor > 1.0f) {
       floor = 1.0f;
+    }
 
     float range = 1.0f - floor;
     gain_spectrum[k] = floor + (range * gain_spectrum[k]);
