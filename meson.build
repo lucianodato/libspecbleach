@@ -8,8 +8,9 @@ current_os = host_machine.system()
 current_arch = build_machine.cpu_family()
 cc = meson.get_compiler('c')
 
-# Shared c_args for libraries
+# Shared c_args and link_args for libraries
 lib_c_args = []
+lib_link_args = []
 
 # Compiler warning flags
 custom_warning_level = get_option('custom_warning_level')
@@ -63,7 +64,9 @@ if get_option('enable_sanitizers')
         if get_option('sanitize_undefined')
             sanitizer_args += ['-fsanitize=undefined']
         endif
+        # Sanitizer flags must be passed to both compiler AND linker
         lib_c_args += cc.get_supported_arguments(sanitizer_args)
+        lib_link_args += cc.get_supported_link_arguments(sanitizer_args)
     else
         warning('Sanitizers are only enabled in debug builds')
     endif

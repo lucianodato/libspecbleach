@@ -8,6 +8,7 @@ specbleach_sources = [shared_sources, processors_sources]
 libspecbleach = library('specbleach',
   sources: specbleach_sources,
   c_args: lib_c_args,
+  link_args: lib_link_args,
   dependencies: dep,
   include_directories: inc,
   version: meson.project_version(),

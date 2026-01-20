@@ -1,11 +1,13 @@
 # Tests configuration
 test_c_args = lib_c_args
+test_link_args = lib_link_args
 
 # Unit tests for utility functions
 test_utils = executable('test_utils',
   sources: ['test_utils.c'],
   dependencies: [libspecbleach_dep, m_dep],
   c_args: test_c_args,
+  link_args: test_link_args,
   include_directories: inc
 )
 
@@ -14,6 +16,7 @@ test_integration = executable('test_integration',
   sources: ['test_integration.c'],
   dependencies: [libspecbleach_dep, m_dep, fftw_dep],
   c_args: test_c_args,
+  link_args: test_link_args,
   include_directories: inc
 )
 
@@ -22,6 +25,7 @@ test_audio_regression = executable('test_audio_regression',
   sources: ['test_audio_regression.c'],
   dependencies: [libspecbleach_dep, m_dep, fftw_dep],
   c_args: test_c_args,
+  link_args: test_link_args,
   include_directories: inc
 )
 
@@ -30,6 +34,7 @@ test_audio_files = executable('test_audio_files',
   sources: ['test_audio_files.c'],
   dependencies: [libspecbleach_dep, m_dep, fftw_dep],
   c_args: test_c_args,
+  link_args: test_link_args,
   include_directories: inc
 )
 
@@ -38,6 +43,7 @@ test_audio_file_regression = executable('test_audio_file_regression',
   sources: ['test_audio_file_regression.c'],
   dependencies: [libspecbleach_dep, m_dep, sndfile_dep],
   c_args: test_c_args,
+  link_args: test_link_args,
   include_directories: inc
 )
 
@@ -46,6 +52,7 @@ test_fft = executable('test_fft',
   sources: ['test_fft.c'],
   dependencies: [libspecbleach_dep, m_dep, fftw_dep],
   c_args: test_c_args,
+  link_args: test_link_args,
   include_directories: inc
 )
 
@@ -54,6 +61,7 @@ test_spectral_whitening = executable('test_spectral_whitening',
   sources: ['test_spectral_whitening.c'],
   dependencies: [libspecbleach_dep, m_dep],
   c_args: test_c_args,
+  link_args: test_link_args,
   include_directories: inc
 )
 
@@ -62,6 +70,7 @@ test_stft_latency = executable('test_stft_latency',
   sources: ['test_stft_latency.c'],
   dependencies: [libspecbleach_dep, m_dep, fftw_dep],
   c_args: test_c_args,
+  link_args: test_link_args,
   include_directories: inc
 )
 
@@ -70,6 +79,7 @@ test_gain_estimation = executable('test_gain_estimation',
   sources: ['test_gain_estimation.c'],
   dependencies: [libspecbleach_dep, m_dep],
   c_args: test_c_args,
+  link_args: test_link_args,
   include_directories: inc
 )
 
@@ -78,6 +88,7 @@ test_pre_estimation = executable('test_pre_estimation',
   sources: ['test_pre_estimation.c'],
   dependencies: [libspecbleach_dep, m_dep],
   c_args: test_c_args,
+  link_args: test_link_args,
   include_directories: inc
 )
 
@@ -86,6 +97,7 @@ test_postfilter = executable('test_postfilter',
   sources: ['test_postfilter.c'],
   dependencies: [libspecbleach_dep, m_dep],
   c_args: test_c_args,
+  link_args: test_link_args,
   include_directories: inc
 )
 
@@ -94,6 +106,7 @@ test_noise_profile = executable('test_noise_profile',
   sources: ['test_noise_profile.c'],
   dependencies: [libspecbleach_dep, m_dep],
   c_args: test_c_args,
+  link_args: test_link_args,
   include_directories: inc
 )
 
@@ -102,6 +115,7 @@ test_specbleach_denoiser = executable('test_specbleach_denoiser',
   sources: ['test_specbleach_denoiser.c'],
   dependencies: [libspecbleach_dep, m_dep],
   c_args: test_c_args,
+  link_args: test_link_args,
   include_directories: inc
 )
 
@@ -110,6 +124,7 @@ test_noise_floor_manager = executable('test_noise_floor_manager',
   sources: ['test_noise_floor_manager.c'],
   dependencies: [libspecbleach_dep, m_dep],
   c_args: test_c_args,
+  link_args: test_link_args,
   include_directories: inc
 )
 
@@ -118,6 +133,7 @@ test_adaptive_noise_estimator_null = executable('test_adaptive_noise_estimator_n
   sources: ['test_adaptive_noise_estimator_null.c'],
   dependencies: [libspecbleach_dep, m_dep, fftw_dep],
   c_args: test_c_args,
+  link_args: test_link_args,
   include_directories: [inc, include_directories('../src')]
 )
 
