@@ -63,7 +63,7 @@ MaskingEstimator* masking_estimation_initialize(const uint32_t fft_size,
   }
 
   self->fft_size = fft_size;
-  self->real_spectrum_size = self->fft_size / 2U + 1U;
+  self->real_spectrum_size = (self->fft_size / 2U) + 1U;
   self->sample_rate = sample_rate;
 
   self->critical_bands = critical_bands_initialize(
@@ -152,8 +152,8 @@ bool compute_masking_thresholds(MaskingEstimator* self, const float* spectrum,
 
     const float tonality_factor = compute_tonality_factor(self, spectrum, j);
 
-    self->masking_offset[j] = (tonality_factor * (14.5F + (float)(j + 1)) +
-                               5.5F * (1.F - tonality_factor));
+    self->masking_offset[j] = (tonality_factor * (14.5F + (float)(j + 1))) +
+                              (5.5F * (1.F - tonality_factor));
 
 #if BIAS
     masking_offset[j] = relative_thresholds[j];
@@ -187,13 +187,13 @@ static void compute_spectral_spreading_function(MaskingEstimator* self) {
     for (uint32_t j = 0U; j < self->number_critical_bands; j++) {
       const uint32_t y = (i + 1) - (j + 1);
 
-      self->spectral_spreading_function[i * self->number_critical_bands + j] =
-          15.81F + 7.5F * ((float)y + 0.474F) -
-          17.5F * sqrtf(1.F + ((float)y + 0.474F) * ((float)y + 0.474F));
+      self->spectral_spreading_function[(i * self->number_critical_bands) + j] =
+          15.81F + (7.5F * ((float)y + 0.474F)) -
+          (17.5F * sqrtf(1.F + (((float)y + 0.474F) * ((float)y + 0.474F))));
 
-      self->spectral_spreading_function[i * self->number_critical_bands + j] =
+      self->spectral_spreading_function[(i * self->number_critical_bands) + j] =
           powf(10.F, self->spectral_spreading_function
-                             [i * self->number_critical_bands + j] /
+                             [(i * self->number_critical_bands) + j] /
                          10.F);
     }
   }
@@ -216,10 +216,10 @@ static float compute_tonality_factor(MaskingEstimator* self,
   float bins_in_band = (float)self->band_indexes.end_position -
                        (float)self->band_indexes.start_position;
 
-  const float SFM =
-      10.F * (sum_log_bins / bins_in_band) - log10f(sum_bins / bins_in_band);
+  const float sfm =
+      (10.F * (sum_log_bins / bins_in_band)) - log10f(sum_bins / bins_in_band);
 
-  const float tonality_factor = fminf(SFM / -60.F, 1.F);
+  const float tonality_factor = fminf(sfm / -60.F, 1.F);
 
   return tonality_factor;
 }

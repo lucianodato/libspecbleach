@@ -21,15 +21,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #ifndef MODULES_CONFIGURATIONS_H
 #define MODULES_CONFIGURATIONS_H
 
-#include "gain_estimation/gain_estimators.h"
-#include "noise_estimation/noise_estimator.h"
-#include "pre_estimation/critical_bands.h"
-#include "pre_estimation/noise_scaling_criterias.h"
-#include "pre_estimation/spectral_smoother.h"
-#include "stft/fft_transform.h"
-#include "utils/spectral_features.h"
 #include "utils/spectral_utils.h"
 #include <stdbool.h>
+#include <stdint.h>
 
 // Compile-time assertions for configuration validity
 _Static_assert(HANN_WINDOW >= 0 && HANN_WINDOW <= 3,
@@ -45,7 +39,7 @@ _Static_assert(VORBIS_WINDOW >= 0 && VORBIS_WINDOW <= 3,
 _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 
 #ifndef M_PI
-#define M_PI 3.1415926535F
+#define M_PI (3.1415926535F)
 #endif
 
 /* --------------------------------------------------------------------- */
@@ -75,7 +69,7 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 // Postfilter SNR Threshold
 #define POSTFILTER_SCALE 10.0F
 #define PRESERVE_MINIMUN_GAIN true
-#define POSTFILTER_MIN_GAIN_DB -15.0F
+#define POSTFILTER_MIN_GAIN_DB (-15.0F)
 
 // Gain Estimators
 #define GSS_EXPONENT                                                           \

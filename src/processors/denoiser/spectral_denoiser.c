@@ -31,7 +31,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "shared/utils/spectral_features.h"
 #include "shared/utils/spectral_utils.h"
 #include <float.h>
-#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -83,7 +82,7 @@ SpectralProcessorHandle spectral_denoiser_initialize(
   }
 
   self->fft_size = fft_size;
-  self->real_spectrum_size = self->fft_size / 2U + 1U;
+  self->real_spectrum_size = (self->fft_size / 2U) + 1U;
   self->hop = self->fft_size / overlap_factor;
   self->sample_rate = sample_rate;
   self->spectrum_type = SPECTRAL_TYPE_GENERAL;

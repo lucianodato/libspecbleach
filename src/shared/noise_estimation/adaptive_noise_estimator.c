@@ -102,7 +102,7 @@ static float compute_mmse_noise_estimate(float spp_h1, float spp_h0,
                                          float observation_power,
                                          float previous_noise_psd) {
   // MMSE estimate: E{|N|²|y} = P(H0|y) * |y|² + P(H1|y) * σ_N²(l-1)
-  return spp_h0 * observation_power + spp_h1 * previous_noise_psd;
+  return (spp_h0 * observation_power) + (spp_h1 * previous_noise_psd);
 }
 
 AdaptiveNoiseEstimator* louizou_estimator_initialize(
@@ -236,16 +236,16 @@ bool louizou_estimator_run(AdaptiveNoiseEstimator* self, const float* spectrum,
   } else {
     for (uint32_t k = 0U; k < self->noise_spectrum_size; k++) {
       self->current->smoothed_spectrum[k] =
-          N_SMOOTH * self->previous->smoothed_spectrum[k] +
-          (1.F - N_SMOOTH) * spectrum[k];
+          (N_SMOOTH * self->previous->smoothed_spectrum[k]) +
+          ((1.F - N_SMOOTH) * spectrum[k]);
 
       if (self->previous->local_minimum_spectrum[k] <
           self->current->smoothed_spectrum[k]) {
         self->current->local_minimum_spectrum[k] =
-            GAMMA * self->previous->local_minimum_spectrum[k] +
-            ((1.F - GAMMA) / (1.F - BETA_AT)) *
-                (self->current->smoothed_spectrum[k] -
-                 BETA_AT * self->previous->smoothed_spectrum[k]);
+            (GAMMA * self->previous->local_minimum_spectrum[k]) +
+            (((1.F - GAMMA) / (1.F - BETA_AT)) *
+             (self->current->smoothed_spectrum[k] -
+              (BETA_AT * self->previous->smoothed_spectrum[k])));
       } else {
         self->current->local_minimum_spectrum[k] =
             self->current->smoothed_spectrum[k];
@@ -262,17 +262,17 @@ bool louizou_estimator_run(AdaptiveNoiseEstimator* self, const float* spectrum,
       }
 
       self->current->speech_present_probability_spectrum[k] =
-          ALPHA_P * self->previous->speech_present_probability_spectrum[k] +
-          (1.F - ALPHA_P) * (float)self->speech_presence_detection[k];
+          (ALPHA_P * self->previous->speech_present_probability_spectrum[k]) +
+          ((1.F - ALPHA_P) * (float)self->speech_presence_detection[k]);
 
       self->time_frequency_smoothing_constant[k] =
-          ALPHA_D + (1.F - ALPHA_D) *
-                        self->current->speech_present_probability_spectrum[k];
+          ALPHA_D + ((1.F - ALPHA_D) *
+                     self->current->speech_present_probability_spectrum[k]);
 
       noise_spectrum[k] =
-          self->time_frequency_smoothing_constant[k] *
-              self->previous_noise_spectrum[k] +
-          (1.F - self->time_frequency_smoothing_constant[k]) * spectrum[k];
+          (self->time_frequency_smoothing_constant[k] *
+           self->previous_noise_spectrum[k]) +
+          ((1.F - self->time_frequency_smoothing_constant[k]) * spectrum[k]);
     }
   }
 
@@ -314,13 +314,13 @@ bool spp_mmse_estimator_run(AdaptiveNoiseEstimator* self, const float* spectrum,
 
       // Step 4: Temporal smoothing
       // σ_N²(l) = α_pow * σ_N²(l-1) + (1 - α_pow) * E{|N|²|y}
-      noise_spectrum[k] = SPP_ALPHA_POW * self->spp_previous_noise_psd[k] +
-                          (1.F - SPP_ALPHA_POW) * mmse_noise_estimate;
+      noise_spectrum[k] = (SPP_ALPHA_POW * self->spp_previous_noise_psd[k]) +
+                          ((1.F - SPP_ALPHA_POW) * mmse_noise_estimate);
 
       // Step 5: Update smoothed SPP for next frame's stagnation control
       // P̄(l) = 0.9 * P̄(l-1) + 0.1 * P(H1|y)
-      self->spp_smoothed_spp[k] =
-          SPP_SMOOTH_SPP * self->spp_smoothed_spp[k] + SPP_CURRENT_SPP * spp_h1;
+      self->spp_smoothed_spp[k] = (SPP_SMOOTH_SPP * self->spp_smoothed_spp[k]) +
+                                  (SPP_CURRENT_SPP * spp_h1);
 
       // Step 6: Store current noise estimate for next frame
       self->spp_previous_noise_psd[k] = noise_spectrum[k];
@@ -385,16 +385,16 @@ static void compute_auto_thresholds(AdaptiveNoiseEstimator* self,
                                     const uint32_t sample_rate,
                                     const uint32_t noise_spectrum_size,
                                     const uint32_t fft_size) {
-  uint32_t LF = freq_to_fft_bin(CROSSOVER_POINT1, sample_rate, fft_size);
-  uint32_t MF = freq_to_fft_bin(CROSSOVER_POINT2, sample_rate, fft_size);
+  uint32_t lf = freq_to_fft_bin(CROSSOVER_POINT1, sample_rate, fft_size);
+  uint32_t mf = freq_to_fft_bin(CROSSOVER_POINT2, sample_rate, fft_size);
   for (uint32_t k = 0U; k < noise_spectrum_size; k++) {
-    if (k <= LF) {
+    if (k <= lf) {
       self->minimum_detection_thresholds[k] = BAND_1_LEVEL;
     }
-    if (k > LF && k < MF) {
+    if (k > lf && k < mf) {
       self->minimum_detection_thresholds[k] = BAND_2_LEVEL;
     }
-    if (k >= MF) {
+    if (k >= mf) {
       self->minimum_detection_thresholds[k] = BAND_3_LEVEL;
     }
   }
