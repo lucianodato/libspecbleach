@@ -116,9 +116,9 @@ test_noise_floor_manager = executable('test_noise_floor_manager',
 # Adaptive noise estimator tests
 test_adaptive_noise_estimator_null = executable('test_adaptive_noise_estimator_null',
   sources: ['test_adaptive_noise_estimator_null.c'],
-  dependencies: [libspecbleach_dep, m_dep],
+  dependencies: [libspecbleach_dep, m_dep, fftw_dep],
   c_args: test_c_args,
-  include_directories: inc
+  include_directories: [inc, include_directories('../src')]
 )
 
 # Run tests
