@@ -31,17 +31,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdlib.h>
 #include <string.h>
 
-// 2D Denoiser configurations - Lukin Algorithm B (Full Quality)
-#define NLM_PATCH_SIZE 8U
-#define NLM_PASTE_BLOCK_SIZE 4U
-#define NLM_SEARCH_RANGE_FREQ 8U
-#define NLM_SEARCH_RANGE_TIME_PAST 16U
-#define NLM_SEARCH_RANGE_TIME_FUTURE 4U
-#define NLM_DEFAULT_H_PARAMETER 1.0F
-
-// Size for the Delay Buffer: PAST frames + 1 for current
-#define DELAY_BUFFER_FRAMES (NLM_SEARCH_RANGE_TIME_PAST + 1U)
-
 typedef struct Spectral2DDenoiser {
   uint32_t fft_size;
   uint32_t real_spectrum_size;
