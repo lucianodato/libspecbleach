@@ -137,6 +137,24 @@ test_adaptive_noise_estimator_null = executable('test_adaptive_noise_estimator_n
   include_directories: [inc, include_directories('../src')]
 )
 
+# NLM filter tests
+test_nlm_filter = executable('test_nlm_filter',
+  sources: ['test_nlm_filter.c'],
+  dependencies: [libspecbleach_dep, m_dep],
+  c_args: test_c_args,
+  link_args: test_link_args,
+  include_directories: [inc, include_directories('../src')]
+)
+
+# 2D Denoiser wrapper tests
+test_specbleach_2d_denoiser = executable('test_specbleach_2d_denoiser',
+  sources: ['test_specbleach_2d_denoiser.c'],
+  dependencies: [libspecbleach_dep, m_dep],
+  c_args: test_c_args,
+  link_args: test_link_args,
+  include_directories: inc
+)
+
 # Run tests
 test('utils', test_utils)
 test('fft', test_fft)
@@ -152,5 +170,8 @@ test('pre_estimation', test_pre_estimation)
 test('postfilter', test_postfilter)
 test('noise_profile', test_noise_profile)
 test('specbleach_denoiser', test_specbleach_denoiser)
+test('specbleach_2d_denoiser', test_specbleach_2d_denoiser)
 test('adaptive_noise_estimator_null', test_adaptive_noise_estimator_null)
+test('nlm_filter', test_nlm_filter)
+
 
