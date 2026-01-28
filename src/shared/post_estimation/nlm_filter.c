@@ -91,8 +91,10 @@ static inline float* get_frame(NlmFilter* self, int32_t relative_offset) {
 
 #ifdef __ARM_NEON
 #include <arm_neon.h>
-#elif defined(__SSE__)
+#else
+#ifdef __SSE__
 #include <xmmintrin.h>
+#endif
 #endif
 
 // Helper: compute squared Euclidean distance between two patches
@@ -154,7 +156,8 @@ static float compute_patch_distance(NlmFilter* self, int32_t target_time,
       distance += vgetq_lane_f32(sum, 0) + vgetq_lane_f32(sum, 1) +
                   vgetq_lane_f32(sum, 2) + vgetq_lane_f32(sum, 3);
 
-#elif defined(__SSE__)
+#else
+#ifdef __SSE__
       __m128 a1 = _mm_loadu_ps(ptr_a);
       __m128 a2 = _mm_loadu_ps(ptr_a + 4);
       __m128 b1 = _mm_loadu_ps(ptr_b);
@@ -183,6 +186,7 @@ static float compute_patch_distance(NlmFilter* self, int32_t target_time,
         distance += diff * diff;
       }
 #endif
+#endif
 
     } else if (safe_bounds && patch_size == 4) {
       // Fast Path for 4x4
@@ -196,7 +200,8 @@ static float compute_patch_distance(NlmFilter* self, int32_t target_time,
       d = vmulq_f32(d, d);
       distance += vgetq_lane_f32(d, 0) + vgetq_lane_f32(d, 1) +
                   vgetq_lane_f32(d, 2) + vgetq_lane_f32(d, 3);
-#elif defined(__SSE__)
+#else
+#ifdef __SSE__
       __m128 a = _mm_loadu_ps(ptr_a);
       __m128 b = _mm_loadu_ps(ptr_b);
       __m128 d = _mm_sub_ps(a, b);
@@ -214,6 +219,7 @@ static float compute_patch_distance(NlmFilter* self, int32_t target_time,
         float diff = ptr_a[i] - ptr_b[i];
         distance += diff * diff;
       }
+#endif
 #endif
 
     } else {
