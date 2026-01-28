@@ -36,7 +36,7 @@ typedef struct Denoiser2DParameters {
   bool residual_listen;     /**< Output residue instead of denoised signal */
   float reduction_amount;   /**< Gain floor / reduction amount (linear) */
   float smoothing_factor;   /**< NLM 'h' parameter (smoothing strength) */
-  float noise_rescale;      /**< Oversubtraction scaling factor */
+  float whitening_factor;   /**< Whitening factor (0.0 to 1.0) */
 } Denoiser2DParameters;
 
 /**

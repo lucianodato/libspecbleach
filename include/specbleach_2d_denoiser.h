@@ -69,11 +69,12 @@ typedef struct SpectralBleach2DDenoiserParameters {
   float smoothing_factor;
 
   /**
-   * Strength in which the reduction will be applied.
-   * Scales overly the noise estimation for more aggressive reduction.
-   * It can be a positive dB value in between 0 dB and 12 dB.
+   * Percentage of whitening that is going to be applied to the residue of the
+   * reduction. It modifies the noise floor to be more like white noise. This
+   * can help hide musical noise when the noise is colored. It goes from 0 to
+   * 100 percent
    */
-  float noise_rescale;
+  float whitening_factor;
 } SpectralBleach2DDenoiserParameters;
 
 /**

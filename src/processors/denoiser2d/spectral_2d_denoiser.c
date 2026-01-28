@@ -320,8 +320,7 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
 
       // Initialize alpha/beta for simple gain estimation
       for (uint32_t k = 0; k < self->real_spectrum_size; k++) {
-        self->alpha[k] =
-            DEFAULT_OVERSUBTRACTION + self->parameters.noise_rescale;
+        self->alpha[k] = DEFAULT_OVERSUBTRACTION;
         self->beta[k] = self->parameters.reduction_amount;
       }
 
@@ -332,10 +331,10 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
                      self->gain_estimation_type);
 
       // Apply noise floor management
-      noise_floor_manager_apply(self->noise_floor_manager,
-                                self->real_spectrum_size, self->fft_size,
-                                self->gain_spectrum, self->noise_spectrum,
-                                self->parameters.reduction_amount, 0.0F);
+      noise_floor_manager_apply(
+          self->noise_floor_manager, self->real_spectrum_size, self->fft_size,
+          self->gain_spectrum, self->noise_spectrum,
+          self->parameters.reduction_amount, self->parameters.whitening_factor);
 
       // Apply gains via mixer to the DELAYED spectrum
       DenoiseMixerParameters mixer_params = {
