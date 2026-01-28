@@ -89,7 +89,7 @@ static inline float* get_frame(NlmFilter* self, int32_t relative_offset) {
   return self->frame_buffer[idx];
 }
 
-#if defined(__ARM_NEON)
+#ifdef __ARM_NEON
 #include <arm_neon.h>
 #elif defined(__SSE__)
 #include <xmmintrin.h>
@@ -138,7 +138,7 @@ static float compute_patch_distance(NlmFilter* self, int32_t target_time,
       float* ptr_a = target_frame + (target_freq - half_patch);
       float* ptr_b = cand_frame + (candidate_freq - half_patch);
 
-#if defined(__ARM_NEON)
+#ifdef __ARM_NEON
       float32x4_t a1 = vld1q_f32(ptr_a);
       float32x4_t a2 = vld1q_f32(ptr_a + 4);
       float32x4_t b1 = vld1q_f32(ptr_b);
@@ -189,7 +189,7 @@ static float compute_patch_distance(NlmFilter* self, int32_t target_time,
       float* ptr_a = target_frame + (target_freq - half_patch);
       float* ptr_b = cand_frame + (candidate_freq - half_patch);
 
-#if defined(__ARM_NEON)
+#ifdef __ARM_NEON
       float32x4_t a = vld1q_f32(ptr_a);
       float32x4_t b = vld1q_f32(ptr_b);
       float32x4_t d = vsubq_f32(a, b);
