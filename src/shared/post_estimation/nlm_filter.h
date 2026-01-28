@@ -31,18 +31,18 @@ typedef struct NlmFilter NlmFilter;
  * Based on "Suppression of Musical Noise Artifacts" by Lukin & Todd.
  */
 typedef struct NlmFilterConfig {
-  uint32_t spectrum_size;            /**< Number of frequency bins (real spectrum
-                                          size) */
-  uint32_t time_buffer_size;         /**< Number of frames to buffer (e.g., 21
-                                          for -16/+4 search range) */
-  uint32_t patch_size;               /**< Patch size for matching (default: 8)
-                                        */
-  uint32_t paste_block_size;         /**< Output block size for pasted block
-                                          optimization (default: 4) */
-  uint32_t search_range_freq;        /**< Search range in frequency bins
-                                          (default: 8) */
-  uint32_t search_range_time_past;   /**< Search range in time - past frames
-                                          (default: 16) */
+  uint32_t spectrum_size;          /**< Number of frequency bins (real spectrum
+                                        size) */
+  uint32_t time_buffer_size;       /**< Number of frames to buffer (e.g., 21
+                                        for -16/+4 search range) */
+  uint32_t patch_size;             /**< Patch size for matching (default: 8)
+                                    */
+  uint32_t paste_block_size;       /**< Output block size for pasted block
+                                        optimization (default: 4) */
+  uint32_t search_range_freq;      /**< Search range in frequency bins
+                                        (default: 8) */
+  uint32_t search_range_time_past; /**< Search range in time - past frames
+                                        (default: 16) */
   uint32_t search_range_time_future; /**< Search range in time - future frames
                                           (default: 4) */
   float h_parameter;                 /**< Smoothing parameter controlling weight

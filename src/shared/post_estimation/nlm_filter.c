@@ -57,8 +57,9 @@ struct NlmFilter {
 static inline float fast_exp_neg(float x) {
   // x is distance/h^2, always positive
   // if x > 10, weight is negligible (< 4.5e-5)
-  if (x > 10.0f)
+  if (x > 10.0f) {
     return 0.0f;
+  }
   return expf(-x); // Fallback to std lib for now, correctness first
 }
 
@@ -134,14 +135,14 @@ static float compute_patch_distance(NlmFilter* self, int32_t target_time,
 
     if (safe_bounds && patch_size == 8) {
       // Fast Path: Direct pointer access + SIMD for 8x8
-      float* pA = target_frame + (target_freq - half_patch);
-      float* pB = cand_frame + (candidate_freq - half_patch);
+      float* ptr_a = target_frame + (target_freq - half_patch);
+      float* ptr_b = cand_frame + (candidate_freq - half_patch);
 
 #if defined(__ARM_NEON)
-      float32x4_t a1 = vld1q_f32(pA);
-      float32x4_t a2 = vld1q_f32(pA + 4);
-      float32x4_t b1 = vld1q_f32(pB);
-      float32x4_t b2 = vld1q_f32(pB + 4);
+      float32x4_t a1 = vld1q_f32(ptr_a);
+      float32x4_t a2 = vld1q_f32(ptr_a + 4);
+      float32x4_t b1 = vld1q_f32(ptr_b);
+      float32x4_t b2 = vld1q_f32(ptr_b + 4);
 
       float32x4_t d1 = vsubq_f32(a1, b1);
       float32x4_t d2 = vsubq_f32(a2, b2);
@@ -154,10 +155,10 @@ static float compute_patch_distance(NlmFilter* self, int32_t target_time,
                   vgetq_lane_f32(sum, 2) + vgetq_lane_f32(sum, 3);
 
 #elif defined(__SSE__)
-      __m128 a1 = _mm_loadu_ps(pA);
-      __m128 a2 = _mm_loadu_ps(pA + 4);
-      __m128 b1 = _mm_loadu_ps(pB);
-      __m128 b2 = _mm_loadu_ps(pB + 4);
+      __m128 a1 = _mm_loadu_ps(ptr_a);
+      __m128 a2 = _mm_loadu_ps(ptr_a + 4);
+      __m128 b1 = _mm_loadu_ps(ptr_b);
+      __m128 b2 = _mm_loadu_ps(ptr_b + 4);
 
       __m128 d1 = _mm_sub_ps(a1, b1);
       __m128 d2 = _mm_sub_ps(a2, b2);
@@ -178,26 +179,26 @@ static float compute_patch_distance(NlmFilter* self, int32_t target_time,
 #else
       // Scalar Fallback for 8x8 safely
       for (int i = 0; i < 8; i++) {
-        float diff = pA[i] - pB[i];
+        float diff = ptr_a[i] - ptr_b[i];
         distance += diff * diff;
       }
 #endif
 
     } else if (safe_bounds && patch_size == 4) {
       // Fast Path for 4x4
-      float* pA = target_frame + (target_freq - half_patch);
-      float* pB = cand_frame + (candidate_freq - half_patch);
+      float* ptr_a = target_frame + (target_freq - half_patch);
+      float* ptr_b = cand_frame + (candidate_freq - half_patch);
 
 #if defined(__ARM_NEON)
-      float32x4_t a = vld1q_f32(pA);
-      float32x4_t b = vld1q_f32(pB);
+      float32x4_t a = vld1q_f32(ptr_a);
+      float32x4_t b = vld1q_f32(ptr_b);
       float32x4_t d = vsubq_f32(a, b);
       d = vmulq_f32(d, d);
       distance += vgetq_lane_f32(d, 0) + vgetq_lane_f32(d, 1) +
                   vgetq_lane_f32(d, 2) + vgetq_lane_f32(d, 3);
 #elif defined(__SSE__)
-      __m128 a = _mm_loadu_ps(pA);
-      __m128 b = _mm_loadu_ps(pB);
+      __m128 a = _mm_loadu_ps(ptr_a);
+      __m128 b = _mm_loadu_ps(ptr_b);
       __m128 d = _mm_sub_ps(a, b);
       d = _mm_mul_ps(d, d);
       // H-add
@@ -210,7 +211,7 @@ static float compute_patch_distance(NlmFilter* self, int32_t target_time,
       distance += f;
 #else
       for (int i = 0; i < 4; i++) {
-        float diff = pA[i] - pB[i];
+        float diff = ptr_a[i] - ptr_b[i];
         distance += diff * diff;
       }
 #endif
