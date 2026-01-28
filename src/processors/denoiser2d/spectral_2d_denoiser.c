@@ -295,19 +295,14 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
     // Process if NLM buffer is ready
     if (nlm_filter_process(self->nlm_filter, self->smoothed_snr)) {
       // NLM output corresponds to frame at (current -
-      // NLM_SEARCH_RANGE_TIME_PAST)
+      // NLM_SEARCH_RANGE_TIME_FUTURE) because we wait for future frames to be
+      // available before processing the target frame.
 
-      // 2. Retrieve delayed spectral frame
-      // The delay buffer index for 'PAST' frames ago:
-      // We want to read from the slot that was written 'SEARCH_RANGE_PAST'
-      // steps ago. Since buffer size is PAST+1, and we just wrote to
-      // write_index... read_index shoud be (write_index + 1) % SIZE? Example:
-      // Size 5 (Past 4). W=0. Buffer has [New, Old3, Old2, Old1, Old0]. Oldest
-      // is at W+1 (1). Next step: W=1. [New, New, Old3, Old2, Old1]. Oldest
-      // at 2. So Read Index = (Write Index + 1) % DELAY_BUFFER_FRAMES
-
+      // 2. Retrieve delayed spectral frame matching the NLM latency
       uint32_t read_index =
-          (self->delay_buffer_write_index + 1) % DELAY_BUFFER_FRAMES;
+          (self->delay_buffer_write_index + DELAY_BUFFER_FRAMES -
+           NLM_SEARCH_RANGE_TIME_FUTURE) %
+          DELAY_BUFFER_FRAMES;
       float* delayed_spectrum =
           &self->spectral_delay_buffer[read_index * self->fft_size];
 
