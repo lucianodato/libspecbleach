@@ -130,7 +130,7 @@ SpectralProcessorHandle spectral_2d_denoiser_initialize(
   // Assuming fft_size floats is sufficient for the packed format used by STFT
   // processor
   self->spectral_delay_buffer =
-      (float*)calloc(DELAY_BUFFER_FRAMES * fft_size, sizeof(float));
+      (float*)calloc((size_t)DELAY_BUFFER_FRAMES * fft_size, sizeof(float));
   if (!self->spectral_delay_buffer) {
     spectral_2d_denoiser_free(self);
     return NULL;
@@ -270,7 +270,7 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
     // Denoising mode: use NLM for 2D smoothing
 
     // 1. Store current spectral frame in delay buffer
-    memcpy(&self->spectral_delay_buffer[self->delay_buffer_write_index *
+    memcpy(&self->spectral_delay_buffer[(size_t)self->delay_buffer_write_index *
                                         self->fft_size],
            fft_spectrum, self->fft_size * sizeof(float));
 
@@ -304,7 +304,7 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
            NLM_SEARCH_RANGE_TIME_FUTURE) %
           DELAY_BUFFER_FRAMES;
       float* delayed_spectrum =
-          &self->spectral_delay_buffer[read_index * self->fft_size];
+          &self->spectral_delay_buffer[(size_t)read_index * self->fft_size];
 
       // Convert smoothed SNR back to spectral domain for gain calculation
       // smoothed_magnitude[k] = smoothed_snr[k] * noise[k]
