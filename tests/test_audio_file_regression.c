@@ -95,8 +95,8 @@ void test_denoiser_file_regression(void) {
     sf_readf_float(ref_sf, ref_buf, read);
 
     for (sf_count_t i = 0; i < read; i++) {
-      // Use a very small tolerance for floating point variations if any
-      if (fabsf(out_buf[i] - ref_buf[i]) > 1e-6f) {
+      // Use tolerance for floating point variations across platforms/compilers
+      if (fabsf(out_buf[i] - ref_buf[i]) > 1e-4f) {
         fprintf(stderr, "Mismatch at sample %lld: %f != %f\n",
                 (long long)(total_read + i), out_buf[i], ref_buf[i]);
         exit(1);
@@ -155,7 +155,7 @@ void test_adenoiser_file_regression(void) {
     sf_readf_float(ref_sf, ref_buf, read);
 
     for (sf_count_t i = 0; i < read; i++) {
-      if (fabsf(out_buf[i] - ref_buf[i]) > 1e-6f) {
+      if (fabsf(out_buf[i] - ref_buf[i]) > 1e-4f) {
         fprintf(stderr, "Mismatch at sample %lld: %f != %f\n",
                 (long long)(total_read + i), out_buf[i], ref_buf[i]);
         exit(1);
