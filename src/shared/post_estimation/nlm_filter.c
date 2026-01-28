@@ -87,7 +87,14 @@ static inline float* get_frame(NlmFilter* self, int32_t relative_offset) {
   return self->frame_buffer[idx];
 }
 
+#if defined(__ARM_NEON)
+#include <arm_neon.h>
+#elif defined(__SSE__)
+#include <xmmintrin.h>
+#endif
+
 // Helper: compute squared Euclidean distance between two patches
+// Optimized with SIMD for common patch sizes (4, 8)
 static float compute_patch_distance(NlmFilter* self, int32_t target_time,
                                     uint32_t target_freq,
                                     int32_t candidate_time,
@@ -97,31 +104,129 @@ static float compute_patch_distance(NlmFilter* self, int32_t target_time,
   const uint32_t half_patch = patch_size / 2;
   const uint32_t spectrum_size = self->config.spectrum_size;
 
+  // Check if we can use the fast SIMD path (no frequency boundary checking
+  // needed) Frequency indices must satisfy: 0 <= freq - half_patch  AND freq -
+  // half_patch + patch_size <= spectrum_size
+  bool safe_bounds =
+      (target_freq >= half_patch) &&
+      (target_freq + patch_size - half_patch <= spectrum_size) &&
+      (candidate_freq >= half_patch) &&
+      (candidate_freq + patch_size - half_patch <= spectrum_size);
+
   for (uint32_t dt = 0; dt < patch_size; dt++) {
     int32_t t_target = target_time + (int32_t)dt - (int32_t)half_patch;
     int32_t t_cand = candidate_time + (int32_t)dt - (int32_t)half_patch;
 
-    // Clamp time indices to buffer bounds
-    t_target = (int32_t)clamp_index(
-        t_target + (int32_t)self->config.search_range_time_past,
-        self->config.time_buffer_size);
-    t_cand = (int32_t)clamp_index(
-        t_cand + (int32_t)self->config.search_range_time_past,
-        self->config.time_buffer_size);
+    // Clamp time indices (always needed as time buffer is circular/finite)
+    // But get_frame handles the circular logic relative to buffer_head if we
+    // pass relative offset wait, get_frame argument is 'relative_offset' from
+    // CURRENT time (0) The arguments t_target/t_cand passed here are relative
+    // to current frame? In caller: compute_patch_distance(filter, 0, ...) ->
+    // target_time is 0 (current). So 'dt' is relative offset. We don't need to
+    // clamp 'dt' against buffer size, get_frame handles wrapping. BUT we
+    // usually want to search only within valid history. 'target_time' is 0.
+    // 'candidate_time' is 'dt' (search loop var). loop dt (patch row): operates
+    // on row 't' of the patch. relative offset = time + dt - half_patch.
 
     float* target_frame = get_frame(self, t_target);
     float* cand_frame = get_frame(self, t_cand);
 
-    for (uint32_t df = 0; df < patch_size; df++) {
-      uint32_t f_target =
-          clamp_index((int32_t)target_freq + (int32_t)df - (int32_t)half_patch,
-                      spectrum_size);
-      uint32_t f_cand = clamp_index(
-          (int32_t)candidate_freq + (int32_t)df - (int32_t)half_patch,
-          spectrum_size);
+    if (safe_bounds && patch_size == 8) {
+      // Fast Path: Direct pointer access + SIMD for 8x8
+      float* pA = target_frame + (target_freq - half_patch);
+      float* pB = cand_frame + (candidate_freq - half_patch);
 
-      float diff = target_frame[f_target] - cand_frame[f_cand];
-      distance += diff * diff;
+#if defined(__ARM_NEON)
+      float32x4_t a1 = vld1q_f32(pA);
+      float32x4_t a2 = vld1q_f32(pA + 4);
+      float32x4_t b1 = vld1q_f32(pB);
+      float32x4_t b2 = vld1q_f32(pB + 4);
+
+      float32x4_t d1 = vsubq_f32(a1, b1);
+      float32x4_t d2 = vsubq_f32(a2, b2);
+
+      d1 = vmulq_f32(d1, d1);
+      d2 = vmulq_f32(d2, d2);
+
+      float32x4_t sum = vaddq_f32(d1, d2);
+      distance += vgetq_lane_f32(sum, 0) + vgetq_lane_f32(sum, 1) +
+                  vgetq_lane_f32(sum, 2) + vgetq_lane_f32(sum, 3);
+
+#elif defined(__SSE__)
+      __m128 a1 = _mm_loadu_ps(pA);
+      __m128 a2 = _mm_loadu_ps(pA + 4);
+      __m128 b1 = _mm_loadu_ps(pB);
+      __m128 b2 = _mm_loadu_ps(pB + 4);
+
+      __m128 d1 = _mm_sub_ps(a1, b1);
+      __m128 d2 = _mm_sub_ps(a2, b2);
+
+      d1 = _mm_mul_ps(d1, d1);
+      d2 = _mm_mul_ps(d2, d2);
+
+      __m128 sum = _mm_add_ps(d1, d2);
+      // Horizontal add
+      __m128 shuf = _mm_shuffle_ps(sum, sum, _MM_SHUFFLE(2, 3, 0, 1));
+      __m128 sums = _mm_add_ps(sum, shuf);
+      shuf = _mm_movehl_ps(shuf, sums);
+      sums = _mm_add_ss(sums, shuf);
+      float f;
+      _mm_store_ss(&f, sums);
+      distance += f;
+
+#else
+      // Scalar Fallback for 8x8 safely
+      for (int i = 0; i < 8; i++) {
+        float diff = pA[i] - pB[i];
+        distance += diff * diff;
+      }
+#endif
+
+    } else if (safe_bounds && patch_size == 4) {
+      // Fast Path for 4x4
+      float* pA = target_frame + (target_freq - half_patch);
+      float* pB = cand_frame + (candidate_freq - half_patch);
+
+#if defined(__ARM_NEON)
+      float32x4_t a = vld1q_f32(pA);
+      float32x4_t b = vld1q_f32(pB);
+      float32x4_t d = vsubq_f32(a, b);
+      d = vmulq_f32(d, d);
+      distance += vgetq_lane_f32(d, 0) + vgetq_lane_f32(d, 1) +
+                  vgetq_lane_f32(d, 2) + vgetq_lane_f32(d, 3);
+#elif defined(__SSE__)
+      __m128 a = _mm_loadu_ps(pA);
+      __m128 b = _mm_loadu_ps(pB);
+      __m128 d = _mm_sub_ps(a, b);
+      d = _mm_mul_ps(d, d);
+      // H-add
+      __m128 shuf = _mm_shuffle_ps(d, d, _MM_SHUFFLE(2, 3, 0, 1));
+      __m128 sums = _mm_add_ps(d, shuf);
+      shuf = _mm_movehl_ps(shuf, sums);
+      sums = _mm_add_ss(sums, shuf);
+      float f;
+      _mm_store_ss(&f, sums);
+      distance += f;
+#else
+      for (int i = 0; i < 4; i++) {
+        float diff = pA[i] - pB[i];
+        distance += diff * diff;
+      }
+#endif
+
+    } else {
+      // Slow safe path with clamping
+      for (uint32_t df = 0; df < patch_size; df++) {
+        uint32_t f_target = clamp_index(
+            (int32_t)target_freq + (int32_t)df - (int32_t)half_patch,
+            spectrum_size);
+        uint32_t f_cand = clamp_index(
+            (int32_t)candidate_freq + (int32_t)df - (int32_t)half_patch,
+            spectrum_size);
+
+        float diff = target_frame[f_target] - cand_frame[f_cand];
+        distance += diff * diff;
+      }
     }
   }
 
