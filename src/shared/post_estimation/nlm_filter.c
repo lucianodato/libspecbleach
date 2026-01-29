@@ -19,18 +19,14 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 #include "nlm_filter.h"
+#include "../configurations.h"
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
 // Default NLM parameters - optimized for real-time performance
 // (Reduced from Lukin's offline parameters for real-time use)
-#define DEFAULT_PATCH_SIZE 4U
-#define DEFAULT_PASTE_BLOCK_SIZE 2U
-#define DEFAULT_SEARCH_RANGE_FREQ 4U
-#define DEFAULT_SEARCH_RANGE_TIME_PAST 4U
-#define DEFAULT_SEARCH_RANGE_TIME_FUTURE 1U
-#define DEFAULT_H_PARAMETER 1.0F
+// NOTE: Now using global configuration from configurations.h
 #define MIN_WEIGHT 1e-10F
 
 struct NlmFilter {
@@ -255,22 +251,22 @@ NlmFilter* nlm_filter_initialize(NlmFilterConfig config) {
   // Apply defaults for zero values
   self->config = config;
   if (self->config.patch_size == 0) {
-    self->config.patch_size = DEFAULT_PATCH_SIZE;
+    self->config.patch_size = NLM_PATCH_SIZE;
   }
   if (self->config.paste_block_size == 0) {
-    self->config.paste_block_size = DEFAULT_PASTE_BLOCK_SIZE;
+    self->config.paste_block_size = NLM_PASTE_BLOCK_SIZE;
   }
   if (self->config.search_range_freq == 0) {
-    self->config.search_range_freq = DEFAULT_SEARCH_RANGE_FREQ;
+    self->config.search_range_freq = NLM_SEARCH_RANGE_FREQ;
   }
   if (self->config.search_range_time_past == 0) {
-    self->config.search_range_time_past = DEFAULT_SEARCH_RANGE_TIME_PAST;
+    self->config.search_range_time_past = NLM_SEARCH_RANGE_TIME_PAST;
   }
   if (self->config.search_range_time_future == 0) {
-    self->config.search_range_time_future = DEFAULT_SEARCH_RANGE_TIME_FUTURE;
+    self->config.search_range_time_future = NLM_SEARCH_RANGE_TIME_FUTURE;
   }
   if (self->config.h_parameter <= 0.0F) {
-    self->config.h_parameter = DEFAULT_H_PARAMETER;
+    self->config.h_parameter = NLM_DEFAULT_H_PARAMETER;
   }
 
   // Compute time buffer size from search ranges
