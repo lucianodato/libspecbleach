@@ -426,7 +426,6 @@ bool nlm_filter_process(NlmFilter* filter, float* smoothed_snr) {
 
     // Pre-load Target Patch
     // Use nlm_filter 8x8 constraints directly for max speed
-    float* t_frame_base = get_frame(filter, 0); // Center frame (t=0 relative)
     const uint32_t half_patch_size =
         4; // Hardcoded for 8x8 optimized path checks
 
@@ -467,18 +466,11 @@ bool nlm_filter_process(NlmFilter* filter, float* smoothed_snr) {
 #endif
 #endif
         } else {
-          // Boundary fallback (load zeros or clamp? just skip optim)
-          // For simplicity, we just zero out and flag to use slow path?
-          // Or actually, just fill with scalar clamped reads.
-          for (int c = 0; c < 8; ++c) {
-            int32_t c_idx = (int32_t)block_center - 4 + c;
-            uint32_t safe_c = clamp_index(c_idx, spectrum_size);
-            float* safe_row = get_frame(filter, t_offset);
-#ifdef __ARM_NEON
-            // Tricky to partial load into register set cleanly without arrays
-            // Let's just avoid register blocking at boundaries for now.
-#endif
-          }
+          // Boundary fallback: We skip the SIMD pre-loading.
+          // The main loop has a 'safe_bounds' check (line 495) that will fail
+          // if we are at the boundary, causing it to fall back to the slow path
+          // or the scalar path, neither of which use 'target_vecs'.
+          // So we don't need to do anything here.
         }
       }
     }
