@@ -73,7 +73,6 @@ tests/test_data/*_denoised.wav
 
 # IDE files
 .vscode/
-.agent/
 .cursor/
 .cache/
 

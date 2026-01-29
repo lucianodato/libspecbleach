@@ -37,6 +37,7 @@ struct NlmFilter {
 
   // Precomputed values
   float h_squared;
+  float inv_h_squared; // Precomputed 1/h^2 for multiplication
   float distance_threshold_actual;
 
   // Scratch buffer for processing (avoid realloc)
@@ -45,15 +46,6 @@ struct NlmFilter {
 
 // Actually, let's use a simpler polynomial approximation for 0..10 range which
 // is most relevant exp(-x) approx 1 / (1 + x + x^2/2)
-static inline float fast_exp_neg(float x) {
-  // x is distance/h^2, always positive
-  // if x > 10, weight is negligible (< 4.5e-5)
-  if (x > 10.0f) {
-    return 0.0f;
-  }
-  return expf(-x); // Fallback to std lib for now, correctness first
-}
-
 // Helper: clamp index to valid range
 static inline uint32_t clamp_index(int32_t idx, uint32_t max_val) {
   if (idx < 0) {
@@ -272,6 +264,7 @@ NlmFilter* nlm_filter_initialize(NlmFilterConfig config) {
 
   // Precompute values
   self->h_squared = self->config.h_parameter * self->config.h_parameter;
+  self->inv_h_squared = 1.0f / self->h_squared;
   if (self->config.distance_threshold <= 0.0F) {
     // Default: 4 * h² (patches 2× noise variance away contribute < 2%)
     self->distance_threshold_actual = 4.0F * self->h_squared;
@@ -341,6 +334,7 @@ void nlm_filter_set_h_parameter(NlmFilter* filter, float h) {
 
   filter->config.h_parameter = h;
   filter->h_squared = h * h;
+  filter->inv_h_squared = 1.0f / filter->h_squared;
 
   // Update distance threshold if using default
   if (filter->config.distance_threshold <= 0.0F) {
@@ -413,6 +407,79 @@ bool nlm_filter_process(NlmFilter* filter, float* smoothed_snr) {
       block_center = spectrum_size - 1;
     }
 
+    // --- Optimization: Register Blocking for Target Patch ---
+    // We load the 8x8 target patch ONCE here, keeping it in registers
+    // to avoid reloading it ~350 times in the inner loop.
+
+    // Storage for pre-loaded target patch (flattened 8x8)
+#ifdef __ARM_NEON
+    float32x4_t target_vecs[16]; // 16 vectors * 4 floats = 64 elements (8x8)
+#else
+#ifdef __SSE__
+    __m128 target_vecs[16];
+#else
+    float target_patch[64];
+#endif
+#endif
+
+    // Pre-load Target Patch
+    // Use nlm_filter 8x8 constraints directly for max speed
+    float* t_frame_base = get_frame(filter, 0); // Center frame (t=0 relative)
+    const uint32_t half_patch_size =
+        4; // Hardcoded for 8x8 optimized path checks
+
+    if (filter->config.patch_size == 8) {
+      // Unroll loading for 8x8
+      for (int r = 0; r < 8; r++) {
+        int32_t t_offset = (int32_t)r - (int32_t)half_patch_size;
+        float* row_ptr =
+            get_frame(filter, t_offset) + (block_center - half_patch_size);
+
+        // Safe bound check? block_center is in [0, spectrum_size-1].
+        // But we need block_center - 4 >= 0.
+        // And block_center - 4 + 8 <= spectrum_size.
+        // The main loop handles boundary cases, but let's be safe or rely on
+        // padding? We'll trust the main loop logic for now or add a quick
+        // check. Actually, if we are near boundaries, we might read OOB if not
+        // careful. For now, let's assume valid range or clamp. To be safe and
+        // fast, we clamp the pointer read index or fallback.
+
+        // Actually, let's just stick to the safe pointer arithmetic logic but
+        // optimize the load. Since we can't easily clamp SIMD loads without
+        // overhead, we only do this optimization if strictly within bounds.
+
+        bool safe_load =
+            (block_center >= 4) && (block_center + 4 <= spectrum_size);
+
+        if (safe_load) {
+#ifdef __ARM_NEON
+          target_vecs[((size_t)r * 2)] = vld1q_f32(row_ptr);
+          target_vecs[((size_t)r * 2) + 1] = vld1q_f32(row_ptr + 4);
+#else
+#ifdef __SSE__
+          target_vecs[((size_t)r * 2)] = _mm_loadu_ps(row_ptr);
+          target_vecs[((size_t)r * 2) + 1] = _mm_loadu_ps(row_ptr + 4);
+#else
+          memcpy(&target_patch[((size_t)r * 8)], row_ptr, 8 * sizeof(float));
+#endif
+#endif
+        } else {
+          // Boundary fallback (load zeros or clamp? just skip optim)
+          // For simplicity, we just zero out and flag to use slow path?
+          // Or actually, just fill with scalar clamped reads.
+          for (int c = 0; c < 8; ++c) {
+            int32_t c_idx = (int32_t)block_center - 4 + c;
+            uint32_t safe_c = clamp_index(c_idx, spectrum_size);
+            float* safe_row = get_frame(filter, t_offset);
+#ifdef __ARM_NEON
+            // Tricky to partial load into register set cleanly without arrays
+            // Let's just avoid register blocking at boundaries for now.
+#endif
+          }
+        }
+      }
+    }
+
     // Search over time and frequency window
     for (int32_t dt = -search_time_past; dt <= search_time_future; dt++) {
       // Optimization: inner loop over frequency often has more locality
@@ -422,9 +489,75 @@ bool nlm_filter_process(NlmFilter* filter, float* smoothed_snr) {
         uint32_t cand_center =
             clamp_index((int32_t)block_center + df, spectrum_size);
 
-        // Compute patch distance
-        float distance =
-            compute_patch_distance(filter, 0, block_center, dt, cand_center);
+        float distance = 0.0F;
+
+        // --- INLINED DISTANCE CALCULATION WITH REGISTER BLOCKING ---
+        bool safe_bounds =
+            (block_center >= 4) && (block_center + 4 <= spectrum_size) &&
+            (cand_center >= 4) && (cand_center + 4 <= spectrum_size);
+
+        if (filter->config.patch_size == 8 && safe_bounds) {
+          // 8x8 Optimized Path
+#ifdef __ARM_NEON
+          float32x4_t sum = vdupq_n_f32(0.0f);
+
+          for (int r = 0; r < 8; r++) {
+            int32_t t_cand = dt + r - 4;
+            float* cand_ptr = get_frame(filter, t_cand) + (cand_center - 4);
+
+            float32x4_t b1 = vld1q_f32(cand_ptr);
+            float32x4_t b2 = vld1q_f32(cand_ptr + 4);
+
+            float32x4_t d1 = vsubq_f32(target_vecs[((size_t)r * 2)], b1);
+            float32x4_t d2 = vsubq_f32(target_vecs[((size_t)r * 2) + 1], b2);
+
+            d1 = vmulq_f32(d1, d1);
+            d2 = vmulq_f32(d2, d2);
+
+            sum = vaddq_f32(sum, d1);
+            sum = vaddq_f32(sum, d2);
+          }
+
+          distance = vgetq_lane_f32(sum, 0) + vgetq_lane_f32(sum, 1) +
+                     vgetq_lane_f32(sum, 2) + vgetq_lane_f32(sum, 3);
+#else
+#ifdef __SSE__
+          __m128 sum = _mm_setzero_ps();
+          for (int r = 0; r < 8; r++) {
+            int32_t t_cand = dt + r - 4;
+            float* cand_ptr = get_frame(filter, t_cand) + (cand_center - 4);
+
+            __m128 b1 = _mm_loadu_ps(cand_ptr);
+            __m128 b2 = _mm_loadu_ps(cand_ptr + 4);
+
+            __m128 d1 = _mm_sub_ps(target_vecs[((size_t)r * 2)], b1);
+            __m128 d2 = _mm_sub_ps(target_vecs[((size_t)r * 2) + 1], b2);
+
+            d1 = _mm_mul_ps(d1, d1);
+            d2 = _mm_mul_ps(d2, d2);
+
+            sum = _mm_add_ps(sum, d1);
+            sum = _mm_add_ps(sum, d2);
+          }
+          // Horizontal add
+          __m128 shuf = _mm_shuffle_ps(sum, sum, _MM_SHUFFLE(2, 3, 0, 1));
+          __m128 sums = _mm_add_ps(sum, shuf);
+          shuf = _mm_movehl_ps(shuf, sums);
+          sums = _mm_add_ss(sums, shuf);
+          float f;
+          _mm_store_ss(&f, sums);
+          distance = f;
+#else
+          // Fallback if no SIMD defined but 8x8 requested
+          distance =
+              compute_patch_distance(filter, 0, block_center, dt, cand_center);
+#endif
+#endif
+        } else {
+          // Fallback for boundaries or non-8x8
+          distance =
+              compute_patch_distance(filter, 0, block_center, dt, cand_center);
+        }
 
         // Distance thresholding (early termination optimization)
         if (distance > filter->distance_threshold_actual) {
@@ -432,7 +565,7 @@ bool nlm_filter_process(NlmFilter* filter, float* smoothed_snr) {
         }
 
         // Compute weight
-        float weight = fast_exp_neg(distance / filter->h_squared);
+        float weight = expf(-distance * filter->inv_h_squared);
         if (weight < NLM_MIN_WEIGHT) {
           continue;
         }
