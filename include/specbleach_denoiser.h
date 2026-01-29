@@ -80,6 +80,15 @@ typedef struct SpectralBleachDenoiserParameters {
    * musical noise. It can be a positive or negative dB value in between -10 dB
    * and 10 dB */
   float post_filter_threshold;
+
+  /* Enables the adaptive noise estimation, which will continuously update the
+   * noise profile based on the current input signal. */
+  int adaptive_noise;
+
+  /* Sets the method used for adaptive noise estimation.
+   * 0: Louizou's method (minimum statistics)
+   * 1: SPP-MMSE method (unbiased estimation) */
+  int noise_estimation_method;
 } SpectralBleachDenoiserParameters;
 
 /**

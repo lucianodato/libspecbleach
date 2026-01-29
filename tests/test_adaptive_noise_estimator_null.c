@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "processors/adaptivedenoiser/adaptive_denoiser.h"
 #include "processors/denoiser/spectral_denoiser.h"
 #include "shared/noise_estimation/adaptive_noise_estimator.h"
 #include "shared/noise_estimation/noise_estimator.h"
@@ -23,7 +22,6 @@
 #include "shared/utils/spectral_features.h"
 #include "shared/utils/spectral_trailing_buffer.h"
 
-#include "specbleach_adenoiser.h"
 #include "specbleach_denoiser.h"
 
 int main(void) {
@@ -41,12 +39,6 @@ int main(void) {
   SpectralBleachHandle sb = specbleach_initialize(sample_rate, 10.0f);
   if (sb) {
     specbleach_free(sb);
-  }
-
-  specbleach_adaptive_free(NULL);
-  SpectralBleachHandle sba = specbleach_adaptive_initialize(sample_rate, 10.0f);
-  if (sba) {
-    specbleach_adaptive_free(sba);
   }
 
   // 2. Internal Modules
@@ -165,7 +157,6 @@ int main(void) {
 
   // Internal Processors
   spectral_denoiser_free(NULL);
-  spectral_adaptive_denoiser_free(NULL);
 
   printf("✅ All safety and basic coverage tests passed!\n");
   return 0;

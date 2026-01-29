@@ -268,6 +268,8 @@ bool specbleach_load_parameters(SpectralBleachHandle instance,
       .smoothing_factor = remap_percentage_log_like_unity(parameters.smoothing_factor / 100.F),
       .whitening_factor = parameters.whitening_factor / 100.F,
       .post_filter_threshold = from_db_to_coefficient(parameters.post_filter_threshold),
+      .adaptive_noise = parameters.adaptive_noise,
+      .noise_estimation_method = parameters.noise_estimation_method,
   };
   // clang-format on
 

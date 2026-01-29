@@ -227,13 +227,75 @@ bool louizou_estimator_run(AdaptiveNoiseEstimator* self, const float* spectrum,
   }
 
   if (self->is_first_frame) {
+    // Check if the first frame has enough energy to be used as initial state
+    float frame_energy = 0.F;
     for (uint32_t k = 0U; k < self->noise_spectrum_size; k++) {
-      self->current->smoothed_spectrum[k] = spectrum[k];
-      self->current->local_minimum_spectrum[k] = spectrum[k];
-      noise_spectrum[k] = spectrum[k];
+      frame_energy += spectrum[k];
+    }
+    frame_energy /= (float)self->noise_spectrum_size;
+
+    if (frame_energy < ESTIMATOR_SILENCE_THRESHOLD) {
+      // Still silence, don't initialize with it, keep waiting for real audio
+      memset(noise_spectrum, 0, self->noise_spectrum_size * sizeof(float));
+      return true;
+    }
+
+    for (uint32_t k = 0U; k < self->noise_spectrum_size; k++) {
+      self->current->smoothed_spectrum[k] =
+          (N_SMOOTH * self->previous->smoothed_spectrum[k]) +
+          ((1.F - N_SMOOTH) * spectrum[k]);
+
+      if (self->previous->local_minimum_spectrum[k] <
+          self->current->smoothed_spectrum[k]) {
+        self->current->local_minimum_spectrum[k] =
+            (GAMMA * self->previous->local_minimum_spectrum[k]) +
+            (((1.F - GAMMA) / (1.F - BETA_AT)) *
+             (self->current->smoothed_spectrum[k] -
+              (BETA_AT * self->previous->smoothed_spectrum[k])));
+      } else {
+        self->current->local_minimum_spectrum[k] =
+            self->current->smoothed_spectrum[k];
+      }
+
+      self->noisy_speech_ratio = sanitize_denormal(
+          self->current->smoothed_spectrum[k] /
+          (self->current->local_minimum_spectrum[k] + 1e-12F));
+
+      if (self->noisy_speech_ratio > self->minimum_detection_thresholds[k]) {
+        self->speech_presence_detection[k] = 1U;
+      } else {
+        self->speech_presence_detection[k] = 0U;
+      }
+
+      self->current->speech_present_probability_spectrum[k] =
+          (ALPHA_P * self->previous->speech_present_probability_spectrum[k]) +
+          ((1.F - ALPHA_P) * (float)self->speech_presence_detection[k]);
+
+      self->time_frequency_smoothing_constant[k] =
+          ALPHA_D + ((1.F - ALPHA_D) *
+                     self->current->speech_present_probability_spectrum[k]);
+
+      noise_spectrum[k] =
+          (self->time_frequency_smoothing_constant[k] *
+           self->previous_noise_spectrum[k]) +
+          ((1.F - self->time_frequency_smoothing_constant[k]) * spectrum[k]);
     }
     self->is_first_frame = false;
   } else {
+    // Gating for silence during playback
+    float frame_energy = 0.F;
+    for (uint32_t k = 0U; k < self->noise_spectrum_size; k++) {
+      frame_energy += spectrum[k];
+    }
+    frame_energy /= (float)self->noise_spectrum_size;
+
+    if (frame_energy < ESTIMATOR_SILENCE_THRESHOLD) {
+      // Silence detected, freeze current noise floor and return last estimate
+      memcpy(noise_spectrum, self->previous_noise_spectrum,
+             sizeof(float) * self->noise_spectrum_size);
+      return true;
+    }
+
     for (uint32_t k = 0U; k < self->noise_spectrum_size; k++) {
       self->current->smoothed_spectrum[k] =
           (N_SMOOTH * self->previous->smoothed_spectrum[k]) +
@@ -288,6 +350,19 @@ bool spp_mmse_estimator_run(AdaptiveNoiseEstimator* self, const float* spectrum,
   }
 
   if (self->is_first_frame) {
+    // Check if the first frame has enough energy to be used as initial state
+    float frame_energy = 0.F;
+    for (uint32_t k = 0U; k < self->noise_spectrum_size; k++) {
+      frame_energy += spectrum[k];
+    }
+    frame_energy /= (float)self->noise_spectrum_size;
+
+    if (frame_energy < ESTIMATOR_SILENCE_THRESHOLD) {
+      // Still silence, don't initialize with it, keep waiting for real audio
+      memset(noise_spectrum, 0, self->noise_spectrum_size * sizeof(float));
+      return true;
+    }
+
     // Initialize with first frame (assume noise-only)
     for (uint32_t k = 0U; k < self->noise_spectrum_size; k++) {
       self->spp_previous_noise_psd[k] = spectrum[k];
@@ -296,6 +371,20 @@ bool spp_mmse_estimator_run(AdaptiveNoiseEstimator* self, const float* spectrum,
     }
     self->is_first_frame = false;
   } else {
+    // Gating for silence during playback
+    float frame_energy = 0.F;
+    for (uint32_t k = 0U; k < self->noise_spectrum_size; k++) {
+      frame_energy += spectrum[k];
+    }
+    frame_energy /= (float)self->noise_spectrum_size;
+
+    if (frame_energy < ESTIMATOR_SILENCE_THRESHOLD) {
+      // Silence detected, freeze current noise floor and return last estimate
+      memcpy(noise_spectrum, self->spp_previous_noise_psd,
+             sizeof(float) * self->noise_spectrum_size);
+      return true;
+    }
+
     for (uint32_t k = 0U; k < self->noise_spectrum_size; k++) {
       // Step 1: Compute A Posteriori Speech Presence Probability
       float spp_h1 =
@@ -396,6 +485,83 @@ static void compute_auto_thresholds(AdaptiveNoiseEstimator* self,
     }
     if (k >= mf) {
       self->minimum_detection_thresholds[k] = BAND_3_LEVEL;
+    }
+  }
+}
+
+void adaptive_estimator_set_state(AdaptiveNoiseEstimator* self,
+                                  const float* initial_profile,
+                                  const int estimation_method) {
+  if (!self || !initial_profile) {
+    return;
+  }
+
+  // Common initialization
+  for (uint32_t k = 0U; k < self->noise_spectrum_size; k++) {
+    // Avoid zeroes which can cause division issues
+    float val = fmaxf(initial_profile[k], FLT_MIN);
+
+    // Seed Louizou state
+    self->previous_noise_spectrum[k] = val;
+    self->current->smoothed_spectrum[k] = val;
+    self->current->local_minimum_spectrum[k] = val;
+    self->previous->smoothed_spectrum[k] = val;
+    self->previous->local_minimum_spectrum[k] = val;
+
+    // Seed SPP-MMSE state
+    self->spp_previous_noise_psd[k] = val;
+
+    // If resetting or first frame, ensure SPP starts clean to allow quick
+    // adaptation
+    if (self->is_first_frame) {
+      self->spp_smoothed_spp[k] = 0.F;
+    }
+  }
+
+  self->is_first_frame = false;
+}
+
+void adaptive_estimator_update_seed(AdaptiveNoiseEstimator* self,
+                                    const float* seed_profile) {
+  if (!self || !seed_profile) {
+    return;
+  }
+
+  for (uint32_t k = 0U; k < self->noise_spectrum_size; k++) {
+    float val = fmaxf(seed_profile[k], FLT_MIN);
+
+    // Update the memory of the estimator to the new "base"
+    // This allows the adaptive algorithm to pivot from the new profile
+    self->previous_noise_spectrum[k] = val;
+    self->spp_previous_noise_psd[k] = val;
+
+    // Reset SPP smoothed history to allow fast adaptation to the new base
+    self->spp_smoothed_spp[k] = 0.F;
+  }
+}
+
+void adaptive_estimator_apply_floor(AdaptiveNoiseEstimator* self,
+                                    const float* floor_profile) {
+  if (!self || !floor_profile) {
+    return;
+  }
+
+  for (uint32_t k = 0U; k < self->noise_spectrum_size; k++) {
+    float floor_val = floor_profile[k];
+    // Floor Louizou state
+    if (self->previous_noise_spectrum[k] < floor_val) {
+      self->previous_noise_spectrum[k] = floor_val;
+    }
+    if (self->current->local_minimum_spectrum[k] < floor_val) {
+      self->current->local_minimum_spectrum[k] = floor_val;
+    }
+    if (self->previous->local_minimum_spectrum[k] < floor_val) {
+      self->previous->local_minimum_spectrum[k] = floor_val;
+    }
+
+    // Floor SPP-MMSE state
+    if (self->spp_previous_noise_psd[k] < floor_val) {
+      self->spp_previous_noise_psd[k] = floor_val;
     }
   }
 }

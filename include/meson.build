@@ -1,5 +1,4 @@
 specbleach_headers = files(
-  'specbleach_adenoiser.h',
   'specbleach_denoiser.h',
   'specbleach_2d_denoiser.h',
 )

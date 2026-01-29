@@ -21,6 +21,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "spectral_denoiser.h"
 #include "shared/configurations.h"
 #include "shared/gain_estimation/gain_estimators.h"
+#include "shared/noise_estimation/adaptive_noise_estimator.h"
 #include "shared/noise_estimation/noise_estimator.h"
 #include "shared/post_estimation/noise_floor_manager.h"
 #include "shared/post_estimation/postfilter.h"
@@ -46,6 +47,7 @@ typedef struct SbSpectralDenoiser {
   float* alpha;
   float* beta;
   float* noise_spectrum;
+  float* manual_noise_floor;
 
   SpectrumType spectrum_type;
   CriticalBandType band_type;
@@ -55,6 +57,7 @@ typedef struct SbSpectralDenoiser {
   NoiseEstimatorType noise_estimator_type;
 
   NoiseEstimator* noise_estimator;
+  AdaptiveNoiseEstimator* adaptive_estimator;
   PostFilter* postfiltering;
   NoiseProfile* noise_profile;
   SpectralFeatures* spectral_features;
@@ -64,6 +67,10 @@ typedef struct SbSpectralDenoiser {
   NoiseFloorManager* noise_floor_manager;
   bool postfiltering_enabled;
   bool whitening_enabled;
+
+  int last_adaptive_state;
+  int last_noise_reduction_mode;
+  int last_noise_estimation_method;
 } SbSpectralDenoiser;
 
 SpectralProcessorHandle spectral_denoiser_initialize(
@@ -120,6 +127,13 @@ SpectralProcessorHandle spectral_denoiser_initialize(
   self->noise_spectrum =
       (float*)calloc(self->real_spectrum_size, sizeof(float));
   if (!self->noise_spectrum) {
+    spectral_denoiser_free(self);
+    return NULL;
+  }
+
+  self->manual_noise_floor =
+      (float*)calloc(self->real_spectrum_size, sizeof(float));
+  if (!self->manual_noise_floor) {
     spectral_denoiser_free(self);
     return NULL;
   }
@@ -189,6 +203,10 @@ void spectral_denoiser_free(SpectralProcessorHandle instance) {
   if (self->noise_estimator) {
     noise_estimation_free(self->noise_estimator);
   }
+  if (self->adaptive_estimator) {
+    louizou_estimator_free(
+        self->adaptive_estimator); // or generic free if available
+  }
   if (self->spectral_features) {
     spectral_features_free(self->spectral_features);
   }
@@ -220,6 +238,9 @@ void spectral_denoiser_free(SpectralProcessorHandle instance) {
   if (self->noise_spectrum) {
     free(self->noise_spectrum);
   }
+  if (self->manual_noise_floor) {
+    free(self->manual_noise_floor);
+  }
 
   free(self);
 }
@@ -231,6 +252,32 @@ bool load_reduction_parameters(SpectralProcessorHandle instance,
   }
 
   SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
+
+  // Check if we need to initialize or re-initialize the adaptive estimator
+  if (parameters.adaptive_noise) {
+    bool method_changed = self->denoise_parameters.noise_estimation_method !=
+                          parameters.noise_estimation_method;
+    bool needs_init = !self->adaptive_estimator || method_changed;
+
+    if (needs_init) {
+      if (self->adaptive_estimator) {
+        louizou_estimator_free(self->adaptive_estimator);
+        self->adaptive_estimator = NULL;
+      }
+
+      if (parameters.noise_estimation_method == 0) {
+        self->adaptive_estimator = louizou_estimator_initialize(
+            self->real_spectrum_size, self->sample_rate, self->fft_size);
+      } else {
+        self->adaptive_estimator = spp_mmse_estimator_initialize(
+            self->real_spectrum_size, self->sample_rate, self->fft_size);
+      }
+
+      // Force a re-seed in the next run cycle
+      self->last_adaptive_state = 0;
+    }
+  }
+
   self->denoise_parameters = parameters;
 
   return true;
@@ -254,64 +301,122 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
       noise_estimation_run(self->noise_estimator, (NoiseEstimatorType)mode,
                            reference_spectrum);
     }
-  } else if (is_noise_estimation_available(
-                 self->noise_profile,
-                 self->denoise_parameters.noise_reduction_mode)) {
-    memcpy(self->noise_spectrum,
-           get_noise_profile(self->noise_profile,
-                             self->denoise_parameters.noise_reduction_mode),
+    return true;
+  }
+
+  // --- Denoising Path ---
+
+  // Always keep manual floor updated from the current mode
+  float* current_profile = get_noise_profile(
+      self->noise_profile, self->denoise_parameters.noise_reduction_mode);
+  if (current_profile) {
+    memcpy(self->manual_noise_floor, current_profile,
            self->real_spectrum_size * sizeof(float));
+  } else {
+    memset(self->manual_noise_floor, 0,
+           self->real_spectrum_size * sizeof(float));
+  }
 
-    NoiseScalingParameters oversubtraction_parameters =
-        (NoiseScalingParameters){
-            .oversubtraction = (self->default_oversubtraction +
-                                self->denoise_parameters.noise_rescale),
-            .undersubtraction = self->denoise_parameters.reduction_amount,
-            .scaling_type = self->denoise_parameters.noise_scaling_type,
-        };
+  if (self->denoise_parameters.adaptive_noise && self->adaptive_estimator) {
+    // Check for state transitions (Adaptive OFF->ON or Mode Change)
+    bool state_changed = !self->last_adaptive_state;
+    bool mode_changed = self->last_noise_reduction_mode !=
+                        self->denoise_parameters.noise_reduction_mode;
 
-    float whitening_factor = self->whitening_enabled
-                                 ? self->denoise_parameters.whitening_factor
-                                 : 0.0f;
+    if (state_changed || mode_changed) {
+      // Re-seed the adaptive estimator to the new chosen base profile
+      adaptive_estimator_update_seed(self->adaptive_estimator,
+                                     self->manual_noise_floor);
 
-    apply_noise_scaling_criteria(
-        self->noise_scaling_criteria, reference_spectrum, self->noise_spectrum,
-        self->alpha, self->beta, oversubtraction_parameters);
-
-    TimeSmoothingParameters spectral_smoothing_parameters =
-        (TimeSmoothingParameters){
-            .smoothing = self->denoise_parameters.smoothing_factor,
-        };
-    spectral_smoothing_run(self->spectrum_smoothing,
-                           spectral_smoothing_parameters, reference_spectrum);
-
-    estimate_gains(self->real_spectrum_size, self->fft_size, reference_spectrum,
-                   self->noise_spectrum, self->gain_spectrum, self->alpha,
-                   self->beta, self->gain_estimation_type);
-
-    noise_floor_manager_apply(
-        self->noise_floor_manager, self->real_spectrum_size, self->fft_size,
-        self->gain_spectrum, self->noise_spectrum,
-        self->denoise_parameters.reduction_amount, whitening_factor);
-
-    if (self->postfiltering_enabled) {
-      PostFiltersParameters post_filter_parameters = (PostFiltersParameters){
-          .snr_threshold = self->denoise_parameters.post_filter_threshold,
-          .gain_floor = self->denoise_parameters.reduction_amount,
-      };
-      postfilter_apply(self->postfiltering, fft_spectrum, self->gain_spectrum,
-                       post_filter_parameters);
+      self->last_adaptive_state = 1;
+      self->last_noise_reduction_mode =
+          self->denoise_parameters.noise_reduction_mode;
     }
 
-    DenoiseMixerParameters mixer_parameters = (DenoiseMixerParameters){
-        .noise_level = self->denoise_parameters.reduction_amount,
-        .residual_listen = self->denoise_parameters.residual_listen,
-        .whitening_amount = whitening_factor,
-    };
+    // Run adaptive estimator
+    if (self->denoise_parameters.noise_estimation_method == 0) {
+      louizou_estimator_run(self->adaptive_estimator, reference_spectrum,
+                            self->noise_spectrum);
+    } else {
+      spp_mmse_estimator_run(self->adaptive_estimator, reference_spectrum,
+                             self->noise_spectrum);
+    }
 
-    denoise_mixer_run(self->mixer, fft_spectrum, self->gain_spectrum,
-                      mixer_parameters);
+    // Apply manual profile as a floor to the internal state and output
+    adaptive_estimator_apply_floor(self->adaptive_estimator,
+                                   self->manual_noise_floor);
+
+    for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
+      if (self->noise_spectrum[k] < self->manual_noise_floor[k]) {
+        self->noise_spectrum[k] = self->manual_noise_floor[k];
+      }
+    }
+  } else {
+    // Manual Denoising Mode
+    self->last_adaptive_state = 0;
+
+    if (is_noise_estimation_available(
+            self->noise_profile,
+            self->denoise_parameters.noise_reduction_mode)) {
+      memcpy(self->noise_spectrum, self->manual_noise_floor,
+             self->real_spectrum_size * sizeof(float));
+    } else {
+      // No profile available
+      return true;
+    }
   }
+
+  // --- Common Processing Path ---
+
+  NoiseScalingParameters oversubtraction_parameters = (NoiseScalingParameters){
+      .oversubtraction = (self->default_oversubtraction +
+                          self->denoise_parameters.noise_rescale),
+      .undersubtraction = self->denoise_parameters.reduction_amount,
+      .scaling_type = self->denoise_parameters.noise_scaling_type,
+  };
+
+  float whitening_factor = self->whitening_enabled
+                               ? self->denoise_parameters.whitening_factor
+                               : 0.0f;
+
+  apply_noise_scaling_criteria(self->noise_scaling_criteria, reference_spectrum,
+                               self->noise_spectrum, self->alpha, self->beta,
+                               oversubtraction_parameters);
+
+  TimeSmoothingParameters spectral_smoothing_parameters =
+      (TimeSmoothingParameters){
+          .smoothing = self->denoise_parameters.smoothing_factor,
+      };
+  spectral_smoothing_run(self->spectrum_smoothing,
+                         spectral_smoothing_parameters, reference_spectrum);
+
+  estimate_gains(self->real_spectrum_size, self->fft_size, reference_spectrum,
+                 self->noise_spectrum, self->gain_spectrum, self->alpha,
+                 self->beta, self->gain_estimation_type);
+
+  // Apply noise floor management
+  noise_floor_manager_apply(
+      self->noise_floor_manager, self->real_spectrum_size, self->fft_size,
+      self->gain_spectrum, self->noise_spectrum,
+      self->denoise_parameters.reduction_amount, whitening_factor);
+
+  if (self->postfiltering_enabled) {
+    PostFiltersParameters post_filter_parameters = (PostFiltersParameters){
+        .snr_threshold = self->denoise_parameters.post_filter_threshold,
+        .gain_floor = self->denoise_parameters.reduction_amount,
+    };
+    postfilter_apply(self->postfiltering, fft_spectrum, self->gain_spectrum,
+                     post_filter_parameters);
+  }
+
+  DenoiseMixerParameters mixer_parameters = (DenoiseMixerParameters){
+      .noise_level = self->denoise_parameters.reduction_amount,
+      .residual_listen = self->denoise_parameters.residual_listen,
+      .whitening_amount = whitening_factor,
+  };
+
+  denoise_mixer_run(self->mixer, fft_spectrum, self->gain_spectrum,
+                    mixer_parameters);
 
   return true;
 }

@@ -75,6 +75,18 @@ typedef struct SpectralBleach2DDenoiserParameters {
    * 100 percent
    */
   float whitening_factor;
+
+  /**
+   * Enabled the adaptive noise estimation.
+   */
+  int adaptive_noise;
+
+  /**
+   * Sets the method used for adaptive noise estimation.
+   * 0: Louizou's method
+   * 1: SPP-MMSE method
+   */
+  int noise_estimation_method;
 } SpectralBleach2DDenoiserParameters;
 
 /**
