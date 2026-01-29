@@ -56,6 +56,10 @@ You can configure the build using `-Doption=value`:
 - `enable_sanitizers`: Enable sanitizers in debug builds (default: `false`).
 - `sanitize_address`: Enable AddressSanitizer (default: `false`).
 - `sanitize_undefined`: Enable UndefinedBehaviorSanitizer (default: `false`).
+- `lv2dir`: Install directory for LV2 bundles (absolute path or relative to prefix) (default: '').
+
+> [!IMPORTANT]
+> **Critical Performance Note for Packagers**: The advanced "2D Denoising" (NLM) feature is computationally intensive and relies heavily on SIMD vectorization and function inlining. You **MUST** compile with `--buildtype=release` (or `-O3`) to ensure usability. Debug or unoptimized builds will result in excessive CPU usage and audio dropouts/xruns.
 
 Example for a static build with examples:
 ```bash
