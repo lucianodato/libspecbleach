@@ -18,11 +18,12 @@ License along with this library; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#include "nlm_filter.h"
-#include "../configurations.h"
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "../configurations.h"
+#include "nlm_filter.h"
 
 struct NlmFilter {
   NlmFilterConfig config;
@@ -418,7 +419,8 @@ bool nlm_filter_process(NlmFilter* filter, float* smoothed_snr) {
 #ifdef __SSE__
     __m128 target_vecs[16];
 #else
-    float target_patch[64];
+    // No pre-load buffer needed for scalar fallback as we use
+    // compute_patch_distance
 #endif
 #endif
 
@@ -460,7 +462,8 @@ bool nlm_filter_process(NlmFilter* filter, float* smoothed_snr) {
           target_vecs[((size_t)r * 2)] = _mm_loadu_ps(row_ptr);
           target_vecs[((size_t)r * 2) + 1] = _mm_loadu_ps(row_ptr + 4);
 #else
-          memcpy(&target_patch[((size_t)r * 8)], row_ptr, 8 * sizeof(float));
+          // Scalar fallback: No pre-load needed, we read directly in
+          // compute_patch_distance
 #endif
 #endif
         } else {
