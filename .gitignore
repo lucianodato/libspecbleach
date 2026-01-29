@@ -80,4 +80,3 @@ tests/test_data/*_denoised.wav
 # Other files
 *.log
 .DS_Store
-/docs
