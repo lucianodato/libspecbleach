@@ -197,5 +197,6 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define NLM_SEARCH_RANGE_TIME_FUTURE 4U
 #define NLM_DEFAULT_H_PARAMETER 1.0F
 #define DELAY_BUFFER_FRAMES (NLM_SEARCH_RANGE_TIME_PAST + 1U)
+#define NLM_MIN_WEIGHT 1e-10F
 
 #endif // ifndef

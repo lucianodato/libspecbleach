@@ -24,10 +24,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdlib.h>
 #include <string.h>
 
-// Default NLM parameters - optimized for real-time performance
-// (Reduced from Lukin's offline parameters for real-time use)
 // NOTE: Now using global configuration from configurations.h
-#define MIN_WEIGHT 1e-10F
 
 struct NlmFilter {
   NlmFilterConfig config;
@@ -438,7 +435,7 @@ bool nlm_filter_process(NlmFilter* filter, float* smoothed_snr) {
 
         // Compute weight
         float weight = fast_exp_neg(distance / filter->h_squared);
-        if (weight < MIN_WEIGHT) {
+        if (weight < NLM_MIN_WEIGHT) {
           continue;
         }
 
@@ -462,7 +459,7 @@ bool nlm_filter_process(NlmFilter* filter, float* smoothed_snr) {
 
   // Normalize by weight sum
   for (uint32_t k = 0; k < spectrum_size; k++) {
-    if (weight_sum[k] > MIN_WEIGHT) {
+    if (weight_sum[k] > NLM_MIN_WEIGHT) {
       smoothed_snr[k] /= weight_sum[k];
     } else {
       // Fallback to original value if no valid weights
