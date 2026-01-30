@@ -402,12 +402,28 @@ int main(void) {
   test_specbleach_reset_noise_profile();
   test_specbleach_run_features();
 
-  // Getter Coverage (Extra)
-  printf("Testing API Getters for coverage...\n");
-  SpectralBleachHandle handle = specbleach_initialize(44100, 20.0f);
-  specbleach_get_noise_profile(handle);
-  specbleach_get_noise_profile_size(handle);
-  specbleach_free(handle);
+  // Getter Coverage (Extra) and NULL Safety
+  printf("Testing API Getters and NULL safety for coverage...\n");
+  SpectralBleachHandle h = specbleach_initialize(44100, 20.0f);
+
+  // Verify getters work with valid handle
+  specbleach_get_noise_profile(h);
+  specbleach_get_noise_profile_size(h);
+  specbleach_get_latency(h);
+  specbleach_noise_profile_available(h);
+
+  // Verify NULL handle protections
+  TEST_ASSERT(specbleach_get_latency(NULL) == 0, "NULL latency");
+  TEST_ASSERT(specbleach_get_noise_profile_size(NULL) == 0, "NULL size");
+  TEST_ASSERT(specbleach_get_noise_profile(NULL) == NULL, "NULL profile");
+  TEST_ASSERT(specbleach_noise_profile_available(NULL) == false,
+              "NULL available");
+  TEST_ASSERT(specbleach_reset_noise_profile(NULL) == false, "NULL reset");
+  TEST_ASSERT(specbleach_load_parameters(
+                  NULL, (SpectralBleachDenoiserParameters){0}) == false,
+              "NULL load");
+
+  specbleach_free(h);
 
   printf("✅ All specbleach denoiser tests passed!\n");
   return 0;
