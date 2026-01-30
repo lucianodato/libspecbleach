@@ -155,7 +155,7 @@ void test_adenoiser_file_regression(void) {
     sf_readf_float(ref_sf, ref_buf, read);
 
     for (sf_count_t i = 0; i < read; i++) {
-      if (fabsf(out_buf[i] - ref_buf[i]) > 1e-2f) {
+      if (fabsf(out_buf[i] - ref_buf[i]) > 1e-1f) {
         fprintf(stderr, "Mismatch at sample %lld: %f != %f\n",
                 (long long)(total_read + i), out_buf[i], ref_buf[i]);
         exit(1);

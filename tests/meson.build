@@ -1,5 +1,6 @@
 # Tests configuration
-test_c_args = lib_c_args + ['-DTEST_DATA_DIR="@0@/"'.format(meson.current_source_dir() / 'test_data')]
+test_data_dir = meson.current_source_dir() / 'test_data'
+test_c_args = lib_c_args + ['-DTEST_DATA_DIR="@0@/"'.format(test_data_dir)]
 test_link_args = lib_link_args
 
 # Unit tests for utility functions
