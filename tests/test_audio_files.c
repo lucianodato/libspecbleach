@@ -11,7 +11,7 @@ void test_data_files_exist(void) {
   printf("Testing essential test data file accessibility...\n");
 
   // Check if Speech.wav exists (required)
-  FILE* file = fopen("../tests/test_data/Speech.wav", "rb");
+  FILE* file = fopen(TEST_DATA_DIR "Speech.wav", "rb");
   if (!file) {
     fprintf(stderr, "ERROR: ../tests/test_data/Speech.wav not found\n");
     fprintf(stderr,
@@ -22,14 +22,14 @@ void test_data_files_exist(void) {
   fclose(file);
 
   // Check if reference denoised files exist (optional - can be regenerated)
-  file = fopen("../tests/test_data/Speech_denoised.wav", "rb");
+  file = fopen(TEST_DATA_DIR "Speech_denoised.wav", "rb");
   if (!file) {
     printf("  Note: Speech_denoised.wav not found (can be regenerated)\n");
   } else {
     fclose(file);
   }
 
-  file = fopen("../tests/test_data/Speech_adaptive_denoised.wav", "rb");
+  file = fopen(TEST_DATA_DIR "Speech_adaptive_denoised.wav", "rb");
   if (!file) {
     printf(
         "  Note: Speech_adaptive_denoised.wav not found (can be "
@@ -45,7 +45,7 @@ void test_data_files_exist(void) {
 void test_file_operations(void) {
   printf("Testing basic file operations...\n");
 
-  const char* test_filename = "../tests/test_data/test_output.tmp";
+  const char* test_filename = TEST_DATA_DIR "test_output.tmp";
 
   // Test writing to test directory
   FILE* file = fopen(test_filename, "wb");
