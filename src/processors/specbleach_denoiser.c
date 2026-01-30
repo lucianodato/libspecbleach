@@ -216,6 +216,9 @@ bool specbleach_reset_noise_profile(SpectralBleachHandle instance) {
 
 bool specbleach_noise_profile_available(SpectralBleachHandle instance) {
   SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
+  if (!self || !self->noise_profile) {
+    return false;
+  }
 
   return is_noise_estimation_available(
       self->noise_profile, self->denoise_parameters.noise_reduction_mode);

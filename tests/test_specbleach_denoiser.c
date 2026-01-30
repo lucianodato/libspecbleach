@@ -117,7 +117,7 @@ void test_specbleach_load_noise_profile_with_mode(void) {
   TEST_ASSERT(test_profile != NULL, "Profile allocation should succeed");
 
   for (uint32_t i = 0; i < profile_size; i++) {
-    test_profile[i] = 0.1f + (float)i * 0.001f;
+    test_profile[i] = 0.1f + ((float)i * 0.001f);
   }
 
   // Test loading profile with mode
@@ -320,7 +320,7 @@ void test_specbleach_load_noise_profile_for_mode(void) {
   TEST_ASSERT(test_profile != NULL, "Profile allocation should succeed");
 
   for (uint32_t i = 0; i < profile_size; i++) {
-    test_profile[i] = 0.1f + (float)i * 0.001f;
+    test_profile[i] = 0.1f + ((float)i * 0.001f);
   }
 
   // Test loading profile for each mode directly
@@ -355,10 +355,12 @@ void test_specbleach_run_features(void) {
   float* output = (float*)calloc(1024, sizeof(float));
   float* profile = (float*)calloc(profile_size, sizeof(float));
 
-  for (int i = 0; i < 1024; i++)
+  for (int i = 0; i < 1024; i++) {
     input[i] = 0.5f;
-  for (uint32_t i = 0; i < profile_size; i++)
+  }
+  for (uint32_t i = 0; i < profile_size; i++) {
     profile[i] = 0.1f;
+  }
 
   specbleach_load_noise_profile(handle, profile, profile_size, 1);
 
@@ -399,6 +401,13 @@ int main(void) {
   test_specbleach_mode_switching();
   test_specbleach_reset_noise_profile();
   test_specbleach_run_features();
+
+  // Getter Coverage (Extra)
+  printf("Testing API Getters for coverage...\n");
+  SpectralBleachHandle handle = specbleach_initialize(44100, 20.0f);
+  specbleach_get_noise_profile(handle);
+  specbleach_get_noise_profile_size(handle);
+  specbleach_free(handle);
 
   printf("✅ All specbleach denoiser tests passed!\n");
   return 0;

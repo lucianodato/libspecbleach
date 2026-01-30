@@ -172,7 +172,7 @@ test('postfilter', test_postfilter)
 test('noise_profile', test_noise_profile)
 test('specbleach_denoiser', test_specbleach_denoiser)
 test('specbleach_2d_denoiser', test_specbleach_2d_denoiser)
+
 test('adaptive_noise_estimator_null', test_adaptive_noise_estimator_null)
 test('nlm_filter', test_nlm_filter)
-
 

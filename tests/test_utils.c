@@ -9,6 +9,7 @@
 // Include internal headers for testing
 #include "../src/shared/utils/denoise_mixer.h"
 #include "../src/shared/utils/general_utils.h"
+#include "../src/shared/utils/spectral_features.h"
 #include "../src/shared/utils/spectral_trailing_buffer.h"
 #include "../src/shared/utils/spectral_utils.h"
 
@@ -50,15 +51,89 @@ void test_spectral_trailing_buffer(void) {
 void test_denoise_mixer(void) {
   printf("Testing denoise_mixer...\n");
 
-  uint32_t fft_size = 1024;
+  uint32_t fft_size = 512;
   uint32_t sr = 44100;
-  uint32_t hop = 256;
+  uint32_t hop = 128;
 
   DenoiseMixer* mixer = denoise_mixer_initialize(fft_size, sr, hop);
   TEST_ASSERT(mixer != NULL, "Mixer initialization should succeed");
 
+  float* fft_spectrum = (float*)calloc(fft_size, sizeof(float));
+  float* gain_spectrum = (float*)calloc(fft_size, sizeof(float));
+  for (uint32_t i = 0; i < fft_size; i++) {
+    fft_spectrum[i] = 1.0f;
+    gain_spectrum[i] = 0.5f;
+  }
+
+  DenoiseMixerParameters params = {0};
+  params.residual_listen = true;
+
+  // Cover residual_listen branch
+  TEST_ASSERT(denoise_mixer_run(mixer, fft_spectrum, gain_spectrum, params),
+              "Mixer run should succeed");
+  for (uint32_t i = 0; i < fft_size; i++) {
+    TEST_FLOAT_CLOSE(fft_spectrum[i], 0.5f, 1e-6f); // 1.0 - (1.0 * 0.5)
+  }
+
+  // Cover NULL checks
+  TEST_ASSERT(!denoise_mixer_run(NULL, fft_spectrum, gain_spectrum, params),
+              "Mixer run should fail with NULL mixer");
+  TEST_ASSERT(!denoise_mixer_run(mixer, NULL, gain_spectrum, params),
+              "Mixer run should fail with NULL spectrum");
+  TEST_ASSERT(!denoise_mixer_run(mixer, fft_spectrum, NULL, params),
+              "Mixer run should fail with NULL gain");
+
   denoise_mixer_free(mixer);
+  free(fft_spectrum);
+  free(gain_spectrum);
   printf("✓ denoise_mixer tests passed\n");
+}
+
+void test_spectral_features(void) {
+  printf("Testing spectral_features...\n");
+  uint32_t fft_size = 512;
+  uint32_t real_size = (fft_size / 2) + 1;
+  SpectralFeatures* sf = spectral_features_initialize(real_size);
+  TEST_ASSERT(sf != NULL, "SpectralFeatures initialization should succeed");
+
+  float* fft_spectrum = (float*)calloc(fft_size, sizeof(float));
+  for (uint32_t i = 0; i < fft_size; i++) {
+    fft_spectrum[i] = (float)i / (float)fft_size;
+  }
+
+  // Cover Power Spectrum
+  float* power =
+      get_spectral_feature(sf, fft_spectrum, fft_size, POWER_SPECTRUM);
+  TEST_ASSERT(power != NULL, "Power spectrum calculation should succeed");
+
+  // Cover Magnitude Spectrum
+  float* magnitude =
+      get_spectral_feature(sf, fft_spectrum, fft_size, MAGNITUDE_SPECTRUM);
+  TEST_ASSERT(magnitude != NULL,
+              "Magnitude spectrum calculation should succeed");
+
+  // Cover Phase Spectrum
+  float* phase =
+      get_spectral_feature(sf, fft_spectrum, fft_size, PHASE_SPECTRUM);
+  TEST_ASSERT(phase != NULL, "Phase spectrum calculation should succeed");
+
+  // Cover Invalid type
+  float* invalid =
+      get_spectral_feature(sf, fft_spectrum, fft_size, (SpectrumType)99);
+  TEST_ASSERT(invalid == NULL, "Invalid type should return NULL");
+
+  // Cover NULL checks
+  TEST_ASSERT(get_spectral_feature(NULL, fft_spectrum, fft_size,
+                                   POWER_SPECTRUM) == NULL,
+              "Should fail with NULL handle");
+  TEST_ASSERT(get_spectral_feature(sf, NULL, fft_size, POWER_SPECTRUM) == NULL,
+              "Should fail with NULL spectrum");
+  TEST_ASSERT(get_spectral_feature(sf, fft_spectrum, 0, POWER_SPECTRUM) == NULL,
+              "Should fail with size 0");
+
+  spectral_features_free(sf);
+  free(fft_spectrum);
+  printf("✓ spectral_features tests passed\n");
 }
 
 void test_sanitize_denormal(void) {
@@ -333,6 +408,7 @@ int main(void) {
   test_spectral_utils_null_and_edge_cases();
   test_denoise_mixer();
   test_spectral_trailing_buffer();
+  test_spectral_features();
 
   printf("\n✅ All utility function tests passed!\n");
   return 0;
