@@ -13,7 +13,7 @@
 
 // Include the public API
 #include "specbleach_2d_denoiser.h"
-#include "specbleach_adenoiser.h"
+
 #include "specbleach_denoiser.h"
 
 // Function prototypes
@@ -223,35 +223,6 @@ void test_library_info(void) {
   printf("✓ Library information tests passed\n");
 }
 
-void test_adaptive_features(void) {
-  printf("Testing adaptive denoiser features...\n");
-
-  float* input = calloc(BLOCK_SIZE, sizeof(float));
-  float* output = calloc(BLOCK_SIZE, sizeof(float));
-  generate_test_audio(input, BLOCK_SIZE, 1000.0f, 0.1f);
-
-  SpectralBleachHandle handle =
-      specbleach_adaptive_initialize(SAMPLE_RATE, 20.0f);
-  TEST_ASSERT(handle != NULL, "Initialization failed");
-
-  SpectralBleachAdaptiveParameters params = {
-      .reduction_amount = 20.0f,
-      .smoothing_factor = 50.0f,
-
-      .noise_scaling_type = 0,
-      .post_filter_threshold = -30.0f,
-      .residual_listen = true, // Test partial branch in mixer
-      .whitening_factor = 1.0f};
-
-  specbleach_adaptive_load_parameters(handle, params);
-  specbleach_adaptive_process(handle, BLOCK_SIZE, input, output);
-
-  specbleach_adaptive_free(handle);
-  free(input);
-  free(output);
-  printf("✓ Adaptive features tests passed\n");
-}
-
 int main(void) {
   printf("Running integration tests...\n\n");
 
@@ -261,7 +232,7 @@ int main(void) {
   test_spectral_denoiser();
   test_different_noise_levels();
   test_adaptive_denoiser();
-  test_adaptive_features();
+
   test_2d_denoiser();
   test_library_info();
 
@@ -269,6 +240,7 @@ int main(void) {
   return 0;
 }
 
+// Test adaptive functionality enabled in standard denoiser
 void test_adaptive_denoiser(void) {
   printf("Testing adaptive denoiser integration...\n");
 
@@ -280,24 +252,27 @@ void test_adaptive_denoiser(void) {
 
   float frame_size_ms = 40.0f;
   SpectralBleachHandle handle =
-      specbleach_adaptive_initialize(SAMPLE_RATE, frame_size_ms);
-  TEST_ASSERT(handle != NULL, "Failed to initialize adaptive denoiser");
+      specbleach_initialize(SAMPLE_RATE, frame_size_ms);
+  TEST_ASSERT(handle != NULL, "Failed to initialize denoiser");
 
-  SpectralBleachAdaptiveParameters parameters =
-      (SpectralBleachAdaptiveParameters){
+  SpectralBleachDenoiserParameters parameters =
+      (SpectralBleachDenoiserParameters){
+          .learn_noise = 0,
           .reduction_amount = 20.0f,
           .smoothing_factor = 50.0f,
-
           .noise_scaling_type = 2, // MASKING_THRESHOLDS
           .post_filter_threshold = -30.0f,
           .residual_listen = false,
-          .whitening_factor = 50.0f};
+          .whitening_factor = 50.0f,
+          .adaptive_noise = 1,         // Enable adaptive mode
+          .noise_estimation_method = 0 // Default method
+      };
 
-  specbleach_adaptive_load_parameters(handle, parameters);
+  specbleach_load_parameters(handle, parameters);
 
   // Process all samples
-  bool result = specbleach_adaptive_process(handle, BLOCK_SIZE, input_buffer,
-                                            output_buffer);
+  bool result =
+      specbleach_process(handle, BLOCK_SIZE, input_buffer, output_buffer);
   TEST_ASSERT(result == true, "Processing failed");
 
   float input_rms = calculate_rms(input_buffer, BLOCK_SIZE);
@@ -305,7 +280,7 @@ void test_adaptive_denoiser(void) {
   printf("  Adaptive - Input RMS: %.4f, Output RMS: %.4f\n", input_rms,
          output_rms);
 
-  specbleach_adaptive_free(handle);
+  specbleach_free(handle);
   free(input_buffer);
   free(output_buffer);
 

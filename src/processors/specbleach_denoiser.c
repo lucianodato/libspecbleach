@@ -216,6 +216,9 @@ bool specbleach_reset_noise_profile(SpectralBleachHandle instance) {
 
 bool specbleach_noise_profile_available(SpectralBleachHandle instance) {
   SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
+  if (!self || !self->noise_profile) {
+    return false;
+  }
 
   return is_noise_estimation_available(
       self->noise_profile, self->denoise_parameters.noise_reduction_mode);
@@ -268,6 +271,8 @@ bool specbleach_load_parameters(SpectralBleachHandle instance,
       .smoothing_factor = remap_percentage_log_like_unity(parameters.smoothing_factor / 100.F),
       .whitening_factor = parameters.whitening_factor / 100.F,
       .post_filter_threshold = from_db_to_coefficient(parameters.post_filter_threshold),
+      .adaptive_noise = parameters.adaptive_noise,
+      .noise_estimation_method = parameters.noise_estimation_method,
   };
   // clang-format on
 

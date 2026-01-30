@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "processors/adaptivedenoiser/adaptive_denoiser.h"
 #include "processors/denoiser/spectral_denoiser.h"
 #include "shared/noise_estimation/adaptive_noise_estimator.h"
 #include "shared/noise_estimation/noise_estimator.h"
@@ -23,7 +22,6 @@
 #include "shared/utils/spectral_features.h"
 #include "shared/utils/spectral_trailing_buffer.h"
 
-#include "specbleach_adenoiser.h"
 #include "specbleach_denoiser.h"
 
 int main(void) {
@@ -41,12 +39,6 @@ int main(void) {
   SpectralBleachHandle sb = specbleach_initialize(sample_rate, 10.0f);
   if (sb) {
     specbleach_free(sb);
-  }
-
-  specbleach_adaptive_free(NULL);
-  SpectralBleachHandle sba = specbleach_adaptive_initialize(sample_rate, 10.0f);
-  if (sba) {
-    specbleach_adaptive_free(sba);
   }
 
   // 2. Internal Modules
@@ -165,7 +157,28 @@ int main(void) {
 
   // Internal Processors
   spectral_denoiser_free(NULL);
-  spectral_adaptive_denoiser_free(NULL);
+
+  // Dispatcher Coverage (Extra)
+  printf("Testing Adaptive Estimator Dispatcher...\n");
+  float* noise_profile = (float*)calloc(real_spectrum_size, sizeof(float));
+
+  AdaptiveNoiseEstimator* lou_est =
+      louizou_estimator_initialize(real_spectrum_size, sample_rate, fft_size);
+  AdaptiveNoiseEstimator* spp_est =
+      spp_mmse_estimator_initialize(real_spectrum_size, sample_rate, fft_size);
+
+  adaptive_estimator_set_state(lou_est, noise_profile, LOUIZOU_METHOD);
+  adaptive_estimator_set_state(spp_est, noise_profile, SPP_MMSE_METHOD);
+
+  adaptive_estimator_apply_floor(lou_est, noise_profile);
+  adaptive_estimator_update_seed(lou_est, noise_profile);
+
+  adaptive_estimator_apply_floor(spp_est, noise_profile);
+  adaptive_estimator_update_seed(spp_est, noise_profile);
+
+  louizou_estimator_free(lou_est);
+  spp_mmse_estimator_free(spp_est);
+  free(noise_profile);
 
   printf("✅ All safety and basic coverage tests passed!\n");
   return 0;

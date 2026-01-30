@@ -69,7 +69,7 @@ bool denoise_mixer_run(DenoiseMixer* self, float* fft_spectrum,
                        const float* gain_spectrum,
                        DenoiseMixerParameters parameters) {
 
-  if (!fft_spectrum || !gain_spectrum) {
+  if (!self || !fft_spectrum || !gain_spectrum) {
     return false;
   }
 

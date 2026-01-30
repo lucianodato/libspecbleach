@@ -276,6 +276,8 @@ bool specbleach_2d_load_parameters(
       .reduction_amount = from_db_to_coefficient(parameters.reduction_amount * -1.F),
       .smoothing_factor = parameters.smoothing_factor,
       .whitening_factor = parameters.whitening_factor / 100.F,
+      .adaptive_noise = parameters.adaptive_noise,
+      .noise_estimation_method = parameters.noise_estimation_method,
   };
   // clang-format on
 

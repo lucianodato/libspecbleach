@@ -1,5 +1,6 @@
 # Tests configuration
-test_c_args = lib_c_args
+test_data_dir = meson.current_source_dir() / 'test_data'
+test_c_args = lib_c_args + ['-DTEST_DATA_DIR="@0@/"'.format(test_data_dir)]
 test_link_args = lib_link_args
 
 # Unit tests for utility functions
@@ -171,7 +172,25 @@ test('postfilter', test_postfilter)
 test('noise_profile', test_noise_profile)
 test('specbleach_denoiser', test_specbleach_denoiser)
 test('specbleach_2d_denoiser', test_specbleach_2d_denoiser)
+
 test('adaptive_noise_estimator_null', test_adaptive_noise_estimator_null)
 test('nlm_filter', test_nlm_filter)
 
+test_louizou = executable('test_louizou',
+  sources: ['test_louizou_noise_estimator.c'],
+  dependencies: [libspecbleach_dep, m_dep],
+  c_args: test_c_args,
+  link_args: test_link_args,
+  include_directories: inc
+)
+test('louizou', test_louizou)
+
+test_spp_mmse = executable('test_spp_mmse',
+  sources: ['test_spp_mmse_noise_estimator.c'],
+  dependencies: [libspecbleach_dep, m_dep],
+  c_args: test_c_args,
+  link_args: test_link_args,
+  include_directories: inc
+)
+test('spp_mmse', test_spp_mmse)
 

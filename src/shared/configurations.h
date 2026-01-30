@@ -104,6 +104,8 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define BAND_2_LEVEL (2.F)
 #define BAND_3_LEVEL (5.F)
 
+#define ESTIMATOR_SILENCE_THRESHOLD (1e-10F) // Roughly -100dB in power
+
 // SPP-MMSE Estimator Constants
 #define SPP_PRIOR_H1 (0.5F)      // P(H1) - Speech present prior
 #define SPP_PRIOR_H0 (0.5F)      // P(H0) - Speech absent prior
@@ -152,38 +154,6 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 
 // Whitening
 #define WHITENING_ENABLED_GENERAL true
-
-/* ------------------------------------------------------------------------ */
-/* ------------------- Adaptive Denoiser configurations ------------------- */
-/* ------------------------------------------------------------------------ */
-
-// STFT configurations - Frame size in milliseconds
-#define OVERLAP_FACTOR_SPEECH 2
-#define INPUT_WINDOW_TYPE_SPEECH VORBIS_WINDOW
-#define OUTPUT_WINDOW_TYPE_SPEECH VORBIS_WINDOW
-
-// Fft configurations
-#define PADDING_CONFIGURATION_SPEECH NO_PADDING
-#define ZEROPADDING_AMOUNT_SPEECH 50 // Even Number
-
-// Spectral Type
-#define SPECTRAL_TYPE_SPEECH POWER_SPECTRUM
-
-// Masking
-#define CRITICAL_BANDS_TYPE_SPEECH OPUS_SCALE
-
-// Noise Scaling strategy
-#define NOISE_SCALING_TYPE_SPEECH MASKING_THRESHOLDS
-#define GAIN_ESTIMATION_TYPE_SPEECH WIENER
-
-// Time Smoothing
-#define TIME_SMOOTHING_TYPE_SPEECH FIXED
-
-// Postfilter
-#define POSTFILTER_ENABLED_SPEECH true
-
-// Whitening
-#define WHITENING_ENABLED_SPEECH true
 
 /* ------------------------------------------------------------------ */
 /* ------------------- 2D Denoiser configurations ------------------- */

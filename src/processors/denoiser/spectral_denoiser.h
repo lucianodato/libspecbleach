@@ -36,6 +36,8 @@ typedef struct DenoiserParameters {
   float smoothing_factor;
   float whitening_factor;
   float post_filter_threshold;
+  int adaptive_noise;
+  int noise_estimation_method;
 } DenoiserParameters;
 
 SpectralProcessorHandle spectral_denoiser_initialize(

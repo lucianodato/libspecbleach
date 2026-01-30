@@ -12,7 +12,7 @@
 // Include internal headers for testing
 
 // Include the public API
-#include "specbleach_adenoiser.h"
+
 #include "specbleach_denoiser.h"
 
 // Function prototypes
@@ -107,22 +107,25 @@ void process_audio(const float* input, float* output, int length) {
 }
 
 // Process audio through adaptive denoiser
+// Process audio through adaptive denoiser
 void process_audio_adaptive(const float* input, float* output, int length) {
   float frame_size_ms = 20.0f;
   SpectralBleachHandle handle =
-      specbleach_adaptive_initialize(SAMPLE_RATE, frame_size_ms);
+      specbleach_initialize(SAMPLE_RATE, frame_size_ms);
   TEST_ASSERT(handle != NULL, "Failed to initialize adaptive denoiser");
 
-  SpectralBleachAdaptiveParameters parameters =
-      (SpectralBleachAdaptiveParameters){.reduction_amount = 20.0f,
+  SpectralBleachDenoiserParameters parameters =
+      (SpectralBleachDenoiserParameters){.reduction_amount = 20.0f,
                                          .smoothing_factor = 0.0f,
                                          .noise_rescale = 0.0f,
                                          .noise_scaling_type = 0,
                                          .post_filter_threshold = 0.0f,
                                          .residual_listen = false,
-                                         .whitening_factor = 0.0f};
+                                         .whitening_factor = 0.0f,
+                                         .adaptive_noise = 1,
+                                         .noise_estimation_method = 0};
 
-  specbleach_adaptive_load_parameters(handle, parameters);
+  specbleach_load_parameters(handle, parameters);
 
   int processed = 0;
   while (processed < length) {
@@ -131,14 +134,14 @@ void process_audio_adaptive(const float* input, float* output, int length) {
       block_size = length - processed;
     }
 
-    bool result = specbleach_adaptive_process(
-        handle, block_size, input + processed, output + processed);
+    bool result = specbleach_process(handle, block_size, input + processed,
+                                     output + processed);
     TEST_ASSERT(result == true, "Adaptive processing failed");
 
     processed += block_size;
   }
 
-  specbleach_adaptive_free(handle);
+  specbleach_free(handle);
 }
 
 // Calculate SNR (Signal-to-Noise Ratio)
@@ -336,6 +339,7 @@ void test_adaptive_denoising(void) {
 }
 
 // Test that both noise estimation methods work correctly
+// Test that both noise estimation methods work correctly
 void test_noise_estimation_methods(void) {
   printf("Testing noise estimation methods (Louizou vs SPP-MMSE)...\n");
 
@@ -350,63 +354,61 @@ void test_noise_estimation_methods(void) {
   generate_test_signal(input, TEST_SAMPLES, 12345);
 
   // Process with Louizou method (default)
-  SpectralBleachAdaptiveParameters params_louizou =
-      (SpectralBleachAdaptiveParameters){.reduction_amount = 20.0f,
+  SpectralBleachDenoiserParameters params_louizou =
+      (SpectralBleachDenoiserParameters){.reduction_amount = 20.0f,
                                          .smoothing_factor = 0.0f,
                                          .noise_rescale = 0.0f,
                                          .noise_scaling_type = 0,
                                          .post_filter_threshold = 0.0f,
                                          .residual_listen = false,
                                          .whitening_factor = 0.0f,
+                                         .adaptive_noise = 1,
                                          .noise_estimation_method = 0};
 
   SpectralBleachHandle handle_louizou =
-      specbleach_adaptive_initialize(SAMPLE_RATE, frame_size_ms);
+      specbleach_initialize(SAMPLE_RATE, frame_size_ms);
   TEST_ASSERT(handle_louizou != NULL, "Failed to initialize Louizou denoiser");
 
-  TEST_ASSERT(
-      specbleach_adaptive_load_parameters(handle_louizou, params_louizou),
-      "Failed to load Louizou parameters");
+  specbleach_load_parameters(handle_louizou, params_louizou);
 
   for (int i = 0; i < TEST_SAMPLES; i += BLOCK_SIZE) {
     int block_size =
         (i + BLOCK_SIZE > TEST_SAMPLES) ? TEST_SAMPLES - i : BLOCK_SIZE;
-    TEST_ASSERT(specbleach_adaptive_process(handle_louizou, block_size,
-                                            input + i, output_louizou + i),
+    TEST_ASSERT(specbleach_process(handle_louizou, block_size, input + i,
+                                   output_louizou + i),
                 "Failed to process with Louizou method");
   }
 
-  specbleach_adaptive_free(handle_louizou);
+  specbleach_free(handle_louizou);
 
   // Process with SPP-MMSE method
-  SpectralBleachAdaptiveParameters params_spp_mmse =
-      (SpectralBleachAdaptiveParameters){.reduction_amount = 20.0f,
+  SpectralBleachDenoiserParameters params_spp_mmse =
+      (SpectralBleachDenoiserParameters){.reduction_amount = 20.0f,
                                          .smoothing_factor = 0.0f,
                                          .noise_rescale = 0.0f,
                                          .noise_scaling_type = 0,
                                          .post_filter_threshold = 0.0f,
                                          .residual_listen = false,
                                          .whitening_factor = 0.0f,
+                                         .adaptive_noise = 1,
                                          .noise_estimation_method = 1};
 
   SpectralBleachHandle handle_spp_mmse =
-      specbleach_adaptive_initialize(SAMPLE_RATE, frame_size_ms);
+      specbleach_initialize(SAMPLE_RATE, frame_size_ms);
   TEST_ASSERT(handle_spp_mmse != NULL,
               "Failed to initialize SPP-MMSE denoiser");
 
-  TEST_ASSERT(
-      specbleach_adaptive_load_parameters(handle_spp_mmse, params_spp_mmse),
-      "Failed to load SPP-MMSE parameters");
+  specbleach_load_parameters(handle_spp_mmse, params_spp_mmse);
 
   for (int i = 0; i < TEST_SAMPLES; i += BLOCK_SIZE) {
     int block_size =
         (i + BLOCK_SIZE > TEST_SAMPLES) ? TEST_SAMPLES - i : BLOCK_SIZE;
-    TEST_ASSERT(specbleach_adaptive_process(handle_spp_mmse, block_size,
-                                            input + i, output_spp_mmse + i),
+    TEST_ASSERT(specbleach_process(handle_spp_mmse, block_size, input + i,
+                                   output_spp_mmse + i),
                 "Failed to process with SPP-MMSE method");
   }
 
-  specbleach_adaptive_free(handle_spp_mmse);
+  specbleach_free(handle_spp_mmse);
 
   // Verify both methods produced valid output (finite values, reduced noise)
   double input_power = 0.0, louizou_power = 0.0, spp_mmse_power = 0.0;

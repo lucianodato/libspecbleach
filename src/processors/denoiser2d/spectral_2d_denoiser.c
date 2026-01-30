@@ -21,6 +21,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "spectral_2d_denoiser.h"
 #include "shared/configurations.h"
 #include "shared/gain_estimation/gain_estimators.h"
+#include "shared/noise_estimation/adaptive_noise_estimator.h"
 #include "shared/noise_estimation/noise_estimator.h"
 #include "shared/post_estimation/nlm_filter.h"
 #include "shared/post_estimation/noise_floor_manager.h"
@@ -39,15 +40,17 @@ typedef struct Spectral2DDenoiser {
 
   Denoiser2DParameters parameters;
 
-  float* snr_frame;      // Current SNR frame for NLM input
-  float* smoothed_snr;   // Smoothed SNR output from NLM
-  float* gain_spectrum;  // Computed gains
-  float* noise_spectrum; // Copy of noise profile for processing
-  float* alpha;          // Oversubtraction factors
-  float* beta;           // Undersubtraction factors
+  float* snr_frame;          // Current SNR frame for NLM input
+  float* smoothed_snr;       // Smoothed SNR output from NLM
+  float* gain_spectrum;      // Computed gains
+  float* noise_spectrum;     // Copy of noise profile for processing
+  float* alpha;              // Oversubtraction factors
+  float* beta;               // Undersubtraction factors
+  float* manual_noise_floor; // Manual profile floor
 
   // Delay buffer for audio alignment
   float* spectral_delay_buffer;
+  float* noise_delay_buffer;
   uint32_t delay_buffer_write_index;
 
   SpectrumType spectrum_type;
@@ -55,10 +58,15 @@ typedef struct Spectral2DDenoiser {
 
   NoiseProfile* noise_profile;
   NoiseEstimator* noise_estimator;
+  AdaptiveNoiseEstimator* adaptive_estimator;
   NlmFilter* nlm_filter;
   SpectralFeatures* spectral_features;
   DenoiseMixer* mixer;
   NoiseFloorManager* noise_floor_manager;
+
+  int last_adaptive_state;
+  int last_noise_reduction_mode;
+  int last_noise_estimation_method;
 } Spectral2DDenoiser;
 
 SpectralProcessorHandle spectral_2d_denoiser_initialize(
@@ -125,6 +133,13 @@ SpectralProcessorHandle spectral_2d_denoiser_initialize(
     return NULL;
   }
 
+  self->manual_noise_floor =
+      (float*)calloc(self->real_spectrum_size, sizeof(float));
+  if (!self->manual_noise_floor) {
+    spectral_2d_denoiser_free(self);
+    return NULL;
+  }
+
   // Allocate spectral delay buffer
   // We need to store full FFT frames (packed complex)
   // Assuming fft_size floats is sufficient for the packed format used by STFT
@@ -135,6 +150,14 @@ SpectralProcessorHandle spectral_2d_denoiser_initialize(
     spectral_2d_denoiser_free(self);
     return NULL;
   }
+
+  self->noise_delay_buffer = (float*)calloc(
+      (size_t)DELAY_BUFFER_FRAMES * self->real_spectrum_size, sizeof(float));
+  if (!self->noise_delay_buffer) {
+    spectral_2d_denoiser_free(self);
+    return NULL;
+  }
+
   self->delay_buffer_write_index = 0;
 
   // Initialize noise estimator for learning mode
@@ -199,6 +222,9 @@ void spectral_2d_denoiser_free(SpectralProcessorHandle instance) {
   if (self->noise_estimator) {
     noise_estimation_free(self->noise_estimator);
   }
+  if (self->adaptive_estimator) {
+    louizou_estimator_free(self->adaptive_estimator); // Reuse free function
+  }
   if (self->nlm_filter) {
     nlm_filter_free(self->nlm_filter);
   }
@@ -219,6 +245,8 @@ void spectral_2d_denoiser_free(SpectralProcessorHandle instance) {
   free(self->alpha);
   free(self->beta);
   free(self->spectral_delay_buffer);
+  free(self->noise_delay_buffer);
+  free(self->manual_noise_floor);
 
   free(self);
 }
@@ -230,6 +258,32 @@ bool load_2d_reduction_parameters(SpectralProcessorHandle instance,
   }
 
   Spectral2DDenoiser* self = (Spectral2DDenoiser*)instance;
+
+  // Check if we need to initialize or re-initialize the adaptive estimator
+  if (parameters.adaptive_noise) {
+    bool method_changed = self->parameters.noise_estimation_method !=
+                          parameters.noise_estimation_method;
+    bool needs_init = !self->adaptive_estimator || method_changed;
+
+    if (needs_init) {
+      if (self->adaptive_estimator) {
+        louizou_estimator_free(self->adaptive_estimator);
+        self->adaptive_estimator = NULL;
+      }
+
+      if (parameters.noise_estimation_method == 0) {
+        self->adaptive_estimator = louizou_estimator_initialize(
+            self->real_spectrum_size, self->sample_rate, self->fft_size);
+      } else {
+        self->adaptive_estimator = spp_mmse_estimator_initialize(
+            self->real_spectrum_size, self->sample_rate, self->fft_size);
+      }
+
+      // Force a re-seed in the next run cycle
+      self->last_adaptive_state = 0;
+    }
+  }
+
   self->parameters = parameters;
 
   // Update NLM h parameter based on smoothing factor
@@ -255,114 +309,150 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
 
   if (self->parameters.learn_noise > 0) {
     // Learning mode: update noise profile for all modes
-    // No latency compensation needed here as we are just learning (output is
-    // passthrough or silenced by host?) Usually plugins bypass processing
-    // during learn. But if we passthrough, we should also delay audio to match
-    // switch behavior? For simplicity, no delay in learn mode, but usually
-    // learning overrides processing.
-
     for (int mode = ROLLING_MEAN; mode <= MAX; mode++) {
       noise_estimation_run(self->noise_estimator, (NoiseEstimatorType)mode,
                            reference_spectrum);
     }
-  } else if (is_noise_estimation_available(
-                 self->noise_profile, self->parameters.noise_reduction_mode)) {
-    // Denoising mode: use NLM for 2D smoothing
-
-    // 1. Store current spectral frame in delay buffer
-    memcpy(&self->spectral_delay_buffer[(size_t)self->delay_buffer_write_index *
-                                        self->fft_size],
-           fft_spectrum, self->fft_size * sizeof(float));
-
-    // Get noise profile
-    memcpy(self->noise_spectrum,
-           get_noise_profile(self->noise_profile,
-                             self->parameters.noise_reduction_mode),
-           self->real_spectrum_size * sizeof(float));
-
-    // Compute SNR frame: snr[k] = spectrum[k] / noise[k]
-    for (uint32_t k = 0; k < self->real_spectrum_size; k++) {
-      if (self->noise_spectrum[k] > FLT_MIN) {
-        self->snr_frame[k] = reference_spectrum[k] / self->noise_spectrum[k];
-      } else {
-        self->snr_frame[k] = reference_spectrum[k];
-      }
-    }
-
-    // Push frame to NLM filter
-    nlm_filter_push_frame(self->nlm_filter, self->snr_frame);
-
-    // Process if NLM buffer is ready
-    if (nlm_filter_process(self->nlm_filter, self->smoothed_snr)) {
-      // NLM output corresponds to frame at (current -
-      // NLM_SEARCH_RANGE_TIME_FUTURE) because we wait for future frames to be
-      // available before processing the target frame.
-
-      // 2. Retrieve delayed spectral frame matching the NLM latency
-      uint32_t read_index =
-          (self->delay_buffer_write_index + DELAY_BUFFER_FRAMES -
-           NLM_SEARCH_RANGE_TIME_FUTURE) %
-          DELAY_BUFFER_FRAMES;
-      float* delayed_spectrum =
-          &self->spectral_delay_buffer[(size_t)read_index * self->fft_size];
-
-      // Convert smoothed SNR back to spectral domain for gain calculation
-      // smoothed_magnitude[k] = smoothed_snr[k] * noise[k]
-      float* smoothed_magnitude = self->snr_frame; // Reuse buffer
-      for (uint32_t k = 0; k < self->real_spectrum_size; k++) {
-        smoothed_magnitude[k] = self->smoothed_snr[k] * self->noise_spectrum[k];
-      }
-
-      // Initialize alpha/beta for simple gain estimation
-      for (uint32_t k = 0; k < self->real_spectrum_size; k++) {
-        self->alpha[k] = DEFAULT_OVERSUBTRACTION;
-        self->beta[k] = self->parameters.reduction_amount;
-      }
-
-      // Estimate gains using smoothed spectrum
-      estimate_gains(self->real_spectrum_size, self->fft_size,
-                     smoothed_magnitude, self->noise_spectrum,
-                     self->gain_spectrum, self->alpha, self->beta,
-                     self->gain_estimation_type);
-
-      // Apply noise floor management
-      noise_floor_manager_apply(
-          self->noise_floor_manager, self->real_spectrum_size, self->fft_size,
-          self->gain_spectrum, self->noise_spectrum,
-          self->parameters.reduction_amount, self->parameters.whitening_factor);
-
-      // Apply gains via mixer to the DELAYED spectrum
-      DenoiseMixerParameters mixer_params = {
-          .noise_level = self->parameters.reduction_amount,
-          .residual_listen = self->parameters.residual_listen,
-          .whitening_amount = 0.0F,
-      };
-
-      // Note: denoise_mixer_run modifies the input spectrum array in-place
-      // We process the delayed spectrum and copy it back to fft_spectrum output
-      // Or we can just process delayed_spectrum and memcpy result to
-      // fft_spectrum? denoise_mixer_run(mixer, input_and_output_spectrum,
-      // gains, ...)
-
-      // We must not modify the delay buffer in place if we were to read it
-      // again (we won't). But let's copy delayed spectrum to fft_spectrum
-      // first, then apply mix in place on fft_spectrum.
-      memcpy(fft_spectrum, delayed_spectrum, self->fft_size * sizeof(float));
-
-      denoise_mixer_run(self->mixer, fft_spectrum, self->gain_spectrum,
-                        mixer_params);
-    } else {
-      // If NLM not ready yet (startup latency)
-      // We should ideally output silence or 0-gain to avoid glitches?
-      // Or just pass through current frame (which will be mixed with future
-      // ones later... bad). Silence is safer for latency filling.
-      memset(fft_spectrum, 0, self->fft_size * sizeof(float));
-    }
-
-    // Advance delay buffer write index
-    self->delay_buffer_write_index =
-        (self->delay_buffer_write_index + 1) % DELAY_BUFFER_FRAMES;
+    return true;
   }
+
+  // --- Denoising mode: use NLM for 2D smoothing ---
+
+  // Always keep manual floor updated from the current mode
+  float* current_profile = get_noise_profile(
+      self->noise_profile, self->parameters.noise_reduction_mode);
+  if (current_profile) {
+    memcpy(self->manual_noise_floor, current_profile,
+           self->real_spectrum_size * sizeof(float));
+  } else {
+    memset(self->manual_noise_floor, 0,
+           self->real_spectrum_size * sizeof(float));
+  }
+
+  // 1. Store current spectral frame in delay buffer
+  memcpy(&self->spectral_delay_buffer[(size_t)self->delay_buffer_write_index *
+                                      self->fft_size],
+         fft_spectrum, self->fft_size * sizeof(float));
+
+  // 2. Determine which noise profile to use
+  if (self->parameters.adaptive_noise && self->adaptive_estimator) {
+    // Check for state transitions
+    bool state_changed = !self->last_adaptive_state;
+    bool mode_changed = self->last_noise_reduction_mode !=
+                        self->parameters.noise_reduction_mode;
+
+    if (state_changed || mode_changed) {
+      // Re-seed the adaptive estimator to the new chosen base profile
+      adaptive_estimator_update_seed(self->adaptive_estimator,
+                                     self->manual_noise_floor);
+
+      self->last_adaptive_state = 1;
+      self->last_noise_reduction_mode = self->parameters.noise_reduction_mode;
+    }
+
+    // Run adaptive estimator
+    if (self->parameters.noise_estimation_method == 0) {
+      louizou_estimator_run(self->adaptive_estimator, reference_spectrum,
+                            self->noise_spectrum);
+    } else {
+      spp_mmse_estimator_run(self->adaptive_estimator, reference_spectrum,
+                             self->noise_spectrum);
+    }
+
+    // Apply manual profile as a floor to the internal state and output
+    adaptive_estimator_apply_floor(self->adaptive_estimator,
+                                   self->manual_noise_floor);
+
+    for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
+      if (self->noise_spectrum[k] < self->manual_noise_floor[k]) {
+        self->noise_spectrum[k] = self->manual_noise_floor[k];
+      }
+    }
+  } else {
+    // Manual mode: use static profile
+    self->last_adaptive_state = 0;
+    memcpy(self->noise_spectrum, self->manual_noise_floor,
+           self->real_spectrum_size * sizeof(float));
+  }
+
+  // 3. Store the noise spectrum in the delay buffer to match NLM latency
+  memcpy(&self->noise_delay_buffer[(size_t)self->delay_buffer_write_index *
+                                   self->real_spectrum_size],
+         self->noise_spectrum, self->real_spectrum_size * sizeof(float));
+
+  // 4. Compute SNR for NLM using the CURRENT adaptive noise (Whitening)
+  for (uint32_t k = 0; k < self->real_spectrum_size; k++) {
+    float denom =
+        self->noise_spectrum[k] > FLT_MIN ? self->noise_spectrum[k] : 1e-12F;
+    self->snr_frame[k] = reference_spectrum[k] / denom;
+  }
+
+  // 5. Push frame to NLM filter
+  nlm_filter_push_frame(self->nlm_filter, self->snr_frame);
+
+  // 6. Process if NLM buffer is ready
+  if (nlm_filter_process(self->nlm_filter, self->smoothed_snr)) {
+    // Determine retrieve index for aligned data
+    uint32_t read_index = (self->delay_buffer_write_index +
+                           DELAY_BUFFER_FRAMES - NLM_SEARCH_RANGE_TIME_FUTURE) %
+                          DELAY_BUFFER_FRAMES;
+
+    float* delayed_spectrum =
+        &self->spectral_delay_buffer[(size_t)read_index * self->fft_size];
+    float* delayed_noise = &self->noise_delay_buffer[(size_t)read_index *
+                                                     self->real_spectrum_size];
+
+    // Convert smoothed SNR back to spectral domain using the MATCHED delayed
+    // noise
+    float* smoothed_magnitude = self->snr_frame; // Reuse buffer
+    for (uint32_t k = 0; k < self->real_spectrum_size; k++) {
+      float denom = delayed_noise[k] > FLT_MIN ? delayed_noise[k] : 1e-12F;
+      smoothed_magnitude[k] = self->smoothed_snr[k] * denom;
+    }
+
+    // Parameters for gain estimation
+    for (uint32_t k = 0; k < self->real_spectrum_size; k++) {
+      self->alpha[k] = DEFAULT_OVERSUBTRACTION;
+      self->beta[k] = self->parameters.reduction_amount;
+    }
+
+    // Estimate gains
+    estimate_gains(self->real_spectrum_size, self->fft_size, smoothed_magnitude,
+                   delayed_noise, self->gain_spectrum, self->alpha, self->beta,
+                   self->gain_estimation_type);
+
+    // Apply noise floor management
+    noise_floor_manager_apply(
+        self->noise_floor_manager, self->real_spectrum_size, self->fft_size,
+        self->gain_spectrum, delayed_noise, self->parameters.reduction_amount,
+        self->parameters.whitening_factor);
+
+    // Mix results
+    DenoiseMixerParameters mixer_params = {
+        .noise_level = self->parameters.reduction_amount,
+        .residual_listen = self->parameters.residual_listen,
+        .whitening_amount = 0.0F,
+    };
+
+    // Copy delayed spectrum to output first
+    memcpy(fft_spectrum, delayed_spectrum, self->fft_size * sizeof(float));
+
+    // Apply mix
+    denoise_mixer_run(self->mixer, fft_spectrum, self->gain_spectrum,
+                      mixer_params);
+  } else {
+    // If NLM not ready yet (startup latency), output the delayed spectrum
+    uint32_t read_index = (self->delay_buffer_write_index +
+                           DELAY_BUFFER_FRAMES - NLM_SEARCH_RANGE_TIME_FUTURE) %
+                          DELAY_BUFFER_FRAMES;
+    float* delayed_spectrum =
+        &self->spectral_delay_buffer[(size_t)read_index * self->fft_size];
+    memcpy(fft_spectrum, delayed_spectrum, self->fft_size * sizeof(float));
+  }
+
+  // Advance delay buffer write index
+  self->delay_buffer_write_index =
+      (self->delay_buffer_write_index + 1) % DELAY_BUFFER_FRAMES;
 
   return true;
 }

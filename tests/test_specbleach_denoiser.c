@@ -117,7 +117,7 @@ void test_specbleach_load_noise_profile_with_mode(void) {
   TEST_ASSERT(test_profile != NULL, "Profile allocation should succeed");
 
   for (uint32_t i = 0; i < profile_size; i++) {
-    test_profile[i] = 0.1f + (float)i * 0.001f;
+    test_profile[i] = 0.1f + ((float)i * 0.001f);
   }
 
   // Test loading profile with mode
@@ -320,7 +320,7 @@ void test_specbleach_load_noise_profile_for_mode(void) {
   TEST_ASSERT(test_profile != NULL, "Profile allocation should succeed");
 
   for (uint32_t i = 0; i < profile_size; i++) {
-    test_profile[i] = 0.1f + (float)i * 0.001f;
+    test_profile[i] = 0.1f + ((float)i * 0.001f);
   }
 
   // Test loading profile for each mode directly
@@ -355,10 +355,12 @@ void test_specbleach_run_features(void) {
   float* output = (float*)calloc(1024, sizeof(float));
   float* profile = (float*)calloc(profile_size, sizeof(float));
 
-  for (int i = 0; i < 1024; i++)
+  for (int i = 0; i < 1024; i++) {
     input[i] = 0.5f;
-  for (uint32_t i = 0; i < profile_size; i++)
+  }
+  for (uint32_t i = 0; i < profile_size; i++) {
     profile[i] = 0.1f;
+  }
 
   specbleach_load_noise_profile(handle, profile, profile_size, 1);
 
@@ -399,6 +401,29 @@ int main(void) {
   test_specbleach_mode_switching();
   test_specbleach_reset_noise_profile();
   test_specbleach_run_features();
+
+  // Getter Coverage (Extra) and NULL Safety
+  printf("Testing API Getters and NULL safety for coverage...\n");
+  SpectralBleachHandle h = specbleach_initialize(44100, 20.0f);
+
+  // Verify getters work with valid handle
+  specbleach_get_noise_profile(h);
+  specbleach_get_noise_profile_size(h);
+  specbleach_get_latency(h);
+  specbleach_noise_profile_available(h);
+
+  // Verify NULL handle protections
+  TEST_ASSERT(specbleach_get_latency(NULL) == 0, "NULL latency");
+  TEST_ASSERT(specbleach_get_noise_profile_size(NULL) == 0, "NULL size");
+  TEST_ASSERT(specbleach_get_noise_profile(NULL) == NULL, "NULL profile");
+  TEST_ASSERT(specbleach_noise_profile_available(NULL) == false,
+              "NULL available");
+  TEST_ASSERT(specbleach_reset_noise_profile(NULL) == false, "NULL reset");
+  TEST_ASSERT(specbleach_load_parameters(
+                  NULL, (SpectralBleachDenoiserParameters){0}) == false,
+              "NULL load");
+
+  specbleach_free(h);
 
   printf("✅ All specbleach denoiser tests passed!\n");
   return 0;

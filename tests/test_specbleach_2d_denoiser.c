@@ -2,8 +2,6 @@
  * Unit tests for the 2D Denoiser Wrapper (specbleach_2d_denoiser)
  */
 
-#include "../src/shared/configurations.h"
-#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -90,8 +88,9 @@ void test_noise_profile_api(void) {
 
   // Test loading a fake profile
   float* fake_profile = calloc(profile_size, sizeof(float));
-  for (uint32_t i = 0; i < profile_size; i++)
+  for (uint32_t i = 0; i < profile_size; i++) {
     fake_profile[i] = 1.0f;
+  }
 
   TEST_ASSERT(
       specbleach_2d_load_noise_profile(h, fake_profile, profile_size, 10),
@@ -144,6 +143,66 @@ void test_noise_profile_api(void) {
   specbleach_2d_free(h);
 }
 
+void test_2d_parameter_switching(void) {
+  printf("Testing 2D parameter switching and adaptive methods...\n");
+  SpectralBleachHandle h = specbleach_2d_initialize(SAMPLE_RATE, FRAME_SIZE);
+
+  SpectralBleach2DDenoiserParameters params = {
+      .learn_noise = 0,
+      .noise_reduction_mode = 1,
+      .reduction_amount = 20.0f,
+      .smoothing_factor = 1.0f,
+      .adaptive_noise = 1,
+      .noise_estimation_method = 0 // Louizou
+  };
+
+  // 1. Load Louizou adaptive
+  TEST_ASSERT(specbleach_2d_load_parameters(h, params),
+              "Load Louizou adaptive should succeed");
+
+  // 2. Switch to SPP-MMSE adaptive
+  params.noise_estimation_method = 1;
+  TEST_ASSERT(specbleach_2d_load_parameters(h, params),
+              "Switch to SPP-MMSE should succeed");
+
+  // 3. Switch adaptive off
+  params.adaptive_noise = 0;
+  TEST_ASSERT(specbleach_2d_load_parameters(h, params),
+              "Switch adaptive off should succeed");
+
+  // 4. Test different reduction modes
+  for (int mode = 2; mode <= 3; mode++) {
+    params.noise_reduction_mode = mode;
+    TEST_ASSERT(specbleach_2d_load_parameters(h, params),
+                "Switch reduction mode should succeed");
+  }
+
+  uint32_t profile_size = specbleach_2d_get_noise_profile_size(h);
+  float* input = calloc(1024, sizeof(float));
+  float* output = calloc(1024, sizeof(float));
+  float* profile = calloc(profile_size, sizeof(float));
+  for (uint32_t i = 0; i < profile_size; i++)
+    profile[i] = 0.001f;
+
+  specbleach_2d_load_noise_profile(h, profile, profile_size, 1);
+
+  // Run with SPP-MMSE adaptive (method 1)
+  params.adaptive_noise = 1;
+  params.noise_estimation_method = 1;
+  specbleach_2d_load_parameters(h, params);
+  specbleach_2d_process(h, 1024, input, output);
+
+  // Run with Louizou adaptive (method 0)
+  params.noise_estimation_method = 0;
+  specbleach_2d_load_parameters(h, params);
+  specbleach_2d_process(h, 1024, input, output);
+
+  free(input);
+  free(output);
+  free(profile);
+  specbleach_2d_free(h);
+}
+
 void test_process_loop(void) {
   printf("Testing process loop (happy/unhappy paths)...\n");
   SpectralBleachHandle h = specbleach_2d_initialize(SAMPLE_RATE, FRAME_SIZE);
@@ -188,6 +247,7 @@ int main(void) {
   test_initialization_failure();
   test_null_handling();
   test_noise_profile_api();
+  test_2d_parameter_switching();
   test_process_loop();
 
   printf("✅ All specbleach_2d_denoiser tests passed!\n");

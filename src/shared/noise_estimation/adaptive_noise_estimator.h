@@ -45,4 +45,17 @@ void spp_mmse_estimator_free(AdaptiveNoiseEstimator* self);
 bool spp_mmse_estimator_run(AdaptiveNoiseEstimator* self, const float* spectrum,
                             float* noise_spectrum);
 
+// Set the internal state of the estimator from an existing noise profile
+void adaptive_estimator_set_state(AdaptiveNoiseEstimator* self,
+                                  const float* initial_profile,
+                                  int estimation_method);
+
+// Apply a minimum floor to the internal state of the estimator
+void adaptive_estimator_apply_floor(AdaptiveNoiseEstimator* self,
+                                    const float* floor_profile);
+
+// Update the starting point (seed) of the estimator without resetting
+void adaptive_estimator_update_seed(AdaptiveNoiseEstimator* self,
+                                    const float* seed_profile);
+
 #endif
