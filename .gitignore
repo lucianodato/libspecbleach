@@ -52,16 +52,10 @@ Mkfile.old
 dkms.conf
 
 # Builds
-build/
-build-*/
-build_*/
+build*/
 compile_commands.json
 .ninja_*
-.ninja_log
-.ninja_deps
-meson-private/
-meson-logs/
-meson-info/
+meson-*/
 
 # Test outputs (temporary files generated during testing)
 tests/test_data/*_output.wav
@@ -75,6 +69,7 @@ tests/test_data/*_denoised.wav
 .vscode/
 .cursor/
 .cache/
+.agent/
 
 # Other files
 *.log
