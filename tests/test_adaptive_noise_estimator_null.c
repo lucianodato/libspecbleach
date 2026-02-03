@@ -73,15 +73,14 @@ int main(void) {
   absolute_hearing_thresholds_free(aht);
 
   // Adaptive Noise Estimators
-  louizou_estimator_free(NULL);
-  AdaptiveNoiseEstimator* le =
-      louizou_estimator_initialize(real_spectrum_size, sample_rate, fft_size);
-  louizou_estimator_free(le);
+  adaptive_estimator_free(NULL);
+  AdaptiveNoiseEstimator* le = adaptive_estimator_initialize(
+      real_spectrum_size, sample_rate, fft_size, LOUIZOU_METHOD);
+  adaptive_estimator_free(le);
 
-  spp_mmse_estimator_free(NULL);
-  AdaptiveNoiseEstimator* spp =
-      spp_mmse_estimator_initialize(real_spectrum_size, sample_rate, fft_size);
-  spp_mmse_estimator_free(spp);
+  AdaptiveNoiseEstimator* spp = adaptive_estimator_initialize(
+      real_spectrum_size, sample_rate, fft_size, SPP_MMSE_METHOD);
+  adaptive_estimator_free(spp);
 
   // Noise Profile
   noise_profile_free(NULL);
@@ -162,10 +161,10 @@ int main(void) {
   printf("Testing Adaptive Estimator Dispatcher...\n");
   float* noise_profile = (float*)calloc(real_spectrum_size, sizeof(float));
 
-  AdaptiveNoiseEstimator* lou_est =
-      louizou_estimator_initialize(real_spectrum_size, sample_rate, fft_size);
-  AdaptiveNoiseEstimator* spp_est =
-      spp_mmse_estimator_initialize(real_spectrum_size, sample_rate, fft_size);
+  AdaptiveNoiseEstimator* lou_est = adaptive_estimator_initialize(
+      real_spectrum_size, sample_rate, fft_size, LOUIZOU_METHOD);
+  AdaptiveNoiseEstimator* spp_est = adaptive_estimator_initialize(
+      real_spectrum_size, sample_rate, fft_size, SPP_MMSE_METHOD);
 
   adaptive_estimator_set_state(lou_est, noise_profile, LOUIZOU_METHOD);
   adaptive_estimator_set_state(spp_est, noise_profile, SPP_MMSE_METHOD);
@@ -176,8 +175,8 @@ int main(void) {
   adaptive_estimator_apply_floor(spp_est, noise_profile);
   adaptive_estimator_update_seed(spp_est, noise_profile);
 
-  louizou_estimator_free(lou_est);
-  spp_mmse_estimator_free(spp_est);
+  adaptive_estimator_free(lou_est);
+  adaptive_estimator_free(spp_est);
   free(noise_profile);
 
   printf("✅ All safety and basic coverage tests passed!\n");
