@@ -27,7 +27,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 typedef enum GainEstimationType {
   WIENER = 0,
   GATES = 1,
-  GENERALIZED_SPECTRALSUBTRACION = 2,
+  GENERALIZED_SPECTRALSUBTRACTION = 2,
 } GainEstimationType;
 
 void estimate_gains(uint32_t real_spectrum_size, uint32_t fft_size,

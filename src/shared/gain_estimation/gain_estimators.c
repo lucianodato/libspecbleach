@@ -118,7 +118,7 @@ void estimate_gains(uint32_t real_spectrum_size, uint32_t fft_size,
       wiener_subtraction(real_spectrum_size, fft_size, spectrum, noise_spectrum,
                          gain_spectrum);
       break;
-    case GENERALIZED_SPECTRALSUBTRACION:
+    case GENERALIZED_SPECTRALSUBTRACTION:
       generalized_spectral_subtraction(real_spectrum_size, fft_size, spectrum,
                                        noise_spectrum, gain_spectrum, alpha,
                                        beta);

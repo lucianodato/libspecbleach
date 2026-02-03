@@ -164,10 +164,10 @@ bool compute_masking_thresholds(MaskingEstimator* self, const float* spectrum,
 #endif
 
     self->threshold_j[j] = powf(
-        10.F, (log10f(self->spreaded_spectrum[j] + 1e-12F) -
+        10.F, (log10f(self->spreaded_spectrum[j] + SPECTRAL_EPSILON) -
                (self->masking_offset[j] / 10.F) -
                log10f(self->spreaded_unity_gain_critical_bands_spectrum[j] +
-                      1e-12F)));
+                      SPECTRAL_EPSILON)));
 
     self->band_indexes = get_band_indexes(self->critical_bands, j);
 
@@ -208,7 +208,7 @@ static float compute_tonality_factor(MaskingEstimator* self,
 
   for (uint32_t k = self->band_indexes.start_position;
        k < self->band_indexes.end_position; k++) {
-    const float val = fmaxf(spectrum[k], 1e-12F);
+    const float val = fmaxf(spectrum[k], SPECTRAL_EPSILON);
     sum_bins += val;
     sum_log_bins += log10f(val);
   }

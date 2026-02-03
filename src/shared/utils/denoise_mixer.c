@@ -28,8 +28,6 @@ struct DenoiseMixer {
 
   uint32_t fft_size;
   uint32_t real_spectrum_size;
-  uint32_t sample_rate;
-  uint32_t hop;
 };
 
 DenoiseMixer* denoise_mixer_initialize(uint32_t fft_size, uint32_t sample_rate,
@@ -41,8 +39,6 @@ DenoiseMixer* denoise_mixer_initialize(uint32_t fft_size, uint32_t sample_rate,
 
   self->fft_size = fft_size;
   self->real_spectrum_size = (self->fft_size / 2U) + 1U;
-  self->sample_rate = sample_rate;
-  self->hop = hop;
 
   self->residual_spectrum = (float*)calloc((self->fft_size), sizeof(float));
   self->denoised_spectrum = (float*)calloc((self->fft_size), sizeof(float));

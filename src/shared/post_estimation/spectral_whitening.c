@@ -78,7 +78,7 @@ void spectral_whitening_get_weights(SpectralWhitening* self,
     return;
   }
 
-  float noise_peak = 1e-12f;
+  float noise_peak = SPECTRAL_EPSILON;
   for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
     if (noise_profile[k] > noise_peak) {
       noise_peak = noise_profile[k];
@@ -87,7 +87,7 @@ void spectral_whitening_get_weights(SpectralWhitening* self,
 
   for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
     float weight = 1.0f;
-    if (whitening_factor > 0.0f && noise_profile[k] > 1e-12f) {
+    if (whitening_factor > 0.0f && noise_profile[k] > SPECTRAL_EPSILON) {
       // Power-law valley filling
       weight = powf(noise_peak / noise_profile[k], whitening_factor);
     }

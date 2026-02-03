@@ -35,8 +35,8 @@ struct SppMmseNoiseEstimator {
 // SPP-MMSE helper functions
 static float compute_spp_probability(float observation_power,
                                      float previous_noise_psd) {
-  if (previous_noise_psd < 1e-12F) {
-    previous_noise_psd = 1e-12F;
+  if (previous_noise_psd < SPECTRAL_EPSILON) {
+    previous_noise_psd = SPECTRAL_EPSILON;
   }
 
   float ratio = observation_power / previous_noise_psd;

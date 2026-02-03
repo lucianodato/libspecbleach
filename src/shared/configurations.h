@@ -73,7 +73,8 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 
 // Postfilter SNR Threshold
 #define POSTFILTER_SCALE (10.0F)
-#define PRESERVE_MINIMUN_GAIN (true)
+#define PRESERVE_MINIMUM_GAIN (true)
+#define SPECTRAL_EPSILON (1e-12F)
 #define POSTFILTER_MIN_GAIN_DB (-15.0F)
 
 // Gain Estimators

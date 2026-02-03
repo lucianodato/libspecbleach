@@ -214,7 +214,7 @@ bool louizou_noise_estimator_run(LouizouNoiseEstimator* self,
 
       self->noisy_speech_ratio = sanitize_denormal(
           self->current->smoothed_spectrum[k] /
-          (self->current->local_minimum_spectrum[k] + 1e-12F));
+          (self->current->local_minimum_spectrum[k] + SPECTRAL_EPSILON));
 
       if (self->noisy_speech_ratio > self->minimum_detection_thresholds[k]) {
         self->speech_presence_detection[k] = 1U;

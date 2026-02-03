@@ -179,7 +179,7 @@ static void a_posteriori_snr_critical_bands(NoiseScalingCriterias* self,
   compute_critical_bands_spectrum(self->critical_bands, spectrum,
                                   self->critical_bands_reference_spectrum);
 
-  float oversustraction_factor = 1.F;
+  float oversubtraction_factor = 1.F;
 
   for (uint32_t j = 0U; j < self->number_critical_bands; j++) {
 
@@ -190,16 +190,16 @@ static void a_posteriori_snr_critical_bands(NoiseScalingCriterias* self,
                       self->critical_bands_noise_profile[j]);
 
     if (snr_db >= self->lower_snr && snr_db <= self->higher_snr) {
-      oversustraction_factor = (-0.05F * (snr_db)) + parameters.oversubtraction;
+      oversubtraction_factor = (-0.05F * (snr_db)) + parameters.oversubtraction;
     } else if (snr_db < 0.F) {
-      oversustraction_factor = parameters.oversubtraction;
+      oversubtraction_factor = parameters.oversubtraction;
     } else if (snr_db > 20.F) {
-      oversustraction_factor = 1.F;
+      oversubtraction_factor = 1.F;
     }
 
     for (uint32_t k = self->band_indexes.start_position;
          k < self->band_indexes.end_position; k++) {
-      alpha[k] = oversustraction_factor;
+      alpha[k] = oversubtraction_factor;
     }
   }
 }
@@ -217,17 +217,17 @@ static void a_posteriori_snr(NoiseScalingCriterias* self, const float* spectrum,
 
   const float snr_db = 10.F * log10f(noisy_spectrum_sum / noise_spectrum_sum);
 
-  float oversustraction_factor;
+  float oversubtraction_factor;
   if (snr_db >= self->lower_snr && snr_db <= self->higher_snr) {
-    oversustraction_factor = (-0.05F * (snr_db)) + parameters.oversubtraction;
+    oversubtraction_factor = (-0.05F * (snr_db)) + parameters.oversubtraction;
   } else if (snr_db < 0.F) {
-    oversustraction_factor = parameters.oversubtraction;
+    oversubtraction_factor = parameters.oversubtraction;
   } else {
-    oversustraction_factor = 1.F;
+    oversubtraction_factor = 1.F;
   }
 
   for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
-    alpha[k] = oversustraction_factor;
+    alpha[k] = oversubtraction_factor;
   }
 }
 
@@ -248,15 +248,15 @@ static void masking_thresholds(NoiseScalingCriterias* self,
   float max_masked_value =
       10.F * log10f(max_spectral_value(self->masking_thresholds,
                                        self->real_spectrum_size) +
-                    1e-12F);
+                    SPECTRAL_EPSILON);
   float min_masked_value =
       10.F * log10f(min_spectral_value(self->masking_thresholds,
                                        self->real_spectrum_size) +
-                    1e-12F);
+                    SPECTRAL_EPSILON);
 
   for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
     const float current_masked_value =
-        10.F * log10f(self->masking_thresholds[k] + 1e-12F);
+        10.F * log10f(self->masking_thresholds[k] + SPECTRAL_EPSILON);
 
     if (current_masked_value >= max_masked_value) {
       alpha[k] = self->alpha_minimun;

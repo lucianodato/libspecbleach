@@ -382,8 +382,8 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
 
   // 4. Compute SNR for NLM using the CURRENT adaptive noise (Whitening)
   for (uint32_t k = 0; k < self->real_spectrum_size; k++) {
-    float denom =
-        self->noise_spectrum[k] > FLT_MIN ? self->noise_spectrum[k] : 1e-12F;
+    float denom = self->noise_spectrum[k] > FLT_MIN ? self->noise_spectrum[k]
+                                                    : SPECTRAL_EPSILON;
     self->snr_frame[k] = reference_spectrum[k] / denom;
   }
 
@@ -406,7 +406,8 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
     // noise
     float* smoothed_magnitude = self->snr_frame; // Reuse buffer
     for (uint32_t k = 0; k < self->real_spectrum_size; k++) {
-      float denom = delayed_noise[k] > FLT_MIN ? delayed_noise[k] : 1e-12F;
+      float denom =
+          delayed_noise[k] > FLT_MIN ? delayed_noise[k] : SPECTRAL_EPSILON;
       smoothed_magnitude[k] = self->smoothed_snr[k] * denom;
     }
 

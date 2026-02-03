@@ -42,7 +42,7 @@ PostFilter* postfilter_initialize(const uint32_t fft_size) {
 
   self->fft_size = fft_size;
   self->real_spectrum_size = (self->fft_size / 2U) + 1U;
-  self->preserve_minimum = (bool)PRESERVE_MINIMUN_GAIN;
+  self->preserve_minimum = (bool)PRESERVE_MINIMUM_GAIN;
   self->default_postfilter_scale = POSTFILTER_SCALE;
   self->min_gain_coefficient = powf(10.F, (float)POSTFILTER_MIN_GAIN_DB / 20.F);
 
@@ -78,7 +78,7 @@ static uint32_t get_adaptive_window_size(const PostFilter* self,
     noisy_energy += noisy * noisy;
   }
 
-  if (noisy_energy <= 1e-12F) {
+  if (noisy_energy <= SPECTRAL_EPSILON) {
     return 1U;
   }
 

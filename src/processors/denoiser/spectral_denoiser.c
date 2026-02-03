@@ -204,8 +204,7 @@ void spectral_denoiser_free(SpectralProcessorHandle instance) {
     noise_estimation_free(self->noise_estimator);
   }
   if (self->adaptive_estimator) {
-    louizou_estimator_free(
-        self->adaptive_estimator); // or generic free if available
+    louizou_estimator_free(self->adaptive_estimator);
   }
   if (self->spectral_features) {
     spectral_features_free(self->spectral_features);
