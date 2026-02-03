@@ -133,7 +133,8 @@ static void compute_spl_reference_spectrum(AbsoluteHearingThresholds* self) {
 
   for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
     self->spl_reference_values[k] =
-        self->reference_level - (10.F * log10f(reference_spectrum[k] + 1e-12F));
+        self->reference_level -
+        (10.F * log10f(reference_spectrum[k] + SPECTRAL_EPSILON));
   }
 }
 
@@ -144,8 +145,8 @@ bool apply_thresholds_as_floor(AbsoluteHearingThresholds* self,
   }
 
   for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
-    const float spl_level =
-        (10.F * log10f(spectrum[k] + 1e-12F)) + self->spl_reference_values[k];
+    const float spl_level = (10.F * log10f(spectrum[k] + SPECTRAL_EPSILON)) +
+                            self->spl_reference_values[k];
     spectrum[k] =
         powf(10.F, fmaxf(spl_level, self->absolute_thresholds[k]) / 10.F);
   }

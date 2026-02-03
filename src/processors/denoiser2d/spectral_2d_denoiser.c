@@ -223,7 +223,7 @@ void spectral_2d_denoiser_free(SpectralProcessorHandle instance) {
     noise_estimation_free(self->noise_estimator);
   }
   if (self->adaptive_estimator) {
-    louizou_estimator_free(self->adaptive_estimator); // Reuse free function
+    adaptive_estimator_free(self->adaptive_estimator);
   }
   if (self->nlm_filter) {
     nlm_filter_free(self->nlm_filter);
@@ -261,25 +261,18 @@ bool load_2d_reduction_parameters(SpectralProcessorHandle instance,
 
   // Check if we need to initialize or re-initialize the adaptive estimator
   if (parameters.adaptive_noise) {
-    bool method_changed = self->parameters.noise_estimation_method !=
-                          parameters.noise_estimation_method;
-    bool needs_init = !self->adaptive_estimator || method_changed;
+    AdaptiveNoiseEstimationMethod requested_method =
+        (AdaptiveNoiseEstimationMethod)parameters.noise_estimation_method;
+
+    bool needs_init = !self->adaptive_estimator ||
+                      adaptive_estimator_get_method(self->adaptive_estimator) !=
+                          requested_method;
 
     if (needs_init) {
-      if (self->adaptive_estimator) {
-        louizou_estimator_free(self->adaptive_estimator);
-        self->adaptive_estimator = NULL;
-      }
-
-      if (parameters.noise_estimation_method == 0) {
-        self->adaptive_estimator = louizou_estimator_initialize(
-            self->real_spectrum_size, self->sample_rate, self->fft_size);
-      } else {
-        self->adaptive_estimator = spp_mmse_estimator_initialize(
-            self->real_spectrum_size, self->sample_rate, self->fft_size);
-      }
-
-      // Force a re-seed in the next run cycle
+      adaptive_estimator_free(self->adaptive_estimator);
+      self->adaptive_estimator = adaptive_estimator_initialize(
+          self->real_spectrum_size, self->sample_rate, self->fft_size,
+          requested_method);
       self->last_adaptive_state = 0;
     }
   }
@@ -351,13 +344,8 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
     }
 
     // Run adaptive estimator
-    if (self->parameters.noise_estimation_method == 0) {
-      louizou_estimator_run(self->adaptive_estimator, reference_spectrum,
-                            self->noise_spectrum);
-    } else {
-      spp_mmse_estimator_run(self->adaptive_estimator, reference_spectrum,
-                             self->noise_spectrum);
-    }
+    adaptive_estimator_run(self->adaptive_estimator, reference_spectrum,
+                           self->noise_spectrum);
 
     // Apply manual profile as a floor to the internal state and output
     adaptive_estimator_apply_floor(self->adaptive_estimator,
@@ -382,8 +370,8 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
 
   // 4. Compute SNR for NLM using the CURRENT adaptive noise (Whitening)
   for (uint32_t k = 0; k < self->real_spectrum_size; k++) {
-    float denom =
-        self->noise_spectrum[k] > FLT_MIN ? self->noise_spectrum[k] : 1e-12F;
+    float denom = self->noise_spectrum[k] > FLT_MIN ? self->noise_spectrum[k]
+                                                    : SPECTRAL_EPSILON;
     self->snr_frame[k] = reference_spectrum[k] / denom;
   }
 
@@ -406,7 +394,8 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
     // noise
     float* smoothed_magnitude = self->snr_frame; // Reuse buffer
     for (uint32_t k = 0; k < self->real_spectrum_size; k++) {
-      float denom = delayed_noise[k] > FLT_MIN ? delayed_noise[k] : 1e-12F;
+      float denom =
+          delayed_noise[k] > FLT_MIN ? delayed_noise[k] : SPECTRAL_EPSILON;
       smoothed_magnitude[k] = self->smoothed_snr[k] * denom;
     }
 

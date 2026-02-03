@@ -84,7 +84,7 @@ void test_gain_estimation_spectral_subtraction(void) {
   float beta[8] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
 
   estimate_gains(real_spectrum_size, fft_size, spectrum, noise_spectrum,
-                 gain_spectrum, alpha, beta, GENERALIZED_SPECTRALSUBTRACION);
+                 gain_spectrum, alpha, beta, GENERALIZED_SPECTRALSUBTRACTION);
 
   // Generalized spectral subtraction: gain = sqrt(max(0, (spectrum^2 -
   // alpha*noise^2) / spectrum^2)) For each bin: gain = sqrt(max(0, (spectrum^2

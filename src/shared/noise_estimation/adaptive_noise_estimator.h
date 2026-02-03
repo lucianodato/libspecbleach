@@ -31,18 +31,20 @@ typedef enum AdaptiveNoiseEstimationMethod {
 
 typedef struct AdaptiveNoiseEstimator AdaptiveNoiseEstimator;
 
-AdaptiveNoiseEstimator* louizou_estimator_initialize(
-    uint32_t noise_spectrum_size, uint32_t sample_rate, uint32_t fft_size);
-void louizou_estimator_free(AdaptiveNoiseEstimator* self);
-bool louizou_estimator_run(AdaptiveNoiseEstimator* self, const float* spectrum,
-                           float* noise_spectrum);
+// Create an adaptive noise estimator with the specified method
+AdaptiveNoiseEstimator* adaptive_estimator_initialize(
+    uint32_t noise_spectrum_size, uint32_t sample_rate, uint32_t fft_size,
+    AdaptiveNoiseEstimationMethod method);
 
-// SPP-MMSE based adaptive noise estimator (Real-Time Unbiased MMSE Noise PSD
-// Tracking)
-AdaptiveNoiseEstimator* spp_mmse_estimator_initialize(
-    uint32_t noise_spectrum_size, uint32_t sample_rate, uint32_t fft_size);
-void spp_mmse_estimator_free(AdaptiveNoiseEstimator* self);
-bool spp_mmse_estimator_run(AdaptiveNoiseEstimator* self, const float* spectrum,
+// Get the estimation method of an existing estimator
+AdaptiveNoiseEstimationMethod adaptive_estimator_get_method(
+    const AdaptiveNoiseEstimator* self);
+
+// Free an adaptive noise estimator
+void adaptive_estimator_free(AdaptiveNoiseEstimator* self);
+
+// Run the estimator (dispatches to appropriate internal method)
+bool adaptive_estimator_run(AdaptiveNoiseEstimator* self, const float* spectrum,
                             float* noise_spectrum);
 
 // Set the internal state of the estimator from an existing noise profile

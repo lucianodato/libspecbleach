@@ -45,8 +45,6 @@ struct NlmFilter {
   float* weight_accum;
 };
 
-// Actually, let's use a simpler polynomial approximation for 0..10 range which
-// is most relevant exp(-x) approx 1 / (1 + x + x^2/2)
 // Helper: clamp index to valid range
 static inline uint32_t clamp_index(int32_t idx, uint32_t max_val) {
   if (idx < 0) {
@@ -592,8 +590,6 @@ bool nlm_filter_process(NlmFilter* filter, float* smoothed_snr) {
       smoothed_snr[k] = target_frame[k];
     }
   }
-
-  // Normalize by weight sum - no free(weight_sum) needed
 
   return true;
 }

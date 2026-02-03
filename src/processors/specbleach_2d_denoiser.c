@@ -40,6 +40,10 @@ typedef struct Sb2DDenoiser {
 
 SpectralBleachHandle specbleach_2d_initialize(const uint32_t sample_rate,
                                               float frame_size) {
+  if (sample_rate == 0 || frame_size <= 0.0f) {
+    return NULL;
+  }
+
   Sb2DDenoiser* self = (Sb2DDenoiser*)calloc(1U, sizeof(Sb2DDenoiser));
   if (!self) {
     return NULL;
@@ -233,6 +237,10 @@ uint32_t specbleach_2d_get_noise_profile_blocks_averaged_for_mode(
     return 0;
   }
 
+  if (mode < 1 || mode > 3) {
+    return 0;
+  }
+
   return get_noise_profile_blocks_averaged(self->noise_profile, mode);
 }
 
@@ -244,6 +252,10 @@ float* specbleach_2d_get_noise_profile_for_mode(SpectralBleachHandle instance,
     return NULL;
   }
 
+  if (mode < 1 || mode > 3) {
+    return NULL;
+  }
+
   return get_noise_profile(self->noise_profile, mode);
 }
 
@@ -252,6 +264,10 @@ bool specbleach_2d_noise_profile_available_for_mode(
   Sb2DDenoiser* self = (Sb2DDenoiser*)instance;
 
   if (!self || !self->noise_profile) {
+    return false;
+  }
+
+  if (mode < 1 || mode > 3) {
     return false;
   }
 

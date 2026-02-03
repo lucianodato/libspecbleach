@@ -204,8 +204,7 @@ void spectral_denoiser_free(SpectralProcessorHandle instance) {
     noise_estimation_free(self->noise_estimator);
   }
   if (self->adaptive_estimator) {
-    louizou_estimator_free(
-        self->adaptive_estimator); // or generic free if available
+    adaptive_estimator_free(self->adaptive_estimator);
   }
   if (self->spectral_features) {
     spectral_features_free(self->spectral_features);
@@ -255,25 +254,18 @@ bool load_reduction_parameters(SpectralProcessorHandle instance,
 
   // Check if we need to initialize or re-initialize the adaptive estimator
   if (parameters.adaptive_noise) {
-    bool method_changed = self->denoise_parameters.noise_estimation_method !=
-                          parameters.noise_estimation_method;
-    bool needs_init = !self->adaptive_estimator || method_changed;
+    AdaptiveNoiseEstimationMethod requested_method =
+        (AdaptiveNoiseEstimationMethod)parameters.noise_estimation_method;
+
+    bool needs_init = !self->adaptive_estimator ||
+                      adaptive_estimator_get_method(self->adaptive_estimator) !=
+                          requested_method;
 
     if (needs_init) {
-      if (self->adaptive_estimator) {
-        louizou_estimator_free(self->adaptive_estimator);
-        self->adaptive_estimator = NULL;
-      }
-
-      if (parameters.noise_estimation_method == 0) {
-        self->adaptive_estimator = louizou_estimator_initialize(
-            self->real_spectrum_size, self->sample_rate, self->fft_size);
-      } else {
-        self->adaptive_estimator = spp_mmse_estimator_initialize(
-            self->real_spectrum_size, self->sample_rate, self->fft_size);
-      }
-
-      // Force a re-seed in the next run cycle
+      adaptive_estimator_free(self->adaptive_estimator);
+      self->adaptive_estimator = adaptive_estimator_initialize(
+          self->real_spectrum_size, self->sample_rate, self->fft_size,
+          requested_method);
       self->last_adaptive_state = 0;
     }
   }
@@ -334,13 +326,8 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
     }
 
     // Run adaptive estimator
-    if (self->denoise_parameters.noise_estimation_method == 0) {
-      louizou_estimator_run(self->adaptive_estimator, reference_spectrum,
-                            self->noise_spectrum);
-    } else {
-      spp_mmse_estimator_run(self->adaptive_estimator, reference_spectrum,
-                             self->noise_spectrum);
-    }
+    adaptive_estimator_run(self->adaptive_estimator, reference_spectrum,
+                           self->noise_spectrum);
 
     // Apply manual profile as a floor to the internal state and output
     adaptive_estimator_apply_floor(self->adaptive_estimator,

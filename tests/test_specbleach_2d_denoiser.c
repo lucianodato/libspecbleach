@@ -139,6 +139,22 @@ void test_noise_profile_api(void) {
                   h, fake_profile, profile_size, 10, 99) == false,
               "Invalid mode load should fail");
 
+  // Test invalid mode validation (modes outside 1-3)
+  TEST_ASSERT(
+      specbleach_2d_get_noise_profile_blocks_averaged_for_mode(h, 0) == 0,
+      "Invalid mode 0 should return 0 blocks");
+  TEST_ASSERT(
+      specbleach_2d_get_noise_profile_blocks_averaged_for_mode(h, 4) == 0,
+      "Invalid mode 4 should return 0 blocks");
+  TEST_ASSERT(specbleach_2d_get_noise_profile_for_mode(h, 0) == NULL,
+              "Invalid mode 0 should return NULL profile");
+  TEST_ASSERT(specbleach_2d_get_noise_profile_for_mode(h, 4) == NULL,
+              "Invalid mode 4 should return NULL profile");
+  TEST_ASSERT(specbleach_2d_noise_profile_available_for_mode(h, 0) == false,
+              "Invalid mode 0 should return false availability");
+  TEST_ASSERT(specbleach_2d_noise_profile_available_for_mode(h, 4) == false,
+              "Invalid mode 4 should return false availability");
+
   free(fake_profile);
   specbleach_2d_free(h);
 }

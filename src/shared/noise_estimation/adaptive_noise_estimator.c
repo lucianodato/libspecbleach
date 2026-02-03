@@ -28,7 +28,7 @@ struct AdaptiveNoiseEstimator {
   void* internal_estimator;
 };
 
-AdaptiveNoiseEstimator* louizou_estimator_initialize(
+static AdaptiveNoiseEstimator* create_louizou_estimator(
     uint32_t noise_spectrum_size, uint32_t sample_rate, uint32_t fft_size) {
   AdaptiveNoiseEstimator* self =
       (AdaptiveNoiseEstimator*)calloc(1U, sizeof(AdaptiveNoiseEstimator));
@@ -48,7 +48,7 @@ AdaptiveNoiseEstimator* louizou_estimator_initialize(
   return self;
 }
 
-AdaptiveNoiseEstimator* spp_mmse_estimator_initialize(
+static AdaptiveNoiseEstimator* create_spp_mmse_estimator(
     uint32_t noise_spectrum_size, uint32_t sample_rate, uint32_t fft_size) {
   AdaptiveNoiseEstimator* self =
       (AdaptiveNoiseEstimator*)calloc(1U, sizeof(AdaptiveNoiseEstimator));
@@ -68,11 +68,38 @@ AdaptiveNoiseEstimator* spp_mmse_estimator_initialize(
   return self;
 }
 
-void spp_mmse_estimator_free(AdaptiveNoiseEstimator* self) {
-  louizou_estimator_free(self); // Dispatcher handles both
+static bool run_louizou(AdaptiveNoiseEstimator* self, const float* spectrum,
+                        float* noise_spectrum) {
+  return louizou_noise_estimator_run(
+      (LouizouNoiseEstimator*)self->internal_estimator, spectrum,
+      noise_spectrum);
 }
 
-void louizou_estimator_free(AdaptiveNoiseEstimator* self) {
+static bool run_spp_mmse(AdaptiveNoiseEstimator* self, const float* spectrum,
+                         float* noise_spectrum) {
+  return spp_mmse_noise_estimator_run(
+      (SppMmseNoiseEstimator*)self->internal_estimator, spectrum,
+      noise_spectrum);
+}
+
+AdaptiveNoiseEstimator* adaptive_estimator_initialize(
+    uint32_t noise_spectrum_size, uint32_t sample_rate, uint32_t fft_size,
+    AdaptiveNoiseEstimationMethod method) {
+  if (method == LOUIZOU_METHOD) {
+    return create_louizou_estimator(noise_spectrum_size, sample_rate, fft_size);
+  }
+  return create_spp_mmse_estimator(noise_spectrum_size, sample_rate, fft_size);
+}
+
+AdaptiveNoiseEstimationMethod adaptive_estimator_get_method(
+    const AdaptiveNoiseEstimator* self) {
+  if (!self) {
+    return LOUIZOU_METHOD; // Safe default
+  }
+  return self->method;
+}
+
+void adaptive_estimator_free(AdaptiveNoiseEstimator* self) {
   if (!self) {
     return;
   }
@@ -88,24 +115,16 @@ void louizou_estimator_free(AdaptiveNoiseEstimator* self) {
   free(self);
 }
 
-bool louizou_estimator_run(AdaptiveNoiseEstimator* self, const float* spectrum,
-                           float* noise_spectrum) {
-  if (!self || self->method != LOUIZOU_METHOD) {
-    return false;
-  }
-  return louizou_noise_estimator_run(
-      (LouizouNoiseEstimator*)self->internal_estimator, spectrum,
-      noise_spectrum);
-}
-
-bool spp_mmse_estimator_run(AdaptiveNoiseEstimator* self, const float* spectrum,
+bool adaptive_estimator_run(AdaptiveNoiseEstimator* self, const float* spectrum,
                             float* noise_spectrum) {
-  if (!self || self->method != SPP_MMSE_METHOD) {
+  if (!self) {
     return false;
   }
-  return spp_mmse_noise_estimator_run(
-      (SppMmseNoiseEstimator*)self->internal_estimator, spectrum,
-      noise_spectrum);
+
+  if (self->method == LOUIZOU_METHOD) {
+    return run_louizou(self, spectrum, noise_spectrum);
+  }
+  return run_spp_mmse(self, spectrum, noise_spectrum);
 }
 
 void adaptive_estimator_set_state(AdaptiveNoiseEstimator* self,
