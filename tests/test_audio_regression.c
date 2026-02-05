@@ -339,59 +339,60 @@ void test_adaptive_denoising(void) {
 }
 
 // Test that both noise estimation methods work correctly
-// Test that both noise estimation methods work correctly
 void test_noise_estimation_methods(void) {
-  printf("Testing noise estimation methods (Louizou vs SPP-MMSE)...\n");
+  printf("Testing noise estimation methods (Martin MS vs SPP-MMSE)...\n");
 
   float frame_size_ms = 20.0f;
   float* input = calloc(TEST_SAMPLES, sizeof(float));
-  float* output_louizou = calloc(TEST_SAMPLES, sizeof(float));
+  float* output_martin = calloc(TEST_SAMPLES, sizeof(float));
   float* output_spp_mmse = calloc(TEST_SAMPLES, sizeof(float));
-  TEST_ASSERT(input && output_louizou && output_spp_mmse,
+  TEST_ASSERT(input && output_martin && output_spp_mmse,
               "Failed to allocate test buffers");
 
   // Generate noisy signal
   generate_test_signal(input, TEST_SAMPLES, 12345);
 
-  // Process with Louizou method (default)
-  SpectralBleachDenoiserParameters params_louizou =
-      (SpectralBleachDenoiserParameters){.reduction_amount = 20.0f,
-                                         .smoothing_factor = 0.0f,
-                                         .noise_rescale = 0.0f,
-                                         .noise_scaling_type = 0,
-                                         .post_filter_threshold = 0.0f,
-                                         .residual_listen = false,
-                                         .whitening_factor = 0.0f,
-                                         .adaptive_noise = 1,
-                                         .noise_estimation_method = 0};
+  // Process with Martin MS method (Default)
+  SpectralBleachDenoiserParameters params_martin =
+      (SpectralBleachDenoiserParameters){
+          .reduction_amount = 20.0f,
+          .smoothing_factor = 0.0f,
+          .noise_rescale = 0.0f,
+          .noise_scaling_type = 0,
+          .post_filter_threshold = 0.0f,
+          .residual_listen = false,
+          .whitening_factor = 0.0f,
+          .adaptive_noise = 1,
+          .noise_estimation_method = 2}; // 2: Martin MS
 
-  SpectralBleachHandle handle_louizou =
+  SpectralBleachHandle handle_martin =
       specbleach_initialize(SAMPLE_RATE, frame_size_ms);
-  TEST_ASSERT(handle_louizou != NULL, "Failed to initialize Louizou denoiser");
+  TEST_ASSERT(handle_martin != NULL, "Failed to initialize Martin denoiser");
 
-  specbleach_load_parameters(handle_louizou, params_louizou);
+  specbleach_load_parameters(handle_martin, params_martin);
 
   for (int i = 0; i < TEST_SAMPLES; i += BLOCK_SIZE) {
     int block_size =
         (i + BLOCK_SIZE > TEST_SAMPLES) ? TEST_SAMPLES - i : BLOCK_SIZE;
-    TEST_ASSERT(specbleach_process(handle_louizou, block_size, input + i,
-                                   output_louizou + i),
-                "Failed to process with Louizou method");
+    TEST_ASSERT(specbleach_process(handle_martin, block_size, input + i,
+                                   output_martin + i),
+                "Failed to process with Martin method");
   }
 
-  specbleach_free(handle_louizou);
+  specbleach_free(handle_martin);
 
   // Process with SPP-MMSE method
   SpectralBleachDenoiserParameters params_spp_mmse =
-      (SpectralBleachDenoiserParameters){.reduction_amount = 20.0f,
-                                         .smoothing_factor = 0.0f,
-                                         .noise_rescale = 0.0f,
-                                         .noise_scaling_type = 0,
-                                         .post_filter_threshold = 0.0f,
-                                         .residual_listen = false,
-                                         .whitening_factor = 0.0f,
-                                         .adaptive_noise = 1,
-                                         .noise_estimation_method = 1};
+      (SpectralBleachDenoiserParameters){
+          .reduction_amount = 20.0f,
+          .smoothing_factor = 0.0f,
+          .noise_rescale = 0.0f,
+          .noise_scaling_type = 0,
+          .post_filter_threshold = 0.0f,
+          .residual_listen = false,
+          .whitening_factor = 0.0f,
+          .adaptive_noise = 1,
+          .noise_estimation_method = 0}; // 0: SPP-MMSE
 
   SpectralBleachHandle handle_spp_mmse =
       specbleach_initialize(SAMPLE_RATE, frame_size_ms);
@@ -411,45 +412,45 @@ void test_noise_estimation_methods(void) {
   specbleach_free(handle_spp_mmse);
 
   // Verify both methods produced valid output (finite values, reduced noise)
-  double input_power = 0.0, louizou_power = 0.0, spp_mmse_power = 0.0;
+  double input_power = 0.0, martin_power = 0.0, spp_mmse_power = 0.0;
   for (int i = 0; i < TEST_SAMPLES; i++) {
-    TEST_ASSERT(isfinite(output_louizou[i]),
-                "Louizou output contains non-finite values");
+    TEST_ASSERT(isfinite(output_martin[i]),
+                "Martin output contains non-finite values");
     TEST_ASSERT(isfinite(output_spp_mmse[i]),
                 "SPP-MMSE output contains non-finite values");
 
     input_power += input[i] * input[i];
-    louizou_power += output_louizou[i] * output_louizou[i];
+    martin_power += output_martin[i] * output_martin[i];
     spp_mmse_power += output_spp_mmse[i] * output_spp_mmse[i];
   }
 
   input_power /= TEST_SAMPLES;
-  louizou_power /= TEST_SAMPLES;
+  martin_power /= TEST_SAMPLES;
   spp_mmse_power /= TEST_SAMPLES;
 
   printf("  Input power: %.6f\n", input_power);
-  printf("  Louizou output power: %.6f\n", louizou_power);
+  printf("  Martin output power: %.6f\n", martin_power);
   printf("  SPP-MMSE output power: %.6f\n", spp_mmse_power);
 
   // Both methods should reduce noise
-  TEST_ASSERT(louizou_power < input_power * 0.95f,
-              "Louizou method should reduce signal power");
+  TEST_ASSERT(martin_power < input_power * 0.95f,
+              "Martin method should reduce signal power");
   TEST_ASSERT(spp_mmse_power < input_power * 0.95f,
               "SPP-MMSE method should reduce signal power");
 
-  // Methods should produce different results (they use different algorithms)
+  // Methods should produce different results
   bool identical = true;
   for (int i = 5000; i < TEST_SAMPLES; i++) { // Skip initial frames
-    if (fabsf(output_louizou[i] - output_spp_mmse[i]) > 1e-4f) {
+    if (fabsf(output_martin[i] - output_spp_mmse[i]) > 1e-4f) {
       identical = false;
       break;
     }
   }
   TEST_ASSERT(!identical,
-              "Louizou and SPP-MMSE methods should produce different results");
+              "Martin and SPP-MMSE methods should produce different results");
 
   free(input);
-  free(output_louizou);
+  free(output_martin);
   free(output_spp_mmse);
 
   printf("✓ Noise estimation methods test passed\n");

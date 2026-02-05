@@ -106,6 +106,17 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define BAND_3_LEVEL (5.F)
 
 #define ESTIMATOR_SILENCE_THRESHOLD (1e-10F) // Roughly -100dB in power
+#define ESTIMATOR_BIAS_EPSILON (1e-6F) // Precision for bias correction calc
+#define ESTIMATOR_MIN_HISTORY_FRAMES                                           \
+  5U // Minimum frames for history-based tracking
+#define ESTIMATOR_MIN_DURATION_MS 0.1F // Safety floor for duration calcs
+
+// Martin (2001) Constants
+#define MARTIN_WINDOW_LEN 96  // Total window length (frames)
+#define MARTIN_SUBWIN_COUNT 8 // Number of sub-windows
+#define MARTIN_SUBWIN_LEN 12  // Sub-window length (96/8)
+#define MARTIN_BIAS_CORR 1.5F // Conservative bias correction for min tracking
+#define MARTIN_SMOOTH_ALPHA 0.8F // Baseline smoothing for PSD
 
 // SPP-MMSE Estimator Constants
 #define SPP_PRIOR_H1 (0.5F)      // P(H1) - Speech present prior
@@ -115,6 +126,12 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define SPP_SMOOTH_SPP (0.9F)    // SPP smoothing for stagnation control
 #define SPP_CURRENT_SPP (0.1F)   // Current SPP weighting for stagnation control
 #define SPP_STAGNATION_CAP (0.99F) // Maximum SPP value to prevent locking
+
+// Brandt (Trimmer Mean) Constants
+#define BRANDT_DEFAULT_HISTORY_MS 5000.0f
+#define BRANDT_DEFAULT_PERCENTILE 0.5f
+#define BRANDT_MIN_CONFIDENCE                                                  \
+  0.90f // Lowered from 0.98 for better learning speed
 
 /* --------------------------------------------------------------- */
 /* ------------------- Denoiser configurations ------------------- */

@@ -83,8 +83,9 @@ typedef struct SpectralBleach2DDenoiserParameters {
 
   /**
    * Sets the method used for adaptive noise estimation.
-   * 0: Louizou's method
-   * 1: SPP-MMSE method
+   * 0: SPP-MMSE method
+   * 1: Brandt (Trimmed Mean)
+   * 2: Martin Minimum Statistics
    */
   int noise_estimation_method;
 } SpectralBleach2DDenoiserParameters;

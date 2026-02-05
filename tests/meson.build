@@ -176,14 +176,23 @@ test('specbleach_2d_denoiser', test_specbleach_2d_denoiser)
 test('adaptive_noise_estimator_null', test_adaptive_noise_estimator_null)
 test('nlm_filter', test_nlm_filter)
 
-test_louizou = executable('test_louizou',
-  sources: ['test_louizou_noise_estimator.c'],
+test_martin = executable('test_martin',
+  sources: ['test_martin_noise_estimator.c'],
   dependencies: [libspecbleach_dep, m_dep],
   c_args: test_c_args,
   link_args: test_link_args,
   include_directories: inc
 )
-test('louizou', test_louizou)
+test('martin', test_martin)
+
+test_brandt = executable('test_brandt',
+  sources: ['test_brandt_noise_estimator.c'],
+  dependencies: [libspecbleach_dep, m_dep],
+  c_args: test_c_args,
+  link_args: test_link_args,
+  include_directories: inc
+)
+test('brandt', test_brandt)
 
 test_spp_mmse = executable('test_spp_mmse',
   sources: ['test_spp_mmse_noise_estimator.c'],

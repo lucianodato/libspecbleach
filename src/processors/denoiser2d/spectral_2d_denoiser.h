@@ -38,7 +38,7 @@ typedef struct Denoiser2DParameters {
   float smoothing_factor;   /**< NLM 'h' parameter (smoothing strength) */
   float whitening_factor;   /**< Whitening factor (0.0 to 1.0) */
   int adaptive_noise;       /**< Adaptive noise mode: 0=disabled, 1=enabled */
-  int noise_estimation_method; /**< 0=Louizou, 1=SPP-MMSE */
+  int noise_estimation_method; /**< 0=SPP-MMSE, 1=Brandt, 2=Martin MS */
 } Denoiser2DParameters;
 
 /**
