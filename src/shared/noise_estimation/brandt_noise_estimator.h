@@ -84,9 +84,8 @@ void brandt_noise_estimator_update_seed(BrandtNoiseEstimator* self,
 void brandt_noise_estimator_apply_floor(BrandtNoiseEstimator* self,
                                         const float* floor_profile);
 
-void brandt_noise_estimator_set_history_duration(BrandtNoiseEstimator* self,
-                                                 float history_duration_ms,
-                                                 uint32_t sample_rate,
-                                                 uint32_t fft_size);
+void brandt_noise_estimator_set_history_duration(
+    const BrandtNoiseEstimator* self, float history_duration_ms,
+    uint32_t sample_rate, uint32_t fft_size);
 
 #endif
