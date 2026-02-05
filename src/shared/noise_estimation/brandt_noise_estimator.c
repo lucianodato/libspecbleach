@@ -29,12 +29,14 @@ struct BrandtNoiseEstimator {
   uint32_t history_size;
   uint32_t history_index; // Circular buffer write head
 
-  float* history_buffer; // Size: spectrum_size * history_size
-  float* sort_buffer;    // Scratch space for sorting (Size: history_size)
+  float* history_buffer;      // Size: spectrum_size * history_size
+  float* sort_buffer;         // Scratch space for sorting (Size: history_size)
+  float* last_noise_spectrum; // Persisted noise to keep during rejection
 
   float percentile;
   uint32_t trim_count; // Number of items to average (history_size * percentile)
   float correction_factor;
+  float correction_factors[5]; // Pre-calculated for search
   bool is_first_frame;
 };
 
@@ -98,12 +100,20 @@ BrandtNoiseEstimator* brandt_noise_estimator_initialize(
 
   self->correction_factor = calculate_correction_factor(percentile);
 
+  static const float p_candidates[] = {0.1f, 0.25f, 0.5f, 0.75f, 1.0f};
+  for (int i = 0; i < 5; i++) {
+    self->correction_factors[i] = calculate_correction_factor(p_candidates[i]);
+  }
+
   // Allocate buffers
   self->history_buffer = (float*)calloc(
       (size_t)self->spectrum_size * self->history_size, sizeof(float));
   self->sort_buffer = (float*)calloc(self->history_size, sizeof(float));
+  self->last_noise_spectrum =
+      (float*)calloc(self->spectrum_size, sizeof(float));
 
-  if (!self->history_buffer || !self->sort_buffer) {
+  if (!self->history_buffer || !self->sort_buffer ||
+      !self->last_noise_spectrum) {
     brandt_noise_estimator_free(self);
     return NULL;
   }
@@ -116,8 +126,35 @@ void brandt_noise_estimator_free(BrandtNoiseEstimator* self) {
   if (self) {
     free(self->history_buffer);
     free(self->sort_buffer);
+    free(self->last_noise_spectrum);
     free(self);
   }
+}
+
+static float calculate_ad_norm(const float* sorted, uint32_t q, float mu,
+                               float b) {
+  if (mu < 1e-15f) {
+    return 1.0f;
+  }
+  float mu_inv = 1.0f / mu;
+  float exp_b_mu = expf(-b * mu_inv);
+  float denom = 1.0f - exp_b_mu;
+  if (fabsf(denom) < 1e-12f) {
+    return 1.0f;
+  }
+
+  float abs_diff_sum = 0.0f;
+  float q_inv = 1.0f / (float)q;
+  float denom_inv = 1.0f / denom;
+
+  // Most expensive loop in denoiser: 5 * spectrum_size * q calls per frame
+  // q is roughly history_size / 2.
+  for (uint32_t i = 0; i < q; i++) {
+    float f_te = (1.0f - expf(-sorted[i] * mu_inv)) * denom_inv;
+    float f_empirical = (float)(i + 1) * q_inv;
+    abs_diff_sum += fabsf(f_empirical - f_te);
+  }
+  return abs_diff_sum * (2.0f * q_inv);
 }
 
 bool brandt_noise_estimator_run(BrandtNoiseEstimator* self,
@@ -133,56 +170,73 @@ bool brandt_noise_estimator_run(BrandtNoiseEstimator* self,
   frame_energy /= (float)self->spectrum_size;
 
   if (self->is_first_frame) {
-    if (frame_energy < ESTIMATOR_SILENCE_THRESHOLD) {
-      memset(noise_spectrum, 0, self->spectrum_size * sizeof(float));
-      return true;
-    }
-    float inverse_factor = 1.0f / self->correction_factor;
-    for (uint32_t k = 0; k < self->spectrum_size; k++) {
-      float val = spectrum[k] * inverse_factor;
-      for (uint32_t t = 0; t < self->history_size; t++) {
-        self->history_buffer[((size_t)k * self->history_size) + t] = val;
+    if (frame_energy > ESTIMATOR_SILENCE_THRESHOLD) {
+      float inv_factor = 1.0f / calculate_correction_factor(0.5f);
+      for (uint32_t k = 0; k < self->spectrum_size; k++) {
+        float val = spectrum[k] * inv_factor;
+        self->last_noise_spectrum[k] = spectrum[k];
+        for (uint32_t t = 0; t < self->history_size; t++) {
+          float jitter =
+              1.0f + (0.01f * (float)(((int32_t)(t + k) % 11) - 5) / 5.0f);
+          self->history_buffer[((size_t)k * self->history_size) + t] =
+              val * jitter;
+        }
       }
+      self->is_first_frame = false;
     }
-    self->is_first_frame = false;
-  } else {
-    // Silence check for subsequent frames
-    if (frame_energy < ESTIMATOR_SILENCE_THRESHOLD) {
-      goto compute_output;
-    }
-
-    // 1. Update history (Circular buffer)
-    for (uint32_t k = 0; k < self->spectrum_size; k++) {
-      self->history_buffer[((size_t)k * self->history_size) +
-                           self->history_index] = spectrum[k];
-    }
-    // Advance history index
-    self->history_index = (self->history_index + 1) % self->history_size;
   }
 
-compute_output:
-  // 2. Process each bin
-  if (!self->history_buffer || !self->sort_buffer || self->history_size == 0) {
-    return false;
+  if (frame_energy < ESTIMATOR_SILENCE_THRESHOLD) {
+    memcpy(noise_spectrum, self->last_noise_spectrum,
+           self->spectrum_size * sizeof(float));
+    return true;
   }
 
   for (uint32_t k = 0; k < self->spectrum_size; k++) {
-    // Copy history to sort buffer
+    self->history_buffer[((size_t)k * self->history_size) +
+                         self->history_index] = spectrum[k];
+  }
+  self->history_index = (self->history_index + 1) % self->history_size;
+
+  static const float p_candidates[] = {0.1f, 0.25f, 0.5f, 0.75f, 1.0f};
+
+  for (uint32_t k = 0; k < self->spectrum_size; k++) {
     float* bin_history = &self->history_buffer[(size_t)k * self->history_size];
     memcpy(self->sort_buffer, bin_history, self->history_size * sizeof(float));
-
-    // Sort to find lowest items
     qsort(self->sort_buffer, self->history_size, sizeof(float), compare_floats);
 
-    // Compute Trimmed Mean
-    float sum = 0.0f;
-    for (uint32_t i = 0; i < self->trim_count; i++) {
-      sum += self->sort_buffer[i];
-    }
-    float trimmed_mean = sum / (float)self->trim_count;
+    float min_ad_norm = 2.0f;
+    float best_mu = self->last_noise_spectrum[k];
 
-    // Apply Correction
-    noise_spectrum[k] = trimmed_mean * self->correction_factor;
+    for (int i = 0; i < 5; i++) {
+      float p = p_candidates[i];
+      uint32_t q = (uint32_t)(p * (float)self->history_size);
+      if (q < 10) {
+        continue;
+      }
+
+      float b = self->sort_buffer[q - 1];
+      float sum = 0.0f;
+      for (uint32_t j = 0; j < q; j++) {
+        sum += self->sort_buffer[j];
+      }
+      float mu_trunc = sum / (float)q;
+
+      if (mu_trunc > ESTIMATOR_SILENCE_THRESHOLD) {
+        float factor = self->correction_factors[i];
+        float mu_full = mu_trunc * factor;
+        float ad_norm = calculate_ad_norm(self->sort_buffer, q, mu_full, b);
+        if (ad_norm < min_ad_norm) {
+          min_ad_norm = ad_norm;
+          best_mu = mu_full;
+        }
+      }
+    }
+
+    if (1.0f - min_ad_norm >= BRANDT_MIN_CONFIDENCE) {
+      self->last_noise_spectrum[k] = best_mu;
+    }
+    noise_spectrum[k] = self->last_noise_spectrum[k];
   }
 
   return true;
@@ -195,16 +249,15 @@ void brandt_noise_estimator_set_state(BrandtNoiseEstimator* self,
   }
 
   // Start with a known state: Fill history with this profile
-  // To avoid identical values (which sorts weirdly?), we just fill flat.
-  // But strictly, we should reverse-engineer the trimmed mean.
-  // If we fill buffer with X, trimmed mean is X. Output is X * Factor.
-  // We want output to be Profile. So input should be Profile / Factor.
   float inverse_factor = 1.0f / self->correction_factor;
 
   for (uint32_t k = 0; k < self->spectrum_size; k++) {
     float val = initial_profile[k] * inverse_factor;
+    self->last_noise_spectrum[k] = initial_profile[k];
     for (uint32_t t = 0; t < self->history_size; t++) {
-      self->history_buffer[((size_t)k * self->history_size) + t] = val;
+      float jitter =
+          1.0f + (0.01f * (float)(((int32_t)(t + k) % 11) - 5) / 5.0f);
+      self->history_buffer[((size_t)k * self->history_size) + t] = val * jitter;
     }
   }
   self->is_first_frame = false;

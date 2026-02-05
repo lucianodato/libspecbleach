@@ -57,11 +57,12 @@ void test_brandt_run_logic(void) {
     spectrum[i] = 1.0f;
   }
 
-  // First frame: Should snap history to spectrum
+  // Use set_state to bypass the learning period/confidence rejected start
+  brandt_noise_estimator_set_state(est, spectrum);
+
   TEST_ASSERT(brandt_noise_estimator_run(est, spectrum, noise_spectrum),
               "Run should succeed");
-  // Due to correction factor applied to trimmed mean of identical values,
-  // it should equal exactly 1.0f.
+  // Check output matches the set state
   for (uint32_t i = 0; i < real_size; i++) {
     TEST_FLOAT_CLOSE(noise_spectrum[i], 1.0f, 1e-4f);
   }

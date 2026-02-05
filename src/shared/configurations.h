@@ -127,6 +127,12 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define SPP_CURRENT_SPP (0.1F)   // Current SPP weighting for stagnation control
 #define SPP_STAGNATION_CAP (0.99F) // Maximum SPP value to prevent locking
 
+// Brandt (Trimmer Mean) Constants
+#define BRANDT_DEFAULT_HISTORY_MS 5000.0f
+#define BRANDT_DEFAULT_PERCENTILE 0.5f
+#define BRANDT_MIN_CONFIDENCE                                                  \
+  0.90f // Lowered from 0.98 for better learning speed
+
 /* --------------------------------------------------------------- */
 /* ------------------- Denoiser configurations ------------------- */
 /* --------------------------------------------------------------- */

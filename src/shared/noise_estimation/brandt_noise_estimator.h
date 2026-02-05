@@ -24,9 +24,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdbool.h>
 #include <stdint.h>
 
-#define BRANDT_DEFAULT_HISTORY_MS 5000.0f
-#define BRANDT_DEFAULT_PERCENTILE 0.1f
-
 typedef struct BrandtNoiseEstimator BrandtNoiseEstimator;
 
 /**
