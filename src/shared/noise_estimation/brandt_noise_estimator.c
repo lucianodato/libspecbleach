@@ -159,7 +159,7 @@ static float calculate_ad_norm(const float* sorted, uint32_t q, float mu,
 
 bool brandt_noise_estimator_run(BrandtNoiseEstimator* self,
                                 const float* spectrum, float* noise_spectrum) {
-  if (!self || !spectrum || !noise_spectrum) {
+  if (!self || !spectrum || !noise_spectrum || self->history_size == 0) {
     return false;
   }
 
