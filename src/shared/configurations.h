@@ -106,6 +106,17 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define BAND_3_LEVEL (5.F)
 
 #define ESTIMATOR_SILENCE_THRESHOLD (1e-10F) // Roughly -100dB in power
+#define ESTIMATOR_BIAS_EPSILON (1e-6F) // Precision for bias correction calc
+#define ESTIMATOR_MIN_HISTORY_FRAMES                                           \
+  5U // Minimum frames for history-based tracking
+#define ESTIMATOR_MIN_DURATION_MS 0.1F // Safety floor for duration calcs
+
+// Martin (2001) Constants
+#define MARTIN_WINDOW_LEN 96  // Total window length (frames)
+#define MARTIN_SUBWIN_COUNT 8 // Number of sub-windows
+#define MARTIN_SUBWIN_LEN 12  // Sub-window length (96/8)
+#define MARTIN_BIAS_CORR 1.5F // Conservative bias correction for min tracking
+#define MARTIN_SMOOTH_ALPHA 0.8F // Baseline smoothing for PSD
 
 // SPP-MMSE Estimator Constants
 #define SPP_PRIOR_H1 (0.5F)      // P(H1) - Speech present prior

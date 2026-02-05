@@ -25,8 +25,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdint.h>
 
 typedef enum AdaptiveNoiseEstimationMethod {
-  LOUIZOU_METHOD = 0,  // Original minimum statistics method (default)
-  SPP_MMSE_METHOD = 1, // Speech Presence Probability - MMSE method
+  SPP_MMSE_METHOD = 0, // Speech Presence Probability - MMSE method
+  BRANDT_METHOD = 1,   // Trimmed Mean (Automatic PSD Estimation - 2017)
+  MARTIN_METHOD = 2,   // Martin (2001) Minimum Statistics
 } AdaptiveNoiseEstimationMethod;
 
 typedef struct AdaptiveNoiseEstimator AdaptiveNoiseEstimator;

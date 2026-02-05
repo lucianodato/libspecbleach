@@ -19,7 +19,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 #include "adaptive_noise_estimator.h"
-#include "louizou_noise_estimator.h"
+#include "brandt_noise_estimator.h"
+#include "martin_noise_estimator.h"
 #include "spp_mmse_noise_estimator.h"
 #include <stdlib.h>
 
@@ -27,26 +28,6 @@ struct AdaptiveNoiseEstimator {
   AdaptiveNoiseEstimationMethod method;
   void* internal_estimator;
 };
-
-static AdaptiveNoiseEstimator* create_louizou_estimator(
-    uint32_t noise_spectrum_size, uint32_t sample_rate, uint32_t fft_size) {
-  AdaptiveNoiseEstimator* self =
-      (AdaptiveNoiseEstimator*)calloc(1U, sizeof(AdaptiveNoiseEstimator));
-  if (!self) {
-    return NULL;
-  }
-
-  self->method = LOUIZOU_METHOD;
-  self->internal_estimator = louizou_noise_estimator_initialize(
-      noise_spectrum_size, sample_rate, fft_size);
-
-  if (!self->internal_estimator) {
-    free(self);
-    return NULL;
-  }
-
-  return self;
-}
 
 static AdaptiveNoiseEstimator* create_spp_mmse_estimator(
     uint32_t noise_spectrum_size, uint32_t sample_rate, uint32_t fft_size) {
@@ -68,33 +49,81 @@ static AdaptiveNoiseEstimator* create_spp_mmse_estimator(
   return self;
 }
 
-static bool run_louizou(AdaptiveNoiseEstimator* self, const float* spectrum,
-                        float* noise_spectrum) {
-  return louizou_noise_estimator_run(
-      (LouizouNoiseEstimator*)self->internal_estimator, spectrum,
+static AdaptiveNoiseEstimator* create_brandt_estimator(
+    uint32_t noise_spectrum_size, uint32_t sample_rate, uint32_t fft_size) {
+  AdaptiveNoiseEstimator* self =
+      (AdaptiveNoiseEstimator*)calloc(1U, sizeof(AdaptiveNoiseEstimator));
+  if (!self) {
+    return NULL;
+  }
+
+  self->method = BRANDT_METHOD;
+  // Default parameters: 5000ms history (extremely robust for music)
+  self->internal_estimator = brandt_noise_estimator_initialize(
+      noise_spectrum_size, BRANDT_DEFAULT_HISTORY_MS, sample_rate, fft_size);
+
+  if (!self->internal_estimator) {
+    free(self);
+    return NULL;
+  }
+
+  return self;
+}
+
+static AdaptiveNoiseEstimator* create_martin_estimator(
+    uint32_t noise_spectrum_size, uint32_t sample_rate, uint32_t fft_size) {
+  AdaptiveNoiseEstimator* self =
+      (AdaptiveNoiseEstimator*)calloc(1U, sizeof(AdaptiveNoiseEstimator));
+  if (!self) {
+    return NULL;
+  }
+
+  self->method = MARTIN_METHOD;
+  self->internal_estimator = martin_noise_estimator_initialize(
+      noise_spectrum_size, sample_rate, fft_size);
+
+  if (!self->internal_estimator) {
+    free(self);
+    return NULL;
+  }
+
+  return self;
+}
+
+static bool run_martin(AdaptiveNoiseEstimator* self, const float* spectrum,
+                       float* noise_spectrum) {
+  return martin_noise_estimator_run(
+      (MartinNoiseEstimator*)self->internal_estimator, spectrum,
       noise_spectrum);
 }
 
-static bool run_spp_mmse(AdaptiveNoiseEstimator* self, const float* spectrum,
-                         float* noise_spectrum) {
-  return spp_mmse_noise_estimator_run(
-      (SppMmseNoiseEstimator*)self->internal_estimator, spectrum,
+static bool run_brandt(AdaptiveNoiseEstimator* self, const float* spectrum,
+                       float* noise_spectrum) {
+  return brandt_noise_estimator_run(
+      (BrandtNoiseEstimator*)self->internal_estimator, spectrum,
       noise_spectrum);
 }
 
 AdaptiveNoiseEstimator* adaptive_estimator_initialize(
     uint32_t noise_spectrum_size, uint32_t sample_rate, uint32_t fft_size,
     AdaptiveNoiseEstimationMethod method) {
-  if (method == LOUIZOU_METHOD) {
-    return create_louizou_estimator(noise_spectrum_size, sample_rate, fft_size);
+  if (method == SPP_MMSE_METHOD) {
+    return create_spp_mmse_estimator(noise_spectrum_size, sample_rate,
+                                     fft_size);
   }
-  return create_spp_mmse_estimator(noise_spectrum_size, sample_rate, fft_size);
+  if (method == BRANDT_METHOD) {
+    return create_brandt_estimator(noise_spectrum_size, sample_rate, fft_size);
+  }
+  if (method == MARTIN_METHOD) {
+    return create_martin_estimator(noise_spectrum_size, sample_rate, fft_size);
+  }
+  return create_martin_estimator(noise_spectrum_size, sample_rate, fft_size);
 }
 
 AdaptiveNoiseEstimationMethod adaptive_estimator_get_method(
     const AdaptiveNoiseEstimator* self) {
   if (!self) {
-    return LOUIZOU_METHOD; // Safe default
+    return MARTIN_METHOD; // Safe default
   }
   return self->method;
 }
@@ -104,12 +133,15 @@ void adaptive_estimator_free(AdaptiveNoiseEstimator* self) {
     return;
   }
 
-  if (self->method == LOUIZOU_METHOD) {
-    louizou_noise_estimator_free(
-        (LouizouNoiseEstimator*)self->internal_estimator);
-  } else {
+  if (self->method == SPP_MMSE_METHOD) {
     spp_mmse_noise_estimator_free(
         (SppMmseNoiseEstimator*)self->internal_estimator);
+  } else if (self->method == BRANDT_METHOD) {
+    brandt_noise_estimator_free(
+        (BrandtNoiseEstimator*)self->internal_estimator);
+  } else if (self->method == MARTIN_METHOD) {
+    martin_noise_estimator_free(
+        (MartinNoiseEstimator*)self->internal_estimator);
   }
 
   free(self);
@@ -121,10 +153,16 @@ bool adaptive_estimator_run(AdaptiveNoiseEstimator* self, const float* spectrum,
     return false;
   }
 
-  if (self->method == LOUIZOU_METHOD) {
-    return run_louizou(self, spectrum, noise_spectrum);
+  if (self->method == SPP_MMSE_METHOD) {
+    return spp_mmse_noise_estimator_run(
+        (SppMmseNoiseEstimator*)self->internal_estimator, spectrum,
+        noise_spectrum);
   }
-  return run_spp_mmse(self, spectrum, noise_spectrum);
+  if (self->method == MARTIN_METHOD) {
+    return run_martin(self, spectrum, noise_spectrum);
+  }
+
+  return run_brandt(self, spectrum, noise_spectrum);
 }
 
 void adaptive_estimator_set_state(AdaptiveNoiseEstimator* self,
@@ -135,12 +173,15 @@ void adaptive_estimator_set_state(AdaptiveNoiseEstimator* self,
     return;
   }
 
-  if (self->method == LOUIZOU_METHOD) {
-    louizou_noise_estimator_set_state(
-        (LouizouNoiseEstimator*)self->internal_estimator, initial_profile);
-  } else {
+  if (self->method == SPP_MMSE_METHOD) {
     spp_mmse_noise_estimator_set_state(
         (SppMmseNoiseEstimator*)self->internal_estimator, initial_profile);
+  } else if (self->method == MARTIN_METHOD) {
+    martin_noise_estimator_set_state(
+        (MartinNoiseEstimator*)self->internal_estimator, initial_profile);
+  } else {
+    brandt_noise_estimator_set_state(
+        (BrandtNoiseEstimator*)self->internal_estimator, initial_profile);
   }
 }
 
@@ -150,12 +191,15 @@ void adaptive_estimator_apply_floor(AdaptiveNoiseEstimator* self,
     return;
   }
 
-  if (self->method == LOUIZOU_METHOD) {
-    louizou_noise_estimator_apply_floor(
-        (LouizouNoiseEstimator*)self->internal_estimator, floor_profile);
-  } else {
+  if (self->method == SPP_MMSE_METHOD) {
     spp_mmse_noise_estimator_apply_floor(
         (SppMmseNoiseEstimator*)self->internal_estimator, floor_profile);
+  } else if (self->method == MARTIN_METHOD) {
+    martin_noise_estimator_apply_floor(
+        (MartinNoiseEstimator*)self->internal_estimator, floor_profile);
+  } else {
+    brandt_noise_estimator_apply_floor(
+        (BrandtNoiseEstimator*)self->internal_estimator, floor_profile);
   }
 }
 
@@ -165,11 +209,14 @@ void adaptive_estimator_update_seed(AdaptiveNoiseEstimator* self,
     return;
   }
 
-  if (self->method == LOUIZOU_METHOD) {
-    louizou_noise_estimator_update_seed(
-        (LouizouNoiseEstimator*)self->internal_estimator, seed_profile);
-  } else {
+  if (self->method == SPP_MMSE_METHOD) {
     spp_mmse_noise_estimator_update_seed(
         (SppMmseNoiseEstimator*)self->internal_estimator, seed_profile);
+  } else if (self->method == MARTIN_METHOD) {
+    martin_noise_estimator_update_seed(
+        (MartinNoiseEstimator*)self->internal_estimator, seed_profile);
+  } else {
+    brandt_noise_estimator_update_seed(
+        (BrandtNoiseEstimator*)self->internal_estimator, seed_profile);
   }
 }
