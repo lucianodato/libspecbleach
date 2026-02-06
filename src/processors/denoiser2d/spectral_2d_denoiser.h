@@ -39,6 +39,8 @@ typedef struct Denoiser2DParameters {
   float whitening_factor;   /**< Whitening factor (0.0 to 1.0) */
   int adaptive_noise;       /**< Adaptive noise mode: 0=disabled, 1=enabled */
   int noise_estimation_method; /**< 0=SPP-MMSE, 1=Brandt, 2=Martin MS */
+  int noise_scaling_type;      /**< 0=SNR, 1=Bands, 2=Masking */
+  float reduction_strength;    /**< Oversubtraction factor */
 } Denoiser2DParameters;
 
 /**

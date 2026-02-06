@@ -88,6 +88,20 @@ typedef struct SpectralBleach2DDenoiserParameters {
    * 2: Martin Minimum Statistics
    */
   int noise_estimation_method;
+
+  /**
+   * Sets the noise scaling type.
+   * 0: A-posteriori SNR Global
+   * 1: A-posteriori SNR Critical Bands
+   * 2: Masking Thresholds
+   */
+  int noise_scaling_type;
+
+  /**
+   * Sets the oversubtraction factor (reduction strength).
+   * Typically from 1.0 to 16.0 (mapped to dBs in the UI).
+   */
+  float reduction_strength;
 } SpectralBleach2DDenoiserParameters;
 
 /**

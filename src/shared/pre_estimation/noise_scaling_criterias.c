@@ -30,11 +30,11 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 static void a_posteriori_snr_critical_bands(NoiseScalingCriterias* self,
                                             const float* spectrum,
                                             const float* noise_spectrum,
-                                            float* alpha,
+                                            float* alpha, float* beta,
                                             NoiseScalingParameters parameters);
 static void a_posteriori_snr(NoiseScalingCriterias* self, const float* spectrum,
                              const float* noise_spectrum, float* alpha,
-                             NoiseScalingParameters parameters);
+                             float* beta, NoiseScalingParameters parameters);
 static void masking_thresholds(NoiseScalingCriterias* self,
                                const float* spectrum,
                                const float* noise_spectrum, float* alpha,
@@ -143,11 +143,11 @@ bool apply_noise_scaling_criteria(NoiseScalingCriterias* self,
 
   switch ((NoiseScalingType)parameters.scaling_type) {
     case A_POSTERIORI_SNR:
-      a_posteriori_snr(self, spectrum, noise_spectrum, alpha, parameters);
+      a_posteriori_snr(self, spectrum, noise_spectrum, alpha, beta, parameters);
       break;
     case A_POSTERIORI_SNR_CRITICAL_BANDS:
       a_posteriori_snr_critical_bands(self, spectrum, noise_spectrum, alpha,
-                                      parameters);
+                                      beta, parameters);
       break;
     case MASKING_THRESHOLDS:
       masking_thresholds(self, spectrum, noise_spectrum, alpha, beta,
@@ -171,7 +171,7 @@ bool apply_noise_scaling_criteria(NoiseScalingCriterias* self,
 static void a_posteriori_snr_critical_bands(NoiseScalingCriterias* self,
                                             const float* spectrum,
                                             const float* noise_spectrum,
-                                            float* alpha,
+                                            float* alpha, float* beta,
                                             NoiseScalingParameters parameters) {
 
   compute_critical_bands_spectrum(self->critical_bands, noise_spectrum,
@@ -179,34 +179,45 @@ static void a_posteriori_snr_critical_bands(NoiseScalingCriterias* self,
   compute_critical_bands_spectrum(self->critical_bands, spectrum,
                                   self->critical_bands_reference_spectrum);
 
-  float oversubtraction_factor = 1.F;
+  float oversubtraction_factor;
+  float undersubtraction_factor;
 
   for (uint32_t j = 0U; j < self->number_critical_bands; j++) {
 
     self->band_indexes = get_band_indexes(self->critical_bands, j);
 
     const float snr_db =
-        10.F * log10f(self->critical_bands_reference_spectrum[j] /
-                      self->critical_bands_noise_profile[j]);
+        10.F *
+        log10f(self->critical_bands_reference_spectrum[j] /
+               (self->critical_bands_noise_profile[j] + SPECTRAL_EPSILON));
 
-    if (snr_db >= self->lower_snr && snr_db <= self->higher_snr) {
-      oversubtraction_factor = (-0.05F * (snr_db)) + parameters.oversubtraction;
-    } else if (snr_db < 0.F) {
+    if (snr_db <= 0.F) {
       oversubtraction_factor = parameters.oversubtraction;
-    } else if (snr_db > 20.F) {
-      oversubtraction_factor = 1.F;
+      undersubtraction_factor = parameters.undersubtraction;
+    } else if (snr_db >= 20.F) {
+      oversubtraction_factor = self->alpha_minimun;
+      undersubtraction_factor = self->beta_minimun;
+    } else {
+      const float normalized_snr = snr_db / 20.F;
+      oversubtraction_factor =
+          ((1.F - normalized_snr) * parameters.oversubtraction) +
+          (normalized_snr * self->alpha_minimun);
+      undersubtraction_factor =
+          ((1.F - normalized_snr) * parameters.undersubtraction) +
+          (normalized_snr * self->beta_minimun);
     }
 
     for (uint32_t k = self->band_indexes.start_position;
          k < self->band_indexes.end_position; k++) {
       alpha[k] = oversubtraction_factor;
+      beta[k] = undersubtraction_factor;
     }
   }
 }
 
 static void a_posteriori_snr(NoiseScalingCriterias* self, const float* spectrum,
                              const float* noise_spectrum, float* alpha,
-                             NoiseScalingParameters parameters) {
+                             float* beta, NoiseScalingParameters parameters) {
   float noisy_spectrum_sum = 0.F;
   float noise_spectrum_sum = 0.F;
 
@@ -215,19 +226,31 @@ static void a_posteriori_snr(NoiseScalingCriterias* self, const float* spectrum,
     noise_spectrum_sum += noise_spectrum[k];
   }
 
-  const float snr_db = 10.F * log10f(noisy_spectrum_sum / noise_spectrum_sum);
+  const float snr_db = 10.F * log10f(noisy_spectrum_sum /
+                                     (noise_spectrum_sum + SPECTRAL_EPSILON));
 
   float oversubtraction_factor;
-  if (snr_db >= self->lower_snr && snr_db <= self->higher_snr) {
-    oversubtraction_factor = (-0.05F * (snr_db)) + parameters.oversubtraction;
-  } else if (snr_db < 0.F) {
+  float undersubtraction_factor;
+
+  if (snr_db <= 0.F) {
     oversubtraction_factor = parameters.oversubtraction;
+    undersubtraction_factor = parameters.undersubtraction;
+  } else if (snr_db >= 20.F) {
+    oversubtraction_factor = self->alpha_minimun;
+    undersubtraction_factor = self->beta_minimun;
   } else {
-    oversubtraction_factor = 1.F;
+    const float normalized_snr = snr_db / 20.F;
+    oversubtraction_factor =
+        ((1.F - normalized_snr) * parameters.oversubtraction) +
+        (normalized_snr * self->alpha_minimun);
+    undersubtraction_factor =
+        ((1.F - normalized_snr) * parameters.undersubtraction) +
+        (normalized_snr * self->beta_minimun);
   }
 
   for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
     alpha[k] = oversubtraction_factor;
+    beta[k] = undersubtraction_factor;
   }
 }
 
@@ -245,33 +268,27 @@ static void masking_thresholds(NoiseScalingCriterias* self,
                              self->clean_signal_estimation,
                              self->masking_thresholds);
 
-  float max_masked_value =
-      10.F * log10f(max_spectral_value(self->masking_thresholds,
-                                       self->real_spectrum_size) +
-                    SPECTRAL_EPSILON);
-  float min_masked_value =
-      10.F * log10f(min_spectral_value(self->masking_thresholds,
-                                       self->real_spectrum_size) +
-                    SPECTRAL_EPSILON);
-
   for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
-    const float current_masked_value =
-        10.F * log10f(self->masking_thresholds[k] + SPECTRAL_EPSILON);
+    const float nmr_db =
+        10.F * log10f(noise_spectrum[k] /
+                      (self->masking_thresholds[k] + SPECTRAL_EPSILON));
 
-    if (current_masked_value >= max_masked_value) {
-      alpha[k] = self->alpha_minimun;
+    if (nmr_db <= 0.F) {
+      // Elastic Protection: allow configured influence of oversubtraction even
+      // if masked
+      alpha[k] = self->alpha_minimun +
+                 (parameters.oversubtraction - self->alpha_minimun) *
+                     ELASTIC_PROTECTION_FACTOR;
       beta[k] = self->beta_minimun;
-    } else if (current_masked_value <= min_masked_value) {
+    } else if (nmr_db >= 20.F) {
       alpha[k] = parameters.oversubtraction;
       beta[k] = parameters.undersubtraction;
     } else {
-      const float normalized_value = (current_masked_value - min_masked_value) /
-                                     (max_masked_value - min_masked_value);
-
-      alpha[k] = ((1.F - normalized_value) * parameters.oversubtraction) +
-                 (normalized_value * self->alpha_minimun);
-      beta[k] = ((1.F - normalized_value) * parameters.undersubtraction) +
-                (normalized_value * self->beta_minimun);
+      const float normalized_nmr = nmr_db / 20.F;
+      alpha[k] = ((1.F - normalized_nmr) * self->alpha_minimun) +
+                 (normalized_nmr * parameters.oversubtraction);
+      beta[k] = ((1.F - normalized_nmr) * self->beta_minimun) +
+                (normalized_nmr * parameters.undersubtraction);
     }
   }
 }

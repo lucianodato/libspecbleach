@@ -76,11 +76,6 @@ typedef struct SpectralBleachDenoiserParameters {
    * value in between 0 dB and 12 dB */
   float noise_rescale;
 
-  /* Sets the SNR threshold in dB in which the post-filter will start to blur
-   * musical noise. It can be a positive or negative dB value in between -10 dB
-   * and 10 dB */
-  float post_filter_threshold;
-
   /* Enables the adaptive noise estimation, which will continuously update the
    * noise profile based on the current input signal. */
   int adaptive_noise;

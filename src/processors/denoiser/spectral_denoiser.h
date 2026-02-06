@@ -35,7 +35,6 @@ typedef struct DenoiserParameters {
   int noise_reduction_mode;
   float smoothing_factor;
   float whitening_factor;
-  float post_filter_threshold;
   int adaptive_noise;
   int noise_estimation_method; /**< 0=SPP-MMSE, 1=Brandt, 2=Martin MS */
 } DenoiserParameters;

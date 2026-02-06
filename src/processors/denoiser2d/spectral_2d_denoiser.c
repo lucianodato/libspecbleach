@@ -25,6 +25,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "shared/noise_estimation/noise_estimator.h"
 #include "shared/post_estimation/nlm_filter.h"
 #include "shared/post_estimation/noise_floor_manager.h"
+#include "shared/pre_estimation/noise_scaling_criterias.h"
 #include "shared/utils/denoise_mixer.h"
 #include "shared/utils/spectral_features.h"
 #include "shared/utils/spectral_utils.h"
@@ -61,6 +62,7 @@ typedef struct Spectral2DDenoiser {
   AdaptiveNoiseEstimator* adaptive_estimator;
   NlmFilter* nlm_filter;
   SpectralFeatures* spectral_features;
+  NoiseScalingCriterias* noise_scaling_criterias;
   DenoiseMixer* mixer;
   NoiseFloorManager* noise_floor_manager;
 
@@ -194,6 +196,15 @@ SpectralProcessorHandle spectral_2d_denoiser_initialize(
     return NULL;
   }
 
+  // Initialize noise scaling criteria
+  self->noise_scaling_criterias = noise_scaling_criterias_initialize(
+      self->fft_size, CRITICAL_BANDS_TYPE, self->sample_rate,
+      self->spectrum_type);
+  if (!self->noise_scaling_criterias) {
+    spectral_2d_denoiser_free(self);
+    return NULL;
+  }
+
   // Initialize mixer
   self->mixer = denoise_mixer_initialize(fft_size, sample_rate, self->hop);
   if (!self->mixer) {
@@ -230,6 +241,9 @@ void spectral_2d_denoiser_free(SpectralProcessorHandle instance) {
   }
   if (self->spectral_features) {
     spectral_features_free(self->spectral_features);
+  }
+  if (self->noise_scaling_criterias) {
+    noise_scaling_criterias_free(self->noise_scaling_criterias);
   }
   if (self->mixer) {
     denoise_mixer_free(self->mixer);
@@ -397,24 +411,33 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
       float denom =
           delayed_noise[k] > FLT_MIN ? delayed_noise[k] : SPECTRAL_EPSILON;
       smoothed_magnitude[k] = self->smoothed_snr[k] * denom;
+      // Also copy delayed noise to self->noise_spectrum for subsequent
+      // processing without modifying the delay buffer in-place
+      self->noise_spectrum[k] = delayed_noise[k];
     }
 
     // Parameters for gain estimation
-    for (uint32_t k = 0; k < self->real_spectrum_size; k++) {
-      self->alpha[k] = DEFAULT_OVERSUBTRACTION;
-      self->beta[k] = self->parameters.reduction_amount;
-    }
+    NoiseScalingParameters scaling_params = {
+        .oversubtraction = self->parameters.reduction_strength,
+        .undersubtraction = self->parameters.reduction_amount,
+        .scaling_type = self->parameters.noise_scaling_type,
+    };
+
+    // Calculate alpha and beta using noise scaling criteria
+    apply_noise_scaling_criteria(self->noise_scaling_criterias,
+                                 delayed_spectrum, delayed_noise, self->alpha,
+                                 self->beta, scaling_params);
 
     // Estimate gains
     estimate_gains(self->real_spectrum_size, self->fft_size, smoothed_magnitude,
-                   delayed_noise, self->gain_spectrum, self->alpha, self->beta,
-                   self->gain_estimation_type);
+                   self->noise_spectrum, self->gain_spectrum, self->alpha,
+                   self->beta, self->gain_estimation_type);
 
     // Apply noise floor management
     noise_floor_manager_apply(
         self->noise_floor_manager, self->real_spectrum_size, self->fft_size,
-        self->gain_spectrum, delayed_noise, self->parameters.reduction_amount,
-        self->parameters.whitening_factor);
+        self->gain_spectrum, self->noise_spectrum,
+        self->parameters.reduction_amount, self->parameters.whitening_factor);
 
     // Mix results
     DenoiseMixerParameters mixer_params = {

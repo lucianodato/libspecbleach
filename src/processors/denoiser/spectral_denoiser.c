@@ -24,7 +24,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "shared/noise_estimation/adaptive_noise_estimator.h"
 #include "shared/noise_estimation/noise_estimator.h"
 #include "shared/post_estimation/noise_floor_manager.h"
-#include "shared/post_estimation/postfilter.h"
 #include "shared/pre_estimation/critical_bands.h"
 #include "shared/pre_estimation/noise_scaling_criterias.h"
 #include "shared/pre_estimation/spectral_smoother.h"
@@ -58,14 +57,12 @@ typedef struct SbSpectralDenoiser {
 
   NoiseEstimator* noise_estimator;
   AdaptiveNoiseEstimator* adaptive_estimator;
-  PostFilter* postfiltering;
   NoiseProfile* noise_profile;
   SpectralFeatures* spectral_features;
   DenoiseMixer* mixer;
   NoiseScalingCriterias* noise_scaling_criteria;
   SpectralSmoother* spectrum_smoothing;
   NoiseFloorManager* noise_floor_manager;
-  bool postfiltering_enabled;
   bool whitening_enabled;
 
   int last_adaptive_state;
@@ -98,7 +95,6 @@ SpectralProcessorHandle spectral_denoiser_initialize(
   self->default_undersubtraction = DEFAULT_UNDERSUBTRACTION;
   self->gain_estimation_type = GAIN_ESTIMATION_TYPE;
   self->time_smoothing_type = TIME_SMOOTHING_TYPE;
-  self->postfiltering_enabled = POSTFILTER_ENABLED_GENERAL;
   self->whitening_enabled = WHITENING_ENABLED_GENERAL;
 
   self->gain_spectrum = (float*)calloc(self->fft_size, sizeof(float));
@@ -150,14 +146,6 @@ SpectralProcessorHandle spectral_denoiser_initialize(
   if (!self->spectral_features) {
     spectral_denoiser_free(self);
     return NULL;
-  }
-
-  if (self->postfiltering_enabled) {
-    self->postfiltering = postfilter_initialize(self->fft_size);
-    if (!self->postfiltering) {
-      spectral_denoiser_free(self);
-      return NULL;
-    }
   }
 
   self->spectrum_smoothing =
@@ -214,9 +202,6 @@ void spectral_denoiser_free(SpectralProcessorHandle instance) {
   }
   if (self->noise_scaling_criteria) {
     noise_scaling_criterias_free(self->noise_scaling_criteria);
-  }
-  if (self->postfiltering) {
-    postfilter_free(self->postfiltering);
   }
   if (self->mixer) {
     denoise_mixer_free(self->mixer);
@@ -356,8 +341,7 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
   // --- Common Processing Path ---
 
   NoiseScalingParameters oversubtraction_parameters = (NoiseScalingParameters){
-      .oversubtraction = (self->default_oversubtraction +
-                          self->denoise_parameters.noise_rescale),
+      .oversubtraction = self->denoise_parameters.noise_rescale,
       .undersubtraction = self->denoise_parameters.reduction_amount,
       .scaling_type = self->denoise_parameters.noise_scaling_type,
   };
@@ -386,15 +370,6 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
       self->noise_floor_manager, self->real_spectrum_size, self->fft_size,
       self->gain_spectrum, self->noise_spectrum,
       self->denoise_parameters.reduction_amount, whitening_factor);
-
-  if (self->postfiltering_enabled) {
-    PostFiltersParameters post_filter_parameters = (PostFiltersParameters){
-        .snr_threshold = self->denoise_parameters.post_filter_threshold,
-        .gain_floor = self->denoise_parameters.reduction_amount,
-    };
-    postfilter_apply(self->postfiltering, fft_spectrum, self->gain_spectrum,
-                     post_filter_parameters);
-  }
 
   DenoiseMixerParameters mixer_parameters = (DenoiseMixerParameters){
       .noise_level = self->denoise_parameters.reduction_amount,
