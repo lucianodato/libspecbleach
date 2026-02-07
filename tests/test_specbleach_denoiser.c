@@ -37,7 +37,6 @@ void test_specbleach_noise_profile_mode_functions(void) {
       .noise_rescale = 1.0f,
       .smoothing_factor = 50.0f,
       .whitening_factor = 0.0f,
-      .post_filter_threshold = -30.0f,
   };
 
   TEST_ASSERT(specbleach_load_parameters(handle, params) == true,
@@ -102,7 +101,6 @@ void test_specbleach_load_noise_profile_with_mode(void) {
       .noise_rescale = 1.0f,
       .smoothing_factor = 50.0f,
       .whitening_factor = 0.0f,
-      .post_filter_threshold = -30.0f,
   };
 
   TEST_ASSERT(specbleach_load_parameters(handle, params) == true,
@@ -186,7 +184,6 @@ void test_specbleach_mode_switching(void) {
       .noise_rescale = 1.0f,
       .smoothing_factor = 50.0f,
       .whitening_factor = 0.0f,
-      .post_filter_threshold = -30.0f,
   };
   TEST_ASSERT(specbleach_load_parameters(handle, params) == true,
               "Loading mode 1 parameters should succeed");
@@ -273,7 +270,6 @@ void test_specbleach_reset_noise_profile(void) {
       .noise_rescale = 1.0f,
       .smoothing_factor = 50.0f,
       .whitening_factor = 0.0f,
-      .post_filter_threshold = -30.0f,
   };
 
   TEST_ASSERT(specbleach_load_parameters(handle, params) == true,
@@ -373,7 +369,6 @@ void test_specbleach_run_features(void) {
       .noise_rescale = 1.0f,
       .smoothing_factor = 50.0f,
       .whitening_factor = 1.0f, // Test whitening
-      .post_filter_threshold = -30.0f,
   };
 
   specbleach_load_parameters(handle, params);

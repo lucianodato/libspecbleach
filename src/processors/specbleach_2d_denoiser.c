@@ -294,8 +294,8 @@ bool specbleach_2d_load_parameters(
       .whitening_factor = parameters.whitening_factor / 100.F,
       .adaptive_noise = parameters.adaptive_noise,
       .noise_estimation_method = parameters.noise_estimation_method,
-      .noise_scaling_type = parameters.noise_scaling_type,
-      .reduction_strength = from_db_to_coefficient(parameters.reduction_strength),
+      .nlm_masking_protection = parameters.nlm_masking_protection,
+      .masking_elasticity = parameters.masking_elasticity,
   };
   // clang-format on
 

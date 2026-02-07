@@ -76,7 +76,7 @@ void process_audio(const float* input, float* output, int length) {
           .smoothing_factor = 0.0f,
           .noise_rescale = 0.0f,
           .noise_scaling_type = 0,
-          .post_filter_threshold = 0.0f,
+
           .residual_listen = false,
           .whitening_factor = 0.0f};
 
@@ -119,7 +119,7 @@ void process_audio_adaptive(const float* input, float* output, int length) {
                                          .smoothing_factor = 0.0f,
                                          .noise_rescale = 0.0f,
                                          .noise_scaling_type = 0,
-                                         .post_filter_threshold = 0.0f,
+
                                          .residual_listen = false,
                                          .whitening_factor = 0.0f,
                                          .adaptive_noise = 1,
@@ -359,7 +359,7 @@ void test_noise_estimation_methods(void) {
           .smoothing_factor = 0.0f,
           .noise_rescale = 0.0f,
           .noise_scaling_type = 0,
-          .post_filter_threshold = 0.0f,
+
           .residual_listen = false,
           .whitening_factor = 0.0f,
           .adaptive_noise = 1,
@@ -388,7 +388,7 @@ void test_noise_estimation_methods(void) {
           .smoothing_factor = 0.0f,
           .noise_rescale = 0.0f,
           .noise_scaling_type = 0,
-          .post_filter_threshold = 0.0f,
+
           .residual_listen = false,
           .whitening_factor = 0.0f,
           .adaptive_noise = 1,

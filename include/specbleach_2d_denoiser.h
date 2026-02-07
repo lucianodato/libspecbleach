@@ -90,18 +90,19 @@ typedef struct SpectralBleach2DDenoiserParameters {
   int noise_estimation_method;
 
   /**
-   * Sets the noise scaling type.
-   * 0: A-posteriori SNR Global
-   * 1: A-posteriori SNR Critical Bands
-   * 2: Masking Thresholds
+   * Sets the masking protection depth for the NLM filter.
+   * Controls how aggressively the masking threshold protects transients.
+   * Range: 0.0 (No protection, full smoothing) to 1.0 (Full protection).
    */
-  int noise_scaling_type;
+  float nlm_masking_protection;
 
   /**
-   * Sets the oversubtraction factor (reduction strength).
-   * Typically from 1.0 to 16.0 (mapped to dBs in the UI).
+   * Sets the masking elasticity.
+   * Controls how much oversubtraction "leaks" into masked regions to compensate
+   * for psychoacoustic inaccuracies.
+   * Range: 0.0 (Pure masking) to 1.0 (Bypass protection).
    */
-  float reduction_strength;
+  float masking_elasticity;
 } SpectralBleach2DDenoiserParameters;
 
 /**

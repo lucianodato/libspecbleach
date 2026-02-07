@@ -32,8 +32,7 @@ static const SpectralBleachDenoiserParameters CANONICAL_DENOISER_PARAMS = {
     .smoothing_factor = 0.0f,
     .whitening_factor = 50.0f,
     .noise_scaling_type = 2,
-    .noise_rescale = 6.0f,
-    .post_filter_threshold = -10.0f};
+    .noise_rescale = 6.0f};
 
 static const SpectralBleachDenoiserParameters CANONICAL_ADENOISER_PARAMS = {
     .residual_listen = false,
@@ -42,7 +41,7 @@ static const SpectralBleachDenoiserParameters CANONICAL_ADENOISER_PARAMS = {
     .whitening_factor = 50.0f,
     .noise_scaling_type = 2,
     .noise_rescale = 6.0f,
-    .post_filter_threshold = -10.0f,
+
     .adaptive_noise = 1,
     .noise_estimation_method = 0};
 

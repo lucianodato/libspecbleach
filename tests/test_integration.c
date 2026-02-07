@@ -93,7 +93,7 @@ void test_spectral_denoiser(void) {
           .smoothing_factor = 0.0f,
 
           .noise_scaling_type = 0,
-          .post_filter_threshold = 0.0f,
+
           .residual_listen = false,
           .whitening_factor = 0.0f};
 
@@ -164,7 +164,7 @@ void test_different_noise_levels(void) {
                                          .smoothing_factor = 0.0f,
 
                                          .noise_scaling_type = 0,
-                                         .post_filter_threshold = 0.0f,
+
                                          .residual_listen = false,
                                          .whitening_factor = 0.0f};
 
@@ -261,7 +261,7 @@ void test_adaptive_denoiser(void) {
           .reduction_amount = 20.0f,
           .smoothing_factor = 50.0f,
           .noise_scaling_type = 2, // MASKING_THRESHOLDS
-          .post_filter_threshold = -30.0f,
+
           .residual_listen = false,
           .whitening_factor = 50.0f,
           .adaptive_noise = 1,         // Enable adaptive mode
