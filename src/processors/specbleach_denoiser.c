@@ -264,14 +264,14 @@ bool specbleach_load_parameters(SpectralBleachHandle instance,
       .learn_noise = parameters.learn_noise,
       .noise_reduction_mode = parameters.noise_reduction_mode,
       .residual_listen = parameters.residual_listen,
-      .noise_scaling_type = parameters.noise_scaling_type,
       .reduction_amount =
           from_db_to_coefficient(parameters.reduction_amount * -1.F),
-      .noise_rescale = from_db_to_coefficient(parameters.noise_rescale),
       .smoothing_factor = remap_percentage_log_like_unity(parameters.smoothing_factor / 100.F),
       .whitening_factor = parameters.whitening_factor / 100.F,
       .adaptive_noise = parameters.adaptive_noise,
       .noise_estimation_method = parameters.noise_estimation_method,
+      .masking_depth = parameters.masking_depth,
+      .masking_elasticity = parameters.masking_elasticity,
   };
   // clang-format on
 

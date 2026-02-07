@@ -28,8 +28,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 typedef struct DenoiserParameters {
   float reduction_amount;
-  int noise_scaling_type;
-  float noise_rescale;
   bool residual_listen;
   int learn_noise;
   int noise_reduction_mode;
@@ -37,6 +35,8 @@ typedef struct DenoiserParameters {
   float whitening_factor;
   int adaptive_noise;
   int noise_estimation_method; /**< 0=SPP-MMSE, 1=Brandt, 2=Martin MS */
+  float masking_depth;
+  float masking_elasticity;
 } DenoiserParameters;
 
 SpectralProcessorHandle spectral_denoiser_initialize(

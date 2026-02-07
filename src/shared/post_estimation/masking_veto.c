@@ -137,8 +137,8 @@ void masking_veto_apply(MaskingVeto* self, const float* smoothed_spectrum,
                                                  (1.0F - protection_effective));
 
     // Final Alpha: Scale the moderated alpha by the smoothing ratio ONLY
-    // in masked regions to rescue blurred energy.
-    // The transient rescue is also moderated by elasticity.
+    // in masked regions to rescue signal energy (transients and masked detail)
+    // blurred by the smoothing process. Moderated by elasticity.
     alpha[k] = moderated_alpha *
                (1.0F - (protection_effective * (1.0F - smoothing_ratio)));
   }

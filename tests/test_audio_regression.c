@@ -74,8 +74,8 @@ void process_audio(const float* input, float* output, int length) {
           .noise_reduction_mode = 1, // Use average when processing
           .reduction_amount = 20.0f,
           .smoothing_factor = 0.0f,
-          .noise_rescale = 0.0f,
-          .noise_scaling_type = 0,
+          .masking_depth = 0.5f,
+          .masking_elasticity = 0.1f,
 
           .residual_listen = false,
           .whitening_factor = 0.0f};
@@ -117,8 +117,8 @@ void process_audio_adaptive(const float* input, float* output, int length) {
   SpectralBleachDenoiserParameters parameters =
       (SpectralBleachDenoiserParameters){.reduction_amount = 20.0f,
                                          .smoothing_factor = 0.0f,
-                                         .noise_rescale = 0.0f,
-                                         .noise_scaling_type = 0,
+                                         .masking_depth = 0.5f,
+                                         .masking_elasticity = 0.1f,
 
                                          .residual_listen = false,
                                          .whitening_factor = 0.0f,
@@ -357,8 +357,8 @@ void test_noise_estimation_methods(void) {
       (SpectralBleachDenoiserParameters){
           .reduction_amount = 20.0f,
           .smoothing_factor = 0.0f,
-          .noise_rescale = 0.0f,
-          .noise_scaling_type = 0,
+          .masking_depth = 0.5f,
+          .masking_elasticity = 0.1f,
 
           .residual_listen = false,
           .whitening_factor = 0.0f,
@@ -386,8 +386,8 @@ void test_noise_estimation_methods(void) {
       (SpectralBleachDenoiserParameters){
           .reduction_amount = 20.0f,
           .smoothing_factor = 0.0f,
-          .noise_rescale = 0.0f,
-          .noise_scaling_type = 0,
+          .masking_depth = 0.5f,
+          .masking_elasticity = 0.1f,
 
           .residual_listen = false,
           .whitening_factor = 0.0f,
