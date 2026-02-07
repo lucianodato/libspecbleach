@@ -50,12 +50,10 @@ static void print_usage(const char* prog_name) {
           "  --whitening <val>      Whitening factor (default: 50.0)\n");
   fprintf(stderr, "  --smoothing <val>      Smoothing factor (default: 0.0)\n");
   fprintf(stderr,
-          "  --rescale <val>        Noise rescale in dB (default: 6.0)\n");
+          "  --masking-depth <val>  Masking depth (0.0-1.0, default: 0.5)\n");
   fprintf(stderr,
-          "  --scaling-type <val>   Noise scaling type (0-2, default: 2)\n");
-  fprintf(stderr,
-          "  --threshold <val>      Post-filter threshold in dB (default: "
-          "-10.0)\n");
+          "  --masking-elasticity <val> Masking elasticity (0.0-1.0, default: "
+          "0.1)\n");
   fprintf(stderr,
           "  --learn-avg <val>      Learn average mode (0-3, default: 3)\n");
   fprintf(stderr, "  --help                Show this help message\n");
@@ -94,24 +92,22 @@ int main(int argc, char** argv) {
           .reduction_amount = 20.F,
           .smoothing_factor = 0.F,
           .whitening_factor = 50.F,
-          .noise_scaling_type = 2,
-          .noise_rescale = 6.F,
-          .post_filter_threshold = -10.F};
+          .masking_depth = 0.5F,
+          .masking_elasticity = 0.1F};
 
   static struct option long_options[] = {
       {"reduction", required_argument, 0, 'r'},
       {"whitening", required_argument, 0, 'w'},
       {"smoothing", required_argument, 0, 's'},
-      {"rescale", required_argument, 0, 'e'},
-      {"scaling-type", required_argument, 0, 't'},
-      {"threshold", required_argument, 0, 'h'},
+      {"masking-depth", required_argument, 0, 'd'},
+      {"masking-elasticity", required_argument, 0, 'e'},
       {"learn-avg", required_argument, 0, 'l'},
       {"help", no_argument, 0, '?'},
       {0, 0, 0, 0}};
 
   int opt;
-  while ((opt = getopt_long(argc, argv, "r:w:s:e:t:h:l:", long_options,
-                            NULL)) != -1) {
+  while ((opt = getopt_long(argc, argv, "r:w:s:d:e:l:", long_options, NULL)) !=
+         -1) {
     switch (opt) {
       case 'r':
         parameters.reduction_amount = (float)atof(optarg);
@@ -122,14 +118,11 @@ int main(int argc, char** argv) {
       case 's':
         parameters.smoothing_factor = (float)atof(optarg);
         break;
+      case 'd':
+        parameters.masking_depth = (float)atof(optarg);
+        break;
       case 'e':
-        parameters.noise_rescale = (float)atof(optarg);
-        break;
-      case 't':
-        parameters.noise_scaling_type = atoi(optarg);
-        break;
-      case 'h':
-        parameters.post_filter_threshold = (float)atof(optarg);
+        parameters.masking_elasticity = (float)atof(optarg);
         break;
       case 'l':
         parameters.noise_reduction_mode = atoi(optarg);
