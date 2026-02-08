@@ -66,22 +66,14 @@ void detect_tonal_components(const float* profile, const float* max_profile,
 
           // Spread the influence to neighboring bins to cover sidebands
           // (leakage) Center: 1.0, ±1: 0.8, ±2: 0.4
-          if (k > 0) {
-            tonal_mask[k - 1] =
-                fmaxf(tonal_mask[k - 1], stationarity_weight * 0.8f);
-          }
-          if (k < size - 1) {
-            tonal_mask[k + 1] =
-                fmaxf(tonal_mask[k + 1], stationarity_weight * 0.8f);
-          }
-          if (k > 1) {
-            tonal_mask[k - 2] =
-                fmaxf(tonal_mask[k - 2], stationarity_weight * 0.4f);
-          }
-          if (k < size - 2) {
-            tonal_mask[k + 2] =
-                fmaxf(tonal_mask[k + 2], stationarity_weight * 0.4f);
-          }
+          tonal_mask[k - 1] =
+              fmaxf(tonal_mask[k - 1], stationarity_weight * 0.8f);
+          tonal_mask[k + 1] =
+              fmaxf(tonal_mask[k + 1], stationarity_weight * 0.8f);
+          tonal_mask[k - 2] =
+              fmaxf(tonal_mask[k - 2], stationarity_weight * 0.4f);
+          tonal_mask[k + 2] =
+              fmaxf(tonal_mask[k + 2], stationarity_weight * 0.4f);
         }
       }
     }
