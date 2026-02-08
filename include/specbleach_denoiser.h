@@ -35,11 +35,6 @@ typedef struct SpectralBleachDenoiserParameters {
    * 0 is disabled, 1 will learn all profile types simultaneously. */
   int learn_noise;
 
-  /* Sets the noise reduction mode to use when learning is disabled.
-   * 1 will use the average profile, 2 will use the median profile
-   * and 3 will use the max profile. */
-  int noise_reduction_mode;
-
   /* Enables outputting the residue of the reduction processing. It's either
    * true or false */
   bool residual_listen;
@@ -66,7 +61,9 @@ typedef struct SpectralBleachDenoiserParameters {
   int adaptive_noise;
 
   /* Sets the method used for adaptive noise estimation.
-   * 1: SPP-MMSE method (unbiased estimation) */
+   * 0: SPP-MMSE method (unbiased estimation)
+   * 1: Brandt (Trimmed Mean)
+   * 2: Martin Minimum Statistics */
   int noise_estimation_method;
 
   /** Masking Veto depth (0.0 - 1.0) */
@@ -75,6 +72,11 @@ typedef struct SpectralBleachDenoiserParameters {
 
   /** Suppression aggressiveness (0.0 - 1.0) */
   float suppression_strength; // 0.0 - 1.0: Berouti oversubtraction factor
+
+  /* Intelligent Steering */
+  float aggressiveness; /**< -1.0 (Median/Min) to 1.0 (Max), 0.0 (Mean) */
+  /* Tonal Separation */
+  float tonal_reduction; // 0.0 to 1.0: Independent reduction for tones
 } SpectralBleachDenoiserParameters;
 
 /**
@@ -109,42 +111,22 @@ uint32_t specbleach_get_latency(SpectralBleachHandle instance);
  */
 uint32_t specbleach_get_noise_profile_size(SpectralBleachHandle instance);
 /**
- * Returns a pointer to the noise profile calculated inside the instance
- */
-float* specbleach_get_noise_profile(SpectralBleachHandle instance);
-/**
- * Allows to load a custom noise profile
- */
-bool specbleach_load_noise_profile(SpectralBleachHandle instance,
-                                   const float* restored_profile,
-                                   uint32_t profile_size,
-                                   uint32_t profile_blocks);
-/**
  * Allows to load a custom noise profile for a specific mode
  */
 bool specbleach_load_noise_profile_for_mode(SpectralBleachHandle instance,
                                             const float* restored_profile,
                                             uint32_t profile_size,
-                                            uint32_t profile_blocks, int mode);
+                                            uint32_t block_count, int mode);
 /**
  * Resets the internal noise profile of the library instance
  */
 bool specbleach_reset_noise_profile(SpectralBleachHandle instance);
-/**
- * Returns if the instance has a noise profile calculated internally
- */
-bool specbleach_noise_profile_available(SpectralBleachHandle instance);
-/**
- * Returns the number of blocks used for the noise profile calculation
- */
-uint32_t specbleach_get_noise_profile_blocks_averaged(
-    SpectralBleachHandle instance);
 
 /**
  * Returns the number of blocks used for the noise profile calculation for a
  * specific mode
  */
-uint32_t specbleach_get_noise_profile_blocks_averaged_for_mode(
+uint32_t specbleach_get_noise_profile_block_count_for_mode(
     SpectralBleachHandle instance, int mode);
 
 /**

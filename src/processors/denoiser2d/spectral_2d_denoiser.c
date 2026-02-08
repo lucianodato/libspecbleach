@@ -24,6 +24,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "shared/gain_estimation/suppression_engine.h"
 #include "shared/noise_estimation/adaptive_noise_estimator.h"
 #include "shared/noise_estimation/noise_estimator.h"
+#include "shared/noise_estimation/tonal_detector.h"
 #include "shared/post_estimation/masking_veto.h"
 #include "shared/post_estimation/nlm_filter.h"
 #include "shared/post_estimation/noise_floor_manager.h"
@@ -31,6 +32,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "shared/utils/spectral_features.h"
 #include "shared/utils/spectral_utils.h"
 #include <float.h>
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -49,6 +51,7 @@ typedef struct Spectral2DDenoiser {
   float* alpha;              // Oversubtraction factors
   float* beta;               // Undersubtraction factors
   float* manual_noise_floor; // Manual profile floor
+  float* tonal_mask;         // Tonal vs Broadband mask
 
   // Delay buffer for audio alignment
   float* spectral_delay_buffer;
@@ -70,8 +73,9 @@ typedef struct Spectral2DDenoiser {
   NoiseFloorManager* noise_floor_manager;
 
   int last_adaptive_state;
-  int last_noise_reduction_mode;
   int last_noise_estimation_method;
+  float aggressiveness;
+  bool was_learning;
 } Spectral2DDenoiser;
 
 SpectralProcessorHandle spectral_2d_denoiser_initialize(
@@ -145,6 +149,12 @@ SpectralProcessorHandle spectral_2d_denoiser_initialize(
     return NULL;
   }
 
+  self->tonal_mask = (float*)calloc(self->real_spectrum_size, sizeof(float));
+  if (!self->tonal_mask) {
+    spectral_2d_denoiser_free(self);
+    return NULL;
+  }
+
   // Allocate spectral delay buffer
   // We need to store full FFT frames (packed complex)
   // Assuming fft_size floats is sufficient for the packed format used by STFT
@@ -171,6 +181,9 @@ SpectralProcessorHandle spectral_2d_denoiser_initialize(
   }
 
   self->delay_buffer_write_index = 0;
+  self->was_learning = false;
+  self->aggressiveness = 0.0f;
+  self->parameters.tonal_reduction = 0.0f;
 
   // Initialize noise estimator for learning mode
   self->noise_estimator = noise_estimation_initialize(fft_size, noise_profile);
@@ -276,6 +289,7 @@ void spectral_2d_denoiser_free(SpectralProcessorHandle instance) {
   free(self->noise_delay_buffer);
   free(self->magnitude_delay_buffer);
   free(self->manual_noise_floor);
+  free(self->tonal_mask);
 
   free(self);
 }
@@ -307,6 +321,7 @@ bool load_2d_reduction_parameters(SpectralProcessorHandle instance,
   }
 
   self->parameters = parameters;
+  self->aggressiveness = parameters.aggressiveness;
 
   // Update NLM h parameter based on smoothing factor
   if (self->nlm_filter && parameters.smoothing_factor > 0.0F) {
@@ -331,25 +346,24 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
 
   if (self->parameters.learn_noise > 0) {
     // Learning mode: update noise profile for all modes
-    for (int mode = ROLLING_MEAN; mode <= MAX; mode++) {
+    for (int mode = ROLLING_MEAN; mode <= MINIMUM; mode++) {
       noise_estimation_run(self->noise_estimator, (NoiseEstimatorType)mode,
                            reference_spectrum);
     }
+    self->was_learning = true;
     return true;
   }
 
-  // --- Denoising mode: use NLM for 2D smoothing ---
-
-  // Always keep manual floor updated from the current mode
-  float* current_profile = get_noise_profile(
-      self->noise_profile, self->parameters.noise_reduction_mode);
-  if (current_profile) {
-    memcpy(self->manual_noise_floor, current_profile,
-           self->real_spectrum_size * sizeof(float));
-  } else {
-    memset(self->manual_noise_floor, 0,
-           self->real_spectrum_size * sizeof(float));
+  if (self->was_learning) {
+    // User just stopped learning -> Finalize all captures
+    for (int mode = ROLLING_MEAN; mode <= MINIMUM; mode++) {
+      noise_estimation_finalize(self->noise_estimator,
+                                (NoiseEstimatorType)mode);
+    }
+    self->was_learning = false;
   }
+
+  // --- Denoising mode: use NLM for 2D smoothing ---
 
   // 1. Store current spectral frame in delay buffer
   memcpy(&self->spectral_delay_buffer[(size_t)self->delay_buffer_write_index *
@@ -365,16 +379,25 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
   if (self->parameters.adaptive_noise && self->adaptive_estimator) {
     // Check for state transitions
     bool state_changed = !self->last_adaptive_state;
-    bool mode_changed = self->last_noise_reduction_mode !=
-                        self->parameters.noise_reduction_mode;
+    bool mode_changed =
+        fabsf(self->aggressiveness - self->parameters.aggressiveness) > 0.01f;
 
     if (state_changed || mode_changed) {
+      // Calculate morphed base profile
+      get_morphed_profile(self->manual_noise_floor,
+                          get_noise_profile(self->noise_profile, ROLLING_MEAN),
+                          get_noise_profile(self->noise_profile, MEDIAN),
+                          get_noise_profile(self->noise_profile, MAX),
+                          get_noise_profile(self->noise_profile, MINIMUM),
+                          self->real_spectrum_size,
+                          self->parameters.aggressiveness);
+
       // Re-seed the adaptive estimator to the new chosen base profile
       adaptive_estimator_update_seed(self->adaptive_estimator,
                                      self->manual_noise_floor);
 
       self->last_adaptive_state = 1;
-      self->last_noise_reduction_mode = self->parameters.noise_reduction_mode;
+      self->aggressiveness = self->parameters.aggressiveness;
     }
 
     // Run adaptive estimator
@@ -391,10 +414,16 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
       }
     }
   } else {
-    // Manual mode: use static profile
+    // Manual mode: use morphed profile
     self->last_adaptive_state = 0;
-    memcpy(self->noise_spectrum, self->manual_noise_floor,
-           self->real_spectrum_size * sizeof(float));
+
+    get_morphed_profile(self->noise_spectrum,
+                        get_noise_profile(self->noise_profile, ROLLING_MEAN),
+                        get_noise_profile(self->noise_profile, MEDIAN),
+                        get_noise_profile(self->noise_profile, MAX),
+                        get_noise_profile(self->noise_profile, MINIMUM),
+                        self->real_spectrum_size,
+                        self->parameters.aggressiveness);
   }
 
   // 3. Store the noise spectrum in the delay buffer to match NLM latency
@@ -431,6 +460,12 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
     // processing without modifying the delay buffer in-place
     memcpy(self->noise_spectrum, delayed_noise,
            self->real_spectrum_size * sizeof(float));
+
+    // Detect tonal components
+    detect_tonal_components(self->noise_spectrum,
+                            get_noise_profile(self->noise_profile, MAX),
+                            get_noise_profile(self->noise_profile, MEDIAN),
+                            self->real_spectrum_size, self->tonal_mask);
 
     // Moderating the NLM reduction via Masking Veto
     if (nlm_filter_process(self->nlm_filter, self->smoothed_snr)) {
@@ -470,7 +505,8 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
       noise_floor_manager_apply(
           self->noise_floor_manager, self->real_spectrum_size, self->fft_size,
           self->gain_spectrum, self->noise_spectrum,
-          self->parameters.reduction_amount, self->parameters.whitening_factor);
+          self->parameters.reduction_amount, self->parameters.tonal_reduction,
+          self->tonal_mask, self->parameters.whitening_factor);
 
       // Mix results
       DenoiseMixerParameters mixer_params = {

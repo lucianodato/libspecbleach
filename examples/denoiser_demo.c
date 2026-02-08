@@ -94,8 +94,8 @@ int main(int argc, char** argv) {
   SpectralBleachDenoiserParameters parameters =
       (SpectralBleachDenoiserParameters){
           .residual_listen = false,
-          .learn_noise = 1,          // Learn all modes
-          .noise_reduction_mode = 3, // Use maximum mode for processing
+          .learn_noise = 1,       // Learn all modes
+          .aggressiveness = 1.0f, // Use maximum mode for processing
           .reduction_amount = 20.F,
           .smoothing_factor = 0.F,
           .whitening_factor = 50.F,
@@ -108,7 +108,7 @@ int main(int argc, char** argv) {
       {"smoothing", required_argument, 0, 's'},
       {"masking-depth", required_argument, 0, 'd'},
       {"masking-elasticity", required_argument, 0, 'e'},
-      {"learn-avg", required_argument, 0, 'l'},
+      {"steering-response", required_argument, 0, 'l'},
       {"adaptive", no_argument, 0, 'a'},
       {"noise-method", required_argument, 0, 'm'},
       {"frame-size", required_argument, 0, 'f'},
@@ -138,7 +138,7 @@ int main(int argc, char** argv) {
         parameters.masking_elasticity = (float)atof(optarg);
         break;
       case 'l':
-        parameters.noise_reduction_mode = atoi(optarg);
+        parameters.aggressiveness = (float)atof(optarg);
         break;
       case 'a':
         parameters.adaptive_noise = 1;
@@ -269,7 +269,7 @@ int main(int argc, char** argv) {
     // If we broke out of the learn stage due to an error, stop.
     // In adaptive mode, we can proceed even without a pre-learned profile.
     if (!parameters.adaptive_noise &&
-        !specbleach_noise_profile_available(lib_instance)) {
+        !specbleach_noise_profile_available_for_mode(lib_instance, 1)) {
       fprintf(stderr, "Error: Noise profile was not successfully learned\n");
       break;
     }

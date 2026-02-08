@@ -32,6 +32,7 @@ typedef enum NoiseEstimatorType {
   ROLLING_MEAN = 1,
   MEDIAN = 2,
   MAX = 3,
+  MINIMUM = 4
 } NoiseEstimatorType;
 
 NoiseEstimator* noise_estimation_initialize(uint32_t fft_size,
@@ -40,5 +41,7 @@ void noise_estimation_free(NoiseEstimator* self);
 bool noise_estimation_run(NoiseEstimator* self,
                           NoiseEstimatorType noise_estimator_type,
                           float* signal_spectrum);
+void noise_estimation_finalize(NoiseEstimator* self,
+                               NoiseEstimatorType noise_estimator_type);
 
 #endif

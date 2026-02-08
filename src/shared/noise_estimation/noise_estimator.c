@@ -81,10 +81,10 @@ bool noise_estimation_run(NoiseEstimator* self,
   switch (noise_estimator_type) {
     case ROLLING_MEAN:
       get_rolling_mean_spectrum(noise_profile, signal_spectrum,
-                                get_noise_profile_blocks_averaged(
+                                get_noise_profile_block_count(
                                     self->noise_profile, noise_estimator_type),
                                 self->real_spectrum_size);
-      increment_blocks_averaged(self->noise_profile, noise_estimator_type);
+      increment_block_count(self->noise_profile, noise_estimator_type);
       break;
     case MEDIAN:
       spectral_trailing_buffer_push_back(self->median_buffer, signal_spectrum);
@@ -101,10 +101,34 @@ bool noise_estimation_run(NoiseEstimator* self,
                          self->real_spectrum_size);
       set_noise_profile_available(self->noise_profile, noise_estimator_type);
       break;
+    case MINIMUM:
+      (void)min_spectrum(noise_profile, signal_spectrum,
+                         self->real_spectrum_size);
+      set_noise_profile_available(self->noise_profile, noise_estimator_type);
+      break;
 
     default:
       break;
   }
 
   return true;
+}
+
+void noise_estimation_finalize(NoiseEstimator* self,
+                               NoiseEstimatorType noise_estimator_type) {
+  if (!self) {
+    return;
+  }
+
+  float* noise_profile =
+      get_noise_profile(self->noise_profile, noise_estimator_type);
+
+  if (noise_profile && is_noise_estimation_available(self->noise_profile,
+                                                     noise_estimator_type)) {
+    // Basic refinement
+    interpolate_spectrum_gaps(noise_profile, self->real_spectrum_size,
+                              NOISE_ESTIMATION_INTERPOLATION_THRESHOLD);
+    smooth_spectrum(noise_profile, self->real_spectrum_size,
+                    NOISE_ESTIMATION_SMOOTHING_FACTOR);
+  }
 }

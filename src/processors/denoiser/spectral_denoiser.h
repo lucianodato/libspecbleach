@@ -30,7 +30,6 @@ typedef struct DenoiserParameters {
   float reduction_amount;
   bool residual_listen;
   int learn_noise;
-  int noise_reduction_mode;
   float smoothing_factor;
   float whitening_factor;
   int adaptive_noise;
@@ -38,6 +37,8 @@ typedef struct DenoiserParameters {
   float masking_depth;
   float masking_elasticity;
   float suppression_strength;
+  float aggressiveness;  /**< -1.0 (Median/Min) to 1.0 (Max), 0.0 (Mean) */
+  float tonal_reduction; /**< 0.0 to 1.0 (Phase 3) */
 } DenoiserParameters;
 
 SpectralProcessorHandle spectral_denoiser_initialize(

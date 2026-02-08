@@ -14,6 +14,8 @@
 // Include the public API
 #include "specbleach_2d_denoiser.h"
 
+#define ROLLING_MEAN 1
+
 #include "specbleach_denoiser.h"
 
 // Function prototypes
@@ -45,7 +47,8 @@ void generate_test_audio(float* buffer, int length, float signal_freq,
                          float noise_level) {
   for (int i = 0; i < length; i++) {
     // Generate a sine wave signal
-    float signal = 0.5f * sinf(2.0f * M_PI * signal_freq * i / SAMPLE_RATE);
+    float signal = 0.5f * sinf(2.0f * (float)M_PI * (float)signal_freq *
+                               (float)i / (float)SAMPLE_RATE);
 
     // Add white noise
     float noise = noise_level * ((float)rand() / RAND_MAX - 0.5f) * 2.0f;
@@ -60,7 +63,7 @@ float calculate_rms(const float* buffer, int length) {
   for (int i = 0; i < length; i++) {
     sum += buffer[i] * buffer[i];
   }
-  return sqrtf(sum / length);
+  return (float)sqrt((double)sum / (double)length);
 }
 
 // Test spectral denoiser with synthetic audio
@@ -68,12 +71,12 @@ void test_spectral_denoiser(void) {
   printf("Testing spectral denoiser integration...\n");
 
   // Create test audio with signal + noise
-  float* input_buffer = calloc(BLOCK_SIZE, sizeof(float));
-  float* output_buffer = calloc(BLOCK_SIZE, sizeof(float));
+  float* input_buffer = calloc((size_t)BLOCK_SIZE, sizeof(float));
+  float* output_buffer = calloc((size_t)BLOCK_SIZE, sizeof(float));
   TEST_ASSERT(input_buffer && output_buffer, "Failed to allocate test buffers");
 
   generate_test_audio(input_buffer, BLOCK_SIZE, 1000.0f,
-                      0.1f); // 1kHz signal + noise
+                      0.5f); // 1kHz signal + noise (higher noise for RMS check)
 
   // Calculate input RMS
   float input_rms = calculate_rms(input_buffer, BLOCK_SIZE);
@@ -86,16 +89,14 @@ void test_spectral_denoiser(void) {
   TEST_ASSERT(handle != NULL, "Failed to initialize spectral denoiser");
 
   SpectralBleachDenoiserParameters parameters =
-      (SpectralBleachDenoiserParameters){
-          .learn_noise = 1,          // Learn all modes
-          .noise_reduction_mode = 1, // Use average when processing
-          .reduction_amount = 20.0f,
-          .smoothing_factor = 0.0f,
-          .masking_depth = 0.5f,
-          .masking_elasticity = 0.1f,
+      (SpectralBleachDenoiserParameters){.learn_noise = 1, // Learn all modes
+                                         .reduction_amount = 20.0f,
+                                         .smoothing_factor = 0.0f,
+                                         .masking_depth = 0.5f,
+                                         .masking_elasticity = 0.1f,
 
-          .residual_listen = false,
-          .whitening_factor = 0.0f};
+                                         .residual_listen = false,
+                                         .whitening_factor = 0.0f};
 
   specbleach_load_parameters(handle, parameters);
 
@@ -309,8 +310,7 @@ void test_2d_denoiser(void) {
 
   // Configure for noise learning
   SpectralBleach2DDenoiserParameters parameters = {
-      .learn_noise = 1,          // Learn mode
-      .noise_reduction_mode = 1, // Use average profile
+      .learn_noise = 1, // Learn mode
       .reduction_amount = 20.0f,
       .smoothing_factor = 1.5f, // NLM h parameter
       .whitening_factor = 0.0f,
@@ -323,8 +323,9 @@ void test_2d_denoiser(void) {
   specbleach_2d_process(handle, FRAME_SIZE * 10, input_buffer, output_buffer);
 
   // Check that noise profile is available
-  TEST_ASSERT(specbleach_2d_noise_profile_available(handle),
-              "Noise profile should be available after learning");
+  TEST_ASSERT(
+      specbleach_2d_noise_profile_available_for_mode(handle, ROLLING_MEAN),
+      "Noise profile should be available after learning");
 
   // Switch to reduction mode
   parameters.learn_noise = 0;
@@ -356,14 +357,16 @@ void test_2d_denoiser(void) {
   uint32_t profile_size = specbleach_2d_get_noise_profile_size(handle);
   TEST_ASSERT(profile_size > 0, "Profile size should be positive");
 
-  float* profile = specbleach_2d_get_noise_profile(handle);
+  float* profile =
+      specbleach_2d_get_noise_profile_for_mode(handle, ROLLING_MEAN);
   TEST_ASSERT(profile != NULL, "Should be able to get noise profile");
 
   // Test reset
   TEST_ASSERT(specbleach_2d_reset_noise_profile(handle),
               "Reset should succeed");
-  TEST_ASSERT(!specbleach_2d_noise_profile_available(handle),
-              "Profile should not be available after reset");
+  TEST_ASSERT(
+      !specbleach_2d_noise_profile_available_for_mode(handle, ROLLING_MEAN),
+      "Profile should not be available after reset");
 
   specbleach_2d_free(handle);
   free(input_buffer);
