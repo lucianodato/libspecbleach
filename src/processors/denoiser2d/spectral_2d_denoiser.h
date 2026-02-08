@@ -31,17 +31,18 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  * Uses Non-Local Means algorithm for 2D smoothing of SNR map.
  */
 typedef struct Denoiser2DParameters {
-  int learn_noise;          /**< Learning mode: 0=disabled, 1=learn all modes */
-  int noise_reduction_mode; /**< Profile to use: 1=avg, 2=median, 3=max */
-  bool residual_listen;     /**< Output residue instead of denoised signal */
-  float reduction_amount;   /**< Gain floor / reduction amount (linear) */
-  float smoothing_factor;   /**< NLM 'h' parameter (smoothing strength) */
-  float whitening_factor;   /**< Whitening factor (0.0 to 1.0) */
-  int adaptive_noise;       /**< Adaptive noise mode: 0=disabled, 1=enabled */
+  int learn_noise;        /**< Learning mode: 0=disabled, 1=learn all modes */
+  bool residual_listen;   /**< Output residue instead of denoised signal */
+  float reduction_amount; /**< Gain floor / reduction amount (linear) */
+  float smoothing_factor; /**< NLM 'h' parameter (smoothing strength) */
+  float whitening_factor; /**< Whitening factor (0.0 to 1.0) */
+  int adaptive_noise;     /**< Adaptive noise mode: 0=disabled, 1=enabled */
   int noise_estimation_method;  /**< 0=SPP-MMSE, 1=Brandt, 2=Martin MS */
   float nlm_masking_protection; /**< Masking protection depth (0.0 to 1.0) */
   float masking_elasticity;     /**< Masking elasticity (0.0 to 1.0) */
   float suppression_strength;   /**< Suppression aggressiveness (0.0 to 1.0) */
+  float aggressiveness;  /**< -1.0 (Median/Min) to 1.0 (Max), 0.0 (Mean) */
+  float tonal_reduction; /**< 0.0 to 1.0 (Phase 3) */
 } Denoiser2DParameters;
 
 /**

@@ -147,7 +147,7 @@ static void compute_mapping_spectrum(CriticalBands* self) {
     }
     case OCTAVE_SCALE: {
       self->current_critical_bands = (float*)octave_bands;
-      uint32_t number_of_octave_bands = sizeof(opus_bands) / sizeof(float);
+      uint32_t number_of_octave_bands = sizeof(octave_bands) / sizeof(float);
       self->number_bands =
           get_last_valid_band_for_samplerate(self, number_of_octave_bands);
       break;
@@ -168,7 +168,7 @@ static uint32_t get_last_valid_band_for_samplerate(CriticalBands* self,
     }
   }
 
-  return last_valid_band;
+  return last_valid_band + 1;
 }
 bool compute_critical_bands_spectrum(CriticalBands* self, const float* spectrum,
                                      float* critical_bands) {

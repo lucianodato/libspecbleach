@@ -70,8 +70,9 @@ void process_audio(const float* input, float* output, int length) {
 
   SpectralBleachDenoiserParameters parameters =
       (SpectralBleachDenoiserParameters){
-          .learn_noise = 1,          // Learn all modes
-          .noise_reduction_mode = 1, // Use average when processing
+          .learn_noise = 1, // Learn all modes
+          .tonal_reduction = 0.0f,
+          .aggressiveness = -1.0f, // Use median when processing
           .reduction_amount = 20.0f,
           .smoothing_factor = 0.0f,
           .masking_depth = 0.5f,

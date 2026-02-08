@@ -44,18 +44,18 @@ void test_noise_profile_operations(void) {
   // Test invalid mode handling
   TEST_ASSERT(is_noise_estimation_available(np, 0) == false,
               "Mode 0 should be invalid");
-  TEST_ASSERT(is_noise_estimation_available(np, 4) == false,
-              "Mode 4 should be invalid");
+  TEST_ASSERT(is_noise_estimation_available(np, 5) == false,
+              "Mode 5 should be invalid");
   TEST_ASSERT(get_noise_profile(np, 0) == NULL, "Mode 0 should return NULL");
-  TEST_ASSERT(get_noise_profile(np, 4) == NULL, "Mode 4 should return NULL");
-  TEST_ASSERT(get_noise_profile_blocks_averaged(np, 0) == 0,
+  TEST_ASSERT(get_noise_profile(np, 5) == NULL, "Mode 5 should return NULL");
+  TEST_ASSERT(get_noise_profile_block_count(np, 0) == 0,
               "Mode 0 should return 0 blocks");
 
   // Initially no profiles should be available
-  for (int mode = 1; mode <= 3; mode++) {
+  for (int mode = 1; mode <= 4; mode++) {
     TEST_ASSERT(is_noise_estimation_available(np, mode) == false,
                 "Profile should not be available initially");
-    TEST_ASSERT(get_noise_profile_blocks_averaged(np, mode) == 0,
+    TEST_ASSERT(get_noise_profile_block_count(np, mode) == 0,
                 "Should have 0 blocks averaged initially");
   }
 
@@ -82,7 +82,7 @@ void test_noise_profile_set_and_get(void) {
 
   TEST_ASSERT(is_noise_estimation_available(np, 1) == true,
               "Profile should be available after setting");
-  TEST_ASSERT(get_noise_profile_blocks_averaged(np, 1) == 10,
+  TEST_ASSERT(get_noise_profile_block_count(np, 1) == 10,
               "Should have 10 blocks averaged");
 
   // Test getting the profile back
@@ -112,9 +112,9 @@ void test_noise_profile_increment_blocks(void) {
 
   // Test incrementing blocks for mode 1
   for (int i = 1; i <= 6; i++) {
-    TEST_ASSERT(increment_blocks_averaged(np, 1) == true,
+    TEST_ASSERT(increment_block_count(np, 1) == true,
                 "Increment should succeed");
-    TEST_ASSERT(get_noise_profile_blocks_averaged(np, 1) == (uint32_t)i,
+    TEST_ASSERT(get_noise_profile_block_count(np, 1) == (uint32_t)i,
                 "Blocks should match expected count");
   }
 
@@ -124,7 +124,7 @@ void test_noise_profile_increment_blocks(void) {
               "Profile should become available after enough blocks");
 
   // Test invalid mode
-  TEST_ASSERT(increment_blocks_averaged(np, 0) == false,
+  TEST_ASSERT(increment_block_count(np, 0) == false,
               "Increment with invalid mode should fail");
 
   noise_profile_free(np);
@@ -155,10 +155,10 @@ void test_noise_profile_reset(void) {
   TEST_ASSERT(reset_noise_profile(np) == true, "Reset should succeed");
 
   // Verify all profiles are reset
-  for (int mode = 1; mode <= 3; mode++) {
+  for (int mode = 1; mode <= 4; mode++) {
     TEST_ASSERT(is_noise_estimation_available(np, mode) == false,
                 "Profile should not be available after reset");
-    TEST_ASSERT(get_noise_profile_blocks_averaged(np, mode) == 0,
+    TEST_ASSERT(get_noise_profile_block_count(np, mode) == 0,
                 "Blocks should be 0 after reset");
   }
 
@@ -204,11 +204,11 @@ void test_noise_profile_multiple_modes(void) {
   }
 
   // Verify block counts
-  TEST_ASSERT(get_noise_profile_blocks_averaged(np, 1) == 5,
+  TEST_ASSERT(get_noise_profile_block_count(np, 1) == 5,
               "Mode 1 should have 5 blocks");
-  TEST_ASSERT(get_noise_profile_blocks_averaged(np, 2) == 10,
+  TEST_ASSERT(get_noise_profile_block_count(np, 2) == 10,
               "Mode 2 should have 10 blocks");
-  TEST_ASSERT(get_noise_profile_blocks_averaged(np, 3) == 15,
+  TEST_ASSERT(get_noise_profile_block_count(np, 3) == 15,
               "Mode 3 should have 15 blocks");
 
   noise_profile_free(np);

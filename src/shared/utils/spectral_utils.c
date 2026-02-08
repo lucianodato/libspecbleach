@@ -268,12 +268,90 @@ bool get_rolling_median_spectrum(float* median_spectrum,
     // Sorting array
     qsort(tmp_buffer, number_of_blocks, sizeof(float), min_max_comparator);
 
-    float median_of_buffer = find_median(tmp_buffer, number_of_blocks);
+    median_spectrum[i] = find_median(tmp_buffer, number_of_blocks);
+  }
 
-    // Taking the max of the median
-    if (median_of_buffer > median_spectrum[i]) {
-      median_spectrum[i] = median_of_buffer;
+  return true;
+}
+
+void smooth_spectrum(float* spectrum, uint32_t size, float smoothing_factor) {
+  if (!spectrum || size < 2 || smoothing_factor <= 0.0F) {
+    return;
+  }
+
+  // Boundary check: Handle edge bins with 2-point moving average
+  // to ensure smoothing reaches the very last bin (Nyquist)
+  float first = spectrum[0];
+  spectrum[0] = ((spectrum[0] + spectrum[1]) / 2.0F * smoothing_factor) +
+                (spectrum[0] * (1.0F - smoothing_factor));
+
+  float prev = first;
+  for (uint32_t i = 1; i < size - 1; i++) {
+    float current = spectrum[i];
+    spectrum[i] =
+        (((prev + current + spectrum[i + 1]) / 3.0F) * smoothing_factor) +
+        (current * (1.0F - smoothing_factor));
+    prev = current;
+  }
+
+  // Handle last bin (Nyquist)
+  spectrum[size - 1] =
+      (((prev + spectrum[size - 1]) / 2.0F) * smoothing_factor) +
+      (spectrum[size - 1] * (1.0F - smoothing_factor));
+}
+
+void interpolate_spectrum_gaps(float* spectrum, uint32_t size,
+                               float gap_threshold) {
+  if (!spectrum || size < 3) {
+    return;
+  }
+
+  for (uint32_t i = 1; i < size - 1; i++) {
+    if (spectrum[i] < gap_threshold) {
+      // Find next non-gap bin
+      uint32_t j = i + 1;
+      while (j < size && spectrum[j] < gap_threshold) {
+        j++;
+      }
+
+      if (j < size) {
+        // Interpolate between i-1 and j
+        float start_val = spectrum[i - 1];
+        float end_val = spectrum[j];
+        float step = (end_val - start_val) / (float)(j - (i - 1));
+
+        for (uint32_t k = i; k < j; k++) {
+          spectrum[k] = start_val + (step * (float)(k - (i - 1)));
+        }
+        i = j;
+      }
     }
+  }
+}
+
+bool get_morphed_profile(float* output_profile, const float* mean_profile,
+                         const float* median_profile, const float* max_profile,
+                         const float* min_profile, uint32_t size,
+                         float aggressiveness) {
+  if (!output_profile || !mean_profile || !median_profile || !max_profile ||
+      !min_profile || size == 0) {
+    return false;
+  }
+
+  for (uint32_t i = 0; i < size; i++) {
+    if (aggressiveness < 0.0F) {
+      // Morph from Mean (0) to Median (-1)
+      float t = -aggressiveness;
+      output_profile[i] =
+          (mean_profile[i] * (1.0F - t)) + (median_profile[i] * t);
+    } else {
+      // Morph from Mean (0) to Max (1)
+      float t = aggressiveness;
+      output_profile[i] = (mean_profile[i] * (1.0F - t)) + (max_profile[i] * t);
+    }
+
+    // Always ensure the profile is at least the Minimum
+    output_profile[i] = fmaxf(output_profile[i], min_profile[i]);
   }
 
   return true;

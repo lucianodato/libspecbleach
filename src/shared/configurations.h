@@ -161,7 +161,9 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 
 // Noise Estimator
 #define MIN_NUMBER_OF_WINDOWS_NOISE_AVERAGED 5
-#define NUMBER_OF_MEDIAN_SPECTRUM 5
+#define NUMBER_OF_MEDIAN_SPECTRUM 25
+#define NOISE_ESTIMATION_INTERPOLATION_THRESHOLD (1e-9F)
+#define NOISE_ESTIMATION_SMOOTHING_FACTOR (0.5F)
 
 // Noise Scaling strategy
 #define NOISE_SCALING_TYPE_GENERAL MASKING_THRESHOLDS

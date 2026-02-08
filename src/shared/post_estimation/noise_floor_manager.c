@@ -73,7 +73,10 @@ void noise_floor_manager_free(NoiseFloorManager* self) {
 void noise_floor_manager_apply(NoiseFloorManager* self,
                                uint32_t real_spectrum_size, uint32_t fft_size,
                                float* gain_spectrum, const float* noise_profile,
-                               float reduction_amount, float whitening_factor) {
+                               float reduction_amount,
+                               float tonal_reduction_amount,
+                               const float* tonal_mask,
+                               float whitening_factor) {
   if (!self || !gain_spectrum || !noise_profile) {
     return;
   }
@@ -84,7 +87,12 @@ void noise_floor_manager_apply(NoiseFloorManager* self,
 
   // 2. Apply biasing + frequency-dependent floor
   for (uint32_t k = 0U; k < real_spectrum_size; k++) {
-    float floor = reduction_amount * self->whitening_weights[k];
+    float mask = (tonal_mask) ? tonal_mask[k] : 0.0f;
+    // Proportional interpolation between regular reduction and tonal reduction
+    float current_reduction =
+        (reduction_amount * (1.0f - mask)) + (tonal_reduction_amount * mask);
+
+    float floor = current_reduction * self->whitening_weights[k];
     if (floor > 1.0f) {
       floor = 1.0f;
     }

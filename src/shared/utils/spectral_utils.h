@@ -74,5 +74,12 @@ bool get_rolling_median_spectrum(float* median_spectrum,
                                  const float* current_spectrum_buffer,
                                  uint32_t number_of_blocks,
                                  uint32_t spectrum_size);
+void smooth_spectrum(float* spectrum, uint32_t size, float smoothing_factor);
+void interpolate_spectrum_gaps(float* spectrum, uint32_t size,
+                               float gap_threshold);
+bool get_morphed_profile(float* output_profile, const float* mean_profile,
+                         const float* median_profile, const float* max_profile,
+                         const float* min_profile, uint32_t size,
+                         float aggressiveness);
 
 #endif
