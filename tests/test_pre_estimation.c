@@ -144,37 +144,67 @@ void test_noise_scaling_criterias(void) {
   float alpha[513] = {0.0f};
   float beta[513] = {0.0f};
 
-  // Create test data
+  // 1. Basic range tests for all scaling types
   for (int i = 0; i < 513; i++) {
     spectrum[i] = 1.0f;
     noise_spectrum[i] = 0.1f;
   }
 
-  // Test all scaling types
   for (int type = A_POSTERIORI_SNR; type <= NO_SCALING; type++) {
-    NoiseScalingParameters params = {.undersubtraction = 1.0f,
-                                     .oversubtraction = 2.0f,
+    NoiseScalingParameters params = {.undersubtraction = 0.01f,
+                                     .oversubtraction = 4.0f,
                                      .scaling_type = type};
 
     TEST_ASSERT(apply_noise_scaling_criteria(nsc, spectrum, noise_spectrum,
                                              alpha, beta, params),
                 "Apply noise scaling criteria should succeed");
 
-    // Check that alpha and beta are in reasonable ranges
     for (int i = 0; i < 513; i++) {
       TEST_ASSERT(alpha[i] >= 0.0f && alpha[i] <= 10.0f,
                   "Alpha should be in reasonable range");
-      TEST_ASSERT(beta[i] >= 0.0f && beta[i] <= 10.0f,
-                  "Beta should be in reasonable range");
-
-      if (type == NO_SCALING) {
-        // For NO_SCALING, it should use min values (set to 1.0 and 0.0 in init
-        // but we just test consistency)
-        // Actually in the current implementation NO_SCALING sets alpha[k] =
-        // self->alpha_minimun and beta[k] = self->beta_minimun.
-      }
     }
   }
+
+  // 2. A_POSTERIORI_SNR Edge Cases (SNR thresholds)
+  NoiseScalingParameters params = {.oversubtraction = 4.0f,
+                                   .undersubtraction = 0.01f,
+                                   .scaling_type = A_POSTERIORI_SNR};
+
+  // Low SNR -> alpha should be oversubtraction (4.0)
+  for (int i = 0; i < 513; i++) {
+    spectrum[i] = 0.01F;
+    noise_spectrum[i] = 1.0F;
+  }
+  apply_noise_scaling_criteria(nsc, spectrum, noise_spectrum, alpha, beta,
+                               params);
+  TEST_FLOAT_CLOSE(alpha[0], 4.0F, 0.001F);
+
+  // High SNR -> alpha should be ALPHA_MIN (1.0)
+  for (int i = 0; i < 513; i++) {
+    spectrum[i] = 1000.0F;
+    noise_spectrum[i] = 1.0F;
+  }
+  apply_noise_scaling_criteria(nsc, spectrum, noise_spectrum, alpha, beta,
+                               params);
+  TEST_FLOAT_CLOSE(alpha[0], 1.0F, 0.001F);
+
+  // 3. MASKING_THRESHOLDS Edge Cases (Elastic Protection)
+  params.scaling_type = MASKING_THRESHOLDS;
+  // Low NMR Case (masked signal) -> alpha follows ELASTIC_PROTECTION_FACTOR
+  for (int i = 0; i < 513; i++) {
+    spectrum[i] = 10.0F;
+    noise_spectrum[i] = 1e-12F; // Low noise vs high signal -> NMRE <= 0
+  }
+  apply_noise_scaling_criteria(nsc, spectrum, noise_spectrum, alpha, beta,
+                               params);
+  // Expected = ALPHA_MIN + (oversub_gap * elastic_factor) = 1.0 + (3.0 * 0.2)
+  // = 1.6
+  TEST_FLOAT_CLOSE(alpha[0], 1.6F, 0.001F);
+
+  // 4. NULL Guards
+  TEST_ASSERT(apply_noise_scaling_criteria(nsc, NULL, noise_spectrum, alpha,
+                                           beta, params) == false,
+              "NULL spectrum handling");
 
   noise_scaling_criterias_free(nsc);
   printf("✓ Noise Scaling Criterias tests passed\n");

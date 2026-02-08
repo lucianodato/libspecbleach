@@ -156,6 +156,23 @@ test_specbleach_2d_denoiser = executable('test_specbleach_2d_denoiser',
   include_directories: inc
 )
 
+# Coverage Gap tests
+test_suppression_engine = executable('test_suppression_engine',
+  sources: ['test_suppression_engine.c'],
+  dependencies: [libspecbleach_dep, m_dep],
+  c_args: test_c_args,
+  link_args: test_link_args,
+  include_directories: inc
+)
+
+test_masking_veto = executable('test_masking_veto',
+  sources: ['test_masking_veto.c'],
+  dependencies: [libspecbleach_dep, m_dep],
+  c_args: test_c_args,
+  link_args: test_link_args,
+  include_directories: inc
+)
+
 # Run tests
 test('utils', test_utils)
 test('fft', test_fft)
@@ -172,6 +189,8 @@ test('postfilter', test_postfilter)
 test('noise_profile', test_noise_profile)
 test('specbleach_denoiser', test_specbleach_denoiser)
 test('specbleach_2d_denoiser', test_specbleach_2d_denoiser)
+test('suppression_engine', test_suppression_engine)
+test('masking_veto', test_masking_veto)
 
 test('adaptive_noise_estimator_null', test_adaptive_noise_estimator_null)
 test('nlm_filter', test_nlm_filter)
