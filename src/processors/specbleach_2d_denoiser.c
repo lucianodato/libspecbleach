@@ -294,6 +294,9 @@ bool specbleach_2d_load_parameters(
       .whitening_factor = parameters.whitening_factor / 100.F,
       .adaptive_noise = parameters.adaptive_noise,
       .noise_estimation_method = parameters.noise_estimation_method,
+      .nlm_masking_protection = parameters.nlm_masking_protection,
+      .masking_elasticity = parameters.masking_elasticity,
+      .suppression_strength = parameters.suppression_strength / 100.F,
   };
   // clang-format on
 

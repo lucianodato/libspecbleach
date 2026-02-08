@@ -27,17 +27,15 @@ void test_specbleach_noise_profile_mode_functions(void) {
   SpectralBleachHandle handle = specbleach_initialize(44100, 20.0f);
   TEST_ASSERT(handle != NULL, "Denoiser initialization should succeed");
 
-  // Load parameters with mode 2
   SpectralBleachDenoiserParameters params = {
       .learn_noise = true,
       .noise_reduction_mode = 2, // Use mode 2
       .residual_listen = false,
-      .noise_scaling_type = 0,
       .reduction_amount = -20.0f,
-      .noise_rescale = 1.0f,
       .smoothing_factor = 50.0f,
       .whitening_factor = 0.0f,
-      .post_filter_threshold = -30.0f,
+      .masking_depth = 0.5f,
+      .masking_elasticity = 0.1f,
   };
 
   TEST_ASSERT(specbleach_load_parameters(handle, params) == true,
@@ -92,17 +90,16 @@ void test_specbleach_load_noise_profile_with_mode(void) {
   SpectralBleachHandle handle = specbleach_initialize(44100, 20.0f);
   TEST_ASSERT(handle != NULL, "Denoiser initialization should succeed");
 
-  // Load parameters
-  SpectralBleachDenoiserParameters params = {
+  // Load
+  SpectralBleachDenoiserParameters params = (SpectralBleachDenoiserParameters){
       .learn_noise = true,
       .noise_reduction_mode = 1,
       .residual_listen = false,
-      .noise_scaling_type = 0,
       .reduction_amount = -20.0f,
-      .noise_rescale = 1.0f,
       .smoothing_factor = 50.0f,
       .whitening_factor = 0.0f,
-      .post_filter_threshold = -30.0f,
+      .masking_depth = 0.5f,
+      .masking_elasticity = 0.1f,
   };
 
   TEST_ASSERT(specbleach_load_parameters(handle, params) == true,
@@ -181,12 +178,11 @@ void test_specbleach_mode_switching(void) {
       .learn_noise = true,
       .noise_reduction_mode = 1,
       .residual_listen = false,
-      .noise_scaling_type = 0,
       .reduction_amount = -20.0f,
-      .noise_rescale = 1.0f,
       .smoothing_factor = 50.0f,
       .whitening_factor = 0.0f,
-      .post_filter_threshold = -30.0f,
+      .masking_depth = 0.5f,
+      .masking_elasticity = 0.1f,
   };
   TEST_ASSERT(specbleach_load_parameters(handle, params) == true,
               "Loading mode 1 parameters should succeed");
@@ -268,12 +264,11 @@ void test_specbleach_reset_noise_profile(void) {
       .learn_noise = true,
       .noise_reduction_mode = 1,
       .residual_listen = false,
-      .noise_scaling_type = 0,
       .reduction_amount = -20.0f,
-      .noise_rescale = 1.0f,
       .smoothing_factor = 50.0f,
       .whitening_factor = 0.0f,
-      .post_filter_threshold = -30.0f,
+      .masking_depth = 0.5f,
+      .masking_elasticity = 0.1f,
   };
 
   TEST_ASSERT(specbleach_load_parameters(handle, params) == true,
@@ -368,12 +363,11 @@ void test_specbleach_run_features(void) {
       .learn_noise = false,
       .noise_reduction_mode = 1,
       .residual_listen = false,
-      .noise_scaling_type = 0,
       .reduction_amount = 20.0f,
-      .noise_rescale = 1.0f,
       .smoothing_factor = 50.0f,
       .whitening_factor = 1.0f, // Test whitening
-      .post_filter_threshold = -30.0f,
+      .masking_depth = 0.5f,
+      .masking_elasticity = 0.1f,
   };
 
   specbleach_load_parameters(handle, params);

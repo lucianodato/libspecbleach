@@ -88,6 +88,24 @@ typedef struct SpectralBleach2DDenoiserParameters {
    * 2: Martin Minimum Statistics
    */
   int noise_estimation_method;
+
+  /**
+   * Sets the masking protection depth for the NLM filter.
+   * Controls how aggressively the masking threshold protects transients.
+   * Range: 0.0 (No protection, full smoothing) to 1.0 (Full protection).
+   */
+  float nlm_masking_protection;
+
+  /**
+    Range: 0.0 (Pure masking) to 1.0 (Bypass protection).
+   */
+  float masking_elasticity;
+
+  /**
+   * Sets the suppression aggressiveness (0-100%).
+   * Controls the SNR-dependent oversubtraction factor.
+   */
+  float suppression_strength;
 } SpectralBleach2DDenoiserParameters;
 
 /**

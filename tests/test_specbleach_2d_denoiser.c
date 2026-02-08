@@ -74,12 +74,12 @@ void test_noise_profile_api(void) {
 
   SpectralBleachHandle h = specbleach_2d_initialize(SAMPLE_RATE, FRAME_SIZE);
 
-  // Set default parameters first to ensure valid noise reduction mode
   SpectralBleach2DDenoiserParameters params = {
       .learn_noise = 0,
       .noise_reduction_mode = 1, // ROLLING_MEAN
       .reduction_amount = 20.0f,
       .smoothing_factor = 1.0f,
+      .nlm_masking_protection = 0.5f,
   };
   specbleach_2d_load_parameters(h, params);
 
@@ -169,8 +169,8 @@ void test_2d_parameter_switching(void) {
       .reduction_amount = 20.0f,
       .smoothing_factor = 1.0f,
       .adaptive_noise = 1,
-      .noise_estimation_method = 0 // Louizou
-  };
+      .noise_estimation_method = 0, // Louizou
+      .nlm_masking_protection = 0.5f};
 
   // 1. Load Louizou adaptive
   TEST_ASSERT(specbleach_2d_load_parameters(h, params),
@@ -197,8 +197,9 @@ void test_2d_parameter_switching(void) {
   float* input = calloc(1024, sizeof(float));
   float* output = calloc(1024, sizeof(float));
   float* profile = calloc(profile_size, sizeof(float));
-  for (uint32_t i = 0; i < profile_size; i++)
+  for (uint32_t i = 0; i < profile_size; i++) {
     profile[i] = 0.001f;
+  }
 
   specbleach_2d_load_noise_profile(h, profile, profile_size, 1);
 

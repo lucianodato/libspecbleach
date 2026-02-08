@@ -31,18 +31,17 @@ static const SpectralBleachDenoiserParameters CANONICAL_DENOISER_PARAMS = {
     .reduction_amount = 20.0f,
     .smoothing_factor = 0.0f,
     .whitening_factor = 50.0f,
-    .noise_scaling_type = 2,
-    .noise_rescale = 6.0f,
-    .post_filter_threshold = -10.0f};
+    .masking_depth = 0.5f,
+    .masking_elasticity = 0.1f};
 
 static const SpectralBleachDenoiserParameters CANONICAL_ADENOISER_PARAMS = {
     .residual_listen = false,
     .reduction_amount = 20.0f,
     .smoothing_factor = 0.0f,
     .whitening_factor = 50.0f,
-    .noise_scaling_type = 2,
-    .noise_rescale = 6.0f,
-    .post_filter_threshold = -10.0f,
+    .masking_depth = 0.5f,
+    .masking_elasticity = 0.1f,
+
     .adaptive_noise = 1,
     .noise_estimation_method = 0};
 

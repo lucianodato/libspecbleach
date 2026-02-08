@@ -33,5 +33,7 @@ MaskingEstimator* masking_estimation_initialize(uint32_t fft_size,
 void masking_estimation_free(MaskingEstimator* self);
 bool compute_masking_thresholds(MaskingEstimator* self, const float* spectrum,
                                 float* masking_thresholds);
+void masking_estimation_set_use_absolute_threshold(MaskingEstimator* self,
+                                                   bool use_absolute_threshold);
 
 #endif

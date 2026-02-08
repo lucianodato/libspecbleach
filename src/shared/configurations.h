@@ -83,14 +83,17 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
        // Subtraction
 
 // Oversubtraction criteria
-#define ALPHA_MAX (6.F)
+#define ALPHA_MAX (4.F)
 #define ALPHA_MIN (1.F)
 #define BETA_MAX (0.01F)
 #define BETA_MIN (0.F)
 #define DEFAULT_OVERSUBTRACTION (ALPHA_MIN)
 #define DEFAULT_UNDERSUBTRACTION (BETA_MAX)
-#define LOWER_SNR (0.F)
-#define HIGHER_SNR (20.F)
+#define NOISE_SCALING_LOWER_SNR (0.F)
+#define NOISE_SCALING_HIGHER_SNR (20.F)
+#define SUPPRESSION_LOWER_SNR_DB (-5.0F)
+#define SUPPRESSION_HIGHER_SNR_DB (20.0F)
+#define ELASTIC_PROTECTION_FACTOR (0.2F)
 
 // Adaptive Estimator
 #define N_SMOOTH (0.7F)
