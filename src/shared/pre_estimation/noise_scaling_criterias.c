@@ -79,8 +79,8 @@ NoiseScalingCriterias* noise_scaling_criterias_initialize(
   self->critical_band_type = critical_band_type;
   self->sample_rate = sample_rate;
   self->spectrum_type = spectrum_type;
-  self->lower_snr = LOWER_SNR;
-  self->higher_snr = HIGHER_SNR;
+  self->lower_snr = NOISE_SCALING_LOWER_SNR;
+  self->higher_snr = NOISE_SCALING_HIGHER_SNR;
   self->alpha_minimun = ALPHA_MIN;
   self->beta_minimun = BETA_MIN;
 
@@ -277,8 +277,8 @@ static void masking_thresholds(NoiseScalingCriterias* self,
       // Elastic Protection: allow configured influence of oversubtraction even
       // if masked
       alpha[k] = self->alpha_minimun +
-                 (parameters.oversubtraction - self->alpha_minimun) *
-                     ELASTIC_PROTECTION_FACTOR;
+                 ((parameters.oversubtraction - self->alpha_minimun) *
+                  ELASTIC_PROTECTION_FACTOR);
       beta[k] = self->beta_minimun;
     } else if (nmr_db >= 20.F) {
       alpha[k] = parameters.oversubtraction;

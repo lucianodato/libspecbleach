@@ -37,6 +37,7 @@ typedef struct DenoiserParameters {
   int noise_estimation_method; /**< 0=SPP-MMSE, 1=Brandt, 2=Martin MS */
   float masking_depth;
   float masking_elasticity;
+  float suppression_strength;
 } DenoiserParameters;
 
 SpectralProcessorHandle spectral_denoiser_initialize(

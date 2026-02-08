@@ -21,6 +21,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "spectral_2d_denoiser.h"
 #include "shared/configurations.h"
 #include "shared/gain_estimation/gain_estimators.h"
+#include "shared/gain_estimation/suppression_engine.h"
 #include "shared/noise_estimation/adaptive_noise_estimator.h"
 #include "shared/noise_estimation/noise_estimator.h"
 #include "shared/post_estimation/masking_veto.h"
@@ -52,6 +53,7 @@ typedef struct Spectral2DDenoiser {
   // Delay buffer for audio alignment
   float* spectral_delay_buffer;
   float* noise_delay_buffer;
+  float* magnitude_delay_buffer;
   uint32_t delay_buffer_write_index;
 
   SpectrumType spectrum_type;
@@ -63,6 +65,7 @@ typedef struct Spectral2DDenoiser {
   NlmFilter* nlm_filter;
   SpectralFeatures* spectral_features;
   MaskingVeto* masking_veto;
+  SuppressionEngine* suppression_engine;
   DenoiseMixer* mixer;
   NoiseFloorManager* noise_floor_manager;
 
@@ -160,6 +163,13 @@ SpectralProcessorHandle spectral_2d_denoiser_initialize(
     return NULL;
   }
 
+  self->magnitude_delay_buffer = (float*)calloc(
+      (size_t)DELAY_BUFFER_FRAMES * self->real_spectrum_size, sizeof(float));
+  if (!self->magnitude_delay_buffer) {
+    spectral_2d_denoiser_free(self);
+    return NULL;
+  }
+
   self->delay_buffer_write_index = 0;
 
   // Initialize noise estimator for learning mode
@@ -196,10 +206,12 @@ SpectralProcessorHandle spectral_2d_denoiser_initialize(
     return NULL;
   }
 
-  // Initialize masking veto
   self->masking_veto = masking_veto_initialize(
       self->fft_size, self->sample_rate, self->spectrum_type);
-  if (!self->masking_veto) {
+  self->suppression_engine =
+      suppression_engine_initialize(self->real_spectrum_size);
+
+  if (!self->masking_veto || !self->suppression_engine) {
     spectral_2d_denoiser_free(self);
     return NULL;
   }
@@ -244,6 +256,9 @@ void spectral_2d_denoiser_free(SpectralProcessorHandle instance) {
   if (self->masking_veto) {
     masking_veto_free(self->masking_veto);
   }
+  if (self->suppression_engine) {
+    suppression_engine_free(self->suppression_engine);
+  }
   if (self->mixer) {
     denoise_mixer_free(self->mixer);
   }
@@ -259,6 +274,7 @@ void spectral_2d_denoiser_free(SpectralProcessorHandle instance) {
   free(self->beta);
   free(self->spectral_delay_buffer);
   free(self->noise_delay_buffer);
+  free(self->magnitude_delay_buffer);
   free(self->manual_noise_floor);
 
   free(self);
@@ -340,6 +356,11 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
                                       self->fft_size],
          fft_spectrum, self->fft_size * sizeof(float));
 
+  // Store current magnitude frame in delay buffer for Veto alignment
+  memcpy(&self->magnitude_delay_buffer[(size_t)self->delay_buffer_write_index *
+                                       self->real_spectrum_size],
+         reference_spectrum, self->real_spectrum_size * sizeof(float));
+
   // 2. Determine which noise profile to use
   if (self->parameters.adaptive_noise && self->adaptive_estimator) {
     // Check for state transitions
@@ -402,6 +423,9 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
         &self->spectral_delay_buffer[(size_t)read_index * self->fft_size];
     float* delayed_noise = &self->noise_delay_buffer[(size_t)read_index *
                                                      self->real_spectrum_size];
+    float* delayed_magnitude_spectrum =
+        &self->magnitude_delay_buffer[(size_t)read_index *
+                                      self->real_spectrum_size];
 
     // Copy delayed noise to self->noise_spectrum for subsequent
     // processing without modifying the delay buffer in-place
@@ -421,14 +445,10 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
         smoothed_magnitude[k] = self->smoothed_snr[k] * denom;
       }
 
-      // 2. Map Reduction slider (0-1) to Oversubtraction Alpha (1.0 to 4.0)
-      // This gives the "Bite" to the denoiser.
-      float oversub_alpha = 1.0F + (self->parameters.reduction_amount * 3.0F);
-
-      (void)initialize_spectrum_with_value(
-          self->alpha, self->real_spectrum_size, oversub_alpha);
-      (void)initialize_spectrum_with_value(self->beta, self->real_spectrum_size,
-                                           0.0F);
+      // 2. Calculate SNR-dependent oversubtraction factors (Alpha/Beta)
+      suppression_engine_calculate(
+          self->suppression_engine, smoothed_magnitude, self->noise_spectrum,
+          self->parameters.suppression_strength, self->alpha, self->beta);
 
       // 3. Apply the psychoacoustic veto in CONJUNCTION with NLM results.
       // We pass BOTH the smoothed signal (masker) and noisy signal (for
@@ -436,8 +456,9 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
       // or further towards 0.0F if a sharp transient is detected.
       // We also apply 'masking_elasticity' to handle perceptual inaccuracies.
       masking_veto_apply(self->masking_veto, smoothed_magnitude,
-                         delayed_spectrum, self->noise_spectrum, self->alpha,
-                         1.0F, self->parameters.nlm_masking_protection,
+                         delayed_magnitude_spectrum, self->noise_spectrum,
+                         self->alpha, 1.0F,
+                         self->parameters.nlm_masking_protection,
                          self->parameters.masking_elasticity);
 
       estimate_gains(self->real_spectrum_size, self->fft_size,

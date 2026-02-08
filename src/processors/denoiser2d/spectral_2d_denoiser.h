@@ -41,6 +41,7 @@ typedef struct Denoiser2DParameters {
   int noise_estimation_method;  /**< 0=SPP-MMSE, 1=Brandt, 2=Martin MS */
   float nlm_masking_protection; /**< Masking protection depth (0.0 to 1.0) */
   float masking_elasticity;     /**< Masking elasticity (0.0 to 1.0) */
+  float suppression_strength;   /**< Suppression aggressiveness (0.0 to 1.0) */
 } Denoiser2DParameters;
 
 /**

@@ -97,12 +97,15 @@ typedef struct SpectralBleach2DDenoiserParameters {
   float nlm_masking_protection;
 
   /**
-   * Sets the masking elasticity.
-   * Controls how much oversubtraction "leaks" into masked regions to compensate
-   * for psychoacoustic inaccuracies.
-   * Range: 0.0 (Pure masking) to 1.0 (Bypass protection).
+    Range: 0.0 (Pure masking) to 1.0 (Bypass protection).
    */
   float masking_elasticity;
+
+  /**
+   * Sets the suppression aggressiveness (0-100%).
+   * Controls the SNR-dependent oversubtraction factor.
+   */
+  float suppression_strength;
 } SpectralBleach2DDenoiserParameters;
 
 /**

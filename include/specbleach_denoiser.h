@@ -72,6 +72,9 @@ typedef struct SpectralBleachDenoiserParameters {
   /** Masking Veto depth (0.0 - 1.0) */
   float masking_depth;      // 0.0 - 1.0: Depth of signal energy preservation
   float masking_elasticity; // 0.0 - 1.0: Tolerance for model inaccuracies
+
+  /** Suppression aggressiveness (0.0 - 1.0) */
+  float suppression_strength; // 0.0 - 1.0: Berouti oversubtraction factor
 } SpectralBleachDenoiserParameters;
 
 /**

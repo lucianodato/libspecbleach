@@ -21,6 +21,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "spectral_denoiser.h"
 #include "shared/configurations.h"
 #include "shared/gain_estimation/gain_estimators.h"
+#include "shared/gain_estimation/suppression_engine.h"
 #include "shared/noise_estimation/adaptive_noise_estimator.h"
 #include "shared/noise_estimation/noise_estimator.h"
 #include "shared/post_estimation/masking_veto.h"
@@ -64,6 +65,7 @@ typedef struct SbSpectralDenoiser {
   SpectralSmoother* spectrum_smoothing;
   NoiseFloorManager* noise_floor_manager;
   MaskingVeto* masking_veto;
+  SuppressionEngine* suppression_engine;
   bool whitening_enabled;
 
   int last_adaptive_state;
@@ -169,7 +171,11 @@ SpectralProcessorHandle spectral_denoiser_initialize(
       self->fft_size, self->sample_rate, self->hop);
   self->masking_veto = masking_veto_initialize(
       self->fft_size, self->sample_rate, self->spectrum_type);
-  if (!self->noise_floor_manager || !self->masking_veto) {
+  self->suppression_engine =
+      suppression_engine_initialize(self->real_spectrum_size);
+
+  if (!self->noise_floor_manager || !self->masking_veto ||
+      !self->suppression_engine) {
     spectral_denoiser_free(self);
     return NULL;
   }
@@ -200,6 +206,9 @@ void spectral_denoiser_free(SpectralProcessorHandle instance) {
   }
   if (self->masking_veto) {
     masking_veto_free(self->masking_veto);
+  }
+  if (self->suppression_engine) {
+    suppression_engine_free(self->suppression_engine);
   }
   if (self->mixer) {
     denoise_mixer_free(self->mixer);
@@ -345,16 +354,12 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
                                ? self->denoise_parameters.whitening_factor
                                : 0.0f;
 
-  // 2. Initialize Oversubtraction factors (Alpha/Beta)
-  // We start with a flat Alpha based on Reduction Amount (mapping 0-40dB
-  // to 1.0-4.0x) The Veto engine will later moderate this based on
-  // audibility/transients.
-  float user_alpha =
-      1.0F + (self->denoise_parameters.reduction_amount / 13.33F);
-  for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
-    self->alpha[k] = user_alpha;
-    self->beta[k] = 0.0F;
-  }
+  // 2. Calculate SNR-dependent oversubtraction factors (Alpha/Beta)
+  // The SuppressionEngine implement Berouti-style scaling.
+  // The Veto engine will later moderate this based on audibility/transients.
+  suppression_engine_calculate(
+      self->suppression_engine, reference_spectrum, self->noise_spectrum,
+      self->denoise_parameters.suppression_strength, self->alpha, self->beta);
 
   // Preserve 'noisy' reference before temporal smoothing for Veto comparison
   memcpy(self->noisy_reference, reference_spectrum,
