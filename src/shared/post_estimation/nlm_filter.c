@@ -406,6 +406,9 @@ bool nlm_filter_process(NlmFilter* filter, float* smoothed_snr) {
       block_center = spectrum_size - 1;
     }
 
+    float current_inv_h2 = filter->inv_h_squared;
+    float current_dist_threshold = filter->distance_threshold_actual;
+
     // --- Optimization: Register Blocking for Target Patch ---
     // We load the 8x8 target patch ONCE here, keeping it in registers
     // to avoid reloading it ~350 times in the inner loop.
@@ -434,19 +437,6 @@ bool nlm_filter_process(NlmFilter* filter, float* smoothed_snr) {
         float* row_ptr =
             get_frame(filter, t_offset) + (block_center - half_patch_size);
 
-        // Safe bound check? block_center is in [0, spectrum_size-1].
-        // But we need block_center - 4 >= 0.
-        // And block_center - 4 + 8 <= spectrum_size.
-        // The main loop handles boundary cases, but let's be safe or rely on
-        // padding? We'll trust the main loop logic for now or add a quick
-        // check. Actually, if we are near boundaries, we might read OOB if not
-        // careful. For now, let's assume valid range or clamp. To be safe and
-        // fast, we clamp the pointer read index or fallback.
-
-        // Actually, let's just stick to the safe pointer arithmetic logic but
-        // optimize the load. Since we can't easily clamp SIMD loads without
-        // overhead, we only do this optimization if strictly within bounds.
-
         bool safe_load =
             (block_center >= 4) && (block_center + 4 <= spectrum_size);
 
@@ -463,19 +453,12 @@ bool nlm_filter_process(NlmFilter* filter, float* smoothed_snr) {
           // compute_patch_distance
 #endif
 #endif
-        } else {
-          // Boundary fallback: We skip the SIMD pre-loading.
-          // The main loop has a 'safe_bounds' check (line 495) that will fail
-          // if we are at the boundary, causing it to fall back to the slow path
-          // or the scalar path, neither of which use 'target_vecs'.
-          // So we don't need to do anything here.
         }
       }
     }
 
     // Search over time and frequency window
     for (int32_t dt = -search_time_past; dt <= search_time_future; dt++) {
-      // Optimization: inner loop over frequency often has more locality
       for (int32_t df = -(int32_t)search_freq; df <= (int32_t)search_freq;
            df++) {
 
@@ -553,12 +536,12 @@ bool nlm_filter_process(NlmFilter* filter, float* smoothed_snr) {
         }
 
         // Distance thresholding (early termination optimization)
-        if (distance > filter->distance_threshold_actual) {
+        if (distance > current_dist_threshold) {
           continue;
         }
 
         // Compute weight
-        float weight = expf(-distance * filter->inv_h_squared);
+        float weight = expf(-distance * current_inv_h2);
         if (weight < NLM_MIN_WEIGHT) {
           continue;
         }
@@ -567,7 +550,6 @@ bool nlm_filter_process(NlmFilter* filter, float* smoothed_snr) {
         float* cand_frame = get_frame(filter, dt);
 
         // Apply weight to all bins in the paste block
-        // Unroll loop for small fixed paste size (2 or 4)
         for (uint32_t i = 0;
              i < paste_size && (block_start + i) < spectrum_size; i++) {
           uint32_t target_bin = block_start + i;

@@ -61,34 +61,17 @@ typedef struct SpectralBleachDenoiserParameters {
    * 100 percent */
   float whitening_factor;
 
-  /* Type of algorithm used to scale noise in order to apply over or under
-   * subtraction in different parts of the spectrum while calculating the
-   * reduction. 0 is a-posteriori snr scaling using the complete spectrum, 1 is
-   * a-posteriori using critical bands, 2 is using masking thresholds and 3 is
-   * disabled.
-   */
-  int noise_scaling_type;
-
-  /* Strength in which the reduction will be applied. It uses the masking
-   * thresholds of the signal to determine where in the spectrum the reduction
-   * needs to be stronger. This parameter scales how much in each of the
-   * frequencies the reduction is going to be applied. It can be a positive dB
-   * value in between 0 dB and 12 dB */
-  float noise_rescale;
-
-  /* Sets the SNR threshold in dB in which the post-filter will start to blur
-   * musical noise. It can be a positive or negative dB value in between -10 dB
-   * and 10 dB */
-  float post_filter_threshold;
-
   /* Enables the adaptive noise estimation, which will continuously update the
    * noise profile based on the current input signal. */
   int adaptive_noise;
 
   /* Sets the method used for adaptive noise estimation.
-   * 0: Louizou's method (minimum statistics)
    * 1: SPP-MMSE method (unbiased estimation) */
   int noise_estimation_method;
+
+  /** Masking Veto depth (0.0 - 1.0) */
+  float masking_depth;      // 0.0 - 1.0: Depth of signal energy preservation
+  float masking_elasticity; // 0.0 - 1.0: Tolerance for model inaccuracies
 } SpectralBleachDenoiserParameters;
 
 /**

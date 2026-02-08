@@ -35,12 +35,24 @@ echo "Generating spectral denoiser reference..."
     --reduction 20.0 \
     --whitening 50.0 \
     --smoothing 0.0 \
-    --rescale 6.0 \
-    --scaling-type 2 \
-    --threshold -10.0 \
+    --masking-depth 0.5 \
+    --masking-elasticity 0.1 \
     tests/test_data/Speech.wav tests/test_data/Speech_denoised.wav
+
+echo "Generating adaptive denoiser reference..."
+./build/examples/denoiser_demo \
+    --reduction 20.0 \
+    --whitening 50.0 \
+    --smoothing 0.0 \
+    --masking-depth 0.5 \
+    --masking-elasticity 0.1 \
+    --adaptive \
+    --frame-size 20.0 \
+    --learn-frames 0 \
+    tests/test_data/Speech.wav tests/test_data/Speech_adaptive_denoised.wav
 
 echo "Reference files generated successfully!"
 echo "Files created:"
 echo "  - tests/test_data/Speech_denoised.wav"
+echo "  - tests/test_data/Speech_adaptive_denoised.wav"
 

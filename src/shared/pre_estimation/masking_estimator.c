@@ -49,6 +49,7 @@ struct MaskingEstimator {
   float* masking_offset;
   float* spreaded_spectrum;
   float* critical_bands_reference_spectrum;
+  bool use_absolute_threshold;
 };
 
 MaskingEstimator* masking_estimation_initialize(const uint32_t fft_size,
@@ -112,6 +113,8 @@ MaskingEstimator* masking_estimation_initialize(const uint32_t fft_size,
       self->unity_gain_critical_bands_spectrum,
       self->spreaded_unity_gain_critical_bands_spectrum,
       self->number_critical_bands);
+
+  self->use_absolute_threshold = true;
 
   return self;
 }
@@ -177,9 +180,18 @@ bool compute_masking_thresholds(MaskingEstimator* self, const float* spectrum,
     }
   }
 
-  apply_thresholds_as_floor(self->reference_spectrum, masking_thresholds);
+  if (self->use_absolute_threshold) {
+    apply_thresholds_as_floor(self->reference_spectrum, masking_thresholds);
+  }
 
   return true;
+}
+
+void masking_estimation_set_use_absolute_threshold(
+    MaskingEstimator* self, bool use_absolute_threshold) {
+  if (self) {
+    self->use_absolute_threshold = use_absolute_threshold;
+  }
 }
 
 static void compute_spectral_spreading_function(MaskingEstimator* self) {

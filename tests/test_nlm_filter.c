@@ -239,17 +239,13 @@ void test_nlm_filter_h_parameter(void) {
   // Update h parameter
   nlm_filter_set_h_parameter(filter, 2.5f);
 
-  // Fill buffer and process
-  float frame[32];
+  float input[32] = {0.0f};
+  // Push enough frames to fill the buffer
+  for (int i = 0; i < 3; i++) {
+    nlm_filter_push_frame(filter, input);
+  }
+
   float output[32];
-  for (int i = 0; i < 32; i++) {
-    frame[i] = 3.0f;
-  }
-
-  for (int f = 0; f < 3; f++) {
-    nlm_filter_push_frame(filter, frame);
-  }
-
   TEST_ASSERT(nlm_filter_process(filter, output),
               "Process should succeed after h parameter update");
 
@@ -332,6 +328,11 @@ void test_nlm_filter_process_patch8(void) {
     frame[i] = 5.0f + (float)(i % 2); // Alternating pattern
   }
 
+  float* alpha = (float*)malloc(64 * sizeof(float));
+  for (int i = 0; i < 64; i++) {
+    alpha[i] = 1.0f;
+  }
+
   // Fill buffer
   for (int f = 0; f < 5; f++) {
     nlm_filter_push_frame(filter, frame);
@@ -345,6 +346,7 @@ void test_nlm_filter_process_patch8(void) {
     TEST_ASSERT(output[i] > 0.0f, "Output should be positive");
   }
 
+  free(alpha);
   nlm_filter_free(filter);
   printf("✓ NLM filter patch_size=8 process tests passed\n");
 }

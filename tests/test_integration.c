@@ -91,9 +91,9 @@ void test_spectral_denoiser(void) {
           .noise_reduction_mode = 1, // Use average when processing
           .reduction_amount = 20.0f,
           .smoothing_factor = 0.0f,
+          .masking_depth = 0.5f,
+          .masking_elasticity = 0.1f,
 
-          .noise_scaling_type = 0,
-          .post_filter_threshold = 0.0f,
           .residual_listen = false,
           .whitening_factor = 0.0f};
 
@@ -162,9 +162,9 @@ void test_different_noise_levels(void) {
       (SpectralBleachDenoiserParameters){.learn_noise = 1, // Average
                                          .reduction_amount = 20.0f,
                                          .smoothing_factor = 0.0f,
+                                         .masking_depth = 0.5f,
+                                         .masking_elasticity = 0.1f,
 
-                                         .noise_scaling_type = 0,
-                                         .post_filter_threshold = 0.0f,
                                          .residual_listen = false,
                                          .whitening_factor = 0.0f};
 
@@ -260,8 +260,9 @@ void test_adaptive_denoiser(void) {
           .learn_noise = 0,
           .reduction_amount = 20.0f,
           .smoothing_factor = 50.0f,
-          .noise_scaling_type = 2, // MASKING_THRESHOLDS
-          .post_filter_threshold = -30.0f,
+          .masking_depth = 0.5f,
+          .masking_elasticity = 0.1f,
+
           .residual_listen = false,
           .whitening_factor = 50.0f,
           .adaptive_noise = 1,         // Enable adaptive mode

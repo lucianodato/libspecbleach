@@ -91,6 +91,7 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define DEFAULT_UNDERSUBTRACTION (BETA_MAX)
 #define LOWER_SNR (0.F)
 #define HIGHER_SNR (20.F)
+#define ELASTIC_PROTECTION_FACTOR (0.2F)
 
 // Adaptive Estimator
 #define N_SMOOTH (0.7F)

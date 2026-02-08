@@ -23,10 +23,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "shared/gain_estimation/gain_estimators.h"
 #include "shared/noise_estimation/adaptive_noise_estimator.h"
 #include "shared/noise_estimation/noise_estimator.h"
+#include "shared/post_estimation/masking_veto.h"
 #include "shared/post_estimation/noise_floor_manager.h"
-#include "shared/post_estimation/postfilter.h"
 #include "shared/pre_estimation/critical_bands.h"
-#include "shared/pre_estimation/noise_scaling_criterias.h"
 #include "shared/pre_estimation/spectral_smoother.h"
 #include "shared/utils/denoise_mixer.h"
 #include "shared/utils/spectral_features.h"
@@ -48,6 +47,7 @@ typedef struct SbSpectralDenoiser {
   float* beta;
   float* noise_spectrum;
   float* manual_noise_floor;
+  float* noisy_reference;
 
   SpectrumType spectrum_type;
   CriticalBandType band_type;
@@ -58,14 +58,12 @@ typedef struct SbSpectralDenoiser {
 
   NoiseEstimator* noise_estimator;
   AdaptiveNoiseEstimator* adaptive_estimator;
-  PostFilter* postfiltering;
   NoiseProfile* noise_profile;
   SpectralFeatures* spectral_features;
   DenoiseMixer* mixer;
-  NoiseScalingCriterias* noise_scaling_criteria;
   SpectralSmoother* spectrum_smoothing;
   NoiseFloorManager* noise_floor_manager;
-  bool postfiltering_enabled;
+  MaskingVeto* masking_veto;
   bool whitening_enabled;
 
   int last_adaptive_state;
@@ -98,7 +96,6 @@ SpectralProcessorHandle spectral_denoiser_initialize(
   self->default_undersubtraction = DEFAULT_UNDERSUBTRACTION;
   self->gain_estimation_type = GAIN_ESTIMATION_TYPE;
   self->time_smoothing_type = TIME_SMOOTHING_TYPE;
-  self->postfiltering_enabled = POSTFILTER_ENABLED_GENERAL;
   self->whitening_enabled = WHITENING_ENABLED_GENERAL;
 
   self->gain_spectrum = (float*)calloc(self->fft_size, sizeof(float));
@@ -133,7 +130,9 @@ SpectralProcessorHandle spectral_denoiser_initialize(
 
   self->manual_noise_floor =
       (float*)calloc(self->real_spectrum_size, sizeof(float));
-  if (!self->manual_noise_floor) {
+  self->noisy_reference =
+      (float*)calloc(self->real_spectrum_size, sizeof(float));
+  if (!self->manual_noise_floor || !self->noisy_reference) {
     spectral_denoiser_free(self);
     return NULL;
   }
@@ -152,24 +151,9 @@ SpectralProcessorHandle spectral_denoiser_initialize(
     return NULL;
   }
 
-  if (self->postfiltering_enabled) {
-    self->postfiltering = postfilter_initialize(self->fft_size);
-    if (!self->postfiltering) {
-      spectral_denoiser_free(self);
-      return NULL;
-    }
-  }
-
   self->spectrum_smoothing =
       spectral_smoothing_initialize(self->fft_size, self->time_smoothing_type);
   if (!self->spectrum_smoothing) {
-    spectral_denoiser_free(self);
-    return NULL;
-  }
-
-  self->noise_scaling_criteria = noise_scaling_criterias_initialize(
-      self->fft_size, self->band_type, self->sample_rate, self->spectrum_type);
-  if (!self->noise_scaling_criteria) {
     spectral_denoiser_free(self);
     return NULL;
   }
@@ -183,7 +167,9 @@ SpectralProcessorHandle spectral_denoiser_initialize(
 
   self->noise_floor_manager = noise_floor_manager_initialize(
       self->fft_size, self->sample_rate, self->hop);
-  if (!self->noise_floor_manager) {
+  self->masking_veto = masking_veto_initialize(
+      self->fft_size, self->sample_rate, self->spectrum_type);
+  if (!self->noise_floor_manager || !self->masking_veto) {
     spectral_denoiser_free(self);
     return NULL;
   }
@@ -212,11 +198,8 @@ void spectral_denoiser_free(SpectralProcessorHandle instance) {
   if (self->spectrum_smoothing) {
     spectral_smoothing_free(self->spectrum_smoothing);
   }
-  if (self->noise_scaling_criteria) {
-    noise_scaling_criterias_free(self->noise_scaling_criteria);
-  }
-  if (self->postfiltering) {
-    postfilter_free(self->postfiltering);
+  if (self->masking_veto) {
+    masking_veto_free(self->masking_veto);
   }
   if (self->mixer) {
     denoise_mixer_free(self->mixer);
@@ -239,6 +222,9 @@ void spectral_denoiser_free(SpectralProcessorHandle instance) {
   }
   if (self->manual_noise_floor) {
     free(self->manual_noise_floor);
+  }
+  if (self->noisy_reference) {
+    free(self->noisy_reference);
   }
 
   free(self);
@@ -355,20 +341,24 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
 
   // --- Common Processing Path ---
 
-  NoiseScalingParameters oversubtraction_parameters = (NoiseScalingParameters){
-      .oversubtraction = (self->default_oversubtraction +
-                          self->denoise_parameters.noise_rescale),
-      .undersubtraction = self->denoise_parameters.reduction_amount,
-      .scaling_type = self->denoise_parameters.noise_scaling_type,
-  };
-
   float whitening_factor = self->whitening_enabled
                                ? self->denoise_parameters.whitening_factor
                                : 0.0f;
 
-  apply_noise_scaling_criteria(self->noise_scaling_criteria, reference_spectrum,
-                               self->noise_spectrum, self->alpha, self->beta,
-                               oversubtraction_parameters);
+  // 2. Initialize Oversubtraction factors (Alpha/Beta)
+  // We start with a flat Alpha based on Reduction Amount (mapping 0-40dB
+  // to 1.0-4.0x) The Veto engine will later moderate this based on
+  // audibility/transients.
+  float user_alpha =
+      1.0F + (self->denoise_parameters.reduction_amount / 13.33F);
+  for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
+    self->alpha[k] = user_alpha;
+    self->beta[k] = 0.0F;
+  }
+
+  // Preserve 'noisy' reference before temporal smoothing for Veto comparison
+  memcpy(self->noisy_reference, reference_spectrum,
+         self->real_spectrum_size * sizeof(float));
 
   TimeSmoothingParameters spectral_smoothing_parameters =
       (TimeSmoothingParameters){
@@ -376,6 +366,12 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
       };
   spectral_smoothing_run(self->spectrum_smoothing,
                          spectral_smoothing_parameters, reference_spectrum);
+
+  // Apply Structural Veto to rescue transients and moderate artifacts
+  masking_veto_apply(self->masking_veto, reference_spectrum,
+                     self->noisy_reference, self->noise_spectrum, self->alpha,
+                     1.0F, self->denoise_parameters.masking_depth,
+                     self->denoise_parameters.masking_elasticity);
 
   estimate_gains(self->real_spectrum_size, self->fft_size, reference_spectrum,
                  self->noise_spectrum, self->gain_spectrum, self->alpha,
@@ -386,15 +382,6 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
       self->noise_floor_manager, self->real_spectrum_size, self->fft_size,
       self->gain_spectrum, self->noise_spectrum,
       self->denoise_parameters.reduction_amount, whitening_factor);
-
-  if (self->postfiltering_enabled) {
-    PostFiltersParameters post_filter_parameters = (PostFiltersParameters){
-        .snr_threshold = self->denoise_parameters.post_filter_threshold,
-        .gain_floor = self->denoise_parameters.reduction_amount,
-    };
-    postfilter_apply(self->postfiltering, fft_spectrum, self->gain_spectrum,
-                     post_filter_parameters);
-  }
 
   DenoiseMixerParameters mixer_parameters = (DenoiseMixerParameters){
       .noise_level = self->denoise_parameters.reduction_amount,
