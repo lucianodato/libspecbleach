@@ -239,6 +239,12 @@ void test_nlm_filter_h_parameter(void) {
   // Update h parameter
   nlm_filter_set_h_parameter(filter, 2.5f);
 
+  float input[32] = {0.0f};
+  // Push enough frames to fill the buffer
+  for (int i = 0; i < 3; i++) {
+    nlm_filter_push_frame(filter, input);
+  }
+
   float output[32];
   TEST_ASSERT(nlm_filter_process(filter, output),
               "Process should succeed after h parameter update");

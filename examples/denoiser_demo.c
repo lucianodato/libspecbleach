@@ -56,6 +56,13 @@ static void print_usage(const char* prog_name) {
           "0.1)\n");
   fprintf(stderr,
           "  --learn-avg <val>      Learn average mode (0-3, default: 3)\n");
+  fprintf(stderr, "  --adaptive            Enable adaptive noise estimation\n");
+  fprintf(
+      stderr,
+      "  --noise-method <val>  Noise estimation method (0-2, default: 0)\n");
+  fprintf(stderr, "  --frame-size <val>    Frame size in ms (default: 46.0)\n");
+  fprintf(stderr,
+          "  --learn-frames <val>  Number of learn frames (default: 8)\n");
   fprintf(stderr, "  --help                Show this help message\n");
 }
 
@@ -102,12 +109,18 @@ int main(int argc, char** argv) {
       {"masking-depth", required_argument, 0, 'd'},
       {"masking-elasticity", required_argument, 0, 'e'},
       {"learn-avg", required_argument, 0, 'l'},
+      {"adaptive", no_argument, 0, 'a'},
+      {"noise-method", required_argument, 0, 'm'},
+      {"frame-size", required_argument, 0, 'f'},
+      {"learn-frames", required_argument, 0, 'n'},
       {"help", no_argument, 0, '?'},
       {0, 0, 0, 0}};
 
+  float frame_size_ms = FRAME_SIZE;
+  uint32_t learn_frames = NOISE_FRAMES;
   int opt;
-  while ((opt = getopt_long(argc, argv, "r:w:s:d:e:l:", long_options, NULL)) !=
-         -1) {
+  while ((opt = getopt_long(argc, argv, "r:w:s:d:e:l:am:f:n:", long_options,
+                            NULL)) != -1) {
     switch (opt) {
       case 'r':
         parameters.reduction_amount = (float)atof(optarg);
@@ -126,6 +139,18 @@ int main(int argc, char** argv) {
         break;
       case 'l':
         parameters.noise_reduction_mode = atoi(optarg);
+        break;
+      case 'a':
+        parameters.adaptive_noise = 1;
+        break;
+      case 'm':
+        parameters.noise_estimation_method = atoi(optarg);
+        break;
+      case 'f':
+        frame_size_ms = (float)atof(optarg);
+        break;
+      case 'n':
+        learn_frames = (uint32_t)atoi(optarg);
         break;
       case '?':
       default:
@@ -198,7 +223,7 @@ int main(int argc, char** argv) {
 
     // Initialize library instance
     lib_instance =
-        specbleach_initialize((uint32_t)sfinfo->samplerate, FRAME_SIZE);
+        specbleach_initialize((uint32_t)sfinfo->samplerate, frame_size_ms);
     if (!lib_instance) {
       fprintf(stderr, "Error: Failed to initialize library instance\n");
       break;
@@ -212,9 +237,9 @@ int main(int argc, char** argv) {
       break;
     }
 
-    // Iterate over some frames (NOISE_FRAMES) at the beginning of the audio to
+    // Iterate over some frames (learn_frames) at the beginning of the audio to
     // capture the noise profile
-    for (uint32_t i = 0; i < NOISE_FRAMES; i++) {
+    for (uint32_t i = 0; i < learn_frames; i++) {
       sf_count_t frames_read =
           sf_readf_float(input_file, input_library_buffer, BLOCK_SIZE);
       if (frames_read <= 0) {
@@ -242,7 +267,9 @@ int main(int argc, char** argv) {
     }
 
     // If we broke out of the learn stage due to an error, stop.
-    if (!specbleach_noise_profile_available(lib_instance)) {
+    // In adaptive mode, we can proceed even without a pre-learned profile.
+    if (!parameters.adaptive_noise &&
+        !specbleach_noise_profile_available(lib_instance)) {
       fprintf(stderr, "Error: Noise profile was not successfully learned\n");
       break;
     }

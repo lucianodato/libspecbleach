@@ -32,8 +32,8 @@ meson setup build -Denable_examples=true
 meson compile -C build
 
 # Generate reference files with canonical parameters
-./build/examples/denoiser_demo --reduction 20.0 --whitening 50.0 --smoothing 0.0 --rescale 6.0 --scaling-type 2 --threshold -10.0 tests/test_data/Speech.wav tests/test_data/Speech_denoised.wav
-./build/examples/adenoiser_demo --reduction 20.0 --whitening 50.0 --smoothing 0.0 --rescale 6.0 --scaling-type 2 --threshold -10.0 tests/test_data/Speech.wav tests/test_data/Speech_adaptive_denoised.wav
+./build/examples/denoiser_demo --reduction 20.0 --whitening 50.0 --smoothing 0.0 --masking-depth 0.5 --masking-elasticity 0.1 tests/test_data/Speech.wav tests/test_data/Speech_denoised.wav
+./build/examples/denoiser_demo --reduction 20.0 --whitening 50.0 --smoothing 0.0 --masking-depth 0.5 --masking-elasticity 0.1 --learn-avg 3 tests/test_data/Speech.wav tests/test_data/Speech_adaptive_denoised.wav
 ```
 
 ### Why Reference Files Aren't Committed
