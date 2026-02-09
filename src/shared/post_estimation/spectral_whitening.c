@@ -25,6 +25,12 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdlib.h>
 #include <string.h>
 
+static int float_comparator(const void* a, const void* b) {
+  float x = *(const float*)a;
+  float y = *(const float*)b;
+  return (x > y) - (x < y);
+}
+
 struct SpectralWhitening {
   float* tapering_window;
   uint32_t fft_size;
@@ -48,13 +54,9 @@ SpectralWhitening* spectral_whitening_initialize(const uint32_t fft_size) {
     return NULL;
   }
 
-  // Pre-calculate Right half of Hamming window for HF tapering
-  uint32_t n_samples = (self->real_spectrum_size * 2U) - 1U;
+  // Tapering is disabled to allow true 100% flat whitening across the spectrum.
   for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
-    uint32_t n = (k + self->real_spectrum_size) - 1U;
-    self->tapering_window[k] =
-        0.54f - (0.46f * cosf((2.0f * (float)M_PI * (float)n) /
-                              (float)(n_samples - 1U)));
+    self->tapering_window[k] = 1.0f;
   }
 
   return self;
@@ -78,20 +80,49 @@ void spectral_whitening_get_weights(SpectralWhitening* self,
     return;
   }
 
-  float noise_peak = SPECTRAL_EPSILON;
-  for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
-    if (noise_profile[k] > noise_peak) {
-      noise_peak = noise_profile[k];
-    }
+  // 1. Create a smoothed copy of the noise profile for stable weight
+  // calculation
+  float* smoothed_profile =
+      (float*)malloc(self->real_spectrum_size * sizeof(float));
+  if (!smoothed_profile) {
+    return;
   }
+  memcpy(smoothed_profile, noise_profile,
+         self->real_spectrum_size * sizeof(float));
+  smooth_spectrum(smoothed_profile, self->real_spectrum_size, 0.5f);
+
+  // 2. Calculate Broadband Anchor Magnitude (using Median)
+  // This prevents narrow tonal spikes from driving the whitening ceiling,
+  // which causes hum leakage.
+  float* sort_buffer = (float*)malloc(self->real_spectrum_size * sizeof(float));
+  if (!sort_buffer) {
+    free(smoothed_profile);
+    return;
+  }
+  memcpy(sort_buffer, smoothed_profile,
+         self->real_spectrum_size * sizeof(float));
+  qsort(sort_buffer, self->real_spectrum_size, sizeof(float), float_comparator);
+
+  float anchor_magnitude = sort_buffer[self->real_spectrum_size / 2];
+  if (anchor_magnitude < SPECTRAL_EPSILON) {
+    anchor_magnitude = SPECTRAL_EPSILON;
+  }
+
+  free(sort_buffer);
+
+  // Use whitening_factor directly (already normalized 0.0-1.0 by the loader)
+  float normalized_factor = whitening_factor;
 
   for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
     float weight = 1.0f;
-    if (whitening_factor > 0.0f && noise_profile[k] > SPECTRAL_EPSILON) {
-      // Power-law valley filling
-      weight = powf(noise_peak / noise_profile[k], whitening_factor);
+    if (normalized_factor > 0.0f && smoothed_profile[k] > SPECTRAL_EPSILON) {
+      // Power-law valley filling anchored to Broadband Hiss level
+      // This results in weights >= 1.0 for valleys and <= 1.0 for spikes
+      weight = powf(anchor_magnitude / smoothed_profile[k], normalized_factor);
     }
-    // Weights include tapering
+    // Weights include unity-tapering (for now)
     weights_out[k] = weight * self->tapering_window[k];
   }
+
+  free(smoothed_profile);
 }

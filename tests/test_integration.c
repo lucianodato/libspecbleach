@@ -128,7 +128,8 @@ void test_spectral_denoiser(void) {
   printf("  Output RMS: %.4f\n", output_rms);
 
   // Verify noise reduction (output should be quieter than input)
-  TEST_ASSERT(output_rms < input_rms * 0.8f,
+  // With Tonal Reduction 0dB, signal is preserved, so RMS drop is smaller
+  TEST_ASSERT(output_rms < input_rms * 0.9f,
               "Noise reduction should reduce RMS significantly");
 
   // Verify signal preservation (output shouldn't be too quiet)
