@@ -2,7 +2,7 @@
 libspecbleach - A spectral processing library
 */
 
-#include "tonal_detector.h"
+#include "shared/utils/tonal_detector.h"
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>

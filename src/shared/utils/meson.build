@@ -4,4 +4,5 @@ shared_sources += files(
     'spectral_features.c',
     'spectral_utils.c',
     'spectral_trailing_buffer.c',
+    'tonal_detector.c',
 )

@@ -5,7 +5,7 @@ Test suite for the frequency-adaptive tonal detector with parabolic
 interpolation.
 */
 
-#include "shared/noise_estimation/tonal_detector.h"
+#include "shared/utils/tonal_detector.h"
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
