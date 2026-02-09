@@ -6,4 +6,5 @@ shared_sources += files(
     'brandt_noise_estimator.c',
     'martin_noise_estimator.c',
     'tonal_detector.c',
+    'tonal_reducer.c',
 )

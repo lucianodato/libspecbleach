@@ -25,6 +25,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "shared/noise_estimation/adaptive_noise_estimator.h"
 #include "shared/noise_estimation/noise_estimator.h"
 #include "shared/noise_estimation/tonal_detector.h"
+#include "shared/noise_estimation/tonal_reducer.h"
 #include "shared/post_estimation/masking_veto.h"
 #include "shared/post_estimation/noise_floor_manager.h"
 #include "shared/pre_estimation/critical_bands.h"
@@ -374,10 +375,10 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
   }
 
   // 3. Detect tonal components
-  detect_tonal_components(self->noise_spectrum,
-                          get_noise_profile(self->noise_profile, MAX),
-                          get_noise_profile(self->noise_profile, MEDIAN),
-                          self->real_spectrum_size, self->tonal_mask);
+  detect_tonal_components(
+      self->noise_spectrum, get_noise_profile(self->noise_profile, MAX),
+      get_noise_profile(self->noise_profile, MEDIAN), self->real_spectrum_size,
+      self->sample_rate, self->fft_size, self->tonal_mask);
 
   // --- Common Processing Path ---
 
@@ -391,6 +392,10 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
   suppression_engine_calculate(
       self->suppression_engine, reference_spectrum, self->noise_spectrum,
       self->denoise_parameters.suppression_strength, self->alpha, self->beta);
+
+  // Boost alpha at tonal bins (before veto so veto can protect signal)
+  tonal_reducer_apply(self->alpha, self->tonal_mask, self->real_spectrum_size,
+                      self->denoise_parameters.tonal_reduction);
 
   // Preserve 'noisy' reference before temporal smoothing for Veto comparison
   memcpy(self->noisy_reference, reference_spectrum,

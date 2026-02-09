@@ -7,8 +7,7 @@ libspecbleach - A spectral processing library
 #include <stdlib.h>
 #include <string.h>
 
-#define PEAK_THRESHOLD 1.41f        // ~3dB above neighbor background
-#define STATIONARITY_THRESHOLD 2.5f // Ratio of Max/Median spread
+#include "shared/configurations.h"
 
 static int float_comparator(const void* a, const void* b) {
   float x = *(const float*)a;
@@ -16,14 +15,31 @@ static int float_comparator(const void* a, const void* b) {
   return (x > y) - (x < y);
 }
 
+// Smooth linear interpolation between two breakpoints
+static float lerp_by_freq(float freq_hz, float val_low, float val_high) {
+  if (freq_hz <= LOW_FREQ_HZ) {
+    return val_low;
+  }
+  if (freq_hz >= MID_FREQ_HZ) {
+    return val_high;
+  }
+  float t = (freq_hz - LOW_FREQ_HZ) / (MID_FREQ_HZ - LOW_FREQ_HZ);
+  return val_low + (t * (val_high - val_low));
+}
+
 void detect_tonal_components(const float* profile, const float* max_profile,
                              const float* median_profile, uint32_t size,
+                             uint32_t sample_rate, uint32_t fft_size,
                              float* tonal_mask) {
-  if (!profile || !tonal_mask || size < 5 || !max_profile || !median_profile) {
+  if (!profile || !tonal_mask || size < 5 || !max_profile || !median_profile ||
+      sample_rate == 0 || fft_size == 0) {
     return;
   }
 
   memset(tonal_mask, 0, size * sizeof(float));
+
+  // Hz per FFT bin
+  const float bin_hz = (float)sample_rate / (float)fft_size;
 
   // We use the median profile for detection as it is much more stable than
   // Mean/Instantaneous
@@ -36,14 +52,37 @@ void detect_tonal_components(const float* profile, const float* max_profile,
         detection_profile[k] > detection_profile[k - 2] &&
         detection_profile[k] > detection_profile[k + 2]) {
 
-      // 2. Robust Local Background Estimation
-      // We use a 15-bin median of the neighborhood (excluding the peak itself)
-      // to avoid nearby harmonics biasing the background estimate.
-      float neighbors[14];
+      // Compute frequency for this bin
+      float freq_hz = (float)k * bin_hz;
+
+      // 2. Parabolic interpolation for sub-bin peak accuracy
+      // Fit a parabola through log-magnitudes at (k-1, k, k+1)
+      float log_prev = logf(detection_profile[k - 1] + 1e-20f);
+      float log_peak = logf(detection_profile[k] + 1e-20f);
+      float log_next = logf(detection_profile[k + 1] + 1e-20f);
+
+      float denom_parab = log_prev - (2.0f * log_peak) + log_next;
+      float delta = 0.0f;
+      float true_amplitude = detection_profile[k];
+
+      // Only interpolate if the parabola is concave (valid peak)
+      if (denom_parab < -1e-10f) {
+        delta = 0.5f * (log_prev - log_next) / denom_parab;
+        // Clamp delta to [-0.5, 0.5]
+        delta = fmaxf(-0.5f, fminf(0.5f, delta));
+        true_amplitude =
+            expf(log_peak - (0.25f * (log_prev - log_next) * delta));
+      }
+
+      // 3. Frequency-adaptive background estimation
+      int bg_radius = (int)roundf(
+          lerp_by_freq(freq_hz, (float)BG_RADIUS_LOW, (float)BG_RADIUS_HIGH));
+
+      float neighbors[MAX_NEIGHBORS];
       int n_count = 0;
-      for (int i = -7; i <= 7; i++) {
+      for (int i = -bg_radius; i <= bg_radius; i++) {
         int idx = (int)k + i;
-        if (i != 0 && idx >= 0 && idx < (int)size) {
+        if (i != 0 && idx >= 0 && idx < (int)size && n_count < MAX_NEIGHBORS) {
           neighbors[n_count++] = detection_profile[idx];
         }
       }
@@ -53,33 +92,55 @@ void detect_tonal_components(const float* profile, const float* max_profile,
         qsort(neighbors, n_count, sizeof(float), float_comparator);
         float avg_background = neighbors[n_count / 2];
 
-        // 3. Stationarity Index (Spread)
+        // 4. Stationarity Index (Spread)
         float spread = (max_profile[k] + 1e-9f) / (median_profile[k] + 1e-9f);
 
-        // We calculate a 'Stationarity Weight' [0.0 - 1.0]
-        // A slightly more relaxed limit for stationarity
+        // Stationarity Weight [0.0 - 1.0]
         float stationarity_weight = fmaxf(
             0.0f, 1.0f - ((spread - 1.0f) / (STATIONARITY_THRESHOLD - 1.0f)));
 
-        // 4. Adaptive Peak Threshold
-        // Relaxed multiplier (1.5x max) for better sensitivity to subtle tones
-        float threshold =
-            PEAK_THRESHOLD * (1.5f - (stationarity_weight * 0.5f));
+        // 5. Frequency-adaptive peak threshold
+        float threshold_factor =
+            lerp_by_freq(freq_hz, THRESHOLD_FACTOR_LOW, THRESHOLD_FACTOR_HIGH);
 
-        if (detection_profile[k] > avg_background * threshold) {
-          // We found a tonal candidate.
+        float threshold = PEAK_THRESHOLD * threshold_factor *
+                          (1.5f - (stationarity_weight * 0.5f));
+
+        // Use parabolic-corrected amplitude for threshold comparison
+        if (true_amplitude > avg_background * threshold) {
+          // We found a tonal candidate
           tonal_mask[k] = stationarity_weight;
 
-          // Spread the influence to neighboring bins to cover sidebands
-          // (leakage) Center: 1.0, ±1: 0.8, ±2: 0.4
-          tonal_mask[k - 1] =
-              fmaxf(tonal_mask[k - 1], stationarity_weight * 0.8f);
-          tonal_mask[k + 1] =
-              fmaxf(tonal_mask[k + 1], stationarity_weight * 0.8f);
-          tonal_mask[k - 2] =
-              fmaxf(tonal_mask[k - 2], stationarity_weight * 0.4f);
-          tonal_mask[k + 2] =
-              fmaxf(tonal_mask[k + 2], stationarity_weight * 0.4f);
+          // 6. Frequency-adaptive sideband spread
+          int spread_bins = (int)roundf(
+              lerp_by_freq(freq_hz, (float)SIDEBAND_LOW, (float)SIDEBAND_HIGH));
+
+          // Apply asymmetric sideband spread based on parabolic offset
+          for (int s = 1; s <= spread_bins; s++) {
+            // Weight decreases with distance from peak
+            float weight = stationarity_weight *
+                           (1.0f - (float)s / ((float)spread_bins + 1.0f));
+
+            // Bias the weight toward the side where the true peak sits
+            float bias_minus = (delta < 0.0f)
+                                   ? fminf(1.0f, 1.0f + (delta * 0.5f))
+                                   : fmaxf(0.5f, 1.0f - (delta * 0.3f));
+            float bias_plus = (delta > 0.0f)
+                                  ? fminf(1.0f, (1.0f - (delta * 0.5f)) + 0.5f)
+                                  : fmaxf(0.5f, 1.0f + (delta * 0.3f));
+
+            int idx_minus = (int)k - s;
+            int idx_plus = (int)k + s;
+
+            if (idx_minus >= 0) {
+              tonal_mask[idx_minus] =
+                  fmaxf(tonal_mask[idx_minus], weight * bias_minus);
+            }
+            if (idx_plus < (int)size) {
+              tonal_mask[idx_plus] =
+                  fmaxf(tonal_mask[idx_plus], weight * bias_plus);
+            }
+          }
         }
       }
     }

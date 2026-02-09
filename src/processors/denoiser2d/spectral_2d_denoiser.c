@@ -25,6 +25,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "shared/noise_estimation/adaptive_noise_estimator.h"
 #include "shared/noise_estimation/noise_estimator.h"
 #include "shared/noise_estimation/tonal_detector.h"
+#include "shared/noise_estimation/tonal_reducer.h"
 #include "shared/post_estimation/masking_veto.h"
 #include "shared/post_estimation/nlm_filter.h"
 #include "shared/post_estimation/noise_floor_manager.h"
@@ -465,7 +466,8 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
     detect_tonal_components(self->noise_spectrum,
                             get_noise_profile(self->noise_profile, MAX),
                             get_noise_profile(self->noise_profile, MEDIAN),
-                            self->real_spectrum_size, self->tonal_mask);
+                            self->real_spectrum_size, self->sample_rate,
+                            self->fft_size, self->tonal_mask);
 
     // Moderating the NLM reduction via Masking Veto
     if (nlm_filter_process(self->nlm_filter, self->smoothed_snr)) {
@@ -484,6 +486,11 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
       suppression_engine_calculate(
           self->suppression_engine, smoothed_magnitude, self->noise_spectrum,
           self->parameters.suppression_strength, self->alpha, self->beta);
+
+      // Boost alpha at tonal bins (before veto so veto can protect signal)
+      tonal_reducer_apply(self->alpha, self->tonal_mask,
+                          self->real_spectrum_size,
+                          self->parameters.tonal_reduction);
 
       // 3. Apply the psychoacoustic veto in CONJUNCTION with NLM results.
       // We pass BOTH the smoothed signal (masker) and noisy signal (for
