@@ -4,10 +4,17 @@ libspecbleach - A spectral processing library
 
 #include "tonal_detector.h"
 #include <math.h>
+#include <stdlib.h>
 #include <string.h>
 
-#define PEAK_THRESHOLD 1.58f        // ~4dB above neighbor average
+#define PEAK_THRESHOLD 1.41f        // ~3dB above neighbor background
 #define STATIONARITY_THRESHOLD 2.5f // Ratio of Max/Median spread
+
+static int float_comparator(const void* a, const void* b) {
+  float x = *(const float*)a;
+  float y = *(const float*)b;
+  return (x > y) - (x < y);
+}
 
 void detect_tonal_components(const float* profile, const float* max_profile,
                              const float* median_profile, uint32_t size,
@@ -29,23 +36,22 @@ void detect_tonal_components(const float* profile, const float* max_profile,
         detection_profile[k] > detection_profile[k - 2] &&
         detection_profile[k] > detection_profile[k + 2]) {
 
-      // 2. Broad Neighborhood average (up to 15-bin window) to estimate
-      // background Boundary-aware: clamp the window to [0, size-1] We exclude
-      // the central 5 bins [k-2...k+2] to avoid peak-induced bias
-      float sum_bg = 0.0f;
-      int count_bg = 0;
+      // 2. Robust Local Background Estimation
+      // We use a 15-bin median of the neighborhood (excluding the peak itself)
+      // to avoid nearby harmonics biasing the background estimate.
+      float neighbors[14];
+      int n_count = 0;
       for (int i = -7; i <= 7; i++) {
         int idx = (int)k + i;
-        if (idx >= 0 && idx < (int)size) {
-          if (i < -2 || i > 2) {
-            sum_bg += detection_profile[idx];
-            count_bg++;
-          }
+        if (i != 0 && idx >= 0 && idx < (int)size) {
+          neighbors[n_count++] = detection_profile[idx];
         }
       }
 
-      if (count_bg > 0) {
-        float avg_background = sum_bg / (float)count_bg;
+      if (n_count > 0) {
+        // Sort to find local background median
+        qsort(neighbors, n_count, sizeof(float), float_comparator);
+        float avg_background = neighbors[n_count / 2];
 
         // 3. Stationarity Index (Spread)
         float spread = (max_profile[k] + 1e-9f) / (median_profile[k] + 1e-9f);
