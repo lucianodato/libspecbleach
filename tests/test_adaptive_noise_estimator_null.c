@@ -116,8 +116,8 @@ int main(void) {
 
   // STFT Windows
   stft_window_free(NULL);
-  StftWindows* sw_win = stft_window_initialize(fft_size, overlap_factor,
-                                               HANN_WINDOW, HANN_WINDOW);
+  StftWindows* sw_win = stft_window_initialize(
+      fft_size, fft_size, fft_size / 4U, HANN_WINDOW, HANN_WINDOW);
   stft_window_free(sw_win);
 
   // FFT Transform (internal)

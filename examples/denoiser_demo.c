@@ -38,7 +38,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define NOISE_FRAMES                                                           \
   8 // Amount of frames to capture profile at the beginning of the file (can be
     // anywhere)
-#define FRAME_SIZE 46
+#define FRAME_SIZE 50
 
 static void print_usage(const char* prog_name) {
   fprintf(stderr, "Usage: %s [options] <noisy input> <denoised output>\n",

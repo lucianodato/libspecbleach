@@ -20,7 +20,7 @@
 
 #define BLOCK_SIZE 512
 #define NOISE_FRAMES 8
-#define FRAME_SIZE_MS 46.0f
+#define FRAME_SIZE_MS 50.0f
 #define FRAME_SIZE_ADAPTIVE_MS 20.0f
 
 // Canonical parameters used in generate_reference_files.sh

@@ -84,6 +84,7 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 
 // Oversubtraction criteria
 #define ALPHA_MAX (4.F)
+#define ALPHA_MAX_TONAL (10.F)
 #define ALPHA_MIN (1.F)
 #define BETA_MAX (0.01F)
 #define BETA_MIN (0.F)
@@ -136,6 +137,29 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define BRANDT_MIN_CONFIDENCE                                                  \
   0.90f // Lowered from 0.98 for better learning speed
 
+// Tonal Detector Constants
+#define PEAK_THRESHOLD 1.41f        // ~3dB above neighbor background
+#define STATIONARITY_THRESHOLD 2.5f // Ratio of Max/Median spread
+
+// Frequency-adaptive breakpoints
+#define LOW_FREQ_HZ 200.0f
+#define MID_FREQ_HZ 1000.0f
+
+// Background radius scaling (half-window size)
+#define BG_RADIUS_LOW 15
+#define BG_RADIUS_HIGH 7
+
+// Sideband spread scaling
+#define SIDEBAND_LOW 4
+#define SIDEBAND_HIGH 2
+
+// Threshold relaxation at low frequencies
+#define THRESHOLD_FACTOR_LOW 0.85f
+#define THRESHOLD_FACTOR_HIGH 1.0f
+
+// Maximum neighbor array size (2 * BG_RADIUS_LOW)
+#define MAX_NEIGHBORS 30
+
 /* --------------------------------------------------------------- */
 /* ------------------- Denoiser configurations ------------------- */
 /* --------------------------------------------------------------- */
@@ -146,8 +170,8 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define OUTPUT_WINDOW_TYPE_GENERAL HANN_WINDOW
 
 // Fft configuration
-#define PADDING_CONFIGURATION_GENERAL NO_PADDING
-#define ZEROPADDING_AMOUNT_GENERAL 50 // Even Number
+#define PADDING_CONFIGURATION_GENERAL FIXED_AMOUNT
+#define ZEROPADDING_AMOUNT_GENERAL 800 // Zero-pad for low-freq resolution
 
 // Spectral Type
 #define SPECTRAL_TYPE_GENERAL POWER_SPECTRUM

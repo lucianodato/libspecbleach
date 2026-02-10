@@ -24,7 +24,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "shared/gain_estimation/suppression_engine.h"
 #include "shared/noise_estimation/adaptive_noise_estimator.h"
 #include "shared/noise_estimation/noise_estimator.h"
-#include "shared/noise_estimation/tonal_detector.h"
+#include "shared/noise_estimation/tonal_reducer.h"
 #include "shared/post_estimation/masking_veto.h"
 #include "shared/post_estimation/noise_floor_manager.h"
 #include "shared/pre_estimation/critical_bands.h"
@@ -51,7 +51,8 @@ typedef struct SbSpectralDenoiser {
   float* noise_spectrum;
   float* manual_noise_floor;
   float* noisy_reference;
-  float* tonal_mask;
+
+  TonalReducer* tonal_reducer;
 
   SpectrumType spectrum_type;
   CriticalBandType band_type;
@@ -69,7 +70,6 @@ typedef struct SbSpectralDenoiser {
   NoiseFloorManager* noise_floor_manager;
   MaskingVeto* masking_veto;
   SuppressionEngine* suppression_engine;
-  bool whitening_enabled;
 
   int last_adaptive_state;
   int last_noise_estimation_method;
@@ -102,7 +102,6 @@ SpectralProcessorHandle spectral_denoiser_initialize(
   self->default_undersubtraction = DEFAULT_UNDERSUBTRACTION;
   self->gain_estimation_type = GAIN_ESTIMATION_TYPE;
   self->time_smoothing_type = TIME_SMOOTHING_TYPE;
-  self->whitening_enabled = WHITENING_ENABLED_GENERAL;
 
   self->gain_spectrum = (float*)calloc(self->fft_size, sizeof(float));
   if (!self->gain_spectrum) {
@@ -138,10 +137,15 @@ SpectralProcessorHandle spectral_denoiser_initialize(
       (float*)calloc(self->real_spectrum_size, sizeof(float));
   self->noisy_reference =
       (float*)calloc(self->real_spectrum_size, sizeof(float));
-  self->tonal_mask = (float*)calloc(self->real_spectrum_size, sizeof(float));
 
-  if (!self->manual_noise_floor || !self->noisy_reference ||
-      !self->tonal_mask) {
+  if (!self->manual_noise_floor || !self->noisy_reference) {
+    spectral_denoiser_free(self);
+    return NULL;
+  }
+
+  self->tonal_reducer = tonal_reducer_initialize(
+      self->real_spectrum_size, self->sample_rate, self->fft_size);
+  if (!self->tonal_reducer) {
     spectral_denoiser_free(self);
     return NULL;
   }
@@ -247,8 +251,8 @@ void spectral_denoiser_free(SpectralProcessorHandle instance) {
   if (self->noisy_reference) {
     free(self->noisy_reference);
   }
-  if (self->tonal_mask) {
-    free(self->tonal_mask);
+  if (self->tonal_reducer) {
+    tonal_reducer_free(self->tonal_reducer);
   }
 
   free(self);
@@ -373,17 +377,7 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
                         self->denoise_parameters.aggressiveness);
   }
 
-  // 3. Detect tonal components
-  detect_tonal_components(self->noise_spectrum,
-                          get_noise_profile(self->noise_profile, MAX),
-                          get_noise_profile(self->noise_profile, MEDIAN),
-                          self->real_spectrum_size, self->tonal_mask);
-
   // --- Common Processing Path ---
-
-  float whitening_factor = self->whitening_enabled
-                               ? self->denoise_parameters.whitening_factor
-                               : 0.0f;
 
   // 2. Calculate SNR-dependent oversubtraction factors (Alpha/Beta)
   // The SuppressionEngine implement Berouti-style scaling.
@@ -391,6 +385,13 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
   suppression_engine_calculate(
       self->suppression_engine, reference_spectrum, self->noise_spectrum,
       self->denoise_parameters.suppression_strength, self->alpha, self->beta);
+
+  // 3. Detect tonal components and boost alpha at tonal bins.
+  // Runs before the masking veto so the veto can protect signal harmonics.
+  tonal_reducer_run(self->tonal_reducer, self->noise_spectrum,
+                    get_noise_profile(self->noise_profile, MAX),
+                    get_noise_profile(self->noise_profile, MEDIAN), self->alpha,
+                    self->denoise_parameters.tonal_reduction);
 
   // Preserve 'noisy' reference before temporal smoothing for Veto comparison
   memcpy(self->noisy_reference, reference_spectrum,
@@ -419,12 +420,13 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
                             self->noise_spectrum,
                             self->denoise_parameters.reduction_amount,
                             self->denoise_parameters.tonal_reduction,
-                            self->tonal_mask, whitening_factor);
+                            tonal_reducer_get_mask(self->tonal_reducer),
+                            self->denoise_parameters.whitening_factor);
 
   DenoiseMixerParameters mixer_parameters = (DenoiseMixerParameters){
       .noise_level = self->denoise_parameters.reduction_amount,
       .residual_listen = self->denoise_parameters.residual_listen,
-      .whitening_amount = whitening_factor,
+      .whitening_amount = self->denoise_parameters.whitening_factor,
   };
 
   denoise_mixer_run(self->mixer, fft_spectrum, self->gain_spectrum,

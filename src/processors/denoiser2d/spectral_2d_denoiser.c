@@ -24,7 +24,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "shared/gain_estimation/suppression_engine.h"
 #include "shared/noise_estimation/adaptive_noise_estimator.h"
 #include "shared/noise_estimation/noise_estimator.h"
-#include "shared/noise_estimation/tonal_detector.h"
+#include "shared/noise_estimation/tonal_reducer.h"
 #include "shared/post_estimation/masking_veto.h"
 #include "shared/post_estimation/nlm_filter.h"
 #include "shared/post_estimation/noise_floor_manager.h"
@@ -51,7 +51,7 @@ typedef struct Spectral2DDenoiser {
   float* alpha;              // Oversubtraction factors
   float* beta;               // Undersubtraction factors
   float* manual_noise_floor; // Manual profile floor
-  float* tonal_mask;         // Tonal vs Broadband mask
+  TonalReducer* tonal_reducer;
 
   // Delay buffer for audio alignment
   float* spectral_delay_buffer;
@@ -149,8 +149,9 @@ SpectralProcessorHandle spectral_2d_denoiser_initialize(
     return NULL;
   }
 
-  self->tonal_mask = (float*)calloc(self->real_spectrum_size, sizeof(float));
-  if (!self->tonal_mask) {
+  self->tonal_reducer = tonal_reducer_initialize(self->real_spectrum_size,
+                                                 self->sample_rate, fft_size);
+  if (!self->tonal_reducer) {
     spectral_2d_denoiser_free(self);
     return NULL;
   }
@@ -289,7 +290,7 @@ void spectral_2d_denoiser_free(SpectralProcessorHandle instance) {
   free(self->noise_delay_buffer);
   free(self->magnitude_delay_buffer);
   free(self->manual_noise_floor);
-  free(self->tonal_mask);
+  tonal_reducer_free(self->tonal_reducer);
 
   free(self);
 }
@@ -461,12 +462,6 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
     memcpy(self->noise_spectrum, delayed_noise,
            self->real_spectrum_size * sizeof(float));
 
-    // Detect tonal components
-    detect_tonal_components(self->noise_spectrum,
-                            get_noise_profile(self->noise_profile, MAX),
-                            get_noise_profile(self->noise_profile, MEDIAN),
-                            self->real_spectrum_size, self->tonal_mask);
-
     // Moderating the NLM reduction via Masking Veto
     if (nlm_filter_process(self->nlm_filter, self->smoothed_snr)) {
       // 1. Convert smoothed SNR back to spectral domain to get the "cleaner"
@@ -485,11 +480,14 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
           self->suppression_engine, smoothed_magnitude, self->noise_spectrum,
           self->parameters.suppression_strength, self->alpha, self->beta);
 
-      // 3. Apply the psychoacoustic veto in CONJUNCTION with NLM results.
-      // We pass BOTH the smoothed signal (masker) and noisy signal (for
-      // transient detection). We moderate from 'oversub_alpha' down to 1.0F,
-      // or further towards 0.0F if a sharp transient is detected.
-      // We also apply 'masking_elasticity' to handle perceptual inaccuracies.
+      // 3. Detect tonal components and boost alpha at tonal bins.
+      // Runs before the masking veto so the veto can protect signal harmonics.
+      tonal_reducer_run(self->tonal_reducer, self->noise_spectrum,
+                        get_noise_profile(self->noise_profile, MAX),
+                        get_noise_profile(self->noise_profile, MEDIAN),
+                        self->alpha, self->parameters.tonal_reduction);
+
+      // 4. Apply the psychoacoustic veto in CONJUNCTION with NLM results.
       masking_veto_apply(self->masking_veto, smoothed_magnitude,
                          delayed_magnitude_spectrum, self->noise_spectrum,
                          self->alpha, 1.0F,
@@ -506,7 +504,8 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
           self->noise_floor_manager, self->real_spectrum_size, self->fft_size,
           self->gain_spectrum, self->noise_spectrum,
           self->parameters.reduction_amount, self->parameters.tonal_reduction,
-          self->tonal_mask, self->parameters.whitening_factor);
+          tonal_reducer_get_mask(self->tonal_reducer),
+          self->parameters.whitening_factor);
 
       // Mix results
       DenoiseMixerParameters mixer_params = {

@@ -5,5 +5,5 @@ shared_sources += files(
     'spp_mmse_noise_estimator.c',
     'brandt_noise_estimator.c',
     'martin_noise_estimator.c',
-    'tonal_detector.c',
+    'tonal_reducer.c',
 )
