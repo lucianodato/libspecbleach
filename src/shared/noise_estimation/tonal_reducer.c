@@ -46,7 +46,7 @@ void tonal_reducer_free(TonalReducer* self) {
 
 void tonal_reducer_run(TonalReducer* self, const float* noise_spectrum,
                        const float* max_profile, const float* median_profile,
-                       float* alpha, float tonal_reduction_amount) {
+                       float* alpha, float tonal_reduction_gain) {
   if (!self || !noise_spectrum || !max_profile || !median_profile || !alpha) {
     return;
   }
@@ -57,16 +57,16 @@ void tonal_reducer_run(TonalReducer* self, const float* noise_spectrum,
                           self->fft_size, self->tonal_mask);
 
   // 2. Skip alpha boosting if reduction is 0 (no tonal suppression)
-  if (tonal_reduction_amount <= 0.0f) {
+  // Gain of 1.0 means no reduction.
+  if (tonal_reduction_gain >= 0.999f) {
     return;
   }
 
   // 3. Boost alpha at tonal bins
-  //    Current alpha is at least ALPHA_MIN (1.0). To reduce effectively, we
-  //    need to boost above 1.0. Map reduction (0..1) to range [ALPHA_MIN,
-  //    ALPHA_MAX_TONAL]. E.g. 0.0 -> 1.0, 1.0 -> 60.0
+  //    Internally we work with strength (0..1) where 1 is max reduction.
+  float tonal_reduction_strength = 1.0f - tonal_reduction_gain;
   float alpha_needed =
-      ALPHA_MIN + (tonal_reduction_amount * (ALPHA_MAX_TONAL - ALPHA_MIN));
+      ALPHA_MIN + (tonal_reduction_strength * (ALPHA_MAX_TONAL - ALPHA_MIN));
 
   for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
     if (self->tonal_mask[k] <= 0.0f) {

@@ -66,8 +66,9 @@ void test_flat_noise_no_boost(void) {
   // module logic: it boosts alpha. If no tonal components, mask should be 0. So
   // alpha should remain 1.0.
 
+  // Run with no reduction requested (gain 1.0)
   tonal_reducer_run(reducer, noise_spectrum, max_profile, median_profile, alpha,
-                    0.5f); // 50% reduction
+                    1.0f);
 
   const float* mask = tonal_reducer_get_mask(reducer);
   for (int i = 0; i < TEST_SPECTRUM_SIZE; i++) {
@@ -115,10 +116,10 @@ void test_tonal_boost(void) {
   median_profile[bin - 1] = 0.03f;
   median_profile[bin + 1] = 0.03f;
 
-  float reduction_amount = 0.99f; // High reduction
+  float reduction_gain = 0.00398f; // ~48dB reduction (gain close to 0)
 
   tonal_reducer_run(reducer, noise_spectrum, max_profile, median_profile, alpha,
-                    reduction_amount);
+                    reduction_gain);
 
   const float* mask = tonal_reducer_get_mask(reducer);
 

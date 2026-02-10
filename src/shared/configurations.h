@@ -84,7 +84,7 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 
 // Oversubtraction criteria
 #define ALPHA_MAX (4.F)
-#define ALPHA_MAX_TONAL (60.F)
+#define ALPHA_MAX_TONAL (10.F)
 #define ALPHA_MIN (1.F)
 #define BETA_MAX (0.01F)
 #define BETA_MIN (0.F)

@@ -36,11 +36,11 @@ void tonal_reducer_free(TonalReducer* self);
  * @param max_profile      Maximum captured noise profile
  * @param median_profile   Median captured noise profile
  * @param alpha            Per-bin oversubtraction array (modified in place)
- * @param tonal_reduction_amount Linear reduction coefficient (0.0–1.0)
+ * @param tonal_reduction_gain   Linear reduction coefficient (0.0–1.0)
  */
 void tonal_reducer_run(TonalReducer* self, const float* noise_spectrum,
                        const float* max_profile, const float* median_profile,
-                       float* alpha, float tonal_reduction_amount);
+                       float* alpha, float tonal_reduction_gain);
 
 /**
  * Get the tonal mask from the last run (for downstream use like
