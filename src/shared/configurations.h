@@ -84,6 +84,7 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 
 // Oversubtraction criteria
 #define ALPHA_MAX (4.F)
+#define ALPHA_MAX_TONAL (60.F)
 #define ALPHA_MIN (1.F)
 #define BETA_MAX (0.01F)
 #define BETA_MIN (0.F)
@@ -169,8 +170,8 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define OUTPUT_WINDOW_TYPE_GENERAL HANN_WINDOW
 
 // Fft configuration
-#define PADDING_CONFIGURATION_GENERAL NO_PADDING
-#define ZEROPADDING_AMOUNT_GENERAL 50 // Even Number
+#define PADDING_CONFIGURATION_GENERAL FIXED_AMOUNT
+#define ZEROPADDING_AMOUNT_GENERAL 800 // Zero-pad for low-freq resolution
 
 // Spectral Type
 #define SPECTRAL_TYPE_GENERAL POWER_SPECTRUM

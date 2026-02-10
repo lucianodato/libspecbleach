@@ -116,6 +116,29 @@ void test_low_frequency_hum_detection(void) {
   }
   printf("  120 Hz (bin %d): mask = %.3f ✓\n", bin_120, tonal_mask[bin_120]);
 
+  // Test 30 Hz (Bin 1 at 48k/2048)
+  int bin_30 = freq_to_bin(30.0f);
+  create_test_profile(profile, TEST_SPECTRUM_SIZE, noise_floor, &bin_30,
+                      peak_amps, 1);
+  create_test_profile(max_profile, TEST_SPECTRUM_SIZE, noise_floor, &bin_30,
+                      peak_amps, 1);
+  create_test_profile(median_profile, TEST_SPECTRUM_SIZE, noise_floor, &bin_30,
+                      peak_amps, 1);
+
+  memset(tonal_mask, 0, TEST_SPECTRUM_SIZE * sizeof(float));
+  detect_tonal_components(profile, max_profile, median_profile,
+                          TEST_SPECTRUM_SIZE, TEST_SAMPLE_RATE, TEST_FFT_SIZE,
+                          tonal_mask);
+
+  if (tonal_mask[bin_30] <= 0.0f) {
+    fprintf(stderr,
+            "FAIL: 30 Hz (bin %d) not detected. Loop extension failed.\n",
+            bin_30);
+    exit(1);
+  }
+  printf("  30 Hz (bin %d): mask = %.3f ✓ (Loop extension to k=1 confirmed)\n",
+         bin_30, tonal_mask[bin_30]);
+
   free(profile);
   free(max_profile);
   free(median_profile);
@@ -162,8 +185,8 @@ void test_high_frequency_detection(void) {
   printf("✓ High-frequency detection passed (no regression)\n");
 }
 
-void test_sideband_spread_scaling(void) {
-  printf("Testing sideband spread scales with frequency...\n");
+void test_adaptive_width(void) {
+  printf("Testing adaptive width detection (Walk-Down)...\n");
 
   float* profile = (float*)calloc(TEST_SPECTRUM_SIZE, sizeof(float));
   float* max_profile = (float*)calloc(TEST_SPECTRUM_SIZE, sizeof(float));
@@ -171,62 +194,77 @@ void test_sideband_spread_scaling(void) {
   float* tonal_mask = (float*)calloc(TEST_SPECTRUM_SIZE, sizeof(float));
 
   float noise_floor = 0.01f;
+  // Initialize backgrounds
+  for (uint32_t i = 0; i < TEST_SPECTRUM_SIZE; i++) {
+    profile[i] = noise_floor;
+    max_profile[i] = noise_floor;
+    median_profile[i] = noise_floor;
+  }
 
-  // Test low-frequency tone (100 Hz) — should have wider spread
-  int bin_low = freq_to_bin(100.0f);
-  int peak_bins_low[] = {bin_low};
-  float peak_amps_low[] = {0.1f};
+  // Create a wide peak centered at bin 100
+  // Peak: 0.1, Neighbors: 0.08, Next: 0.04 (still > 1.1*floor approx 0.011)
+  int center = 100;
 
-  create_test_profile(profile, TEST_SPECTRUM_SIZE, noise_floor, peak_bins_low,
-                      peak_amps_low, 1);
-  create_test_profile(max_profile, TEST_SPECTRUM_SIZE, noise_floor,
-                      peak_bins_low, peak_amps_low, 1);
-  create_test_profile(median_profile, TEST_SPECTRUM_SIZE, noise_floor,
-                      peak_bins_low, peak_amps_low, 1);
+  // Center
+  profile[center] = 0.1f;
+  max_profile[center] = 0.1f;
+  median_profile[center] = 0.1f;
+
+  // +/- 1
+  profile[center - 1] = 0.08f;
+  max_profile[center - 1] = 0.08f;
+  median_profile[center - 1] = 0.08f;
+  profile[center + 1] = 0.08f;
+  max_profile[center + 1] = 0.08f;
+  median_profile[center + 1] = 0.08f;
+
+  // +/- 2
+  profile[center - 2] = 0.04f;
+  max_profile[center - 2] = 0.04f;
+  median_profile[center - 2] = 0.04f;
+  profile[center + 2] = 0.04f;
+  max_profile[center + 2] = 0.04f;
+  median_profile[center + 2] = 0.04f;
+
+  // +/- 3 (Close to floor but above)
+  profile[center - 3] = 0.02f;
+  max_profile[center - 3] = 0.02f;
+  median_profile[center - 3] = 0.02f;
+  profile[center + 3] = 0.02f;
+  max_profile[center + 3] = 0.02f;
+  median_profile[center + 3] = 0.02f;
+
+  // +/- 4 (Noise floor)
+  // already 0.01
 
   detect_tonal_components(profile, max_profile, median_profile,
                           TEST_SPECTRUM_SIZE, TEST_SAMPLE_RATE, TEST_FFT_SIZE,
                           tonal_mask);
 
-  // Count bins with non-zero mask around low-freq peak
-  int low_spread = 0;
-  for (int i = bin_low - 6; i <= bin_low + 6; i++) {
-    if (i >= 0 && i < TEST_SPECTRUM_SIZE && tonal_mask[i] > 0.0f) {
-      low_spread++;
-    }
+  // Verification:
+  // Center should be detected
+  if (tonal_mask[center] <= 0.0f) {
+    fprintf(stderr, "FAIL: Center peak %d not detected\n", center);
+    exit(1);
   }
 
-  // Test high-frequency tone (8 kHz) — should have narrower spread
-  int bin_high = freq_to_bin(8000.0f);
-  int peak_bins_high[] = {bin_high};
-  float peak_amps_high[] = {0.1f};
-
-  memset(tonal_mask, 0, TEST_SPECTRUM_SIZE * sizeof(float));
-  create_test_profile(profile, TEST_SPECTRUM_SIZE, noise_floor, peak_bins_high,
-                      peak_amps_high, 1);
-  create_test_profile(max_profile, TEST_SPECTRUM_SIZE, noise_floor,
-                      peak_bins_high, peak_amps_high, 1);
-  create_test_profile(median_profile, TEST_SPECTRUM_SIZE, noise_floor,
-                      peak_bins_high, peak_amps_high, 1);
-
-  detect_tonal_components(profile, max_profile, median_profile,
-                          TEST_SPECTRUM_SIZE, TEST_SAMPLE_RATE, TEST_FFT_SIZE,
-                          tonal_mask);
-
-  int high_spread = 0;
-  for (int i = bin_high - 6; i <= bin_high + 6; i++) {
-    if (i >= 0 && i < TEST_SPECTRUM_SIZE && tonal_mask[i] > 0.0f) {
-      high_spread++;
-    }
+  // +/- 3 should be detected because they are > 0.011 and monotonic
+  if (tonal_mask[center - 3] <= 0.0f || tonal_mask[center + 3] <= 0.0f) {
+    fprintf(
+        stderr,
+        "FAIL: Wide peak edges (+/-3) not detected. Mask[-3]=%f, Mask[+3]=%f\n",
+        tonal_mask[center - 3], tonal_mask[center + 3]);
+    exit(1);
   }
 
-  printf("  Low-freq spread: %d bins, High-freq spread: %d bins\n", low_spread,
-         high_spread);
+  printf("  Center Mask: %.3f\n", tonal_mask[center]);
+  printf("  Edge Mask (+/-3): %.3f / %.3f\n", tonal_mask[center - 3],
+         tonal_mask[center + 3]);
 
-  if (low_spread <= high_spread) {
-    fprintf(stderr,
-            "FAIL: Low-freq spread (%d) should be wider than high-freq (%d)\n",
-            low_spread, high_spread);
+  // +/- 4 should NOT be detected (floor)
+  if (tonal_mask[center - 4] > 0.0f || tonal_mask[center + 4] > 0.0f) {
+    fprintf(stderr, "FAIL: Noise floor bins masked! Mask[-4]=%f, Mask[+4]=%f\n",
+            tonal_mask[center - 4], tonal_mask[center + 4]);
     exit(1);
   }
 
@@ -234,7 +272,7 @@ void test_sideband_spread_scaling(void) {
   free(max_profile);
   free(median_profile);
   free(tonal_mask);
-  printf("✓ Sideband spread scaling passed\n");
+  printf("✓ Adaptive width detection passed\n");
 }
 
 void test_flat_noise_no_false_detection(void) {
@@ -339,7 +377,7 @@ int main(void) {
   test_flat_noise_no_false_detection();
   test_low_frequency_hum_detection();
   test_high_frequency_detection();
-  test_sideband_spread_scaling();
+  test_adaptive_width();
   test_off_center_peak_interpolation();
 
   printf("\n=== All tonal detector tests passed ===\n");

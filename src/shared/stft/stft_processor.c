@@ -89,7 +89,7 @@ StftProcessor* stft_processor_initialize(const uint32_t sample_rate,
   }
 
   self->stft_windows = stft_window_initialize(
-      self->fft_size, self->overlap_factor, input_window, output_window);
+      self->fft_size, self->frame_size, self->hop, input_window, output_window);
   if (!self->stft_windows) {
     stft_processor_free(self);
     return NULL;

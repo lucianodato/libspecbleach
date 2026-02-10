@@ -3,6 +3,7 @@ libspecbleach - A spectral processing library
 */
 
 #include "tonal_reducer.h"
+#include "shared/configurations.h"
 #include "shared/utils/tonal_detector.h"
 #include <math.h>
 #include <stdlib.h>
@@ -55,16 +56,17 @@ void tonal_reducer_run(TonalReducer* self, const float* noise_spectrum,
                           self->real_spectrum_size, self->sample_rate,
                           self->fft_size, self->tonal_mask);
 
-  // 2. Skip alpha boosting if reduction is at 0dB (no tonal suppression)
-  if (tonal_reduction_amount >= 1.0f) {
+  // 2. Skip alpha boosting if reduction is 0 (no tonal suppression)
+  if (tonal_reduction_amount <= 0.0f) {
     return;
   }
 
   // 3. Boost alpha at tonal bins
-  //    gain ≈ 1 - alpha  (when spectrum ≈ noise)
-  //    alpha = 1 - tonal_reduction_amount
-  //    E.g. -48dB → 0.004 → alpha = 0.996
-  float alpha_needed = 1.0f - tonal_reduction_amount;
+  //    Current alpha is at least ALPHA_MIN (1.0). To reduce effectively, we
+  //    need to boost above 1.0. Map reduction (0..1) to range [ALPHA_MIN,
+  //    ALPHA_MAX_TONAL]. E.g. 0.0 -> 1.0, 1.0 -> 60.0
+  float alpha_needed =
+      ALPHA_MIN + (tonal_reduction_amount * (ALPHA_MAX_TONAL - ALPHA_MIN));
 
   for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
     if (self->tonal_mask[k] <= 0.0f) {
