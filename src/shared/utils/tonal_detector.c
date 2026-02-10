@@ -79,12 +79,11 @@ void detect_tonal_components(const float* profile, const float* max_profile,
         float log_next = logf(detection_profile[k + 1] + 1e-20f);
 
         float denom_parab = log_prev - (2.0f * log_peak) + log_next;
-        float delta = 0.0f;
         float true_amplitude = detection_profile[k];
 
         // Only interpolate if the parabola is concave (valid peak)
         if (denom_parab < -1e-10f) {
-          delta = 0.5f * (log_prev - log_next) / denom_parab;
+          float delta = 0.5f * (log_prev - log_next) / denom_parab;
           // Clamp delta to [-0.5, 0.5]
           delta = fmaxf(-0.5f, fminf(0.5f, delta));
           true_amplitude =

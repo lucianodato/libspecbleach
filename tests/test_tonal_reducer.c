@@ -130,32 +130,12 @@ void test_tonal_boost(void) {
   printf("  Tone detected at bin %d (mask=%.3f)\n", bin, mask[bin]);
 
   // Alpha should be boosted.
-  // logic: target_alpha = 1.0 - reduction_amount? No wait,
-  // Let's re-read tonal_reducer.c logic in thought if needed.
-  // "target_alpha = alpha_needed * tonal_mask[k]"
-  // "alpha[k] = fmaxf(alpha[k], target_alpha)"
-  // If tonal_reducer implementation boosts alpha, then alpha[bin] > 1.0.
-  // WAIT. Standard oversubtraction alpha is usually > 1.0 to reduce noise.
-  // But here "reduction_amount" is passed.
-  // If I recall correctly, `tonal_reducer` calculates `alpha` to suppress the
-  // tone by X dB. So alpha[bin] should be significantly modified. Let's just
-  // check alpha[bin] > 1.0f (assuming 1.0 is neutral) or check that it changed
-  // from initial 1.0f.
-
-  // Actually, looking at implementation (from memory/previous views):
-  // It probably sets alpha to `target_alpha` where target_alpha is derived from
-  // reduction. If reduction is close to 1.0 (strong reduction), alpha might be
-  // small? Or if alpha is subtraction factor (Mag - alpha*Noise), then alpha is
-  // large. Wait, `spectral_denoiser` uses `alpha` for oversubtraction. Larger
-  // alpha = more subtraction = more reduction. So we expect alpha[bin] > 1.0 if
-  // we want to reduce it strongly? OR if we are doing `1 - reduction`, maybe we
-  // are applying gain?
-
-  // Let's verify what happened.
-  if (alpha[bin] <= 10.0f) {
+  // With ALPHA_MAX_TONAL=10.0, we expect it to be close to 10.0.
+  if (alpha[bin] <= 9.0f) {
     fprintf(stderr,
-            "FAIL: Alpha not boosted aggressively (<=10.0) at tonal bin %d\n",
-            bin);
+            "FAIL: Alpha not boosted aggressively (<=9.0) at tonal bin %d (got "
+            "%f)\n",
+            bin, alpha[bin]);
     exit(1);
   }
   printf("  Alpha at bin %d: %.3f (boosted aggressively) ✓\n", bin, alpha[bin]);
