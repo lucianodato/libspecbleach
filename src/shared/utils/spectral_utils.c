@@ -251,18 +251,25 @@ static float find_median(const float* array, uint32_t array_size) {
 }
 
 bool get_rolling_median_spectrum(float* median_spectrum,
-                                 const float* current_spectrum_buffer,
+                                 const float** input_spectra,
                                  const uint32_t number_of_blocks,
                                  const uint32_t spectrum_size) {
-  if (!median_spectrum || !current_spectrum_buffer || spectrum_size == 0U) {
+  if (!median_spectrum || !input_spectra || spectrum_size == 0U) {
     return false;
   }
 
+  // Optimize for small block counts to avoid VLA if possible, but keep simple
+  // for now Note: VLA usage is generally discouraged in strict C
+  // standards/security contexts, but this matches existing pattern.
   float tmp_buffer[number_of_blocks];
 
   for (uint32_t i = 0U; i < spectrum_size; i++) {
     for (uint32_t j = 0U; j < number_of_blocks; j++) {
-      tmp_buffer[j] = current_spectrum_buffer[(j * spectrum_size) + i];
+      if (input_spectra[j]) {
+        tmp_buffer[j] = input_spectra[j][i];
+      } else {
+        tmp_buffer[j] = 0.0f; // Safety fallback
+      }
     }
 
     // Sorting array

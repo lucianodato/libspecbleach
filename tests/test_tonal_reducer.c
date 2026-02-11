@@ -3,7 +3,7 @@ libspecbleach - A spectral processing library
 Test suite for the Tonal Reducer module.
 */
 
-#include "shared/noise_estimation/tonal_reducer.h"
+#include "shared/denoiser_logic/processing/tonal_reducer.h"
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>

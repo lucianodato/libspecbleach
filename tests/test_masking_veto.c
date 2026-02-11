@@ -2,12 +2,12 @@
  * Unit tests for Masking Veto
  */
 
-#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "../src/shared/post_estimation/masking_veto.h"
+#include "shared/denoiser_logic/processing/masking_veto.h"
+#include "shared/utils/spectral_features.h"
 
 #define TEST_ASSERT(condition, message)                                        \
   do {                                                                         \
@@ -24,7 +24,8 @@ void test_masking_veto_logic(void) {
   printf("Testing MaskingVeto logic...\n");
 
   uint32_t fft_size = 1024;
-  MaskingVeto* mv = masking_veto_initialize(fft_size, 44100, POWER_SPECTRUM);
+  MaskingVeto* mv =
+      masking_veto_initialize(fft_size, 44100, OPUS_SCALE, POWER_SPECTRUM);
   TEST_ASSERT(mv != NULL, "Init failed");
 
   float smoothed[513];

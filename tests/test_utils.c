@@ -7,11 +7,11 @@
 #include <stdlib.h>
 
 // Include internal headers for testing
-#include "../src/shared/utils/denoise_mixer.h"
-#include "../src/shared/utils/general_utils.h"
 #include "../src/shared/utils/spectral_features.h"
-#include "../src/shared/utils/spectral_trailing_buffer.h"
 #include "../src/shared/utils/spectral_utils.h"
+#include "shared/denoiser_logic/core/denoise_mixer.h"
+#include "shared/utils/general_utils.h"
+#include "shared/utils/spectral_utils.h"
 
 #define TEST_ASSERT(condition, message)                                        \
   do {                                                                         \
@@ -23,30 +23,6 @@
 
 #define TEST_FLOAT_CLOSE(a, b, tolerance)                                      \
   TEST_ASSERT(fabsf((a) - (b)) < (tolerance), "Float values not close enough")
-
-void test_spectral_trailing_buffer(void) {
-  printf("Testing spectral_trailing_buffer...\n");
-
-  uint32_t spec_size = 512;
-  uint32_t buf_size = 10;
-  SpectralTrailingBuffer* stbuff =
-      spectral_trailing_buffer_initialize(spec_size, buf_size);
-  TEST_ASSERT(stbuff != NULL, "STBuff initialization should succeed");
-  TEST_ASSERT(get_spectrum_size(stbuff) == spec_size, "Spec size check");
-  TEST_ASSERT(get_spectrum_buffer_size(stbuff) == buf_size,
-              "Buffer size check");
-
-  float test_spec[512];
-  for (int i = 0; i < 512; i++) {
-    test_spec[i] = (float)i;
-  }
-
-  TEST_ASSERT(spectral_trailing_buffer_push_back(stbuff, test_spec),
-              "Push should succeed");
-
-  spectral_trailing_buffer_free(stbuff);
-  printf("✓ spectral_trailing_buffer tests passed\n");
-}
 
 void test_denoise_mixer(void) {
   printf("Testing denoise_mixer...\n");
@@ -407,7 +383,6 @@ int main(void) {
   test_min_max_spectrum_float();
   test_spectral_utils_null_and_edge_cases();
   test_denoise_mixer();
-  test_spectral_trailing_buffer();
   test_spectral_features();
 
   printf("\n✅ All utility function tests passed!\n");

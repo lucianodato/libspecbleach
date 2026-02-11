@@ -7,7 +7,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../src/shared/post_estimation/spectral_whitening.h"
+#include "shared/denoiser_logic/core/noise_profile.h"
+#include "shared/denoiser_logic/processing/spectral_whitening.h"
 
 #define TEST_ASSERT(condition, message)                                        \
   do {                                                                         \

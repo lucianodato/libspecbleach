@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../src/shared/post_estimation/nlm_filter.h"
+#include "shared/denoiser_logic/processing/nlm_filter.h"
 
 #define TEST_ASSERT(condition, message)                                        \
   do {                                                                         \

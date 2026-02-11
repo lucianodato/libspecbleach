@@ -21,8 +21,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "specbleach_denoiser.h"
 #include "denoiser/spectral_denoiser.h"
 #include "shared/configurations.h"
-#include "shared/noise_estimation/noise_estimator.h"
-#include "shared/noise_estimation/noise_profile.h"
+#include "shared/denoiser_logic/core/noise_profile.h"
 #include "shared/stft/stft_processor.h"
 #include "shared/utils/general_utils.h"
 #include <stdlib.h>
@@ -52,9 +51,8 @@ SpectralBleachHandle specbleach_initialize(const uint32_t sample_rate,
   self->sample_rate = sample_rate;
 
   self->stft_processor = stft_processor_initialize(
-      sample_rate, frame_size, OVERLAP_FACTOR_GENERAL,
-      PADDING_CONFIGURATION_GENERAL, ZEROPADDING_AMOUNT_GENERAL,
-      INPUT_WINDOW_TYPE_GENERAL, OUTPUT_WINDOW_TYPE_GENERAL);
+      sample_rate, frame_size, OVERLAP_FACTOR_1D, PADDING_CONFIGURATION_1D,
+      ZEROPADDING_AMOUNT_1D, INPUT_WINDOW_TYPE_1D, OUTPUT_WINDOW_TYPE_1D);
 
   if (!self->stft_processor) {
     specbleach_free(self);
@@ -73,7 +71,7 @@ SpectralBleachHandle specbleach_initialize(const uint32_t sample_rate,
   }
 
   self->spectral_denoiser = spectral_denoiser_initialize(
-      self->sample_rate, fft_size, OVERLAP_FACTOR_GENERAL, self->noise_profile);
+      self->sample_rate, fft_size, OVERLAP_FACTOR_1D, self->noise_profile);
 
   if (!self->spectral_denoiser) {
     specbleach_free(self);

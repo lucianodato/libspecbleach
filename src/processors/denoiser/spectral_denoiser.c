@@ -20,20 +20,21 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "spectral_denoiser.h"
 #include "shared/configurations.h"
-#include "shared/gain_estimation/gain_estimators.h"
-#include "shared/gain_estimation/suppression_engine.h"
-#include "shared/noise_estimation/adaptive_noise_estimator.h"
-#include "shared/noise_estimation/noise_estimator.h"
-#include "shared/noise_estimation/tonal_reducer.h"
-#include "shared/post_estimation/masking_veto.h"
-#include "shared/post_estimation/noise_floor_manager.h"
-#include "shared/pre_estimation/critical_bands.h"
-#include "shared/pre_estimation/spectral_smoother.h"
-#include "shared/utils/denoise_mixer.h"
+#include "shared/denoiser_logic/core/denoise_mixer.h"
+#include "shared/denoiser_logic/core/denoiser_core.h"
+#include "shared/denoiser_logic/core/noise_floor_manager.h"
+#include "shared/denoiser_logic/core/noise_profile.h"
+#include "shared/denoiser_logic/estimators/adaptive_noise_estimator.h"
+#include "shared/denoiser_logic/estimators/noise_estimator.h"
+#include "shared/denoiser_logic/processing/gain_calculator.h"
+#include "shared/denoiser_logic/processing/masking_veto.h"
+#include "shared/denoiser_logic/processing/suppression_engine.h"
+#include "shared/denoiser_logic/processing/tonal_reducer.h"
+#include "shared/utils/critical_bands.h"
 #include "shared/utils/spectral_features.h"
+#include "shared/utils/spectral_smoother.h"
 #include "shared/utils/spectral_utils.h"
 #include <float.h>
-#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -57,7 +58,7 @@ typedef struct SbSpectralDenoiser {
   SpectrumType spectrum_type;
   CriticalBandType band_type;
   DenoiserParameters denoise_parameters;
-  GainEstimationType gain_estimation_type;
+  GainCalculationType gain_calculation_type;
   TimeSmoothingType time_smoothing_type;
   NoiseEstimatorType noise_estimator_type;
 
@@ -96,12 +97,12 @@ SpectralProcessorHandle spectral_denoiser_initialize(
   self->real_spectrum_size = (self->fft_size / 2U) + 1U;
   self->hop = self->fft_size / overlap_factor;
   self->sample_rate = sample_rate;
-  self->spectrum_type = SPECTRAL_TYPE_GENERAL;
-  self->band_type = CRITICAL_BANDS_TYPE;
+  self->spectrum_type = SPECTRAL_TYPE_1D;
+  self->band_type = CRITICAL_BANDS_TYPE_1D;
   self->default_oversubtraction = DEFAULT_OVERSUBTRACTION;
   self->default_undersubtraction = DEFAULT_UNDERSUBTRACTION;
-  self->gain_estimation_type = GAIN_ESTIMATION_TYPE;
-  self->time_smoothing_type = TIME_SMOOTHING_TYPE;
+  self->gain_calculation_type = GAIN_ESTIMATION_TYPE_1D;
+  self->time_smoothing_type = FIXED;
 
   self->gain_spectrum = (float*)calloc(self->fft_size, sizeof(float));
   if (!self->gain_spectrum) {
@@ -186,9 +187,10 @@ SpectralProcessorHandle spectral_denoiser_initialize(
   self->denoise_parameters.tonal_reduction = 0.0f;
 
   self->masking_veto = masking_veto_initialize(
-      self->fft_size, self->sample_rate, self->spectrum_type);
+      self->fft_size, self->sample_rate, self->band_type, self->spectrum_type);
   self->suppression_engine =
-      suppression_engine_initialize(self->real_spectrum_size);
+      suppression_engine_initialize(self->real_spectrum_size, self->sample_rate,
+                                    self->band_type, self->spectrum_type);
 
   if (!self->noise_floor_manager || !self->masking_veto ||
       !self->suppression_engine) {
@@ -298,105 +300,54 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
 
   SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
 
+  // 1. Preparation: Get reference spectrum and handle learning mode
   float* reference_spectrum =
       get_spectral_feature(self->spectral_features, fft_spectrum,
                            self->fft_size, self->spectrum_type);
 
-  if (self->denoise_parameters.learn_noise > 0) {
-    // Learn all modes simultaneously
-    for (int mode = ROLLING_MEAN; mode <= MINIMUM; mode++) {
-      noise_estimation_run(self->noise_estimator, (NoiseEstimatorType)mode,
-                           reference_spectrum);
-    }
-    self->was_learning = true;
+  if (denoiser_core_handle_learning_mode(
+          self->noise_estimator, reference_spectrum,
+          self->denoise_parameters.learn_noise, &self->was_learning)) {
     return true;
   }
 
-  if (self->was_learning) {
-    // User just stopped learning -> Finalize all captures
-    for (int mode = ROLLING_MEAN; mode <= MINIMUM; mode++) {
-      noise_estimation_finalize(self->noise_estimator,
-                                (NoiseEstimatorType)mode);
-    }
-    self->was_learning = false;
-  }
+  // 2. Noise Estimation: Update noise profile (Adaptive or Manual)
+  DenoiserCoreProfileParams profile_params = {
+      .adaptive_enabled = self->denoise_parameters.adaptive_noise,
+      .spectrum_size = self->real_spectrum_size,
+      .aggressiveness = &self->aggressiveness,
+      .param_aggressiveness = self->denoise_parameters.aggressiveness,
+      .last_adaptive_state = &self->last_adaptive_state,
+      .adaptive_estimator = self->adaptive_estimator,
+      .noise_profile = self->noise_profile,
+      .manual_noise_floor = self->manual_noise_floor,
+      .noise_spectrum = self->noise_spectrum,
+  };
+  denoiser_core_update_noise_profile(profile_params, reference_spectrum);
 
-  // --- Denoising Path ---
+  // 3. Denoising Stage: Calculate gains and apply psychoacoustic constraints
 
-  if (self->denoise_parameters.adaptive_noise && self->adaptive_estimator) {
-    // ... (Adaptive logic remains similar but uses morphed profile as base)
-    // Check for state transitions
-    bool state_changed = !self->last_adaptive_state;
-    bool mode_changed = fabsf(self->aggressiveness -
-                              self->denoise_parameters.aggressiveness) > 0.01f;
+  // Preservation of 'noisy' reference before temporal smoothing for Veto
+  // comparison
+  memcpy(self->noisy_reference, reference_spectrum,
+         self->real_spectrum_size * sizeof(float));
 
-    if (state_changed || mode_changed) {
-      // Calculate morphed base profile
-      get_morphed_profile(self->manual_noise_floor,
-                          get_noise_profile(self->noise_profile, ROLLING_MEAN),
-                          get_noise_profile(self->noise_profile, MEDIAN),
-                          get_noise_profile(self->noise_profile, MAX),
-                          get_noise_profile(self->noise_profile, MINIMUM),
-                          self->real_spectrum_size,
-                          self->denoise_parameters.aggressiveness);
+  // 3.1. Calculate SNR-dependent oversubtraction factors (Alpha/Beta)
+  SuppressionParameters suppression_params = {
+      .type = SUPPRESSION_BEROUTI_PER_BIN,
+      .strength = self->denoise_parameters.suppression_strength,
+      .undersubtraction = 0.0F};
+  suppression_engine_calculate(self->suppression_engine, reference_spectrum,
+                               self->noise_spectrum, suppression_params,
+                               self->alpha, self->beta);
 
-      adaptive_estimator_update_seed(self->adaptive_estimator,
-                                     self->manual_noise_floor);
-
-      self->last_adaptive_state = 1;
-      self->aggressiveness = self->denoise_parameters.aggressiveness;
-    }
-
-    // Run adaptive estimator
-    adaptive_estimator_run(self->adaptive_estimator, reference_spectrum,
-                           self->noise_spectrum);
-
-    // Apply morphed profile as a floor
-    adaptive_estimator_apply_floor(self->adaptive_estimator,
-                                   self->manual_noise_floor);
-    for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
-      if (self->noise_spectrum[k] < self->manual_noise_floor[k]) {
-        self->noise_spectrum[k] = self->manual_noise_floor[k];
-      }
-    }
-
-    // Smooth the morphed/refined floor every frame to eliminate
-    // residual musical noise in specific steering modes (e.g. Median)
-    smooth_spectrum(self->noise_spectrum, self->real_spectrum_size, 0.5f);
-  } else {
-    // Manual Denoising Mode
-    self->last_adaptive_state = 0;
-
-    // Use morphed profile
-    get_morphed_profile(self->noise_spectrum,
-                        get_noise_profile(self->noise_profile, ROLLING_MEAN),
-                        get_noise_profile(self->noise_profile, MEDIAN),
-                        get_noise_profile(self->noise_profile, MAX),
-                        get_noise_profile(self->noise_profile, MINIMUM),
-                        self->real_spectrum_size,
-                        self->denoise_parameters.aggressiveness);
-  }
-
-  // --- Common Processing Path ---
-
-  // 2. Calculate SNR-dependent oversubtraction factors (Alpha/Beta)
-  // The SuppressionEngine implement Berouti-style scaling.
-  // The Veto engine will later moderate this based on audibility/transients.
-  suppression_engine_calculate(
-      self->suppression_engine, reference_spectrum, self->noise_spectrum,
-      self->denoise_parameters.suppression_strength, self->alpha, self->beta);
-
-  // 3. Detect tonal components and boost alpha at tonal bins.
-  // Runs before the masking veto so the veto can protect signal harmonics.
+  // 3.2. Detect tonal components and boost alpha at tonal bins
   tonal_reducer_run(self->tonal_reducer, self->noise_spectrum,
                     get_noise_profile(self->noise_profile, MAX),
                     get_noise_profile(self->noise_profile, MEDIAN), self->alpha,
                     self->denoise_parameters.tonal_reduction);
 
-  // Preserve 'noisy' reference before temporal smoothing for Veto comparison
-  memcpy(self->noisy_reference, reference_spectrum,
-         self->real_spectrum_size * sizeof(float));
-
+  // 3.3. Apply temporal smoothing to the input spectrum
   TimeSmoothingParameters spectral_smoothing_parameters =
       (TimeSmoothingParameters){
           .smoothing = self->denoise_parameters.smoothing_factor,
@@ -404,33 +355,34 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
   spectral_smoothing_run(self->spectrum_smoothing,
                          spectral_smoothing_parameters, reference_spectrum);
 
-  // Apply Structural Veto to rescue transients and moderate artifacts
+  // 3.4. Apply Structural Veto to rescue transients and moderate artifacts
   masking_veto_apply(self->masking_veto, reference_spectrum,
                      self->noisy_reference, self->noise_spectrum, self->alpha,
-                     1.0F, self->denoise_parameters.masking_depth,
+                     ALPHA_MIN, self->denoise_parameters.masking_depth,
                      self->denoise_parameters.masking_elasticity);
 
-  estimate_gains(self->real_spectrum_size, self->fft_size, reference_spectrum,
-                 self->noise_spectrum, self->gain_spectrum, self->alpha,
-                 self->beta, self->gain_estimation_type);
+  // 3.5. Final Gain Calculation
+  calculate_gains(self->real_spectrum_size, self->fft_size, reference_spectrum,
+                  self->noise_spectrum, self->gain_spectrum, self->alpha,
+                  self->beta, self->gain_calculation_type);
 
-  // Apply noise floor management
-  noise_floor_manager_apply(self->noise_floor_manager, self->real_spectrum_size,
-                            self->fft_size, self->gain_spectrum,
-                            self->noise_spectrum,
-                            self->denoise_parameters.reduction_amount,
-                            self->denoise_parameters.tonal_reduction,
-                            tonal_reducer_get_mask(self->tonal_reducer),
-                            self->denoise_parameters.whitening_factor);
-
-  DenoiseMixerParameters mixer_parameters = (DenoiseMixerParameters){
-      .noise_level = self->denoise_parameters.reduction_amount,
+  // 4. Post-Processing: Final gain management and mixing
+  DenoiserCorePostProcessParams post_params = {
+      .fft_size = self->fft_size,
+      .real_spectrum_size = self->real_spectrum_size,
+      .reduction_amount = self->denoise_parameters.reduction_amount,
+      .tonal_reduction = self->denoise_parameters.tonal_reduction,
+      .whitening_factor = self->denoise_parameters.whitening_factor,
+      .mixer_whitening_factor = self->denoise_parameters.whitening_factor,
       .residual_listen = self->denoise_parameters.residual_listen,
-      .whitening_amount = self->denoise_parameters.whitening_factor,
+      .noise_floor_manager = self->noise_floor_manager,
+      .tonal_reducer = self->tonal_reducer,
+      .mixer = self->mixer,
+      .gain_spectrum = self->gain_spectrum,
+      .noise_spectrum = self->noise_spectrum,
+      .fft_spectrum = fft_spectrum,
   };
-
-  denoise_mixer_run(self->mixer, fft_spectrum, self->gain_spectrum,
-                    mixer_parameters);
+  denoiser_core_apply_post_processing(post_params);
 
   return true;
 }
