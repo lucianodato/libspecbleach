@@ -51,6 +51,7 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 /* --------------------------------------------------------------------- */
 
 #define SPECTRAL_EPSILON (1e-12F)
+#define MAX_SPECTRAL_CIRCULAR_BUFFER_LAYERS 8
 
 // Absolute hearing thresholds
 #define REFERENCE_SINE_WAVE_FREQ (1000.F)

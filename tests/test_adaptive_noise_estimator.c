@@ -18,7 +18,6 @@
 #include "shared/utils/masking_estimator.h"
 #include "shared/utils/spectral_features.h"
 #include "shared/utils/spectral_smoother.h"
-#include "shared/utils/spectral_trailing_buffer.h"
 #include "shared/utils/transient_detector.h"
 
 #include "specbleach_denoiser.h"
@@ -130,12 +129,6 @@ int main(void) {
   denoise_mixer_free(NULL);
   DenoiseMixer* dm = denoise_mixer_initialize(fft_size, sample_rate, hop);
   denoise_mixer_free(dm);
-
-  // Spectral Trailing Buffer
-  spectral_trailing_buffer_free(NULL);
-  SpectralTrailingBuffer* stb =
-      spectral_trailing_buffer_initialize(real_spectrum_size, 5);
-  spectral_trailing_buffer_free(stb);
 
   // Spectral Features
   spectral_features_free(NULL);

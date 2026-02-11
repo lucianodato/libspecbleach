@@ -21,7 +21,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "shared/denoiser_logic/estimators/noise_estimator.h"
 #include "shared/configurations.h"
 #include "shared/denoiser_logic/core/noise_profile.h"
-#include "shared/utils/spectral_trailing_buffer.h"
+#include "shared/utils/spectral_circular_buffer.h"
 #include "shared/utils/spectral_utils.h"
 #include <stdlib.h>
 #include <string.h>
@@ -29,7 +29,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 struct NoiseEstimator {
   uint32_t fft_size;
   uint32_t real_spectrum_size;
-  SpectralTrailingBuffer* median_buffer;
+  SbSpectralCircularBuffer* median_buffer;
+  uint32_t layer_median;
 
   NoiseProfile* noise_profile;
 };
@@ -46,8 +47,17 @@ NoiseEstimator* noise_estimation_initialize(const uint32_t fft_size,
   self->real_spectrum_size = (self->fft_size / 2U) + 1U;
 
   self->noise_profile = noise_profile;
-  self->median_buffer = spectral_trailing_buffer_initialize(
-      self->real_spectrum_size, NUMBER_OF_MEDIAN_SPECTRUM);
+  self->noise_profile = noise_profile;
+  self->median_buffer =
+      spectral_circular_buffer_create(NUMBER_OF_MEDIAN_SPECTRUM);
+
+  if (!self->median_buffer) {
+    noise_estimation_free(self);
+    return NULL;
+  }
+
+  self->layer_median = spectral_circular_buffer_add_layer(
+      self->median_buffer, self->real_spectrum_size);
 
   if (!self->median_buffer) {
     noise_estimation_free(self);
@@ -64,7 +74,9 @@ void noise_estimation_free(NoiseEstimator* self) {
 
   // Don't free noise profile used as reference here
 
-  spectral_trailing_buffer_free(self->median_buffer);
+  if (self->median_buffer) {
+    spectral_circular_buffer_free(self->median_buffer);
+  }
 
   free(self);
 }
@@ -87,16 +99,32 @@ bool noise_estimation_run(NoiseEstimator* self,
                                 self->real_spectrum_size);
       increment_block_count(self->noise_profile, noise_estimator_type);
       break;
-    case MEDIAN:
-      spectral_trailing_buffer_push_back(self->median_buffer, signal_spectrum);
+    case MEDIAN: {
+      spectral_circular_buffer_push(self->median_buffer, self->layer_median,
+                                    signal_spectrum);
+      spectral_circular_buffer_advance(self->median_buffer);
+
+      const uint32_t blocks = NUMBER_OF_MEDIAN_SPECTRUM;
+      const float* history_frames[blocks];
+
+      // Retrieve history (0 = most recent, blocks-1 = oldest)
+      for (uint32_t i = 0; i < blocks; i++) {
+        // We retrieve with delay 'i + 1' because 'advance' was already called
+        // so current write index is at +1 relative to the frame we just pushed.
+        // wait, usually we push then advance.
+        // Retrieve(delay=1) gets the frame we just pushed.
+        history_frames[i] = spectral_circular_buffer_retrieve(
+            self->median_buffer, self->layer_median, i + 1);
+      }
+
       bool is_valid_median = get_rolling_median_spectrum(
-          noise_profile, get_trailing_spectral_buffer(self->median_buffer),
-          get_spectrum_buffer_size(self->median_buffer),
-          get_spectrum_size(self->median_buffer));
+          noise_profile, history_frames, blocks, self->real_spectrum_size);
+
       if (is_valid_median) {
         set_noise_profile_available(self->noise_profile, noise_estimator_type);
       }
       break;
+    }
     case MAX:
       (void)max_spectrum(noise_profile, signal_spectrum,
                          self->real_spectrum_size);

@@ -70,8 +70,18 @@ bool get_rolling_mean_spectrum(float* averaged_spectrum,
                                const float* current_spectrum,
                                uint32_t number_of_blocks,
                                uint32_t spectrum_size);
+/**
+ * @brief Computes the rolling median spectrum from a history of frames.
+ *
+ * @param median_spectrum Output buffer for the median spectrum.
+ * @param input_spectra Array of pointers to input spectra history (size:
+ * number_of_blocks).
+ * @param number_of_blocks Number of historical frames to consider.
+ * @param spectrum_size Size of each spectrum (in floats).
+ * @return true if successful, false otherwise.
+ */
 bool get_rolling_median_spectrum(float* median_spectrum,
-                                 const float* current_spectrum_buffer,
+                                 const float** input_spectra,
                                  uint32_t number_of_blocks,
                                  uint32_t spectrum_size);
 void smooth_spectrum(float* spectrum, uint32_t size, float smoothing_factor);

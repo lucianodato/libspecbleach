@@ -19,10 +19,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 #include "spectral_circular_buffer.h"
+#include "shared/configurations.h"
 #include <stdlib.h>
 #include <string.h>
-
-#define MAX_LAYERS 8
 
 typedef struct SbCircularLayer {
   float* buffer;
@@ -30,7 +29,7 @@ typedef struct SbCircularLayer {
 } SbCircularLayer;
 
 struct SbSpectralCircularBuffer {
-  SbCircularLayer layers[MAX_LAYERS];
+  SbCircularLayer layers[MAX_SPECTRAL_CIRCULAR_BUFFER_LAYERS];
   uint32_t num_layers;
   uint32_t num_frames;
   uint32_t write_index;
@@ -56,7 +55,8 @@ SbSpectralCircularBuffer* spectral_circular_buffer_create(uint32_t num_frames) {
 
 uint32_t spectral_circular_buffer_add_layer(SbSpectralCircularBuffer* self,
                                             uint32_t layer_size) {
-  if (!self || self->num_layers >= MAX_LAYERS || layer_size == 0) {
+  if (!self || self->num_layers >= MAX_SPECTRAL_CIRCULAR_BUFFER_LAYERS ||
+      layer_size == 0) {
     return 0xFFFFFFFF;
   }
 

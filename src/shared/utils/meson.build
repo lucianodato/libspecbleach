@@ -2,7 +2,7 @@ shared_sources += files(
     'general_utils.c',
     'spectral_features.c',
     'spectral_utils.c',
-    'spectral_trailing_buffer.c',
+
     'tonal_detector.c',
     'absolute_hearing_thresholds.c',
     'critical_bands.c',
