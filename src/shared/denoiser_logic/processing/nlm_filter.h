@@ -108,4 +108,29 @@ void nlm_filter_reset(NlmFilter* filter);
  */
 uint32_t nlm_filter_get_latency_frames(NlmFilter* filter);
 
+/**
+ * Calculate the SNR frame from reference and noise spectra.
+ * snr[k] = reference[k] / noise[k] (with epsilon safety)
+ * @param filter Pointer to filter
+ * @param reference_spectrum Input signal spectrum
+ * @param noise_spectrum Noise profile spectrum
+ * @param snr_frame Output SNR frame
+ */
+void nlm_filter_calculate_snr(NlmFilter* filter,
+                              const float* reference_spectrum,
+                              const float* noise_spectrum, float* snr_frame);
+
+/**
+ * Reconstruct the magnitude spectrum from smoothed SNR and noise.
+ * magnitude[k] = smoothed_snr[k] * noise[k] (with epsilon safety)
+ * @param filter Pointer to filter
+ * @param smoothed_snr Input smoothed SNR
+ * @param noise_spectrum Noise profile spectrum
+ * @param magnitude_spectrum Output reconstructed magnitude
+ */
+void nlm_filter_reconstruct_magnitude(NlmFilter* filter,
+                                      const float* smoothed_snr,
+                                      const float* noise_spectrum,
+                                      float* magnitude_spectrum);
+
 #endif /* NLM_FILTER_H */

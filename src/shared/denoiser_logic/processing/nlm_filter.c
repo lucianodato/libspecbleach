@@ -18,6 +18,7 @@ License along with this library; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
+#include <float.h>
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -597,4 +598,37 @@ uint32_t nlm_filter_get_latency_frames(NlmFilter* filter) {
   }
   // Latency is the number of look-ahead frames
   return filter->config.search_range_time_future;
+}
+
+void nlm_filter_calculate_snr(NlmFilter* filter,
+                              const float* reference_spectrum,
+                              const float* noise_spectrum, float* snr_frame) {
+  if (!filter || !reference_spectrum || !noise_spectrum || !snr_frame) {
+    return;
+  }
+
+  const uint32_t spectrum_size = filter->config.spectrum_size;
+
+  for (uint32_t k = 0; k < spectrum_size; k++) {
+    float denom =
+        noise_spectrum[k] > FLT_MIN ? noise_spectrum[k] : SPECTRAL_EPSILON;
+    snr_frame[k] = reference_spectrum[k] / denom;
+  }
+}
+
+void nlm_filter_reconstruct_magnitude(NlmFilter* filter,
+                                      const float* smoothed_snr,
+                                      const float* noise_spectrum,
+                                      float* magnitude_spectrum) {
+  if (!filter || !smoothed_snr || !noise_spectrum || !magnitude_spectrum) {
+    return;
+  }
+
+  const uint32_t spectrum_size = filter->config.spectrum_size;
+
+  for (uint32_t k = 0; k < spectrum_size; k++) {
+    float denom =
+        noise_spectrum[k] > FLT_MIN ? noise_spectrum[k] : SPECTRAL_EPSILON;
+    magnitude_spectrum[k] = smoothed_snr[k] * denom;
+  }
 }

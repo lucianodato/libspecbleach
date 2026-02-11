@@ -162,12 +162,8 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define SPECTRAL_TYPE_1D POWER_SPECTRUM
 
 // Noise Scaling strategy
-#define NOISE_SCALING_TYPE_1D SUPPRESSION_BEROUTI_PER_BIN
 #define CRITICAL_BANDS_TYPE_1D OPUS_SCALE
 #define GAIN_ESTIMATION_TYPE_1D WIENER
-
-// Time Smoothing
-#define TIME_SMOOTHING_TYPE_1D FIXED
 
 /* ------------------------------------------------------------------ */
 /* ------------------- 2D Denoiser configurations ------------------- */
@@ -186,7 +182,6 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define SPECTRAL_TYPE_2D POWER_SPECTRUM
 
 // Noise Scaling strategy
-#define NOISE_SCALING_TYPE_2D SUPPRESSION_BEROUTI_PER_BIN
 #define CRITICAL_BANDS_TYPE_2D OPUS_SCALE
 #define GAIN_ESTIMATION_TYPE_2D WIENER
 
