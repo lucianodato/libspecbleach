@@ -24,7 +24,8 @@ void test_masking_veto_logic(void) {
   printf("Testing MaskingVeto logic...\n");
 
   uint32_t fft_size = 1024;
-  MaskingVeto* mv = masking_veto_initialize(fft_size, 44100, POWER_SPECTRUM);
+  MaskingVeto* mv =
+      masking_veto_initialize(fft_size, 44100, OPUS_SCALE, POWER_SPECTRUM);
   TEST_ASSERT(mv != NULL, "Init failed");
 
   float smoothed[513];

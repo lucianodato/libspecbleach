@@ -165,8 +165,18 @@ test_masking_veto = executable('test_masking_veto',
   include_directories: [inc, src_inc]
 )
 
+# Spectral Circular Buffer tests
+test_spectral_circular_buffer = executable('test_spectral_circular_buffer',
+  sources: ['test_spectral_circular_buffer.c'],
+  dependencies: [libspecbleach_dep, m_dep],
+  c_args: test_c_args,
+  link_args: test_link_args,
+  include_directories: [inc, src_inc]
+)
+
 # Run tests
 test('utils', test_utils)
+test('spectral_circular_buffer', test_spectral_circular_buffer)
 test('fft', test_fft)
 test('spectral_whitening', test_spectral_whitening)
 test('noise_floor_manager', test_noise_floor_manager)

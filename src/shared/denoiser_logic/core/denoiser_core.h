@@ -32,7 +32,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 typedef struct DenoiserCoreProfileParams {
   bool adaptive_enabled;
   uint32_t spectrum_size;
-  float aggressiveness;
+  float* aggressiveness;
   float param_aggressiveness;
   int* last_adaptive_state; // Pointer to state variable in parent struct
 
@@ -91,7 +91,7 @@ bool denoiser_core_handle_learning_mode(NoiseEstimator* noise_estimator,
  * component pointers.
  */
 void denoiser_core_update_noise_profile(DenoiserCoreProfileParams params,
-                                        float* reference_spectrum);
+                                        const float* reference_spectrum);
 
 /**
  * @brief Applies post-processing steps: Noise Floor Management and Mixing.

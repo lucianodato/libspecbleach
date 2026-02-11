@@ -21,6 +21,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #ifndef SHARED_DENOISER_LOGIC_MASKING_VETO_H
 #define SHARED_DENOISER_LOGIC_MASKING_VETO_H
 
+#include "shared/utils/critical_bands.h"
 #include "shared/utils/spectral_features.h"
 #include <stdbool.h>
 #include <stdint.h>
@@ -44,6 +45,7 @@ typedef struct MaskingVeto MaskingVeto;
  * @return Initialized MaskingVeto instance or NULL on failure
  */
 MaskingVeto* masking_veto_initialize(uint32_t fft_size, uint32_t sample_rate,
+                                     CriticalBandType critical_band_type,
                                      SpectrumType spectrum_type);
 
 /**

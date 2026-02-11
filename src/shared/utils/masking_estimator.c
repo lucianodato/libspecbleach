@@ -52,9 +52,9 @@ struct MaskingEstimator {
   bool use_absolute_threshold;
 };
 
-MaskingEstimator* masking_estimation_initialize(const uint32_t fft_size,
-                                                const uint32_t sample_rate,
-                                                SpectrumType spectrum_type) {
+MaskingEstimator* masking_estimation_initialize(
+    const uint32_t fft_size, const uint32_t sample_rate,
+    CriticalBandType critical_band_type, SpectrumType spectrum_type) {
 
   MaskingEstimator* self =
       (MaskingEstimator*)calloc(1U, sizeof(MaskingEstimator));
@@ -68,7 +68,7 @@ MaskingEstimator* masking_estimation_initialize(const uint32_t fft_size,
   self->sample_rate = sample_rate;
 
   self->critical_bands = critical_bands_initialize(
-      self->sample_rate, self->fft_size, CRITICAL_BANDS_TYPE);
+      self->sample_rate, self->fft_size, critical_band_type);
   if (!self->critical_bands) {
     masking_estimation_free(self);
     return NULL;

@@ -105,8 +105,8 @@ void test_masking_estimator(void) {
   uint32_t fft_size = 1024;
   uint32_t sample_rate = 44100;
 
-  MaskingEstimator* me =
-      masking_estimation_initialize(fft_size, sample_rate, POWER_SPECTRUM);
+  MaskingEstimator* me = masking_estimation_initialize(
+      fft_size, sample_rate, OPUS_SCALE, POWER_SPECTRUM);
   TEST_ASSERT(me != NULL, "Masking estimator initialization should succeed");
 
   float spectrum[513] = {0.0f};

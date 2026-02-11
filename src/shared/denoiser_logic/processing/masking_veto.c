@@ -35,6 +35,7 @@ struct MaskingVeto {
 };
 
 MaskingVeto* masking_veto_initialize(uint32_t fft_size, uint32_t sample_rate,
+                                     CriticalBandType critical_band_type,
                                      SpectrumType spectrum_type) {
   MaskingVeto* self = (MaskingVeto*)calloc(1U, sizeof(MaskingVeto));
   if (!self) {
@@ -42,8 +43,8 @@ MaskingVeto* masking_veto_initialize(uint32_t fft_size, uint32_t sample_rate,
   }
 
   self->real_spectrum_size = (fft_size / 2U) + 1U;
-  self->masking_estimator =
-      masking_estimation_initialize(fft_size, sample_rate, spectrum_type);
+  self->masking_estimator = masking_estimation_initialize(
+      fft_size, sample_rate, critical_band_type, spectrum_type);
 
   if (!self->masking_estimator) {
     masking_veto_free(self);

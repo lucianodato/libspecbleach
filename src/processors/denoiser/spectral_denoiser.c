@@ -97,12 +97,12 @@ SpectralProcessorHandle spectral_denoiser_initialize(
   self->real_spectrum_size = (self->fft_size / 2U) + 1U;
   self->hop = self->fft_size / overlap_factor;
   self->sample_rate = sample_rate;
-  self->spectrum_type = SPECTRAL_TYPE_GENERAL;
-  self->band_type = CRITICAL_BANDS_TYPE;
+  self->spectrum_type = SPECTRAL_TYPE_1D;
+  self->band_type = CRITICAL_BANDS_TYPE_1D;
   self->default_oversubtraction = DEFAULT_OVERSUBTRACTION;
   self->default_undersubtraction = DEFAULT_UNDERSUBTRACTION;
-  self->gain_calculation_type = GAIN_ESTIMATION_TYPE;
-  self->time_smoothing_type = TIME_SMOOTHING_TYPE;
+  self->gain_calculation_type = GAIN_ESTIMATION_TYPE_1D;
+  self->time_smoothing_type = FIXED;
 
   self->gain_spectrum = (float*)calloc(self->fft_size, sizeof(float));
   if (!self->gain_spectrum) {
@@ -187,7 +187,7 @@ SpectralProcessorHandle spectral_denoiser_initialize(
   self->denoise_parameters.tonal_reduction = 0.0f;
 
   self->masking_veto = masking_veto_initialize(
-      self->fft_size, self->sample_rate, self->spectrum_type);
+      self->fft_size, self->sample_rate, self->band_type, self->spectrum_type);
   self->suppression_engine =
       suppression_engine_initialize(self->real_spectrum_size, self->sample_rate,
                                     self->band_type, self->spectrum_type);
@@ -292,9 +292,6 @@ bool load_reduction_parameters(SpectralProcessorHandle instance,
   return true;
 }
 
-static void calculate_reduction_gains(SbSpectralDenoiser* self,
-                                      float* reference_spectrum);
-
 bool spectral_denoiser_run(SpectralProcessorHandle instance,
                            float* fft_spectrum) {
   if (!fft_spectrum || !instance) {
@@ -303,6 +300,7 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
 
   SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
 
+  // 1. Preparation: Get reference spectrum and handle learning mode
   float* reference_spectrum =
       get_spectral_feature(self->spectral_features, fft_spectrum,
                            self->fft_size, self->spectrum_type);
@@ -313,12 +311,11 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
     return true;
   }
 
-  // --- Denoising Path ---
-
+  // 2. Noise Estimation: Update noise profile (Adaptive or Manual)
   DenoiserCoreProfileParams profile_params = {
       .adaptive_enabled = self->denoise_parameters.adaptive_noise,
       .spectrum_size = self->real_spectrum_size,
-      .aggressiveness = self->aggressiveness,
+      .aggressiveness = &self->aggressiveness,
       .param_aggressiveness = self->denoise_parameters.aggressiveness,
       .last_adaptive_state = &self->last_adaptive_state,
       .adaptive_estimator = self->adaptive_estimator,
@@ -328,27 +325,48 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
   };
   denoiser_core_update_noise_profile(profile_params, reference_spectrum);
 
-  // Update internal aggressiveness state if it changed during update
-  self->aggressiveness = profile_params.aggressiveness;
-  if (*profile_params.last_adaptive_state) {
-    self->aggressiveness = self->denoise_parameters.aggressiveness;
-  }
+  // 3. Denoising Stage: Calculate gains and apply psychoacoustic constraints
 
-  if (profile_params.adaptive_enabled && profile_params.adaptive_estimator) {
-    // Smooth the morphed/refined floor every frame to eliminate
-    // residual musical noise in specific steering modes (e.g. Median)
-    smooth_spectrum(self->noise_spectrum, self->real_spectrum_size, 0.5f);
-  }
-
-  // --- Common Processing Path ---
-
-  // Preserve 'noisy' reference before temporal smoothing for Veto comparison
-  // (moved out of calc function to keep it visible/safe)
+  // Preservation of 'noisy' reference before temporal smoothing for Veto
+  // comparison
   memcpy(self->noisy_reference, reference_spectrum,
          self->real_spectrum_size * sizeof(float));
 
-  calculate_reduction_gains(self, reference_spectrum);
+  // 3.1. Calculate SNR-dependent oversubtraction factors (Alpha/Beta)
+  SuppressionParameters suppression_params = {
+      .type = SUPPRESSION_BEROUTI_PER_BIN,
+      .strength = self->denoise_parameters.suppression_strength,
+      .undersubtraction = 0.0F};
+  suppression_engine_calculate(self->suppression_engine, reference_spectrum,
+                               self->noise_spectrum, suppression_params,
+                               self->alpha, self->beta);
 
+  // 3.2. Detect tonal components and boost alpha at tonal bins
+  tonal_reducer_run(self->tonal_reducer, self->noise_spectrum,
+                    get_noise_profile(self->noise_profile, MAX),
+                    get_noise_profile(self->noise_profile, MEDIAN), self->alpha,
+                    self->denoise_parameters.tonal_reduction);
+
+  // 3.3. Apply temporal smoothing to the input spectrum
+  TimeSmoothingParameters spectral_smoothing_parameters =
+      (TimeSmoothingParameters){
+          .smoothing = self->denoise_parameters.smoothing_factor,
+      };
+  spectral_smoothing_run(self->spectrum_smoothing,
+                         spectral_smoothing_parameters, reference_spectrum);
+
+  // 3.4. Apply Structural Veto to rescue transients and moderate artifacts
+  masking_veto_apply(self->masking_veto, reference_spectrum,
+                     self->noisy_reference, self->noise_spectrum, self->alpha,
+                     ALPHA_MIN, self->denoise_parameters.masking_depth,
+                     self->denoise_parameters.masking_elasticity);
+
+  // 3.5. Final Gain Calculation
+  calculate_gains(self->real_spectrum_size, self->fft_size, reference_spectrum,
+                  self->noise_spectrum, self->gain_spectrum, self->alpha,
+                  self->beta, self->gain_calculation_type);
+
+  // 4. Post-Processing: Final gain management and mixing
   DenoiserCorePostProcessParams post_params = {
       .fft_size = self->fft_size,
       .real_spectrum_size = self->real_spectrum_size,
@@ -367,42 +385,4 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
   denoiser_core_apply_post_processing(post_params);
 
   return true;
-}
-
-static void calculate_reduction_gains(SbSpectralDenoiser* self,
-                                      float* reference_spectrum) {
-  // 2. Calculate SNR-dependent oversubtraction factors (Alpha/Beta)
-  // The SuppressionEngine implement Berouti-style scaling.
-  // The Veto engine will later moderate this based on audibility/transients.
-  SuppressionParameters suppression_params = {
-      .type = SUPPRESSION_BEROUTI_PER_BIN,
-      .strength = self->denoise_parameters.suppression_strength,
-      .undersubtraction = 0.0F};
-  suppression_engine_calculate(self->suppression_engine, reference_spectrum,
-                               self->noise_spectrum, suppression_params,
-                               self->alpha, self->beta);
-
-  // 3. Detect tonal components and boost alpha at tonal bins.
-  // Runs before the masking veto so the veto can protect signal harmonics.
-  tonal_reducer_run(self->tonal_reducer, self->noise_spectrum,
-                    get_noise_profile(self->noise_profile, MAX),
-                    get_noise_profile(self->noise_profile, MEDIAN), self->alpha,
-                    self->denoise_parameters.tonal_reduction);
-
-  TimeSmoothingParameters spectral_smoothing_parameters =
-      (TimeSmoothingParameters){
-          .smoothing = self->denoise_parameters.smoothing_factor,
-      };
-  spectral_smoothing_run(self->spectrum_smoothing,
-                         spectral_smoothing_parameters, reference_spectrum);
-
-  // Apply Structural Veto to rescue transients and moderate artifacts
-  masking_veto_apply(self->masking_veto, reference_spectrum,
-                     self->noisy_reference, self->noise_spectrum, self->alpha,
-                     1.0F, self->denoise_parameters.masking_depth,
-                     self->denoise_parameters.masking_elasticity);
-
-  calculate_gains(self->real_spectrum_size, self->fft_size, reference_spectrum,
-                  self->noise_spectrum, self->gain_spectrum, self->alpha,
-                  self->beta, self->gain_calculation_type);
 }

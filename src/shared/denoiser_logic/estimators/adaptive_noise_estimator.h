@@ -46,7 +46,8 @@ void adaptive_estimator_free(AdaptiveNoiseEstimator* self);
 
 // Run the estimator (dispatches to appropriate internal method)
 bool adaptive_estimator_run(AdaptiveNoiseEstimator* self, const float* spectrum,
-                            float* noise_spectrum);
+                            float* noise_spectrum, float* aggressiveness,
+                            float param_aggressiveness);
 
 // Set the internal state of the estimator from an existing noise profile
 void adaptive_estimator_set_state(AdaptiveNoiseEstimator* self,

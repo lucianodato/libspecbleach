@@ -51,9 +51,8 @@ SpectralBleachHandle specbleach_2d_initialize(const uint32_t sample_rate,
   self->sample_rate = sample_rate;
 
   self->stft_processor = stft_processor_initialize(
-      sample_rate, frame_size, OVERLAP_FACTOR_GENERAL,
-      PADDING_CONFIGURATION_GENERAL, ZEROPADDING_AMOUNT_GENERAL,
-      INPUT_WINDOW_TYPE_GENERAL, OUTPUT_WINDOW_TYPE_GENERAL);
+      sample_rate, frame_size, OVERLAP_FACTOR_2D, PADDING_CONFIGURATION_2D,
+      ZEROPADDING_AMOUNT_2D, INPUT_WINDOW_TYPE_2D, OUTPUT_WINDOW_TYPE_2D);
 
   if (!self->stft_processor) {
     specbleach_2d_free(self);
@@ -61,7 +60,7 @@ SpectralBleachHandle specbleach_2d_initialize(const uint32_t sample_rate,
   }
 
   const uint32_t fft_size = get_stft_fft_size(self->stft_processor);
-  self->hop = fft_size / OVERLAP_FACTOR_GENERAL;
+  self->hop = fft_size / OVERLAP_FACTOR_2D;
 
   self->noise_profile = noise_profile_initialize(fft_size);
   if (!self->noise_profile) {
@@ -70,7 +69,7 @@ SpectralBleachHandle specbleach_2d_initialize(const uint32_t sample_rate,
   }
 
   self->spectral_2d_denoiser = spectral_2d_denoiser_initialize(
-      sample_rate, fft_size, OVERLAP_FACTOR_GENERAL, self->noise_profile);
+      sample_rate, fft_size, OVERLAP_FACTOR_2D, self->noise_profile);
 
   if (!self->spectral_2d_denoiser) {
     specbleach_2d_free(self);

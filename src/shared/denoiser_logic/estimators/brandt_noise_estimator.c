@@ -48,7 +48,7 @@ static float calculate_correction_factor(float p) {
   }
   float term = (1.0f - p) / p * logf(1.0f - p);
   float denominator = 1.0f + term;
-  if (fabsf(denominator) < ESTIMATOR_BIAS_EPSILON) {
+  if (fabsf(denominator) < BRANDT_ESTIMATOR_BIAS_EPSILON) {
     return 1.0f; // Avoid division by zero
   }
   return 1.0f / denominator;
@@ -81,13 +81,13 @@ BrandtNoiseEstimator* brandt_noise_estimator_initialize(
   // parameters. If exact duration needed, we might need hop_size.
   // Assuming standard 50% overlap for calculation roughly:
   float frame_duration = ms_per_frame * 0.5f; // Rough approximation of step
-  if (frame_duration < ESTIMATOR_MIN_DURATION_MS) {
-    frame_duration = ESTIMATOR_MIN_DURATION_MS;
+  if (frame_duration < BRANDT_ESTIMATOR_MIN_DURATION_MS) {
+    frame_duration = BRANDT_ESTIMATOR_MIN_DURATION_MS;
   }
 
   self->history_size = (uint32_t)(history_duration_ms / frame_duration);
-  if (self->history_size < ESTIMATOR_MIN_HISTORY_FRAMES) {
-    self->history_size = ESTIMATOR_MIN_HISTORY_FRAMES; // Minimum history
+  if (self->history_size < BRANDT_ESTIMATOR_MIN_HISTORY_FRAMES) {
+    self->history_size = BRANDT_ESTIMATOR_MIN_HISTORY_FRAMES; // Minimum history
   }
 
   self->trim_count = (uint32_t)((float)self->history_size * percentile);

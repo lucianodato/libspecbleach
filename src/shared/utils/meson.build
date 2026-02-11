@@ -9,4 +9,5 @@ shared_sources += files(
     'transient_detector.c',
     'spectral_smoother.c',
     'masking_estimator.c',
+    'spectral_circular_buffer.c',
 )

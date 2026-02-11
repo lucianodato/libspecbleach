@@ -57,8 +57,8 @@ SuppressionEngine* suppression_engine_initialize(
 
   self->critical_bands =
       critical_bands_initialize(sample_rate, fft_size, critical_band_type);
-  self->masking_estimation =
-      masking_estimation_initialize(fft_size, sample_rate, spectrum_type);
+  self->masking_estimation = masking_estimation_initialize(
+      fft_size, sample_rate, critical_band_type, spectrum_type);
 
   if (!self->critical_bands || !self->masking_estimation) {
     suppression_engine_free(self);

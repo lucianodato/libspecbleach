@@ -55,12 +55,12 @@ bool denoiser_core_handle_learning_mode(NoiseEstimator* noise_estimator,
 }
 
 void denoiser_core_update_noise_profile(DenoiserCoreProfileParams params,
-                                        float* reference_spectrum) {
+                                        const float* reference_spectrum) {
   if (params.adaptive_enabled && params.adaptive_estimator) {
-    // Check for state transitions
-    bool state_changed = !(*params.last_adaptive_state);
+    // Adaptive Denoising Mode
+    int state_changed = *params.last_adaptive_state == 0;
     bool mode_changed =
-        fabsf(params.aggressiveness - params.param_aggressiveness) > 0.01f;
+        fabsf(*params.aggressiveness - params.param_aggressiveness) > 0.01f;
 
     if (state_changed || mode_changed) {
       // Calculate morphed base profile
@@ -69,8 +69,7 @@ void denoiser_core_update_noise_profile(DenoiserCoreProfileParams params,
                           get_noise_profile(params.noise_profile, MEDIAN),
                           get_noise_profile(params.noise_profile, MAX),
                           get_noise_profile(params.noise_profile, MINIMUM),
-                          params.spectrum_size,
-                          params.param_aggressiveness); // Use new params
+                          params.spectrum_size, params.param_aggressiveness);
 
       adaptive_estimator_update_seed(params.adaptive_estimator,
                                      params.manual_noise_floor);
@@ -78,9 +77,10 @@ void denoiser_core_update_noise_profile(DenoiserCoreProfileParams params,
       *params.last_adaptive_state = 1;
     }
 
-    // Run adaptive estimator
+    // Run adaptive estimator (handles smoothing and aggressiveness tracking)
     adaptive_estimator_run(params.adaptive_estimator, reference_spectrum,
-                           params.noise_spectrum);
+                           params.noise_spectrum, params.aggressiveness,
+                           params.param_aggressiveness);
 
     // Apply morphed profile as a floor
     adaptive_estimator_apply_floor(params.adaptive_estimator,
@@ -90,11 +90,6 @@ void denoiser_core_update_noise_profile(DenoiserCoreProfileParams params,
         params.noise_spectrum[k] = params.manual_noise_floor[k];
       }
     }
-
-    // Note: Smoothing logic is specific to 1D denoiser and not included here
-    // The 2D denoiser uses NLM, so post-smoothing isn't universally shared
-    // here. If 1D needs smoothing, it should be done by the caller after this
-    // function.
 
   } else {
     // Manual Denoising Mode

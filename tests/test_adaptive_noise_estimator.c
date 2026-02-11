@@ -61,8 +61,8 @@ int main(void) {
 
   // Masking Estimator
   masking_estimation_free(NULL);
-  MaskingEstimator* me =
-      masking_estimation_initialize(fft_size, sample_rate, POWER_SPECTRUM);
+  MaskingEstimator* me = masking_estimation_initialize(
+      fft_size, sample_rate, OPUS_SCALE, POWER_SPECTRUM);
   masking_estimation_free(me);
 
   // Absolute Hearing Thresholds

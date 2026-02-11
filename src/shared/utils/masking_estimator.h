@@ -21,15 +21,16 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #ifndef MASKING_ESTIMATOR_H
 #define MASKING_ESTIMATOR_H
 
-#include "../utils/spectral_features.h"
+#include "shared/utils/critical_bands.h"
+#include "shared/utils/spectral_features.h"
 #include <stdbool.h>
 #include <stdint.h>
 
 typedef struct MaskingEstimator MaskingEstimator;
 
-MaskingEstimator* masking_estimation_initialize(uint32_t fft_size,
-                                                uint32_t sample_rate,
-                                                SpectrumType spectrum_type);
+MaskingEstimator* masking_estimation_initialize(
+    uint32_t fft_size, uint32_t sample_rate,
+    CriticalBandType critical_band_type, SpectrumType spectrum_type);
 void masking_estimation_free(MaskingEstimator* self);
 bool compute_masking_thresholds(MaskingEstimator* self, const float* spectrum,
                                 float* masking_thresholds);

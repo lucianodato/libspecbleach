@@ -28,6 +28,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 struct AdaptiveNoiseEstimator {
   AdaptiveNoiseEstimationMethod method;
+  uint32_t spectrum_size;
   void* internal_estimator;
 };
 
@@ -40,6 +41,7 @@ static AdaptiveNoiseEstimator* create_spp_mmse_estimator(
   }
 
   self->method = SPP_MMSE_METHOD;
+  self->spectrum_size = noise_spectrum_size;
   self->internal_estimator = spp_mmse_noise_estimator_initialize(
       noise_spectrum_size, sample_rate, fft_size);
 
@@ -60,6 +62,7 @@ static AdaptiveNoiseEstimator* create_brandt_estimator(
   }
 
   self->method = BRANDT_METHOD;
+  self->spectrum_size = noise_spectrum_size;
   // Default parameters: 5000ms history (extremely robust for music)
   self->internal_estimator = brandt_noise_estimator_initialize(
       noise_spectrum_size, BRANDT_DEFAULT_HISTORY_MS, sample_rate, fft_size);
@@ -81,6 +84,7 @@ static AdaptiveNoiseEstimator* create_martin_estimator(
   }
 
   self->method = MARTIN_METHOD;
+  self->spectrum_size = noise_spectrum_size;
   self->internal_estimator = martin_noise_estimator_initialize(
       noise_spectrum_size, sample_rate, fft_size);
 
@@ -150,21 +154,39 @@ void adaptive_estimator_free(AdaptiveNoiseEstimator* self) {
 }
 
 bool adaptive_estimator_run(AdaptiveNoiseEstimator* self, const float* spectrum,
-                            float* noise_spectrum) {
+                            float* noise_spectrum, float* aggressiveness,
+                            float param_aggressiveness) {
   if (!self) {
     return false;
   }
 
+  bool success = false;
   if (self->method == SPP_MMSE_METHOD) {
-    return spp_mmse_noise_estimator_run(
+    success = spp_mmse_noise_estimator_run(
         (SppMmseNoiseEstimator*)self->internal_estimator, spectrum,
         noise_spectrum);
-  }
-  if (self->method == MARTIN_METHOD) {
-    return run_martin(self, spectrum, noise_spectrum);
+  } else if (self->method == MARTIN_METHOD) {
+    success = run_martin(self, spectrum, noise_spectrum);
+  } else {
+    success = run_brandt(self, spectrum, noise_spectrum);
   }
 
-  return run_brandt(self, spectrum, noise_spectrum);
+  if (success) {
+    // Update internal aggressiveness state
+    if (aggressiveness) {
+      *aggressiveness = param_aggressiveness;
+    }
+
+    // Refine the estimator output: heal spectral gaps before smoothing
+    interpolate_spectrum_gaps(noise_spectrum, self->spectrum_size,
+                              NOISE_ESTIMATION_INTERPOLATION_THRESHOLD);
+
+    // Smooth the estimator output to eliminate residual musical noise
+    smooth_spectrum(noise_spectrum, self->spectrum_size,
+                    ADAPTIVE_NOISE_FLOOR_SMOOTHING);
+  }
+
+  return success;
 }
 
 void adaptive_estimator_set_state(AdaptiveNoiseEstimator* self,
