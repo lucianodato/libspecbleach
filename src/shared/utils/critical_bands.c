@@ -23,10 +23,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdlib.h>
 #include <string.h>
 
-static const float bark_bands[24] = {
-    100.F,  200.F,  300.F,  400.F,  510.F,  630.F,  770.F,   920.F,
-    1080.F, 1270.F, 1480.F, 1720.F, 2000.F, 2320.F, 2700.F,  3150.F,
-    3700.F, 4400.F, 5300.F, 6400.F, 7700.F, 9500.F, 12000.F, 15500.F};
+static const float bark_bands[25] = {
+    100.F,  200.F,  300.F,  400.F,  510.F,   630.F,   770.F,  920.F,  1080.F,
+    1270.F, 1480.F, 1720.F, 2000.F, 2320.F,  2700.F,  3150.F, 3700.F, 4400.F,
+    5300.F, 6400.F, 7700.F, 9500.F, 12000.F, 15500.F, 19000.F};
 static const float opus_bands[20] = {200.F,  400.F,  600.F,  800.F,   1000.F,
                                      1200.F, 1400.F, 1600.F, 2000.F,  2400.F,
                                      2800.F, 3200.F, 4000.F, 4800.F,  5600.F,

@@ -70,6 +70,10 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 // clang-format on
 #endif
 
+// Veto Parameters
+#define MASKING_VETO_ALPHA_FLOOR                                               \
+  (0.2F) // Set to 0.0 for full preservation, or 1.0 for standard reduction.
+
 // Gain Estimators
 #define GSS_EXPONENT                                                           \
   2.0F // 2 Power Subtraction / 1 Magnitude Subtraxtion / 0.5 Spectral
@@ -163,7 +167,7 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define SPECTRAL_TYPE_1D POWER_SPECTRUM
 
 // Noise Scaling strategy
-#define CRITICAL_BANDS_TYPE_1D OPUS_SCALE
+#define CRITICAL_BANDS_TYPE_1D BARK_SCALE
 #define GAIN_ESTIMATION_TYPE_1D WIENER
 
 /* ------------------------------------------------------------------ */
@@ -183,7 +187,7 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define SPECTRAL_TYPE_2D POWER_SPECTRUM
 
 // Noise Scaling strategy
-#define CRITICAL_BANDS_TYPE_2D OPUS_SCALE
+#define CRITICAL_BANDS_TYPE_2D BARK_SCALE
 #define GAIN_ESTIMATION_TYPE_2D WIENER
 
-#endif // ifndef
+#endif // MODULES_CONFIGURATIONS_H
