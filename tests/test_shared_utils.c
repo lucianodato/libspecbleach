@@ -7,9 +7,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "shared/denoiser_logic/core/noise_profile.h"
-#include "shared/denoiser_logic/estimators/adaptive_noise_estimator.h"
-#include "shared/denoiser_logic/estimators/noise_estimator.h"
 #include "shared/utils/absolute_hearing_thresholds.h"
 #include "shared/utils/critical_bands.h"
 #include "shared/utils/masking_estimator.h"
@@ -62,7 +59,7 @@ void test_absolute_hearing_thresholds(void) {
 }
 
 void test_critical_bands(void) {
-  printf("Testing Critical Bands...\n");
+  printf("Testing Critical Bands (Shared Utils)...\n");
 
   uint32_t fft_size = 1024;
   uint32_t sample_rate = 44100;
@@ -79,13 +76,14 @@ void test_critical_bands(void) {
     CriticalBandIndexes indexes = get_band_indexes(cb, i);
     TEST_ASSERT(indexes.start_position < indexes.end_position,
                 "Band start should be before end");
-    TEST_ASSERT(indexes.end_position <= fft_size / 2 + 1,
+    TEST_ASSERT(indexes.end_position <= (fft_size / 2U) + 1U,
                 "Band end should be within spectrum bounds");
   }
 
   // Test computing critical bands spectrum
   float spectrum[513] = {0.0f};
-  float critical_bands_spectrum[24] = {0.0f}; // Assuming max 24 bark bands
+  float* critical_bands_spectrum = (float*)calloc(num_bands, sizeof(float));
+  TEST_ASSERT(critical_bands_spectrum != NULL, "Allocation failed");
 
   for (int i = 0; i < 513; i++) {
     spectrum[i] = (float)i * 0.1f;
@@ -95,6 +93,7 @@ void test_critical_bands(void) {
       compute_critical_bands_spectrum(cb, spectrum, critical_bands_spectrum),
       "Compute critical bands should succeed");
 
+  free(critical_bands_spectrum);
   critical_bands_free(cb);
   printf("✓ Critical Bands tests passed\n");
 }
@@ -114,7 +113,7 @@ void test_masking_estimator(void) {
 
   // Create a test spectrum with some energy
   for (int i = 0; i < 513; i++) {
-    spectrum[i] = 0.1f + (float)i * 0.01f;
+    spectrum[i] = 0.1f + ((float)i * 0.01f);
   }
 
   TEST_ASSERT(compute_masking_thresholds(me, spectrum, masking_thresholds),
@@ -143,7 +142,7 @@ void test_spectral_smoother(void) {
 
     float spectrum[513] = {0.0f};
     for (int i = 0; i < 513; i++) {
-      spectrum[i] = 1.0f + 0.5f * sinf((float)i * 0.1f);
+      spectrum[i] = 1.0f + (0.5f * sinf((float)i * 0.1f));
     }
 
     TimeSmoothingParameters params = {.smoothing = 0.8f};
