@@ -84,9 +84,9 @@ test_gain_calculator = executable('test_gain_calculator',
   include_directories: [inc, src_inc]
 )
 
-# Pre-estimation tests
-test_pre_estimation = executable('test_pre_estimation',
-  sources: ['test_pre_estimation.c'],
+# Shared Utils tests
+test_shared_utils = executable('test_shared_utils',
+  sources: ['test_shared_utils.c'],
   dependencies: [libspecbleach_dep, m_dep],
   c_args: test_c_args,
   link_args: test_link_args,
@@ -186,7 +186,7 @@ test('audio_regression', test_audio_regression)
 test('audio_files', test_audio_files)
 test('audio_file_regression', test_audio_file_regression)
 test('gain_calculator', test_gain_calculator)
-test('pre_estimation', test_pre_estimation)
+test('shared_utils', test_shared_utils)
 test('noise_profile', test_noise_profile)
 test('specbleach_denoiser', test_specbleach_denoiser)
 test('specbleach_2d_denoiser', test_specbleach_2d_denoiser)

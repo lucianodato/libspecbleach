@@ -2,6 +2,7 @@
  * Unit tests for Masking Veto
  */
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -60,9 +61,60 @@ void test_masking_veto_logic(void) {
   printf("✓ Masking Veto tests passed\n");
 }
 
+void test_dot_artifact_removal(void) {
+  printf("Testing Veto Interpolation and Protection...\n");
+
+  uint32_t fft_size = 1024; // Real size = 513
+  MaskingVeto* mv =
+      masking_veto_initialize(fft_size, 44100, OPUS_SCALE, POWER_SPECTRUM);
+  TEST_ASSERT(mv != NULL, "Init failed");
+
+  uint32_t real_size = (fft_size / 2) + 1;
+  float* smoothed = (float*)calloc(real_size, sizeof(float));
+  float* noisy = (float*)calloc(real_size, sizeof(float));
+  float* noise = (float*)calloc(real_size, sizeof(float));
+  float* alpha = (float*)calloc(real_size, sizeof(float));
+
+  for (uint32_t i = 0; i < real_size; i++) {
+    smoothed[i] = 1000.0F; // High signal -> High threshold
+    noisy[i] = 1000.0F;
+    alpha[i] = 1.0F; // Initial alpha (high reduction)
+
+    // Default noise: Very low (Masked)
+    noise[i] = 1.0F;
+  }
+
+  // A wide spike ensures we hit a few Bark band centers in the OPUS scale
+  for (uint32_t i = 5; i <= 15; i++) {
+    noise[i] = 10000.0F;
+  }
+
+  // Run Veto
+  // alpha input is 1.0.
+  // floor_alpha is 0.1.
+  // depth = 1.0 (Full protection).
+  // elasticity = 0.0 (Rigid).
+  masking_veto_apply(mv, smoothed, noisy, noise, alpha, 0.1F, 1.0F, 0.0F);
+
+  // Verify Bin 10 is rescued (high alpha) and its neighbors are at least
+  // partially rescued (> floor) due to interpolation.
+  TEST_ASSERT(alpha[10] > 0.5F, "Bin 10 should be rescued");
+  TEST_ASSERT(alpha[9] > 0.1F, "Bin 9 should be above floor");
+  TEST_ASSERT(alpha[11] > 0.1F, "Bin 11 should be above floor");
+
+  free(smoothed);
+  free(noisy);
+  free(noise);
+  free(alpha);
+  masking_veto_free(mv);
+
+  printf("✓ Interpolation protection tests passed\n");
+}
+
 int main(void) {
   printf("Running Masking Veto tests...\n");
   test_masking_veto_logic();
+  test_dot_artifact_removal();
   printf("✅ All Masking Veto tests passed!\n");
   return 0;
 }

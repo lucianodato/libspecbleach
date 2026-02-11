@@ -434,7 +434,8 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
     // artifacts
     masking_veto_apply(self->masking_veto, smoothed_magnitude,
                        delayed_magnitude_spectrum, delayed_noise, self->alpha,
-                       ALPHA_MIN, self->parameters.nlm_masking_protection,
+                       MASKING_VETO_ALPHA_FLOOR,
+                       self->parameters.nlm_masking_protection,
                        self->parameters.masking_elasticity);
 
     // 3.3.5 Final Gain Calculation

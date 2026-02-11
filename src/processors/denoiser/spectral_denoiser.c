@@ -358,7 +358,8 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
   // 3.4. Apply Structural Veto to rescue transients and moderate artifacts
   masking_veto_apply(self->masking_veto, reference_spectrum,
                      self->noisy_reference, self->noise_spectrum, self->alpha,
-                     ALPHA_MIN, self->denoise_parameters.masking_depth,
+                     MASKING_VETO_ALPHA_FLOOR,
+                     self->denoise_parameters.masking_depth,
                      self->denoise_parameters.masking_elasticity);
 
   // 3.5. Final Gain Calculation
