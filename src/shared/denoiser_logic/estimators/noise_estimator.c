@@ -47,7 +47,6 @@ NoiseEstimator* noise_estimation_initialize(const uint32_t fft_size,
   self->real_spectrum_size = (self->fft_size / 2U) + 1U;
 
   self->noise_profile = noise_profile;
-  self->noise_profile = noise_profile;
   self->median_buffer =
       spectral_circular_buffer_create(NUMBER_OF_MEDIAN_SPECTRUM);
 
