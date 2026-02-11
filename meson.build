@@ -91,7 +91,7 @@ subdir('include')
 subdir('src')
 
 # Export dependency for parent projects
-libspecbleach_dep = declare_dependency(include_directories: inc,
+libspecbleach_dep = declare_dependency(include_directories: [inc, src_inc],
   link_with: libspecbleach)
 
 # Examples building

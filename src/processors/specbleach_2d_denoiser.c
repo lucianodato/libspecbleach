@@ -21,8 +21,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "specbleach_2d_denoiser.h"
 #include "denoiser2d/spectral_2d_denoiser.h"
 #include "shared/configurations.h"
-#include "shared/noise_estimation/noise_estimator.h"
-#include "shared/noise_estimation/noise_profile.h"
+#include "shared/denoiser_logic/core/noise_profile.h"
 #include "shared/stft/stft_processor.h"
 #include "shared/utils/general_utils.h"
 #include <stdlib.h>

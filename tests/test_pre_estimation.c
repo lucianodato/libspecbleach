@@ -7,12 +7,14 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../src/shared/pre_estimation/absolute_hearing_thresholds.h"
-#include "../src/shared/pre_estimation/critical_bands.h"
-#include "../src/shared/pre_estimation/masking_estimator.h"
-#include "../src/shared/pre_estimation/noise_scaling_criterias.h"
-#include "../src/shared/pre_estimation/spectral_smoother.h"
-#include "../src/shared/pre_estimation/transient_detector.h"
+#include "shared/denoiser_logic/core/noise_profile.h"
+#include "shared/denoiser_logic/estimators/adaptive_noise_estimator.h"
+#include "shared/denoiser_logic/estimators/noise_estimator.h"
+#include "shared/utils/absolute_hearing_thresholds.h"
+#include "shared/utils/critical_bands.h"
+#include "shared/utils/masking_estimator.h"
+#include "shared/utils/spectral_smoother.h"
+#include "shared/utils/transient_detector.h"
 
 #define TEST_ASSERT(condition, message)                                        \
   do {                                                                         \
@@ -128,88 +130,6 @@ void test_masking_estimator(void) {
   printf("✓ Masking Estimator tests passed\n");
 }
 
-void test_noise_scaling_criterias(void) {
-  printf("Testing Noise Scaling Criterias...\n");
-
-  uint32_t fft_size = 1024;
-  uint32_t sample_rate = 44100;
-
-  NoiseScalingCriterias* nsc = noise_scaling_criterias_initialize(
-      fft_size, BARK_SCALE, sample_rate, POWER_SPECTRUM);
-  TEST_ASSERT(nsc != NULL,
-              "Noise scaling criterias initialization should succeed");
-
-  float spectrum[513] = {0.0f};
-  float noise_spectrum[513] = {0.0f};
-  float alpha[513] = {0.0f};
-  float beta[513] = {0.0f};
-
-  // 1. Basic range tests for all scaling types
-  for (int i = 0; i < 513; i++) {
-    spectrum[i] = 1.0f;
-    noise_spectrum[i] = 0.1f;
-  }
-
-  for (int type = A_POSTERIORI_SNR; type <= NO_SCALING; type++) {
-    NoiseScalingParameters params = {.undersubtraction = 0.01f,
-                                     .oversubtraction = 4.0f,
-                                     .scaling_type = type};
-
-    TEST_ASSERT(apply_noise_scaling_criteria(nsc, spectrum, noise_spectrum,
-                                             alpha, beta, params),
-                "Apply noise scaling criteria should succeed");
-
-    for (int i = 0; i < 513; i++) {
-      TEST_ASSERT(alpha[i] >= 0.0f && alpha[i] <= 10.0f,
-                  "Alpha should be in reasonable range");
-    }
-  }
-
-  // 2. A_POSTERIORI_SNR Edge Cases (SNR thresholds)
-  NoiseScalingParameters params = {.oversubtraction = 4.0f,
-                                   .undersubtraction = 0.01f,
-                                   .scaling_type = A_POSTERIORI_SNR};
-
-  // Low SNR -> alpha should be oversubtraction (4.0)
-  for (int i = 0; i < 513; i++) {
-    spectrum[i] = 0.01F;
-    noise_spectrum[i] = 1.0F;
-  }
-  apply_noise_scaling_criteria(nsc, spectrum, noise_spectrum, alpha, beta,
-                               params);
-  TEST_FLOAT_CLOSE(alpha[0], 4.0F, 0.001F);
-
-  // High SNR -> alpha should be ALPHA_MIN (1.0)
-  for (int i = 0; i < 513; i++) {
-    spectrum[i] = 1000.0F;
-    noise_spectrum[i] = 1.0F;
-  }
-  apply_noise_scaling_criteria(nsc, spectrum, noise_spectrum, alpha, beta,
-                               params);
-  TEST_FLOAT_CLOSE(alpha[0], 1.0F, 0.001F);
-
-  // 3. MASKING_THRESHOLDS Edge Cases (Elastic Protection)
-  params.scaling_type = MASKING_THRESHOLDS;
-  // Low NMR Case (masked signal) -> alpha follows ELASTIC_PROTECTION_FACTOR
-  for (int i = 0; i < 513; i++) {
-    spectrum[i] = 10.0F;
-    noise_spectrum[i] = 1e-12F; // Low noise vs high signal -> NMRE <= 0
-  }
-  apply_noise_scaling_criteria(nsc, spectrum, noise_spectrum, alpha, beta,
-                               params);
-  // Expected = ALPHA_MIN + (oversub_gap * elastic_factor) = 1.0 + (3.0 * 0.2)
-  // = 1.6
-  TEST_FLOAT_CLOSE(alpha[0], 1.6F, 0.001F);
-
-  // 4. NULL Guards
-  TEST_ASSERT(apply_noise_scaling_criteria(nsc, NULL, noise_spectrum, alpha,
-                                           beta, params) == false,
-              "NULL spectrum handling");
-
-  noise_scaling_criterias_free(nsc);
-  printf("✓ Noise Scaling Criterias tests passed\n");
-}
-
 void test_spectral_smoother(void) {
   printf("Testing Spectral Smoother...\n");
 
@@ -286,7 +206,6 @@ int main(void) {
   test_absolute_hearing_thresholds();
   test_critical_bands();
   test_masking_estimator();
-  test_noise_scaling_criterias();
   test_spectral_smoother();
   test_transient_detector();
 

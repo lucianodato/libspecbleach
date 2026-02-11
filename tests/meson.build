@@ -9,7 +9,7 @@ test_utils = executable('test_utils',
   dependencies: [libspecbleach_dep, m_dep],
   c_args: test_c_args,
   link_args: test_link_args,
-  include_directories: inc
+  include_directories: [inc, src_inc]
 )
 
 # Integration tests for full pipeline
@@ -18,7 +18,7 @@ test_integration = executable('test_integration',
   dependencies: [libspecbleach_dep, m_dep, fftw_dep],
   c_args: test_c_args,
   link_args: test_link_args,
-  include_directories: inc
+  include_directories: [inc, src_inc]
 )
 
 # Audio regression tests
@@ -27,7 +27,7 @@ test_audio_regression = executable('test_audio_regression',
   dependencies: [libspecbleach_dep, m_dep, fftw_dep],
   c_args: test_c_args,
   link_args: test_link_args,
-  include_directories: inc
+  include_directories: [inc, src_inc]
 )
 
 # Real audio file tests
@@ -36,7 +36,7 @@ test_audio_files = executable('test_audio_files',
   dependencies: [libspecbleach_dep, m_dep, fftw_dep],
   c_args: test_c_args,
   link_args: test_link_args,
-  include_directories: inc
+  include_directories: [inc, src_inc]
 )
 
 # Audio file regression tests
@@ -45,7 +45,7 @@ test_audio_file_regression = executable('test_audio_file_regression',
   dependencies: [libspecbleach_dep, m_dep, sndfile_dep],
   c_args: test_c_args,
   link_args: test_link_args,
-  include_directories: inc
+  include_directories: [inc, src_inc]
 )
 
 # FFT tests
@@ -54,7 +54,7 @@ test_fft = executable('test_fft',
   dependencies: [libspecbleach_dep, m_dep, fftw_dep],
   c_args: test_c_args,
   link_args: test_link_args,
-  include_directories: inc
+  include_directories: [inc, src_inc]
 )
 
 # Spectral Whitening tests
@@ -63,7 +63,7 @@ test_spectral_whitening = executable('test_spectral_whitening',
   dependencies: [libspecbleach_dep, m_dep],
   c_args: test_c_args,
   link_args: test_link_args,
-  include_directories: inc
+  include_directories: [inc, src_inc]
 )
 
 # STFT Latency tests
@@ -72,16 +72,16 @@ test_stft_latency = executable('test_stft_latency',
   dependencies: [libspecbleach_dep, m_dep, fftw_dep],
   c_args: test_c_args,
   link_args: test_link_args,
-  include_directories: inc
+  include_directories: [inc, src_inc]
 )
 
-# Gain Estimation tests
-test_gain_estimation = executable('test_gain_estimation',
-  sources: ['test_gain_estimation.c'],
+# Gain Calculator tests
+test_gain_calculator = executable('test_gain_calculator',
+  sources: ['test_gain_calculator.c'],
   dependencies: [libspecbleach_dep, m_dep],
   c_args: test_c_args,
   link_args: test_link_args,
-  include_directories: inc
+  include_directories: [inc, src_inc]
 )
 
 # Pre-estimation tests
@@ -90,17 +90,9 @@ test_pre_estimation = executable('test_pre_estimation',
   dependencies: [libspecbleach_dep, m_dep],
   c_args: test_c_args,
   link_args: test_link_args,
-  include_directories: inc
+  include_directories: [inc, src_inc]
 )
 
-# Post-filter tests
-test_postfilter = executable('test_postfilter',
-  sources: ['test_postfilter.c'],
-  dependencies: [libspecbleach_dep, m_dep],
-  c_args: test_c_args,
-  link_args: test_link_args,
-  include_directories: inc
-)
 
 # Noise profile tests
 test_noise_profile = executable('test_noise_profile',
@@ -126,16 +118,16 @@ test_noise_floor_manager = executable('test_noise_floor_manager',
   dependencies: [libspecbleach_dep, m_dep],
   c_args: test_c_args,
   link_args: test_link_args,
-  include_directories: inc
+  include_directories: [inc, src_inc]
 )
 
 # Adaptive noise estimator tests
-test_adaptive_noise_estimator_null = executable('test_adaptive_noise_estimator_null',
-  sources: ['test_adaptive_noise_estimator_null.c'],
+test_adaptive_noise_estimator = executable('test_adaptive_noise_estimator',
+  sources: ['test_adaptive_noise_estimator.c'],
   dependencies: [libspecbleach_dep, m_dep, fftw_dep],
   c_args: test_c_args,
   link_args: test_link_args,
-  include_directories: [inc, include_directories('../src')]
+  include_directories: [inc, src_inc]
 )
 
 # NLM filter tests
@@ -144,7 +136,7 @@ test_nlm_filter = executable('test_nlm_filter',
   dependencies: [libspecbleach_dep, m_dep],
   c_args: test_c_args,
   link_args: test_link_args,
-  include_directories: [inc, include_directories('../src')]
+  include_directories: [inc, src_inc]
 )
 
 # 2D Denoiser wrapper tests
@@ -162,7 +154,7 @@ test_suppression_engine = executable('test_suppression_engine',
   dependencies: [libspecbleach_dep, m_dep],
   c_args: test_c_args,
   link_args: test_link_args,
-  include_directories: inc
+  include_directories: [inc, src_inc]
 )
 
 test_masking_veto = executable('test_masking_veto',
@@ -170,7 +162,7 @@ test_masking_veto = executable('test_masking_veto',
   dependencies: [libspecbleach_dep, m_dep],
   c_args: test_c_args,
   link_args: test_link_args,
-  include_directories: inc
+  include_directories: [inc, src_inc]
 )
 
 # Run tests
@@ -183,16 +175,15 @@ test('integration', test_integration)
 test('audio_regression', test_audio_regression)
 test('audio_files', test_audio_files)
 test('audio_file_regression', test_audio_file_regression)
-test('gain_estimation', test_gain_estimation)
+test('gain_calculator', test_gain_calculator)
 test('pre_estimation', test_pre_estimation)
-test('postfilter', test_postfilter)
 test('noise_profile', test_noise_profile)
 test('specbleach_denoiser', test_specbleach_denoiser)
 test('specbleach_2d_denoiser', test_specbleach_2d_denoiser)
 test('suppression_engine', test_suppression_engine)
 test('masking_veto', test_masking_veto)
 
-test('adaptive_noise_estimator_null', test_adaptive_noise_estimator_null)
+test('adaptive_noise_estimator', test_adaptive_noise_estimator)
 test('nlm_filter', test_nlm_filter)
 
 test_martin = executable('test_martin',
@@ -227,7 +218,7 @@ test_tonal_detector = executable('test_tonal_detector',
   dependencies: [libspecbleach_dep, m_dep],
   c_args: test_c_args,
   link_args: test_link_args,
-  include_directories: [inc, include_directories('../src')]
+  include_directories: [inc, src_inc]
 )
 test('tonal_detector', test_tonal_detector)
 
@@ -236,6 +227,6 @@ test_tonal_reducer = executable('test_tonal_reducer',
   dependencies: [libspecbleach_dep, m_dep],
   c_args: test_c_args,
   link_args: test_link_args,
-  include_directories: [inc, include_directories('../src')]
+  include_directories: [inc, src_inc]
 )
 test('tonal_reducer', test_tonal_reducer)

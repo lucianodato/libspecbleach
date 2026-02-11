@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../src/shared/noise_estimation/noise_profile.h"
+#include "shared/denoiser_logic/core/noise_profile.h"
 
 #define TEST_ASSERT(condition, message)                                        \
   do {                                                                         \

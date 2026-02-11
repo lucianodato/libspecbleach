@@ -8,8 +8,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../src/shared/configurations.h"
-#include "../src/shared/noise_estimation/spp_mmse_noise_estimator.h"
+#include "shared/configurations.h"
+#include "shared/denoiser_logic/estimators/spp_mmse_noise_estimator.h"
 
 #define TEST_ASSERT(condition, message)                                        \
   do {                                                                         \

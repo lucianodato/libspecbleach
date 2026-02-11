@@ -7,11 +7,13 @@
 #include <stdlib.h>
 
 // Include internal headers for testing
-#include "../src/shared/utils/denoise_mixer.h"
-#include "../src/shared/utils/general_utils.h"
 #include "../src/shared/utils/spectral_features.h"
 #include "../src/shared/utils/spectral_trailing_buffer.h"
 #include "../src/shared/utils/spectral_utils.h"
+#include "shared/denoiser_logic/core/denoise_mixer.h"
+#include "shared/denoiser_logic/core/noise_profile.h"
+#include "shared/utils/general_utils.h"
+#include "shared/utils/spectral_utils.h"
 
 #define TEST_ASSERT(condition, message)                                        \
   do {                                                                         \

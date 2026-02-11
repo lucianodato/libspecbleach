@@ -2,12 +2,12 @@
  * Unit tests for Masking Veto
  */
 
-#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "../src/shared/post_estimation/masking_veto.h"
+#include "shared/denoiser_logic/processing/masking_veto.h"
+#include "shared/utils/spectral_features.h"
 
 #define TEST_ASSERT(condition, message)                                        \
   do {                                                                         \
