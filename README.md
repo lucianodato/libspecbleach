@@ -19,11 +19,32 @@ C library for audio noise reduction and other spectral effects
 
 ## Background
 
-This library is based on the algorithms that were used in [noise-repellent](https://github.com/lucianodato/noise-repellent). These were extracted into a standalone library to remove the lv2 dependency. It was designed to be extensible and modular. It uses the concept of a spectral processor which itself uses a short time Fourier transform (STFT) to process the audio. There are two initial processors in place, one which uses the adaptive part of noise repellent and one that uses the manual capturing profile based denoising. The library could be extended with more spectral processors using any STFT-based algorithm such as de-crackle, de-click and other audio restoration algorithms.
+This library is a standalone, modular spectral processing engine originally based on [noise-repellent](https://github.com/lucianodato/noise-repellent). It decouples the DSP algorithms from any specific plugin API (like LV2), allowing for easy integration into various applications.
+
+The core architecture uses a unified spectral processor concept. The library currently implements advanced spectral denoising using efficient circular buffering (`SbSpectralCircularBuffer`) and modern STFT processing. It is designed to be extensible, supporting future additions like de-crackle or de-click algorithms.
 
 ## De-noise Algorithms
 
-There are several techniques implemented in the library that are being used in the denoisers, such as masking thresholds estimation, onset detectors, etc. All these are being used in conjunction to improve the very basic spectral subtraction algorithm. Most of the papers used are listed in the wiki of the project. Also a block diagram is provided to explain the reduction architecture.
+The library implements a sophisticated spectral gating algorithm enhanced by several psychoacoustic and statistical techniques:
+
+### 1. Spectral Gating & Subtraction
+The fundamental noise reduction method uses spectral subtraction with proprietary framing and windowing to minimize artifacts.
+
+### 2. 2D Denoising (Time-Frequency Filtering)
+A Non-Local Means (NLM) algorithm filters the spectrogram in both time and frequency domains simultaneously. This preserving structural details of the signal while reducing musical noise and "burbling" artifacts often associated with simple spectral subtraction.
+*Note: This feature is computationally intensive and requires SIMD optimization (enabled in Release builds).*
+
+### 3. Masking Veto
+To preserve transients and prevent over-processing, a psychoacoustic masking model estimates the auditory masking threshold. If the signal components are strong enough to mask the noise naturally, the "veto" system prevents unnecessary noise reduction, preserving the natural character of the audio.
+
+### 4. Tonal Reduction
+Specialized handling for tonal noise components allows for more aggressive reduction of static hums and whines without affecting broadband characteristics.
+
+### 5. Transparent Whitening
+The whitening feature (noise floor recovery) has been refined to be transparent at 0dB reduction, ensuring that the noise floor texture is natural and consistent with the reduction amount.
+
+### 6. Adaptive Estimation
+In addition to manual noise profile capture, the library supports adaptive noise usage for changing noise environments.
 
 ## Build
 
@@ -67,7 +88,6 @@ meson setup build -Dstatic_deps=true -Denable_examples=true
 meson compile -C build
 ```
 
-
 ## Usage Examples
 
 Simple console apps examples are provided to demonstrate how to use the library. It needs libsndfile to compile successfully. You can build them with:
@@ -77,16 +97,31 @@ meson setup build --buildtype=release -Denable_examples=true
 meson compile -C build
 ```
 
-### Adaptive noise reduction
+### Manual Noise Profile
+
+To process a file using a manually captured noise profile (first N frames):
 
 ```bash
-./build/example/adenoiser_demo <input file name> <output file name>
+./build/example/denoiser_demo --learn-frames 10 input.wav output.wav
 ```
 
-### Manual noise reduction
+### Adaptive Mode
+
+To use the adaptive noise estimator:
 
 ```bash
-./build/example/denoiser_demo <input file name> <output file name>
+./build/example/denoiser_demo --adaptive input.wav output.wav
+```
+
+### Full Options
+
+```bash
+./build/example/denoiser_demo \
+  --adaptive \
+  --reduction 20 \
+  --whitening 50 \
+  --smoothing 0.0 \
+  input.wav output.wav
 ```
 
 It will recognize any libsndfile supported format.
