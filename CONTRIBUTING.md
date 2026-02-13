@@ -65,6 +65,8 @@ meson compile -C build
 - Write clear, documented code
 - Add tests for new functionality
 - Update documentation for API changes
+- **Clean up unused includes:** Remove any `#include` directives that are not actually used in the source file.
+- **License Header:** Ensure every source file begins with the standard LGPL license comment.
 
 ### Safety and Robustness
 

@@ -1,27 +1,7 @@
-/*
-libspecbleach - A spectral processing library
-
-Copyright 2022 Luciano Dato <lucianodato@gmail.com>
-
-This library is free software; you can redistribute it and/or
-modify it under the terms of the GNU Lesser General Public
-License as published by the Free Software Foundation; either
-version 2.1 of the License, or (at your option) any later version.
-
-This library is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-Lesser General Public License for more details.
-
-You should have received a copy of the GNU Lesser General Public
-License along with this library; if not, write to the Free Software
-Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
-*/
-
 #include "spectral_denoiser.h"
 #include "shared/configurations.h"
-#include "shared/denoiser_logic/core/denoise_mixer.h"
-#include "shared/denoiser_logic/core/denoiser_core.h"
+#include "shared/denoiser_logic/core/denoiser_post_process.h"
+#include "shared/denoiser_logic/core/denoiser_profile_core.h"
 #include "shared/denoiser_logic/core/noise_floor_manager.h"
 #include "shared/denoiser_logic/core/noise_profile.h"
 #include "shared/denoiser_logic/estimators/adaptive_noise_estimator.h"
@@ -66,7 +46,6 @@ typedef struct SbSpectralDenoiser {
   AdaptiveNoiseEstimator* adaptive_estimator;
   NoiseProfile* noise_profile;
   SpectralFeatures* spectral_features;
-  DenoiseMixer* mixer;
   SpectralSmoother* spectrum_smoothing;
   NoiseFloorManager* noise_floor_manager;
   MaskingVeto* masking_veto;
@@ -172,13 +151,6 @@ SpectralProcessorHandle spectral_denoiser_initialize(
     return NULL;
   }
 
-  self->mixer =
-      denoise_mixer_initialize(self->fft_size, self->sample_rate, self->hop);
-  if (!self->mixer) {
-    spectral_denoiser_free(self);
-    return NULL;
-  }
-
   self->noise_floor_manager = noise_floor_manager_initialize(
       self->fft_size, self->sample_rate, self->hop);
 
@@ -227,9 +199,6 @@ void spectral_denoiser_free(SpectralProcessorHandle instance) {
   }
   if (self->suppression_engine) {
     suppression_engine_free(self->suppression_engine);
-  }
-  if (self->mixer) {
-    denoise_mixer_free(self->mixer);
   }
   if (self->gain_spectrum) {
     free(self->gain_spectrum);
@@ -305,14 +274,14 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
       get_spectral_feature(self->spectral_features, fft_spectrum,
                            self->fft_size, self->spectrum_type);
 
-  if (denoiser_core_handle_learning_mode(
+  if (denoiser_profile_core_handle_learning_mode(
           self->noise_estimator, reference_spectrum,
           self->denoise_parameters.learn_noise, &self->was_learning)) {
     return true;
   }
 
   // 2. Noise Estimation: Update noise profile (Adaptive or Manual)
-  DenoiserCoreProfileParams profile_params = {
+  DenoiserProfileCoreParams profile_params = {
       .adaptive_enabled = self->denoise_parameters.adaptive_noise,
       .spectrum_size = self->real_spectrum_size,
       .aggressiveness = &self->aggressiveness,
@@ -323,7 +292,7 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
       .manual_noise_floor = self->manual_noise_floor,
       .noise_spectrum = self->noise_spectrum,
   };
-  denoiser_core_update_noise_profile(profile_params, reference_spectrum);
+  denoiser_profile_core_update(profile_params, reference_spectrum);
 
   // 3. Denoising Stage: Calculate gains and apply psychoacoustic constraints
 
@@ -368,22 +337,20 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
                   self->beta, self->gain_calculation_type);
 
   // 4. Post-Processing: Final gain management and mixing
-  DenoiserCorePostProcessParams post_params = {
+  DenoiserPostProcessParams post_params = {
       .fft_size = self->fft_size,
       .real_spectrum_size = self->real_spectrum_size,
       .reduction_amount = self->denoise_parameters.reduction_amount,
       .tonal_reduction = self->denoise_parameters.tonal_reduction,
       .whitening_factor = self->denoise_parameters.whitening_factor,
-      .mixer_whitening_factor = self->denoise_parameters.whitening_factor,
       .residual_listen = self->denoise_parameters.residual_listen,
       .noise_floor_manager = self->noise_floor_manager,
       .tonal_reducer = self->tonal_reducer,
-      .mixer = self->mixer,
       .gain_spectrum = self->gain_spectrum,
       .noise_spectrum = self->noise_spectrum,
       .fft_spectrum = fft_spectrum,
   };
-  denoiser_core_apply_post_processing(post_params);
+  denoiser_post_process_apply(post_params);
 
   return true;
 }

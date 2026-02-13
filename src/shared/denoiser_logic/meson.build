@@ -1,6 +1,6 @@
 shared_sources += files([
-  'core/denoiser_core.c',
-  'core/denoise_mixer.c',
+  'core/denoiser_profile_core.c',
+  'core/denoiser_post_process.c',
   'core/noise_profile.c',
   'core/noise_floor_manager.c',
   'estimators/noise_estimator.c',

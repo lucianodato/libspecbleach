@@ -18,18 +18,17 @@ License along with this library; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#ifndef SHARED_DENOISER_CORE_H
-#define SHARED_DENOISER_CORE_H
+#ifndef SHARED_DENOISER_PROFILE_CORE_H
+#define SHARED_DENOISER_PROFILE_CORE_H
 
-#include "shared/denoiser_logic/core/denoise_mixer.h"
-#include "shared/denoiser_logic/core/noise_floor_manager.h"
 #include "shared/denoiser_logic/core/noise_profile.h"
 #include "shared/denoiser_logic/estimators/adaptive_noise_estimator.h"
 #include "shared/denoiser_logic/estimators/noise_estimator.h"
-#include "shared/denoiser_logic/processing/tonal_reducer.h"
+#include <stdbool.h>
+#include <stdint.h>
 
 // Core parameters needed for updating noise profile
-typedef struct DenoiserCoreProfileParams {
+typedef struct DenoiserProfileCoreParams {
   bool adaptive_enabled;
   uint32_t spectrum_size;
   float* aggressiveness;
@@ -41,28 +40,7 @@ typedef struct DenoiserCoreProfileParams {
   NoiseProfile* noise_profile;
   float* manual_noise_floor;
   float* noise_spectrum; // Output buffer
-} DenoiserCoreProfileParams;
-
-// Core parameters for post-processing and mixing
-typedef struct DenoiserCorePostProcessParams {
-  uint32_t fft_size;
-  uint32_t real_spectrum_size;
-  float reduction_amount;
-  float tonal_reduction;
-  float whitening_factor;
-  float mixer_whitening_factor;
-  bool residual_listen;
-
-  // Components
-  NoiseFloorManager* noise_floor_manager;
-  TonalReducer* tonal_reducer;
-  DenoiseMixer* mixer;
-
-  // Buffers
-  float* gain_spectrum;
-  float* noise_spectrum;
-  float* fft_spectrum; // Input/Output spectrum (modified in place)
-} DenoiserCorePostProcessParams;
+} DenoiserProfileCoreParams;
 
 /**
  * @brief Handles the learning mode logic.
@@ -75,10 +53,10 @@ typedef struct DenoiserCorePostProcessParams {
  * @return true if learning was processed (caller should return early), false
  * otherwise.
  */
-bool denoiser_core_handle_learning_mode(NoiseEstimator* noise_estimator,
-                                        float* reference_spectrum,
-                                        int learn_noise_flag,
-                                        bool* was_learning);
+bool denoiser_profile_core_handle_learning_mode(NoiseEstimator* noise_estimator,
+                                                float* reference_spectrum,
+                                                int learn_noise_flag,
+                                                bool* was_learning);
 
 /**
  * @brief Updates the noise profile based on adaptive or manual mode settings.
@@ -90,15 +68,7 @@ bool denoiser_core_handle_learning_mode(NoiseEstimator* noise_estimator,
  * @param params Struct containing all necessary improved parameters and
  * component pointers.
  */
-void denoiser_core_update_noise_profile(DenoiserCoreProfileParams params,
-                                        const float* reference_spectrum);
-
-/**
- * @brief Applies post-processing steps: Noise Floor Management and Mixing.
- *
- * @param params Struct containing all necessary parameters and component
- * pointers.
- */
-void denoiser_core_apply_post_processing(DenoiserCorePostProcessParams params);
+void denoiser_profile_core_update(DenoiserProfileCoreParams params,
+                                  const float* reference_spectrum);
 
 #endif
