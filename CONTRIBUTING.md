@@ -63,15 +63,20 @@ meson compile -C build
 - Follow the existing code style (enforced by clang-format)
 - Use C17 standard
 - Write clear, documented code
+- **Testing Conventions:**
+  - **Unit Tests:** Always create tests per module (one test file per source module).
+  - **Integration Tests:** Filenames must contain the word `integration` to clearly distinguish them from unit tests.
 - Add tests for new functionality
 - Update documentation for API changes
+- **Clean up unused includes:** Remove any `#include` directives that are not actually used in the source file.
+- **License Header:** Ensure every source file begins with the standard LGPL license comment.
 
 ### Safety and Robustness
 
 1.  **Robust Freeing:** Every `_free` function MUST include a NULL check: `if (!self) return;`.
 2.  **Atomic Initialization:** Initialization functions should handle partial allocation failures gracefully. If a sub-allocation fails, all previously allocated resources within that function must be freed before returning `NULL`.
 3.  **FFT Buffer Sizing:** Always use the correct buffer size for FFT operations. Remember that for real-to-complex FFTs of size `N`, the real spectrum size is `N/2 + 1`.
-4.  **Verification:** Always run your changes through `scan-build` and with sanitizers enabled (`-Denable_sanitizers=true`).
+4.  **Verification:** Always run your changes through `scan-build`, `clang-tidy`, and with sanitizers enabled (`-Denable_sanitizers=true`).
 
 ## License
 

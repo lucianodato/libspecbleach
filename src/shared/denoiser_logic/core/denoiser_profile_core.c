@@ -18,21 +18,17 @@ License along with this library; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#include "shared/denoiser_logic/core/denoiser_core.h"
-#include "shared/denoiser_logic/core/denoise_mixer.h"
-#include "shared/denoiser_logic/core/noise_floor_manager.h"
+#include "shared/denoiser_logic/core/denoiser_profile_core.h"
 #include "shared/denoiser_logic/core/noise_profile.h"
 #include "shared/denoiser_logic/estimators/adaptive_noise_estimator.h"
 #include "shared/denoiser_logic/estimators/noise_estimator.h"
-#include "shared/denoiser_logic/processing/tonal_reducer.h"
 #include "shared/utils/spectral_utils.h"
-#include <float.h>
 #include <math.h>
 
-bool denoiser_core_handle_learning_mode(NoiseEstimator* noise_estimator,
-                                        float* reference_spectrum,
-                                        int learn_noise_flag,
-                                        bool* was_learning) {
+bool denoiser_profile_core_handle_learning_mode(NoiseEstimator* noise_estimator,
+                                                float* reference_spectrum,
+                                                int learn_noise_flag,
+                                                bool* was_learning) {
   if (learn_noise_flag > 0) {
     // Learn all modes simultaneously
     for (int mode = ROLLING_MEAN; mode <= MINIMUM; mode++) {
@@ -54,8 +50,8 @@ bool denoiser_core_handle_learning_mode(NoiseEstimator* noise_estimator,
   return false;
 }
 
-void denoiser_core_update_noise_profile(DenoiserCoreProfileParams params,
-                                        const float* reference_spectrum) {
+void denoiser_profile_core_update(DenoiserProfileCoreParams params,
+                                  const float* reference_spectrum) {
   if (params.adaptive_enabled && params.adaptive_estimator) {
     // Adaptive Denoising Mode
     int state_changed = *params.last_adaptive_state == 0;
@@ -103,22 +99,4 @@ void denoiser_core_update_noise_profile(DenoiserCoreProfileParams params,
                         get_noise_profile(params.noise_profile, MINIMUM),
                         params.spectrum_size, params.param_aggressiveness);
   }
-}
-
-void denoiser_core_apply_post_processing(DenoiserCorePostProcessParams params) {
-  // Apply noise floor management
-  noise_floor_manager_apply(
-      params.noise_floor_manager, params.real_spectrum_size, params.fft_size,
-      params.gain_spectrum, params.noise_spectrum, params.reduction_amount,
-      params.tonal_reduction, tonal_reducer_get_mask(params.tonal_reducer),
-      params.whitening_factor);
-
-  DenoiseMixerParameters mixer_parameters = (DenoiseMixerParameters){
-      .noise_level = params.reduction_amount,
-      .residual_listen = params.residual_listen,
-      .whitening_amount = params.mixer_whitening_factor,
-  };
-
-  denoise_mixer_run(params.mixer, params.fft_spectrum, params.gain_spectrum,
-                    mixer_parameters);
 }

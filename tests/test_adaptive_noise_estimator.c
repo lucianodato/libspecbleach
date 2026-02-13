@@ -2,7 +2,7 @@
 #include <stdlib.h>
 
 #include "processors/denoiser/spectral_denoiser.h"
-#include "shared/denoiser_logic/core/denoise_mixer.h"
+
 #include "shared/denoiser_logic/core/noise_floor_manager.h"
 #include "shared/denoiser_logic/core/noise_profile.h"
 #include "shared/denoiser_logic/estimators/adaptive_noise_estimator.h"
@@ -124,11 +124,6 @@ int main(void) {
       stft_processor_initialize(sample_rate, 10.0f, overlap_factor, NO_PADDING,
                                 0, HANN_WINDOW, HANN_WINDOW);
   stft_processor_free(stft_p);
-
-  // Denoise Mixer
-  denoise_mixer_free(NULL);
-  DenoiseMixer* dm = denoise_mixer_initialize(fft_size, sample_rate, hop);
-  denoise_mixer_free(dm);
 
   // Spectral Features
   spectral_features_free(NULL);

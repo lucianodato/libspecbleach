@@ -9,9 +9,7 @@
 // Include internal headers for testing
 #include "../src/shared/utils/spectral_features.h"
 #include "../src/shared/utils/spectral_utils.h"
-#include "shared/denoiser_logic/core/denoise_mixer.h"
 #include "shared/utils/general_utils.h"
-#include "shared/utils/spectral_utils.h"
 
 #define TEST_ASSERT(condition, message)                                        \
   do {                                                                         \
@@ -23,47 +21,6 @@
 
 #define TEST_FLOAT_CLOSE(a, b, tolerance)                                      \
   TEST_ASSERT(fabsf((a) - (b)) < (tolerance), "Float values not close enough")
-
-void test_denoise_mixer(void) {
-  printf("Testing denoise_mixer...\n");
-
-  uint32_t fft_size = 512;
-  uint32_t sr = 44100;
-  uint32_t hop = 128;
-
-  DenoiseMixer* mixer = denoise_mixer_initialize(fft_size, sr, hop);
-  TEST_ASSERT(mixer != NULL, "Mixer initialization should succeed");
-
-  float* fft_spectrum = (float*)calloc(fft_size, sizeof(float));
-  float* gain_spectrum = (float*)calloc(fft_size, sizeof(float));
-  for (uint32_t i = 0; i < fft_size; i++) {
-    fft_spectrum[i] = 1.0f;
-    gain_spectrum[i] = 0.5f;
-  }
-
-  DenoiseMixerParameters params = {0};
-  params.residual_listen = true;
-
-  // Cover residual_listen branch
-  TEST_ASSERT(denoise_mixer_run(mixer, fft_spectrum, gain_spectrum, params),
-              "Mixer run should succeed");
-  for (uint32_t i = 0; i < fft_size; i++) {
-    TEST_FLOAT_CLOSE(fft_spectrum[i], 0.5f, 1e-6f); // 1.0 - (1.0 * 0.5)
-  }
-
-  // Cover NULL checks
-  TEST_ASSERT(!denoise_mixer_run(NULL, fft_spectrum, gain_spectrum, params),
-              "Mixer run should fail with NULL mixer");
-  TEST_ASSERT(!denoise_mixer_run(mixer, NULL, gain_spectrum, params),
-              "Mixer run should fail with NULL spectrum");
-  TEST_ASSERT(!denoise_mixer_run(mixer, fft_spectrum, NULL, params),
-              "Mixer run should fail with NULL gain");
-
-  denoise_mixer_free(mixer);
-  free(fft_spectrum);
-  free(gain_spectrum);
-  printf("✓ denoise_mixer tests passed\n");
-}
 
 void test_spectral_features(void) {
   printf("Testing spectral_features...\n");
@@ -382,7 +339,7 @@ int main(void) {
   test_fft_frequency_conversions();
   test_min_max_spectrum_float();
   test_spectral_utils_null_and_edge_cases();
-  test_denoise_mixer();
+
   test_spectral_features();
 
   printf("\n✅ All utility function tests passed!\n");

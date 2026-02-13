@@ -20,8 +20,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "spectral_2d_denoiser.h"
 #include "shared/configurations.h"
-#include "shared/denoiser_logic/core/denoise_mixer.h"
-#include "shared/denoiser_logic/core/denoiser_core.h"
+#include "shared/denoiser_logic/core/denoiser_post_process.h"
+#include "shared/denoiser_logic/core/denoiser_profile_core.h"
 #include "shared/denoiser_logic/core/noise_floor_manager.h"
 #include "shared/denoiser_logic/core/noise_profile.h"
 #include "shared/denoiser_logic/estimators/adaptive_noise_estimator.h"
@@ -70,7 +70,6 @@ typedef struct Spectral2DDenoiser {
   SpectralFeatures* spectral_features;
   MaskingVeto* masking_veto;
   SuppressionEngine* suppression_engine;
-  DenoiseMixer* mixer;
   NoiseFloorManager* noise_floor_manager;
 
   int last_adaptive_state;
@@ -229,13 +228,6 @@ SpectralProcessorHandle spectral_2d_denoiser_initialize(
     return NULL;
   }
 
-  // Initialize mixer
-  self->mixer = denoise_mixer_initialize(fft_size, sample_rate, self->hop);
-  if (!self->mixer) {
-    spectral_2d_denoiser_free(self);
-    return NULL;
-  }
-
   // Initialize noise floor manager
   self->noise_floor_manager =
       noise_floor_manager_initialize(fft_size, sample_rate, self->hop);
@@ -271,9 +263,6 @@ void spectral_2d_denoiser_free(SpectralProcessorHandle instance) {
   }
   if (self->suppression_engine) {
     suppression_engine_free(self->suppression_engine);
-  }
-  if (self->mixer) {
-    denoise_mixer_free(self->mixer);
   }
   if (self->noise_floor_manager) {
     noise_floor_manager_free(self->noise_floor_manager);
@@ -350,14 +339,14 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
       get_spectral_feature(self->spectral_features, fft_spectrum,
                            self->fft_size, self->spectrum_type);
 
-  if (denoiser_core_handle_learning_mode(
+  if (denoiser_profile_core_handle_learning_mode(
           self->noise_estimator, reference_spectrum,
           self->parameters.learn_noise, &self->was_learning)) {
     return true;
   }
 
   // 2. Noise Estimation: Update noise profile (Adaptive or Manual)
-  DenoiserCoreProfileParams profile_params = {
+  DenoiserProfileCoreParams profile_params = {
       .adaptive_enabled = self->parameters.adaptive_noise,
       .spectrum_size = self->real_spectrum_size,
       .aggressiveness = &self->aggressiveness,
@@ -368,7 +357,7 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
       .manual_noise_floor = self->manual_noise_floor,
       .noise_spectrum = self->noise_spectrum,
   };
-  denoiser_core_update_noise_profile(profile_params, reference_spectrum);
+  denoiser_profile_core_update(profile_params, reference_spectrum);
 
   // 2.1 Align internal state and output to the delayed frame (temporal
   // plumbing)
@@ -444,23 +433,21 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
                     self->alpha, self->beta, self->gain_calculation_type);
 
     // 4. Post-Processing: Final gain management and mixing
-    DenoiserCorePostProcessParams post_params = {
+    DenoiserPostProcessParams post_params = {
         .fft_size = self->fft_size,
         .real_spectrum_size = self->real_spectrum_size,
         .reduction_amount = self->parameters.reduction_amount,
         .tonal_reduction = self->parameters.tonal_reduction,
         .whitening_factor = self->parameters.whitening_factor,
-        .mixer_whitening_factor = self->parameters.whitening_factor,
         .residual_listen = self->parameters.residual_listen,
         .noise_floor_manager = self->noise_floor_manager,
         .tonal_reducer = self->tonal_reducer,
-        .mixer = self->mixer,
         .gain_spectrum = self->gain_spectrum,
         .noise_spectrum = delayed_noise,
         .fft_spectrum = fft_spectrum,
     };
 
-    denoiser_core_apply_post_processing(post_params);
+    denoiser_post_process_apply(post_params);
   }
 
   // Finalize: Advance circular buffer write index
