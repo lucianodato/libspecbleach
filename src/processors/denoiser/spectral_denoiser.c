@@ -31,7 +31,6 @@ typedef struct SbSpectralDenoiser {
   float* beta;
   float* noise_spectrum;
   float* manual_noise_floor;
-  float* noisy_reference;
 
   TonalReducer* tonal_reducer;
 
@@ -115,10 +114,7 @@ SpectralProcessorHandle spectral_denoiser_initialize(
 
   self->manual_noise_floor =
       (float*)calloc(self->real_spectrum_size, sizeof(float));
-  self->noisy_reference =
-      (float*)calloc(self->real_spectrum_size, sizeof(float));
-
-  if (!self->manual_noise_floor || !self->noisy_reference) {
+  if (!self->manual_noise_floor) {
     spectral_denoiser_free(self);
     return NULL;
   }
@@ -220,9 +216,7 @@ void spectral_denoiser_free(SpectralProcessorHandle instance) {
   if (self->manual_noise_floor) {
     free(self->manual_noise_floor);
   }
-  if (self->noisy_reference) {
-    free(self->noisy_reference);
-  }
+
   if (self->tonal_reducer) {
     tonal_reducer_free(self->tonal_reducer);
   }
@@ -297,11 +291,6 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
 
   // 3. Denoising Stage: Calculate gains and apply psychoacoustic constraints
 
-  // Preservation of 'noisy' reference before temporal smoothing for Veto
-  // comparison
-  memcpy(self->noisy_reference, reference_spectrum,
-         self->real_spectrum_size * sizeof(float));
-
   // 3.1. Calculate SNR-dependent oversubtraction factors (Alpha/Beta)
   SuppressionParameters suppression_params = {
       .type = SUPPRESSION_BEROUTI_PER_BIN,
@@ -327,10 +316,8 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
 
   // 3.4. Apply Structural Veto to rescue transients and moderate artifacts
   masking_veto_apply(self->masking_veto, reference_spectrum,
-                     self->noisy_reference, self->noise_spectrum, NULL,
-                     self->alpha, MASKING_VETO_ALPHA_FLOOR,
-                     self->denoise_parameters.masking_depth,
-                     self->denoise_parameters.masking_elasticity);
+                     self->noise_spectrum, NULL, self->alpha,
+                     self->denoise_parameters.masking_depth);
 
   // 3.5. Final Gain Calculation
   calculate_gains(self->real_spectrum_size, self->fft_size, reference_spectrum,

@@ -44,4 +44,8 @@ bool spectral_smoothing_run(SpectralSmoother* self,
                             TimeSmoothingParameters parameters,
                             float* signal_spectrum);
 
+void spectral_smoothing_apply_spatial(float* data, uint32_t size);
+void spectral_smoothing_apply_simple_temporal(float* current, float* memory,
+                                              uint32_t size, float smoothing);
+
 #endif

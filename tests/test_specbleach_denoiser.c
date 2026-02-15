@@ -36,7 +36,6 @@ void test_specbleach_noise_profile_mode_functions(void) {
       .smoothing_factor = 50.0f,
       .whitening_factor = 0.0f,
       .masking_depth = 0.5f,
-      .masking_elasticity = 0.1f,
       .tonal_reduction = 0.0f,
       .aggressiveness = 0.0f,
   };
@@ -98,7 +97,6 @@ void test_specbleach_load_noise_profile_with_mode(void) {
       .smoothing_factor = 50.0f,
       .whitening_factor = 0.0f,
       .masking_depth = 0.5f,
-      .masking_elasticity = 0.1f,
       .tonal_reduction = 0.0f,
       .aggressiveness = 0.0f,
   };
@@ -182,7 +180,6 @@ void test_specbleach_mode_switching(void) {
       .smoothing_factor = 50.0f,
       .whitening_factor = 0.0f,
       .masking_depth = 0.5f,
-      .masking_elasticity = 0.1f,
       .tonal_reduction = 0.0f,
       .aggressiveness = 0.0f,
   };
@@ -268,7 +265,6 @@ void test_specbleach_reset_noise_profile(void) {
       .smoothing_factor = 50.0f,
       .whitening_factor = 0.0f,
       .masking_depth = 0.5f,
-      .masking_elasticity = 0.1f,
       .tonal_reduction = 0.0f,
       .aggressiveness = 0.0f,
   };
@@ -369,7 +365,6 @@ void test_specbleach_run_features(void) {
       .smoothing_factor = 50.0f,
       .whitening_factor = 1.0f, // Test whitening
       .masking_depth = 0.5f,
-      .masking_elasticity = 0.1f,
       .tonal_reduction = 0.0f,
       .aggressiveness = 0.0f,
   };

@@ -423,11 +423,9 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
     // artifacts
     // We pass the CURRENT spectrum (fft_spectrum) as the lookahead for the
     // DELAYED frame being processed.
-    masking_veto_apply(self->masking_veto, smoothed_magnitude,
-                       delayed_magnitude_spectrum, delayed_noise, fft_spectrum,
-                       self->alpha, MASKING_VETO_ALPHA_FLOOR,
-                       self->parameters.nlm_masking_protection,
-                       self->parameters.masking_elasticity);
+    masking_veto_apply(self->masking_veto, smoothed_magnitude, delayed_noise,
+                       fft_spectrum, self->alpha,
+                       self->parameters.nlm_masking_protection);
 
     // 3.3.5 Final Gain Calculation
     calculate_gains(self->real_spectrum_size, self->fft_size,

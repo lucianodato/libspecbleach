@@ -88,16 +88,12 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define S_SLOPE_FACTOR 0.2F  // Slope broadening factor per dB
 
 // Veto Parameters
-#define MASKING_VETO_ALPHA_FLOOR                                               \
-  (0.2F) // Set to 0.0 for full preservation, or 1.0 for standard reduction.
-#define MASKING_VETO_SMOOTHING 0.5F     // Stabilization alpha for clean signal
-#define MASKING_VETO_SNR_THRESHOLD 3.0F // SNR floor for protection
-#define MASKING_VETO_SNR_RANGE 3.0F     // SNR range for weight mapping
-#define MASKING_VETO_NMR_RANGE 20.0F    // NMR range for audibility mapping
+#define MASKING_VETO_SMOOTHING 0.5F  // Stabilization alpha for clean signal
+#define MASKING_VETO_NMR_RANGE 20.0F // NMR range for protection mapping (dB)
 
 // Gain Estimators
 #define GSS_EXPONENT                                                           \
-  2.0F // 2 Power Subtraction / 1 Magnitude Subtraxtion / 0.5 Spectral
+  2.0F // 2 Power Subtraction / 1 Magnitude Subtraction / 0.5 Spectral
        // Subtraction
 
 // Oversubtraction criteria

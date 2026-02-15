@@ -39,7 +39,6 @@ typedef struct Denoiser2DParameters {
   int adaptive_noise;     /**< Adaptive noise mode: 0=disabled, 1=enabled */
   int noise_estimation_method;  /**< 0=SPP-MMSE, 1=Brandt, 2=Martin MS */
   float nlm_masking_protection; /**< Masking protection depth (0.0 to 1.0) */
-  float masking_elasticity;     /**< Masking elasticity (0.0 to 1.0) */
   float suppression_strength;   /**< Suppression aggressiveness (0.0 to 1.0) */
   float aggressiveness;  /**< -1.0 (Median/Min) to 1.0 (Max), 0.0 (Mean) */
   float tonal_reduction; /**< 0.0 to 1.0 (Phase 3) */
