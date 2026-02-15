@@ -169,8 +169,9 @@ void test_transient_detector(void) {
   printf("Testing Transient Detector...\n");
 
   uint32_t fft_size = 1024;
+  uint32_t real_size = (fft_size / 2) + 1;
 
-  TransientDetector* td = transient_detector_initialize(fft_size);
+  TransientDetector* td = transient_detector_initialize(real_size);
   TEST_ASSERT(td != NULL, "Transient detector initialization should succeed");
 
   float spectrum[513] = {0.0f};
