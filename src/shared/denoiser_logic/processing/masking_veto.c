@@ -187,8 +187,8 @@ void masking_veto_apply(MaskingVeto* self, const float* smoothed_spectrum,
   }
 
   // 2.2 Update onset weights using the innovation ratio
-  transient_detector_process(self->transient_detector, self->band_energies_buf,
-                             self->onset_weights);
+  (void)transient_detector_process(
+      self->transient_detector, self->band_energies_buf, self->onset_weights);
 
   for (uint32_t j = 0U; j < num_bands; j++) {
     const CriticalBandIndexes indexes =

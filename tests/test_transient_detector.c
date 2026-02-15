@@ -72,17 +72,18 @@ void test_global_transient_detection(void) {
   for (uint32_t i = 0; i < 1024; i++) {
     spectrum[i] = 1.0F;
   }
-  transient_detector_run(td, spectrum);
-  transient_detector_run(td, spectrum);
+  transient_detector_process(td, spectrum, NULL);
+  transient_detector_process(td, spectrum, NULL);
 
-  TEST_ASSERT(transient_detector_run(td, spectrum) == false,
+  TEST_ASSERT(transient_detector_process(td, spectrum, NULL) == false,
               "Should not detect transient in steady signal");
 
   // 2. Burst
   for (uint32_t i = 0; i < 1024; i++) {
     spectrum[i] = 100.0F;
   }
-  TEST_ASSERT(transient_detector_run(td, spectrum) == true,
+  // The burst is significant (100x), so it should trigger detection
+  TEST_ASSERT(transient_detector_process(td, spectrum, NULL) == true,
               "Should detect global transient");
 
   transient_detector_free(td);

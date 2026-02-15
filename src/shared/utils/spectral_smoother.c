@@ -150,7 +150,8 @@ static void spectrum_transient_aware_time_smoothing(SpectralSmoother* self,
     self->band_energies[j] = energy;
   }
 
-  if (!transient_detector_run(self->transient_detection, self->band_energies)) {
+  if (!transient_detector_process(self->transient_detection,
+                                  self->band_energies, NULL)) {
     for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
       if (self->smoothed_spectrum[k] > self->smoothed_spectrum_previous[k]) {
         self->smoothed_spectrum[k] =

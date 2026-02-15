@@ -30,20 +30,16 @@ TransientDetector* transient_detector_initialize(uint32_t num_items);
 void transient_detector_free(TransientDetector* self);
 
 /**
- * Global transient detection for a full spectrum/buffer.
- * Used by SpectralSmoother to skip smoothing during onsets.
- */
-bool transient_detector_run(TransientDetector* self, const float* spectrum);
-
-/**
- * Process band energies and update transient weights.
- * Used by MaskingVeto for per-band psychoacoustic protection.
+ * Process band energies, update transient weights, and detect global
+ * transients. Used by MaskingVeto (weights) and SpectralSmoother (bool).
+ *
  * @param self TransientDetector instance
  * @param band_energies Current energy per critical band
- * @param onset_weights Output buffer for per-band onset weights (0.0:
- * steady, 1.0: transient)
+ * @param onset_weights Output buffer for per-band onset weights (0.0: steady,
+ * 1.0: transient). Can be NULL if only global detection is needed.
+ * @return true if a global transient is detected (based on aggregate weights)
  */
-void transient_detector_process(TransientDetector* self,
+bool transient_detector_process(TransientDetector* self,
                                 const float* band_energies,
                                 float* onset_weights);
 

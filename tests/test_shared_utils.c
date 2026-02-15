@@ -183,19 +183,20 @@ void test_transient_detector(void) {
     different_spectrum[i] = 2.0f; // Different spectrum to create change
   }
 
-  // First run - should not detect transient (no previous data)
-  bool result1 = transient_detector_run(td, spectrum);
+  // First run - should not detect transient (no previous data, initialized with
+  // current)
+  bool result1 = transient_detector_process(td, spectrum, NULL);
 
-  // Second run with different spectrum - may or may not detect transient
-  bool result2 = transient_detector_run(td, different_spectrum);
+  // Second run with different spectrum - likely transient due to jump from 1.0
+  // to 2.0 Ratio = 2.0 / 1.0 = 2.0. Weight = (2-1)/0.25 = 4.0 -> Clamped
+  // to 1.0. Should return true.
+  bool result2 = transient_detector_process(td, different_spectrum, NULL);
 
   // The function should run without error (return value is boolean indicating
   // transient presence) We just test that it doesn't crash and returns a valid
   // boolean
-  TEST_ASSERT(result1 == true || result1 == false,
-              "First run should return boolean");
-  TEST_ASSERT(result2 == true || result2 == false,
-              "Second run should return boolean");
+  TEST_ASSERT(result1 == false, "First run should not detect transient (init)");
+  TEST_ASSERT(result2 == true, "Second run should detect transient (jump)");
 
   transient_detector_free(td);
   printf("✓ Transient Detector tests passed\n");
