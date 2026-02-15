@@ -58,7 +58,6 @@ typedef struct Spectral2DDenoiser {
   SbSpectralCircularBuffer* circular_buffer;
   uint32_t layer_fft;
   uint32_t layer_noise;
-  uint32_t layer_magnitude;
 
   SpectrumType spectrum_type;
   GainCalculationType gain_calculation_type;
@@ -167,13 +166,10 @@ SpectralProcessorHandle spectral_2d_denoiser_initialize(
 
   self->layer_fft =
       spectral_circular_buffer_add_layer(self->circular_buffer, self->fft_size);
-  self->layer_magnitude = spectral_circular_buffer_add_layer(
-      self->circular_buffer, self->real_spectrum_size);
   self->layer_noise = spectral_circular_buffer_add_layer(
       self->circular_buffer, self->real_spectrum_size);
 
-  if (self->layer_fft == 0xFFFFFFFF || self->layer_magnitude == 0xFFFFFFFF ||
-      self->layer_noise == 0xFFFFFFFF) {
+  if (self->layer_fft == 0xFFFFFFFF || self->layer_noise == 0xFFFFFFFF) {
     spectral_2d_denoiser_free(self);
     return NULL;
   }
@@ -362,13 +358,10 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
   // 2.1 Align internal state and output to the delayed frame (temporal
   // plumbing)
   float* delayed_noise = NULL;
-  float* delayed_magnitude_spectrum = NULL;
 
   // 2.1.1 Push current spectra to circular buffer
   spectral_circular_buffer_push(self->circular_buffer, self->layer_fft,
                                 fft_spectrum);
-  spectral_circular_buffer_push(self->circular_buffer, self->layer_magnitude,
-                                reference_spectrum);
   spectral_circular_buffer_push(self->circular_buffer, self->layer_noise,
                                 self->noise_spectrum);
 
@@ -380,9 +373,6 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
 
   delayed_noise = spectral_circular_buffer_retrieve(
       self->circular_buffer, self->layer_noise, delay_frames);
-
-  delayed_magnitude_spectrum = spectral_circular_buffer_retrieve(
-      self->circular_buffer, self->layer_magnitude, delay_frames);
 
   // 2.1.3 Align output to the delayed frame by default (Passthrough)
   memcpy(fft_spectrum, delayed_spectrum, self->fft_size * sizeof(float));
