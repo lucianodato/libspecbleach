@@ -27,7 +27,7 @@ void test_suppression_engine_branches(void) {
   uint32_t size = 10;
   uint32_t sample_rate = 44100;
   SuppressionEngine* se = suppression_engine_initialize(
-      size, sample_rate, OPUS_SCALE, POWER_SPECTRUM);
+      size, sample_rate, OPUS_SCALE, POWER_SPECTRUM, true, true);
   TEST_ASSERT(se != NULL, "Init failed");
 
   float ref[10];

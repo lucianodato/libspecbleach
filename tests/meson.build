@@ -165,6 +165,14 @@ test_masking_veto = executable('test_masking_veto',
   include_directories: [inc, src_inc]
 )
 
+test_transient_detector = executable('test_transient_detector',
+  sources: ['test_transient_detector.c'],
+  dependencies: [libspecbleach_dep, m_dep],
+  c_args: test_c_args,
+  link_args: test_link_args,
+  include_directories: [inc, src_inc]
+)
+
 # Spectral Circular Buffer tests
 test_spectral_circular_buffer = executable('test_spectral_circular_buffer',
   sources: ['test_spectral_circular_buffer.c'],
@@ -192,6 +200,7 @@ test('specbleach_denoiser', test_specbleach_denoiser)
 test('specbleach_2d_denoiser', test_specbleach_2d_denoiser)
 test('suppression_engine', test_suppression_engine)
 test('masking_veto', test_masking_veto)
+test('transient_detector', test_transient_detector)
 
 test('adaptive_noise_estimator', test_adaptive_noise_estimator)
 test('nlm_filter', test_nlm_filter)

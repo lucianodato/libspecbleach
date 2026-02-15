@@ -46,7 +46,9 @@ typedef struct MaskingVeto MaskingVeto;
  */
 MaskingVeto* masking_veto_initialize(uint32_t fft_size, uint32_t sample_rate,
                                      CriticalBandType critical_band_type,
-                                     SpectrumType spectrum_type);
+                                     SpectrumType spectrum_type,
+                                     bool use_absolute_threshold,
+                                     bool use_temporal_masking);
 
 /**
  * Free a MaskingVeto instance.
@@ -57,16 +59,22 @@ void masking_veto_free(MaskingVeto* self);
 /**
  * Moderate noise reduction alpha values based on psychoacoustic masking.
  *
+ * In bands where noise is below the masking threshold (NMR < 0dB), the
+ * noise is inaudible. The veto lerps alpha toward 1.0 (no extra subtraction)
+ * to preserve band energy. In bands where noise is audible (NMR > 0dB),
+ * alpha is left unchanged and suppression proceeds normally.
+ *
  * @param self MaskingVeto instance
- * @param spectrum Current spectral magnitude or power
+ * @param smoothed_spectrum Temporally smoothed spectral magnitude/power
  * @param noise_spectrum Estimated noise profile
- * @param alpha In/Out alpha map to be moderated
+ * @param future_spectrum Future frame for backward masking (or NULL)
+ * @param alpha In/Out oversubtraction factors to be moderated
  * @param depth Veto strength (0.0: No veto, 1.0: Full psychoacoustic
  * protection)
  */
 void masking_veto_apply(MaskingVeto* self, const float* smoothed_spectrum,
-                        const float* noisy_spectrum,
-                        const float* noise_spectrum, float* alpha,
-                        float floor_alpha, float depth, float elasticity);
+                        const float* noise_spectrum,
+                        const float* future_spectrum, float* alpha,
+                        float depth);
 
 #endif // SHARED_DENOISER_LOGIC_MASKING_VETO_H

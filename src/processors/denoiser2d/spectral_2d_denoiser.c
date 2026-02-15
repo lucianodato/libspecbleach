@@ -58,7 +58,6 @@ typedef struct Spectral2DDenoiser {
   SbSpectralCircularBuffer* circular_buffer;
   uint32_t layer_fft;
   uint32_t layer_noise;
-  uint32_t layer_magnitude;
 
   SpectrumType spectrum_type;
   GainCalculationType gain_calculation_type;
@@ -167,13 +166,10 @@ SpectralProcessorHandle spectral_2d_denoiser_initialize(
 
   self->layer_fft =
       spectral_circular_buffer_add_layer(self->circular_buffer, self->fft_size);
-  self->layer_magnitude = spectral_circular_buffer_add_layer(
-      self->circular_buffer, self->real_spectrum_size);
   self->layer_noise = spectral_circular_buffer_add_layer(
       self->circular_buffer, self->real_spectrum_size);
 
-  if (self->layer_fft == 0xFFFFFFFF || self->layer_magnitude == 0xFFFFFFFF ||
-      self->layer_noise == 0xFFFFFFFF) {
+  if (self->layer_fft == 0xFFFFFFFF || self->layer_noise == 0xFFFFFFFF) {
     spectral_2d_denoiser_free(self);
     return NULL;
   }
@@ -216,21 +212,21 @@ SpectralProcessorHandle spectral_2d_denoiser_initialize(
     return NULL;
   }
 
-  self->masking_veto =
-      masking_veto_initialize(self->fft_size, self->sample_rate,
-                              CRITICAL_BANDS_TYPE_2D, self->spectrum_type);
+  self->masking_veto = masking_veto_initialize(
+      self->fft_size, self->sample_rate, CRITICAL_BANDS_TYPE_2D,
+      self->spectrum_type, false, USE_TEMPORAL_MASKING_2D_DEFAULT);
   self->suppression_engine = suppression_engine_initialize(
       self->real_spectrum_size, self->sample_rate, CRITICAL_BANDS_TYPE_2D,
-      self->spectrum_type);
+      self->spectrum_type, true, USE_TEMPORAL_MASKING_2D_DEFAULT);
 
   if (!self->masking_veto || !self->suppression_engine) {
     spectral_2d_denoiser_free(self);
     return NULL;
   }
 
-  // Initialize noise floor manager
   self->noise_floor_manager =
       noise_floor_manager_initialize(fft_size, sample_rate, self->hop);
+
   if (!self->noise_floor_manager) {
     spectral_2d_denoiser_free(self);
     return NULL;
@@ -362,13 +358,10 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
   // 2.1 Align internal state and output to the delayed frame (temporal
   // plumbing)
   float* delayed_noise = NULL;
-  float* delayed_magnitude_spectrum = NULL;
 
   // 2.1.1 Push current spectra to circular buffer
   spectral_circular_buffer_push(self->circular_buffer, self->layer_fft,
                                 fft_spectrum);
-  spectral_circular_buffer_push(self->circular_buffer, self->layer_magnitude,
-                                reference_spectrum);
   spectral_circular_buffer_push(self->circular_buffer, self->layer_noise,
                                 self->noise_spectrum);
 
@@ -380,9 +373,6 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
 
   delayed_noise = spectral_circular_buffer_retrieve(
       self->circular_buffer, self->layer_noise, delay_frames);
-
-  delayed_magnitude_spectrum = spectral_circular_buffer_retrieve(
-      self->circular_buffer, self->layer_magnitude, delay_frames);
 
   // 2.1.3 Align output to the delayed frame by default (Passthrough)
   memcpy(fft_spectrum, delayed_spectrum, self->fft_size * sizeof(float));
@@ -421,11 +411,11 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
 
     // 3.3.4 Apply psychoacoustic veto to preserve transients and moderate
     // artifacts
-    masking_veto_apply(self->masking_veto, smoothed_magnitude,
-                       delayed_magnitude_spectrum, delayed_noise, self->alpha,
-                       MASKING_VETO_ALPHA_FLOOR,
-                       self->parameters.nlm_masking_protection,
-                       self->parameters.masking_elasticity);
+    // We pass the CURRENT spectrum (fft_spectrum) as the lookahead for the
+    // DELAYED frame being processed.
+    masking_veto_apply(self->masking_veto, smoothed_magnitude, delayed_noise,
+                       fft_spectrum, self->alpha,
+                       self->parameters.nlm_masking_protection);
 
     // 3.3.5 Final Gain Calculation
     calculate_gains(self->real_spectrum_size, self->fft_size,

@@ -105,7 +105,7 @@ void test_masking_estimator(void) {
   uint32_t sample_rate = 44100;
 
   MaskingEstimator* me = masking_estimation_initialize(
-      fft_size, sample_rate, OPUS_SCALE, POWER_SPECTRUM);
+      fft_size, sample_rate, OPUS_SCALE, POWER_SPECTRUM, true, true);
   TEST_ASSERT(me != NULL, "Masking estimator initialization should succeed");
 
   float spectrum[513] = {0.0f};
@@ -116,8 +116,9 @@ void test_masking_estimator(void) {
     spectrum[i] = 0.1f + ((float)i * 0.01f);
   }
 
-  TEST_ASSERT(compute_masking_thresholds(me, spectrum, masking_thresholds),
-              "Compute masking thresholds should succeed");
+  TEST_ASSERT(
+      compute_masking_thresholds(me, spectrum, spectrum, masking_thresholds),
+      "Compute masking thresholds should succeed");
 
   // Check that masking thresholds are reasonable
   for (int i = 0; i < 513; i++) {
@@ -137,7 +138,7 @@ void test_spectral_smoother(void) {
   // Test all smoothing types
   for (int type = NO_SMOOTHING; type <= TRANSIENT_AWARE; type++) {
     SpectralSmoother* ss =
-        spectral_smoothing_initialize(fft_size, (TimeSmoothingType)type);
+        spectral_smoothing_initialize(fft_size, 44100, (TimeSmoothingType)type);
     TEST_ASSERT(ss != NULL, "Spectral smoother initialization should succeed");
 
     float spectrum[513] = {0.0f};
@@ -168,8 +169,9 @@ void test_transient_detector(void) {
   printf("Testing Transient Detector...\n");
 
   uint32_t fft_size = 1024;
+  uint32_t real_size = (fft_size / 2) + 1;
 
-  TransientDetector* td = transient_detector_initialize(fft_size);
+  TransientDetector* td = transient_detector_initialize(real_size);
   TEST_ASSERT(td != NULL, "Transient detector initialization should succeed");
 
   float spectrum[513] = {0.0f};
@@ -181,19 +183,20 @@ void test_transient_detector(void) {
     different_spectrum[i] = 2.0f; // Different spectrum to create change
   }
 
-  // First run - should not detect transient (no previous data)
-  bool result1 = transient_detector_run(td, spectrum);
+  // First run - should not detect transient (no previous data, initialized with
+  // current)
+  bool result1 = transient_detector_process(td, spectrum, NULL);
 
-  // Second run with different spectrum - may or may not detect transient
-  bool result2 = transient_detector_run(td, different_spectrum);
+  // Second run with different spectrum - likely transient due to jump from 1.0
+  // to 2.0 Ratio = 2.0 / 1.0 = 2.0. Weight = (2-1)/0.25 = 4.0 -> Clamped
+  // to 1.0. Should return true.
+  bool result2 = transient_detector_process(td, different_spectrum, NULL);
 
   // The function should run without error (return value is boolean indicating
   // transient presence) We just test that it doesn't crash and returns a valid
   // boolean
-  TEST_ASSERT(result1 == true || result1 == false,
-              "First run should return boolean");
-  TEST_ASSERT(result2 == true || result2 == false,
-              "Second run should return boolean");
+  TEST_ASSERT(result1 == false, "First run should not detect transient (init)");
+  TEST_ASSERT(result2 == true, "Second run should detect transient (jump)");
 
   transient_detector_free(td);
   printf("✓ Transient Detector tests passed\n");

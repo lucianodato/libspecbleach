@@ -216,7 +216,6 @@ bool specbleach_load_parameters(SpectralBleachHandle instance,
       .adaptive_noise = parameters.adaptive_noise,
       .noise_estimation_method = parameters.noise_estimation_method,
       .masking_depth = parameters.masking_depth,
-      .masking_elasticity = parameters.masking_elasticity,
       .suppression_strength = parameters.suppression_strength / 100.F,
       .aggressiveness = parameters.aggressiveness,
       .tonal_reduction =

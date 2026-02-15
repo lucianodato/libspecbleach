@@ -58,25 +58,42 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define REFERENCE_LEVEL (90.F)
 #define SINE_AMPLITUDE (1.F)
 
-// Masking Thresholds
-#define BIAS false
-#define HIGH_FREQ_BIAS 20.F
-#if BIAS
-// clang-format off
-#define relative_thresholds                                                    \
-  (float[25]){-16.F, -17.F, -18.F, -19.F, -20.F, -21.F, -22.F, -23.F, -24.F,   \
-              -25.F, -25.F, -25.F, -25.F, -25.F, -25.F, -24.F, -23.F, -22.F,   \
-              -19.F, -18.F, -18.F, -18.F, -18.F, -18.F, -18.F}
-// clang-format on
-#endif
+// Johnston Psychoacoustic Model (1988)
+#define DB_FS_TO_SPL_REF 96.0F    // 0dBFS -> 96dB SPL reference level
+#define POWER_LAW_EXPONENT (0.6F) // Johnston power-law integration exponent
+
+// Default Additivity Exponents
+#define SPECTRAL_ADDITIVITY_EXPONENT_STANDARD (1.0F) // Pure Johnston
+#define SPECTRAL_ADDITIVITY_EXPONENT_PEAQ (0.4F)     // Advanced precision
+
+// Schroeder spreading function constants
+#define S_MIN_UPWARD (5.0F)  // Minimum upward spreading slope (dB/Bark)
+#define S_MAX_UPWARD (15.0F) // Maximum upward spreading slope (dB/Bark)
+#define S_DOWNWARD (25.0F)   // Constant downward spreading slope (dB/Bark)
+
+// Threshold Offsets (NMT = Noise-Masking-Tone, TMN = Tone-Masking-Noise)
+#define NMT_OFFSET_DB (6.0F)    // Standard offset for NMT
+#define TMN_OFFSET_BASE (14.5F) // Base offset for TMN (Bark-dependent)
+
+// Johnston SFM (Spectral Flatness Measure) constants
+#define SFM_MIN_DB (-60.0F) // Minimum expected SFM (highly tonal)
+#define SFM_MAX_DB (0.0F)   // Maximum expected SFM (random noise)
+// Temporal Masking Constants
+#define FORWARD_MASKING_TAU_LOW_MS (0.100F)  // 100ms decay for low frequencies
+#define FORWARD_MASKING_TAU_HIGH_MS (0.025F) // 25ms decay for high frequencies
+#define BACKWARD_MASKING_TAU_MS (0.010F)     // 10ms decay for pre-masking
+
+// Schroeder Slope Adaptation Constants
+#define S_LEVEL_REF_DB 40.0F // Reference level for slope adaptation (dB SPL)
+#define S_SLOPE_FACTOR 0.2F  // Slope broadening factor per dB
 
 // Veto Parameters
-#define MASKING_VETO_ALPHA_FLOOR                                               \
-  (0.2F) // Set to 0.0 for full preservation, or 1.0 for standard reduction.
+#define MASKING_VETO_SMOOTHING 0.5F  // Stabilization alpha for clean signal
+#define MASKING_VETO_NMR_RANGE 20.0F // NMR range for protection mapping (dB)
 
 // Gain Estimators
 #define GSS_EXPONENT                                                           \
-  2.0F // 2 Power Subtraction / 1 Magnitude Subtraxtion / 0.5 Spectral
+  2.0F // 2 Power Subtraction / 1 Magnitude Subtraction / 0.5 Spectral
        // Subtraction
 
 // Oversubtraction criteria
@@ -92,7 +109,6 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define ESTIMATOR_SILENCE_THRESHOLD (1e-10F) // Roughly -100dB in power
 
 // Martin (2001) Constants
-#define MARTIN_WINDOW_LEN 96  // Total window length (frames)
 #define MARTIN_SUBWIN_COUNT 8 // Number of sub-windows
 #define MARTIN_SUBWIN_LEN 12  // Sub-window length (96/8)
 #define MARTIN_BIAS_CORR 1.5F // Conservative bias correction for min tracking
@@ -116,7 +132,8 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
   (1e-6F) // Precision for bias correction calc
 #define BRANDT_ESTIMATOR_MIN_HISTORY_FRAMES                                    \
   5U // Minimum frames for history-based tracking
-#define BRANDT_ESTIMATOR_MIN_DURATION_MS 0.1F // Safety floor for duration calcs
+#define BRANDT_ESTIMATOR_MIN_DURATION_MS                                       \
+  (0.1F) // Safety floor for duration calcs
 
 // Tonal Detector Constants
 #define PEAK_THRESHOLD 1.41f        // ~3dB above neighbor background
@@ -132,6 +149,9 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 // Transient Detector Constants
 #define UPPER_LIMIT (5.F)
 #define DEFAULT_TRANSIENT_THRESHOLD (2.F)
+#define MIN_INNOVATION_ENERGY 1e-10F  // ~ -100dB floor for transient trigger
+#define ONSET_RATIO_SENSITIVITY 0.25F // Innovation required for full weight
+#define TRANSIENT_SMOOTH_ALPHA 0.8F   // Reference smoothing alpha
 
 // Noise Estimator Constants
 #define MIN_NUMBER_OF_WINDOWS_NOISE_AVERAGED 5
@@ -170,6 +190,9 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define CRITICAL_BANDS_TYPE_1D BARK_SCALE
 #define GAIN_ESTIMATION_TYPE_1D WIENER
 
+// Masking Veto defaults
+#define USE_TEMPORAL_MASKING_1D_DEFAULT true
+
 /* ------------------------------------------------------------------ */
 /* ------------------- 2D Denoiser configurations ------------------- */
 /* ------------------------------------------------------------------ */
@@ -189,5 +212,8 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 // Noise Scaling strategy
 #define CRITICAL_BANDS_TYPE_2D BARK_SCALE
 #define GAIN_ESTIMATION_TYPE_2D WIENER
+
+// Masking Veto defaults
+#define USE_TEMPORAL_MASKING_2D_DEFAULT true
 
 #endif // MODULES_CONFIGURATIONS_H

@@ -30,11 +30,11 @@ typedef struct MaskingEstimator MaskingEstimator;
 
 MaskingEstimator* masking_estimation_initialize(
     uint32_t fft_size, uint32_t sample_rate,
-    CriticalBandType critical_band_type, SpectrumType spectrum_type);
+    CriticalBandType critical_band_type, SpectrumType spectrum_type,
+    bool use_absolute_threshold, bool use_temporal_masking);
 void masking_estimation_free(MaskingEstimator* self);
 bool compute_masking_thresholds(MaskingEstimator* self, const float* spectrum,
+                                const float* future_spectrum,
                                 float* masking_thresholds);
-void masking_estimation_set_use_absolute_threshold(MaskingEstimator* self,
-                                                   bool use_absolute_threshold);
 
 #endif

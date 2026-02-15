@@ -174,7 +174,9 @@ void test_noise_profile_multiple_modes(void) {
   TEST_ASSERT(np != NULL, "Noise profile initialization should succeed");
 
   // Create different profiles for each mode
-  float profile1[513], profile2[513], profile3[513];
+  float profile1[513];
+  float profile2[513];
+  float profile3[513];
   for (int i = 0; i < 513; i++) {
     profile1[i] = 1.0f;
     profile2[i] = 2.0f;

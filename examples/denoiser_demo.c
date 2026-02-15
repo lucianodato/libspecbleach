@@ -52,9 +52,6 @@ static void print_usage(const char* prog_name) {
   fprintf(stderr,
           "  --masking-depth <val>  Masking depth (0.0-1.0, default: 0.5)\n");
   fprintf(stderr,
-          "  --masking-elasticity <val> Masking elasticity (0.0-1.0, default: "
-          "0.1)\n");
-  fprintf(stderr,
           "  --learn-avg <val>      Learn average mode (0-3, default: 3)\n");
   fprintf(stderr, "  --adaptive            Enable adaptive noise estimation\n");
   fprintf(
@@ -99,15 +96,13 @@ int main(int argc, char** argv) {
           .reduction_amount = 20.F,
           .smoothing_factor = 0.F,
           .whitening_factor = 50.F,
-          .masking_depth = 0.5F,
-          .masking_elasticity = 0.1F};
+          .masking_depth = 0.5F};
 
   static struct option long_options[] = {
       {"reduction", required_argument, 0, 'r'},
       {"whitening", required_argument, 0, 'w'},
       {"smoothing", required_argument, 0, 's'},
       {"masking-depth", required_argument, 0, 'd'},
-      {"masking-elasticity", required_argument, 0, 'e'},
       {"steering-response", required_argument, 0, 'l'},
       {"adaptive", no_argument, 0, 'a'},
       {"noise-method", required_argument, 0, 'm'},
@@ -119,7 +114,7 @@ int main(int argc, char** argv) {
   float frame_size_ms = FRAME_SIZE;
   uint32_t learn_frames = NOISE_FRAMES;
   int opt;
-  while ((opt = getopt_long(argc, argv, "r:w:s:d:e:l:am:f:n:", long_options,
+  while ((opt = getopt_long(argc, argv, "r:w:s:d:l:am:f:n:", long_options,
                             NULL)) != -1) {
     switch (opt) {
       case 'r':
@@ -133,9 +128,6 @@ int main(int argc, char** argv) {
         break;
       case 'd':
         parameters.masking_depth = (float)atof(optarg);
-        break;
-      case 'e':
-        parameters.masking_elasticity = (float)atof(optarg);
         break;
       case 'l':
         parameters.aggressiveness = (float)atof(optarg);

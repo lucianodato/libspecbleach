@@ -44,7 +44,8 @@ int main(void) {
 
   // Spectral Smoother
   spectral_smoothing_free(NULL);
-  SpectralSmoother* ss = spectral_smoothing_initialize(fft_size, FIXED);
+  SpectralSmoother* ss =
+      spectral_smoothing_initialize(fft_size, sample_rate, FIXED);
   spectral_smoothing_free(ss);
 
   // Transient Detector
@@ -61,7 +62,7 @@ int main(void) {
   // Masking Estimator
   masking_estimation_free(NULL);
   MaskingEstimator* me = masking_estimation_initialize(
-      fft_size, sample_rate, OPUS_SCALE, POWER_SPECTRUM);
+      fft_size, sample_rate, OPUS_SCALE, POWER_SPECTRUM, true, true);
   masking_estimation_free(me);
 
   // Absolute Hearing Thresholds
@@ -133,7 +134,7 @@ int main(void) {
   // Suppression Engine
   suppression_engine_free(NULL);
   SuppressionEngine* se = suppression_engine_initialize(
-      real_spectrum_size, sample_rate, OPUS_SCALE, POWER_SPECTRUM);
+      real_spectrum_size, sample_rate, OPUS_SCALE, POWER_SPECTRUM, true, true);
   suppression_engine_free(se);
 
   // Internal Processors
