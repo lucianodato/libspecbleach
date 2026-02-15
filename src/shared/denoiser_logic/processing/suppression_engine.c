@@ -213,7 +213,7 @@ static void calculate_masking_thresholds(SuppressionEngine* self,
   }
 
   compute_masking_thresholds(self->masking_estimation,
-                             self->clean_signal_estimation,
+                             self->clean_signal_estimation, NULL,
                              self->masking_thresholds);
 
   for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {

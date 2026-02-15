@@ -66,7 +66,8 @@ void masking_veto_free(MaskingVeto* self);
  */
 void masking_veto_apply(MaskingVeto* self, const float* smoothed_spectrum,
                         const float* noisy_spectrum,
-                        const float* noise_spectrum, float* alpha,
+                        const float* noise_spectrum,
+                        const float* future_spectrum, float* alpha,
                         float floor_alpha, float depth, float elasticity);
 
 #endif // SHARED_DENOISER_LOGIC_MASKING_VETO_H

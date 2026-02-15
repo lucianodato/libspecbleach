@@ -421,9 +421,11 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
 
     // 3.3.4 Apply psychoacoustic veto to preserve transients and moderate
     // artifacts
+    // We pass the CURRENT spectrum (fft_spectrum) as the lookahead for the
+    // DELAYED frame being processed.
     masking_veto_apply(self->masking_veto, smoothed_magnitude,
-                       delayed_magnitude_spectrum, delayed_noise, self->alpha,
-                       MASKING_VETO_ALPHA_FLOOR,
+                       delayed_magnitude_spectrum, delayed_noise, fft_spectrum,
+                       self->alpha, MASKING_VETO_ALPHA_FLOOR,
                        self->parameters.nlm_masking_protection,
                        self->parameters.masking_elasticity);
 
