@@ -41,7 +41,7 @@ void test_snr_improvement(void);
 #define FRAME_SIZE 512
 #define BLOCK_SIZE FRAME_SIZE
 #define TEST_DURATION_SECONDS 2
-#define TEST_SAMPLES (SAMPLE_RATE * TEST_DURATION_SECONDS)
+#define TEST_SAMPLES ((size_t)SAMPLE_RATE * (size_t)TEST_DURATION_SECONDS)
 
 // Generate deterministic test signal (sine wave + noise)
 void generate_test_signal(float* buffer, int length, unsigned int seed) {
@@ -49,13 +49,17 @@ void generate_test_signal(float* buffer, int length, unsigned int seed) {
 
   for (int i = 0; i < length; i++) {
     // Generate a 1kHz sine wave
-    float signal = 0.3f * sinf(2.0f * M_PI * 1000.0f * i / SAMPLE_RATE);
+    float signal =
+        0.3f *
+        sinf((float)(2.0 * M_PIf * 1000.0 * (double)i / (double)SAMPLE_RATE));
 
     // Add correlated noise (pink-like)
     float noise = 0.1f * ((float)rand() / RAND_MAX - 0.5f) * 2.0f;
 
     // Add some harmonics
-    float harmonic = 0.1f * sinf(2.0f * M_PI * 2000.0f * i / SAMPLE_RATE);
+    float harmonic =
+        0.1f *
+        sinf((float)(2.0 * M_PIf * 2000.0 * (double)i / (double)SAMPLE_RATE));
 
     buffer[i] = signal + noise + harmonic;
   }
@@ -162,7 +166,7 @@ float calculate_snr(const float* original, const float* processed, int length) {
     return 100.0f; // Very high SNR if noise is negligible
   }
 
-  return 10.0f * log10(signal_power / noise_power);
+  return (float)(10.0 * log10(signal_power / noise_power));
 }
 
 // Test that denoising produces consistent results
@@ -186,7 +190,7 @@ void test_deterministic_processing(void) {
   process_audio(input2, output2, TEST_SAMPLES);
 
   // Verify outputs are identical (deterministic processing)
-  for (int i = 0; i < TEST_SAMPLES; i++) {
+  for (size_t i = 0; i < TEST_SAMPLES; i++) {
     TEST_FLOAT_CLOSE(output1[i], output2[i], 1e-10f);
   }
 
@@ -211,20 +215,20 @@ void test_noise_reduction(void) {
 
   // Calculate input signal power (approximate)
   double input_power = 0.0;
-  for (int i = 0; i < TEST_SAMPLES; i++) {
-    input_power += input[i] * input[i];
+  for (size_t i = 0; i < TEST_SAMPLES; i++) {
+    input_power += (double)input[i] * (double)input[i];
   }
-  input_power /= TEST_SAMPLES;
+  input_power /= (double)TEST_SAMPLES;
 
   // Process through denoiser
   process_audio(input, output, TEST_SAMPLES);
 
   // Calculate output signal power
   double output_power = 0.0;
-  for (int i = 0; i < TEST_SAMPLES; i++) {
-    output_power += output[i] * output[i];
+  for (size_t i = 0; i < TEST_SAMPLES; i++) {
+    output_power += (double)output[i] * (double)output[i];
   }
-  output_power /= TEST_SAMPLES;
+  output_power /= (double)TEST_SAMPLES;
 
   printf("  Input power: %.6f\n", input_power);
   printf("  Output power: %.6f\n", output_power);
@@ -262,7 +266,7 @@ void test_valid_output(void) {
   float min_output = 0.0f;
   bool has_non_zero = false;
 
-  for (int i = 0; i < TEST_SAMPLES; i++) {
+  for (size_t i = 0; i < TEST_SAMPLES; i++) {
     TEST_ASSERT(!isnan(output[i]), "Output contains NaN values");
     TEST_ASSERT(!isinf(output[i]), "Output contains infinite values");
 
@@ -270,10 +274,12 @@ void test_valid_output(void) {
       has_non_zero = true;
     }
 
-    if (output[i] > max_output)
+    if (output[i] > max_output) {
       max_output = output[i];
-    if (output[i] < min_output)
+    }
+    if (output[i] < min_output) {
       min_output = output[i];
+    }
   }
 
   TEST_ASSERT(has_non_zero, "Output should not be all zeros");
@@ -308,12 +314,13 @@ void test_adaptive_denoising(void) {
   // Verify adaptive denoiser reduced noise
   double input_power = 0.0;
   double adaptive_output_power = 0.0;
-  for (int i = 0; i < TEST_SAMPLES; i++) {
-    input_power += input[i] * input[i];
-    adaptive_output_power += output_adaptive[i] * output_adaptive[i];
+  for (size_t i = 0; i < TEST_SAMPLES; i++) {
+    input_power += (double)input[i] * (double)input[i];
+    adaptive_output_power +=
+        (double)output_adaptive[i] * (double)output_adaptive[i];
   }
-  input_power /= TEST_SAMPLES;
-  adaptive_output_power /= TEST_SAMPLES;
+  input_power /= (double)TEST_SAMPLES;
+  adaptive_output_power /= (double)TEST_SAMPLES;
 
   printf("  Input power: %.6f\n", input_power);
   printf("  Adaptive output power: %.6f\n", adaptive_output_power);
@@ -373,9 +380,10 @@ void test_noise_estimation_methods(void) {
 
   specbleach_load_parameters(handle_martin, params_martin);
 
-  for (int i = 0; i < TEST_SAMPLES; i += BLOCK_SIZE) {
-    int block_size =
-        (i + BLOCK_SIZE > TEST_SAMPLES) ? TEST_SAMPLES - i : BLOCK_SIZE;
+  for (size_t i = 0; i < TEST_SAMPLES; i += (size_t)BLOCK_SIZE) {
+    int block_size = (i + (size_t)BLOCK_SIZE > TEST_SAMPLES)
+                         ? (int)(TEST_SAMPLES - i)
+                         : BLOCK_SIZE;
     TEST_ASSERT(specbleach_process(handle_martin, block_size, input + i,
                                    output_martin + i),
                 "Failed to process with Martin method");
@@ -403,9 +411,10 @@ void test_noise_estimation_methods(void) {
 
   specbleach_load_parameters(handle_spp_mmse, params_spp_mmse);
 
-  for (int i = 0; i < TEST_SAMPLES; i += BLOCK_SIZE) {
-    int block_size =
-        (i + BLOCK_SIZE > TEST_SAMPLES) ? TEST_SAMPLES - i : BLOCK_SIZE;
+  for (size_t i = 0; i < TEST_SAMPLES; i += (size_t)BLOCK_SIZE) {
+    int block_size = (i + (size_t)BLOCK_SIZE > TEST_SAMPLES)
+                         ? (int)(TEST_SAMPLES - i)
+                         : BLOCK_SIZE;
     TEST_ASSERT(specbleach_process(handle_spp_mmse, block_size, input + i,
                                    output_spp_mmse + i),
                 "Failed to process with SPP-MMSE method");
@@ -414,21 +423,23 @@ void test_noise_estimation_methods(void) {
   specbleach_free(handle_spp_mmse);
 
   // Verify both methods produced valid output (finite values, reduced noise)
-  double input_power = 0.0, martin_power = 0.0, spp_mmse_power = 0.0;
-  for (int i = 0; i < TEST_SAMPLES; i++) {
+  double input_power = 0.0;
+  double martin_power = 0.0;
+  double spp_mmse_power = 0.0;
+  for (size_t i = 0; i < TEST_SAMPLES; i++) {
     TEST_ASSERT(isfinite(output_martin[i]),
                 "Martin output contains non-finite values");
     TEST_ASSERT(isfinite(output_spp_mmse[i]),
                 "SPP-MMSE output contains non-finite values");
 
-    input_power += input[i] * input[i];
-    martin_power += output_martin[i] * output_martin[i];
-    spp_mmse_power += output_spp_mmse[i] * output_spp_mmse[i];
+    input_power += (double)input[i] * (double)input[i];
+    martin_power += (double)output_martin[i] * (double)output_martin[i];
+    spp_mmse_power += (double)output_spp_mmse[i] * (double)output_spp_mmse[i];
   }
 
-  input_power /= TEST_SAMPLES;
-  martin_power /= TEST_SAMPLES;
-  spp_mmse_power /= TEST_SAMPLES;
+  input_power /= (double)TEST_SAMPLES;
+  martin_power /= (double)TEST_SAMPLES;
+  spp_mmse_power /= (double)TEST_SAMPLES;
 
   printf("  Input power: %.6f\n", input_power);
   printf("  Martin output power: %.6f\n", martin_power);

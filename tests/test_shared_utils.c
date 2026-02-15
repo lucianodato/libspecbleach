@@ -116,8 +116,9 @@ void test_masking_estimator(void) {
     spectrum[i] = 0.1f + ((float)i * 0.01f);
   }
 
-  TEST_ASSERT(compute_masking_thresholds(me, spectrum, masking_thresholds),
-              "Compute masking thresholds should succeed");
+  TEST_ASSERT(
+      compute_masking_thresholds(me, spectrum, spectrum, masking_thresholds),
+      "Compute masking thresholds should succeed");
 
   // Check that masking thresholds are reasonable
   for (int i = 0; i < 513; i++) {

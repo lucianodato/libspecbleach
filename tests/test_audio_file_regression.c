@@ -24,7 +24,7 @@
 #define FRAME_SIZE_ADAPTIVE_MS 20.0f
 
 // Canonical parameters used in generate_reference_files.sh
-static const SpectralBleachDenoiserParameters CANONICAL_DENOISER_PARAMS = {
+static const SpectralBleachDenoiserParameters canonical_denoiser_params = {
     .residual_listen = false,
     .learn_noise = 1,
     .tonal_reduction = 0.0f,
@@ -35,7 +35,7 @@ static const SpectralBleachDenoiserParameters CANONICAL_DENOISER_PARAMS = {
     .masking_depth = 0.5f,
     .masking_elasticity = 0.1f};
 
-static const SpectralBleachDenoiserParameters CANONICAL_ADENOISER_PARAMS = {
+static const SpectralBleachDenoiserParameters canonical_adenoiser_params = {
     .residual_listen = false,
     .reduction_amount = 20.0f,
     .smoothing_factor = 0.0f,
@@ -52,15 +52,17 @@ void test_denoiser_file_regression(void) {
   const char* input_path = TEST_DATA_DIR "Speech.wav";
   const char* reference_path = TEST_DATA_DIR "Speech_denoised.wav";
 
-  SF_INFO in_info, ref_info;
+  SF_INFO in_info;
+  SF_INFO ref_info;
   SNDFILE* in_sf = sf_open(input_path, SFM_READ, &in_info);
   SNDFILE* ref_sf = sf_open(reference_path, SFM_READ, &ref_info);
 
   if (!ref_sf) {
     printf("  Note: Reference file %s not found. Skipping test.\n",
            reference_path);
-    if (in_sf)
+    if (in_sf) {
       sf_close(in_sf);
+    }
     return;
   }
 
@@ -71,7 +73,7 @@ void test_denoiser_file_regression(void) {
       specbleach_initialize((uint32_t)in_info.samplerate, FRAME_SIZE_MS);
   TEST_ASSERT(handle != NULL, "Failed to initialize denoiser");
 
-  SpectralBleachDenoiserParameters params = CANONICAL_DENOISER_PARAMS;
+  SpectralBleachDenoiserParameters params = canonical_denoiser_params;
   specbleach_load_parameters(handle, params);
 
   float* in_buf = malloc(BLOCK_SIZE * sizeof(float));
@@ -123,15 +125,17 @@ void test_adenoiser_file_regression(void) {
   const char* input_path = TEST_DATA_DIR "Speech.wav";
   const char* reference_path = TEST_DATA_DIR "Speech_adaptive_denoised.wav";
 
-  SF_INFO in_info, ref_info;
+  SF_INFO in_info;
+  SF_INFO ref_info;
   SNDFILE* in_sf = sf_open(input_path, SFM_READ, &in_info);
   SNDFILE* ref_sf = sf_open(reference_path, SFM_READ, &ref_info);
 
   if (!ref_sf) {
     printf("  Note: Reference file %s not found. Skipping test.\n",
            reference_path);
-    if (in_sf)
+    if (in_sf) {
       sf_close(in_sf);
+    }
     return;
   }
 
@@ -142,7 +146,7 @@ void test_adenoiser_file_regression(void) {
       (uint32_t)in_info.samplerate, FRAME_SIZE_ADAPTIVE_MS);
   TEST_ASSERT(handle != NULL, "Failed to initialize adaptive denoiser");
 
-  SpectralBleachDenoiserParameters params = CANONICAL_ADENOISER_PARAMS;
+  SpectralBleachDenoiserParameters params = canonical_adenoiser_params;
   specbleach_load_parameters(handle, params);
 
   float* in_buf = malloc(BLOCK_SIZE * sizeof(float));

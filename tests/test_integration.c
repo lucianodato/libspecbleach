@@ -24,7 +24,9 @@ void test_adaptive_denoiser(void);
 void test_2d_denoiser(void);
 void test_different_noise_levels(void);
 void test_library_info(void);
-float calculate_rms(const float* buffer, int length);
+void generate_test_audio(float* buffer, size_t length, float signal_freq,
+                         float noise_level);
+float calculate_rms(const float* buffer, size_t length);
 
 #define TEST_ASSERT(condition, message)                                        \
   do {                                                                         \
@@ -40,15 +42,15 @@ float calculate_rms(const float* buffer, int length);
 #define SAMPLE_RATE 44100
 #define FRAME_SIZE 512
 #define NUM_FRAMES 100
-#define BLOCK_SIZE (FRAME_SIZE * NUM_FRAMES)
+#define BLOCK_SIZE ((size_t)FRAME_SIZE * (size_t)NUM_FRAMES)
 
 // Generate synthetic audio with noise
-void generate_test_audio(float* buffer, int length, float signal_freq,
+void generate_test_audio(float* buffer, size_t length, float signal_freq,
                          float noise_level) {
-  for (int i = 0; i < length; i++) {
+  for (size_t i = 0; i < length; i++) {
     // Generate a sine wave signal
-    float signal = 0.5f * sinf(2.0f * (float)M_PI * (float)signal_freq *
-                               (float)i / (float)SAMPLE_RATE);
+    float signal = 0.5f * sinf((float)(2.0 * M_PIf * (double)signal_freq *
+                                       (double)i / (double)SAMPLE_RATE));
 
     // Add white noise
     float noise = noise_level * ((float)rand() / RAND_MAX - 0.5f) * 2.0f;
@@ -58,12 +60,12 @@ void generate_test_audio(float* buffer, int length, float signal_freq,
 }
 
 // Calculate RMS of audio buffer
-float calculate_rms(const float* buffer, int length) {
+float calculate_rms(const float* buffer, size_t length) {
   double sum = 0.0;
-  for (int i = 0; i < length; i++) {
-    sum += buffer[i] * buffer[i];
+  for (size_t i = 0; i < length; i++) {
+    sum += (double)buffer[i] * (double)buffer[i];
   }
-  return (float)sqrt((double)sum / (double)length);
+  return (float)sqrt(sum / (double)length);
 }
 
 // Test spectral denoiser with synthetic audio
@@ -108,11 +110,11 @@ void test_spectral_denoiser(void) {
   specbleach_load_parameters(handle, parameters);
 
   // Process remaining blocks
-  int processed_samples = FRAME_SIZE * 10;
+  size_t processed_samples = FRAME_SIZE * 10;
   while (processed_samples < BLOCK_SIZE) {
-    int block_size = FRAME_SIZE;
-    if (processed_samples + block_size > BLOCK_SIZE) {
-      block_size = BLOCK_SIZE - processed_samples;
+    uint32_t block_size = FRAME_SIZE;
+    if (processed_samples + (size_t)block_size > BLOCK_SIZE) {
+      block_size = (uint32_t)(BLOCK_SIZE - processed_samples);
     }
 
     bool result =
@@ -202,10 +204,11 @@ void test_library_info(void) {
   printf("Testing library information functions...\n");
 
   // Test spectral denoiser info
-  int latency = specbleach_get_latency(NULL); // Should return 0 for NULL handle
+  int latency =
+      (int)specbleach_get_latency(NULL); // Should return 0 for NULL handle
   TEST_ASSERT(latency == 0, "NULL handle should return 0 latency");
 
-  int profile_size = specbleach_get_noise_profile_size(NULL);
+  int profile_size = (int)specbleach_get_noise_profile_size(NULL);
   TEST_ASSERT(profile_size == 0, "NULL handle should return 0 profile size");
 
   // Test that we can get valid information after initialization
@@ -214,10 +217,10 @@ void test_library_info(void) {
       specbleach_initialize(SAMPLE_RATE, frame_size_ms);
   TEST_ASSERT(handle != NULL, "Failed to initialize for info test");
 
-  latency = specbleach_get_latency(handle);
+  latency = (int)specbleach_get_latency(handle);
   TEST_ASSERT(latency >= 0, "Latency should be non-negative");
 
-  profile_size = specbleach_get_noise_profile_size(handle);
+  profile_size = (int)specbleach_get_noise_profile_size(handle);
   TEST_ASSERT(profile_size > 0, "Profile size should be positive");
 
   specbleach_free(handle);
@@ -333,11 +336,11 @@ void test_2d_denoiser(void) {
   specbleach_2d_load_parameters(handle, parameters);
 
   // Process remaining blocks
-  int processed_samples = FRAME_SIZE * 10;
+  size_t processed_samples = FRAME_SIZE * 10;
   while (processed_samples < BLOCK_SIZE) {
-    int block_size = FRAME_SIZE;
-    if (processed_samples + block_size > BLOCK_SIZE) {
-      block_size = BLOCK_SIZE - processed_samples;
+    uint32_t block_size = FRAME_SIZE;
+    if (processed_samples + (size_t)block_size > BLOCK_SIZE) {
+      block_size = (uint32_t)(BLOCK_SIZE - processed_samples);
     }
 
     bool result = specbleach_2d_process(handle, block_size,
@@ -345,7 +348,7 @@ void test_2d_denoiser(void) {
                                         output_buffer + processed_samples);
     TEST_ASSERT(result == true, "Processing failed");
 
-    processed_samples += block_size;
+    processed_samples += (size_t)block_size;
   }
 
   // Calculate RMS values
