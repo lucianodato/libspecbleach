@@ -46,7 +46,9 @@ typedef struct MaskingVeto MaskingVeto;
  */
 MaskingVeto* masking_veto_initialize(uint32_t fft_size, uint32_t sample_rate,
                                      CriticalBandType critical_band_type,
-                                     SpectrumType spectrum_type);
+                                     SpectrumType spectrum_type,
+                                     bool use_absolute_threshold,
+                                     bool use_temporal_masking);
 
 /**
  * Free a MaskingVeto instance.

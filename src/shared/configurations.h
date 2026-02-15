@@ -78,7 +78,6 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 // Johnston SFM (Spectral Flatness Measure) constants
 #define SFM_MIN_DB (-60.0F) // Minimum expected SFM (highly tonal)
 #define SFM_MAX_DB (0.0F)   // Maximum expected SFM (random noise)
-
 // Temporal Masking Constants
 #define FORWARD_MASKING_TAU_LOW_MS (0.100F)  // 100ms decay for low frequencies
 #define FORWARD_MASKING_TAU_HIGH_MS (0.025F) // 25ms decay for high frequencies
@@ -87,18 +86,6 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 // Schroeder Slope Adaptation Constants
 #define S_LEVEL_REF_DB 40.0F // Reference level for slope adaptation (dB SPL)
 #define S_SLOPE_FACTOR 0.2F  // Slope broadening factor per dB
-
-// Masking Thresholds (Legacy/Optional)
-#define BIAS false
-#define HIGH_FREQ_BIAS 20.F
-#if BIAS
-// clang-format off
-#define relative_thresholds                                                    \
-  (float[25]){-16.F, -17.F, -18.F, -19.F, -20.F, -21.F, -22.F, -23.F, -24.F,   \
-              -25.F, -25.F, -25.F, -25.F, -25.F, -25.F, -24.F, -23.F, -22.F,   \
-              -19.F, -18.F, -18.F, -18.F, -18.F, -18.F, -18.F}
-// clang-format on
-#endif
 
 // Veto Parameters
 #define MASKING_VETO_ALPHA_FLOOR                                               \
@@ -207,6 +194,9 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define CRITICAL_BANDS_TYPE_1D BARK_SCALE
 #define GAIN_ESTIMATION_TYPE_1D WIENER
 
+// Masking Veto defaults
+#define USE_TEMPORAL_MASKING_1D_DEFAULT true
+
 /* ------------------------------------------------------------------ */
 /* ------------------- 2D Denoiser configurations ------------------- */
 /* ------------------------------------------------------------------ */
@@ -226,5 +216,8 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 // Noise Scaling strategy
 #define CRITICAL_BANDS_TYPE_2D BARK_SCALE
 #define GAIN_ESTIMATION_TYPE_2D WIENER
+
+// Masking Veto defaults
+#define USE_TEMPORAL_MASKING_2D_DEFAULT true
 
 #endif // MODULES_CONFIGURATIONS_H

@@ -41,11 +41,16 @@ struct MaskingVeto {
   float* onset_weights;
   TransientDetector* transient_detector;
   uint32_t sample_rate;
+  float* future_clean_estimation_buf;
+  float* band_energies_buf;
 };
 
 MaskingVeto* masking_veto_initialize(uint32_t fft_size, uint32_t sample_rate,
                                      CriticalBandType critical_band_type,
-                                     SpectrumType spectrum_type) {
+                                     SpectrumType spectrum_type,
+                                     bool use_absolute_threshold,
+                                     bool use_temporal_masking) {
+
   MaskingVeto* self = (MaskingVeto*)calloc(1U, sizeof(MaskingVeto));
   if (!self) {
     return NULL;
@@ -53,7 +58,8 @@ MaskingVeto* masking_veto_initialize(uint32_t fft_size, uint32_t sample_rate,
 
   self->real_spectrum_size = (fft_size / 2U) + 1U;
   self->masking_estimator = masking_estimation_initialize(
-      fft_size, sample_rate, critical_band_type, spectrum_type);
+      fft_size, sample_rate, critical_band_type, spectrum_type,
+      use_absolute_threshold, use_temporal_masking);
 
   // Helper to access band indexes for classification
   self->critical_bands_helper =
@@ -77,12 +83,16 @@ MaskingVeto* masking_veto_initialize(uint32_t fft_size, uint32_t sample_rate,
   self->band_centers = (float*)calloc(num_bands, sizeof(float));
   self->onset_weights = (float*)calloc(num_bands, sizeof(float));
   self->transient_detector = transient_detector_initialize(num_bands);
+  self->future_clean_estimation_buf =
+      (float*)calloc(self->real_spectrum_size, sizeof(float));
+  self->band_energies_buf = (float*)calloc(num_bands, sizeof(float));
   self->sample_rate = sample_rate;
 
   if (!self->clean_signal_estimation || !self->stable_clean_signal ||
       !self->masking_thresholds || !self->band_audibility ||
       !self->band_centers || !self->onset_weights ||
-      !self->transient_detector) {
+      !self->transient_detector || !self->future_clean_estimation_buf ||
+      !self->band_energies_buf) {
     masking_veto_free(self);
     return NULL;
   }
@@ -95,10 +105,6 @@ MaskingVeto* masking_veto_initialize(uint32_t fft_size, uint32_t sample_rate,
         (float)indexes.start_position +
         ((float)(indexes.end_position - indexes.start_position) / 2.0F);
   }
-
-  // Relative-only Masking for the Veto: Disable the absolute threshold floor.
-  // The Veto should only trigger when SIGNAL is providing masking.
-  masking_estimation_set_use_absolute_threshold(self->masking_estimator, false);
 
   return self;
 }
@@ -117,6 +123,8 @@ void masking_veto_free(MaskingVeto* self) {
   free(self->band_centers);
   free(self->onset_weights);
   transient_detector_free(self->transient_detector);
+  free(self->future_clean_estimation_buf);
+  free(self->band_energies_buf);
   free(self);
 }
 
@@ -126,7 +134,7 @@ void masking_veto_apply(MaskingVeto* self, const float* smoothed_spectrum,
                         const float* future_spectrum, float* alpha,
                         float floor_alpha, float depth, float elasticity) {
   if (!self || !smoothed_spectrum || !noisy_spectrum || !noise_spectrum ||
-      !alpha || depth < 0.0F) {
+      !alpha || depth < 0.0F || self->real_spectrum_size == 0U) {
     return;
   }
 
@@ -145,12 +153,12 @@ void masking_veto_apply(MaskingVeto* self, const float* smoothed_spectrum,
 
   // 1.1 Estimate future clean signal magnitude for backward masking
   float* future_clean_estimation = NULL;
-  float future_clean_buf[self->real_spectrum_size]; // Temporary stack buffer
   if (future_spectrum) {
     for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
-      future_clean_buf[k] = fmaxf(future_spectrum[k] - noise_spectrum[k], 0.0F);
+      self->future_clean_estimation_buf[k] =
+          fmaxf(future_spectrum[k] - noise_spectrum[k], 0.0F);
     }
-    future_clean_estimation = future_clean_buf;
+    future_clean_estimation = self->future_clean_estimation_buf;
   }
 
   // 2. Compute psychoacoustic masking thresholds
@@ -168,7 +176,6 @@ void masking_veto_apply(MaskingVeto* self, const float* smoothed_spectrum,
       get_number_of_critical_bands(self->critical_bands_helper);
 
   // 2.1 Calculate band energies for the transient detector
-  float band_energies[num_bands];
   for (uint32_t j = 0U; j < num_bands; j++) {
     const CriticalBandIndexes indexes =
         get_band_indexes(self->critical_bands_helper, j);
@@ -176,11 +183,11 @@ void masking_veto_apply(MaskingVeto* self, const float* smoothed_spectrum,
     for (uint32_t k = indexes.start_position; k < indexes.end_position; k++) {
       energy += self->clean_signal_estimation[k];
     }
-    band_energies[j] = energy;
+    self->band_energies_buf[j] = energy;
   }
 
   // 2.2 Update onset weights using the innovation ratio
-  transient_detector_process(self->transient_detector, band_energies,
+  transient_detector_process(self->transient_detector, self->band_energies_buf,
                              self->onset_weights);
 
   for (uint32_t j = 0U; j < num_bands; j++) {
@@ -189,7 +196,7 @@ void masking_veto_apply(MaskingVeto* self, const float* smoothed_spectrum,
 
     const uint32_t bins_in_band = indexes.end_position - indexes.start_position;
     if (bins_in_band > 0) {
-      float band_signal_energy = band_energies[j];
+      float band_signal_energy = self->band_energies_buf[j];
       float band_noise_energy = 0.0F;
       float band_threshold = 0.0F;
 

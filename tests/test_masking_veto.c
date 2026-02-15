@@ -25,8 +25,8 @@ void test_masking_veto_logic(void) {
   printf("Testing MaskingVeto logic...\n");
 
   uint32_t fft_size = 1024;
-  MaskingVeto* mv =
-      masking_veto_initialize(fft_size, 44100, OPUS_SCALE, POWER_SPECTRUM);
+  MaskingVeto* mv = masking_veto_initialize(fft_size, 44100, OPUS_SCALE,
+                                            POWER_SPECTRUM, false, true);
   TEST_ASSERT(mv != NULL, "Init failed");
 
   float smoothed[513];
@@ -67,8 +67,8 @@ void test_dot_artifact_removal(void) {
   printf("Testing Veto Interpolation and Protection...\n");
 
   uint32_t fft_size = 1024; // Real size = 513
-  MaskingVeto* mv =
-      masking_veto_initialize(fft_size, 44100, OPUS_SCALE, POWER_SPECTRUM);
+  MaskingVeto* mv = masking_veto_initialize(fft_size, 44100, OPUS_SCALE,
+                                            POWER_SPECTRUM, false, true);
   TEST_ASSERT(mv != NULL, "Init failed");
 
   uint32_t real_size = (fft_size / 2) + 1;
@@ -122,8 +122,8 @@ void test_temporal_masking(void) {
   printf("Testing Temporal Masking (Forward and Backward)...\n");
 
   uint32_t fft_size = 1024;
-  MaskingVeto* mv =
-      masking_veto_initialize(fft_size, 48000, OPUS_SCALE, POWER_SPECTRUM);
+  MaskingVeto* mv = masking_veto_initialize(fft_size, 48000, OPUS_SCALE,
+                                            POWER_SPECTRUM, false, true);
   TEST_ASSERT(mv != NULL, "Init failed");
 
   uint32_t real_size = 513;

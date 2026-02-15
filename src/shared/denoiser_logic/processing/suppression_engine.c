@@ -43,7 +43,8 @@ struct SuppressionEngine {
 
 SuppressionEngine* suppression_engine_initialize(
     uint32_t real_spectrum_size, uint32_t sample_rate,
-    CriticalBandType critical_band_type, SpectrumType spectrum_type) {
+    CriticalBandType critical_band_type, SpectrumType spectrum_type,
+    bool use_absolute_threshold, bool use_temporal_masking) {
 
   SuppressionEngine* self =
       (SuppressionEngine*)calloc(1U, sizeof(SuppressionEngine));
@@ -58,7 +59,8 @@ SuppressionEngine* suppression_engine_initialize(
   self->critical_bands =
       critical_bands_initialize(sample_rate, fft_size, critical_band_type);
   self->masking_estimation = masking_estimation_initialize(
-      fft_size, sample_rate, critical_band_type, spectrum_type);
+      fft_size, sample_rate, critical_band_type, spectrum_type,
+      use_absolute_threshold, use_temporal_masking);
 
   if (!self->critical_bands || !self->masking_estimation) {
     suppression_engine_free(self);

@@ -63,7 +63,8 @@ typedef struct SuppressionEngine SuppressionEngine;
  */
 SuppressionEngine* suppression_engine_initialize(
     uint32_t real_spectrum_size, uint32_t sample_rate,
-    CriticalBandType critical_band_type, SpectrumType spectrum_type);
+    CriticalBandType critical_band_type, SpectrumType spectrum_type,
+    bool use_absolute_threshold, bool use_temporal_masking);
 
 /**
  * Free a SuppressionEngine instance.

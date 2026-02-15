@@ -105,7 +105,7 @@ void test_masking_estimator(void) {
   uint32_t sample_rate = 44100;
 
   MaskingEstimator* me = masking_estimation_initialize(
-      fft_size, sample_rate, OPUS_SCALE, POWER_SPECTRUM);
+      fft_size, sample_rate, OPUS_SCALE, POWER_SPECTRUM, true, true);
   TEST_ASSERT(me != NULL, "Masking estimator initialization should succeed");
 
   float spectrum[513] = {0.0f};
@@ -138,7 +138,7 @@ void test_spectral_smoother(void) {
   // Test all smoothing types
   for (int type = NO_SMOOTHING; type <= TRANSIENT_AWARE; type++) {
     SpectralSmoother* ss =
-        spectral_smoothing_initialize(fft_size, (TimeSmoothingType)type);
+        spectral_smoothing_initialize(fft_size, 44100, (TimeSmoothingType)type);
     TEST_ASSERT(ss != NULL, "Spectral smoother initialization should succeed");
 
     float spectrum[513] = {0.0f};

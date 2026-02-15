@@ -30,29 +30,11 @@ typedef struct MaskingEstimator MaskingEstimator;
 
 MaskingEstimator* masking_estimation_initialize(
     uint32_t fft_size, uint32_t sample_rate,
-    CriticalBandType critical_band_type, SpectrumType spectrum_type);
+    CriticalBandType critical_band_type, SpectrumType spectrum_type,
+    bool use_absolute_threshold, bool use_temporal_masking);
 void masking_estimation_free(MaskingEstimator* self);
 bool compute_masking_thresholds(MaskingEstimator* self, const float* spectrum,
                                 const float* future_spectrum,
                                 float* masking_thresholds);
-void masking_estimation_set_use_absolute_threshold(MaskingEstimator* self,
-                                                   bool use_absolute_threshold);
-
-/**
- * masking_estimation_set_temporal_masking: Toggle forward/backward masking
- * logic. Default: true (Enhanced Mode). Set to false for Pure Johnston (1988)
- * compliance.
- */
-void masking_estimation_set_temporal_masking(MaskingEstimator* self,
-                                             bool enabled);
-
-/**
- * masking_estimation_set_spectral_additivity_exponent: Set the power-law
- * exponent for simultaneous masking (addition of spreading). Standard: 1.0
- * (Johnston 1988 / Linear Addition) Advanced: 0.4 (PEAQ / ITU-R BS.1387
- * Precision)
- */
-void masking_estimation_set_spectral_additivity_exponent(MaskingEstimator* self,
-                                                         float exponent);
 
 #endif

@@ -216,21 +216,21 @@ SpectralProcessorHandle spectral_2d_denoiser_initialize(
     return NULL;
   }
 
-  self->masking_veto =
-      masking_veto_initialize(self->fft_size, self->sample_rate,
-                              CRITICAL_BANDS_TYPE_2D, self->spectrum_type);
+  self->masking_veto = masking_veto_initialize(
+      self->fft_size, self->sample_rate, CRITICAL_BANDS_TYPE_2D,
+      self->spectrum_type, false, USE_TEMPORAL_MASKING_2D_DEFAULT);
   self->suppression_engine = suppression_engine_initialize(
       self->real_spectrum_size, self->sample_rate, CRITICAL_BANDS_TYPE_2D,
-      self->spectrum_type);
+      self->spectrum_type, true, USE_TEMPORAL_MASKING_2D_DEFAULT);
 
   if (!self->masking_veto || !self->suppression_engine) {
     spectral_2d_denoiser_free(self);
     return NULL;
   }
 
-  // Initialize noise floor manager
   self->noise_floor_manager =
       noise_floor_manager_initialize(fft_size, sample_rate, self->hop);
+
   if (!self->noise_floor_manager) {
     spectral_2d_denoiser_free(self);
     return NULL;
