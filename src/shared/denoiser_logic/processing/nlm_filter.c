@@ -378,6 +378,11 @@ bool nlm_filter_process(NlmFilter* filter, float* smoothed_snr) {
     return false;
   }
 
+#ifdef __SSE__
+  unsigned int old_mxcsr = _mm_getcsr();
+  _mm_setcsr(old_mxcsr | 0x8040); // Set flush-to-zero and denormals-are-zero
+#endif
+
   const uint32_t spectrum_size = filter->config.spectrum_size;
   const uint32_t paste_size = filter->config.paste_block_size;
   const uint32_t search_freq = filter->config.search_range_freq;
@@ -573,6 +578,10 @@ bool nlm_filter_process(NlmFilter* filter, float* smoothed_snr) {
       smoothed_snr[k] = target_frame[k];
     }
   }
+
+#ifdef __SSE__
+  _mm_setcsr(old_mxcsr);
+#endif
 
   return true;
 }
