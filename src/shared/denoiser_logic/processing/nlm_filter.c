@@ -25,6 +25,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "shared/configurations.h"
 #include "shared/denoiser_logic/processing/nlm_filter.h"
+#include "shared/utils/simd_utils.h"
 
 struct NlmFilter {
   NlmFilterConfig config;
@@ -72,17 +73,6 @@ static inline float* get_frame(NlmFilter* self, int32_t relative_offset) {
   return self->frame_buffer[idx];
 }
 
-#ifdef __ARM_NEON
-#include <arm_neon.h>
-#else
-#ifdef __SSE__
-#include <xmmintrin.h>
-#ifdef __AVX__
-#include <immintrin.h>
-#endif
-#endif
-#endif
-
 // Helper: compute squared Euclidean distance between two patches
 // Optimized with SIMD for common patch sizes (4, 8)
 static float compute_patch_distance(NlmFilter* self, int32_t target_time,
@@ -123,104 +113,13 @@ static float compute_patch_distance(NlmFilter* self, int32_t target_time,
 
     if (safe_bounds && patch_size == 8) {
       // Fast Path: Direct pointer access + SIMD for 8x8
-      float* ptr_a = target_frame + (target_freq - half_patch);
-      float* ptr_b = cand_frame + (candidate_freq - half_patch);
-
-#ifdef __ARM_NEON
-      float32x4_t a1 = vld1q_f32(ptr_a);
-      float32x4_t a2 = vld1q_f32(ptr_a + 4);
-      float32x4_t b1 = vld1q_f32(ptr_b);
-      float32x4_t b2 = vld1q_f32(ptr_b + 4);
-
-      float32x4_t d1 = vsubq_f32(a1, b1);
-      float32x4_t d2 = vsubq_f32(a2, b2);
-
-      d1 = vmulq_f32(d1, d1);
-      d2 = vmulq_f32(d2, d2);
-
-      float32x4_t sum = vaddq_f32(d1, d2);
-      distance += vgetq_lane_f32(sum, 0) + vgetq_lane_f32(sum, 1) +
-                  vgetq_lane_f32(sum, 2) + vgetq_lane_f32(sum, 3);
-
-#elif defined(__AVX__)
-      __m256 a = _mm256_loadu_ps(ptr_a);
-      __m256 b = _mm256_loadu_ps(ptr_b);
-      __m256 d = _mm256_sub_ps(a, b);
-      d = _mm256_mul_ps(d, d);
-
-      // Horizontal add for AVX
-      __m128 low = _mm256_castps256_ps128(d);
-      __m128 high = _mm256_extractf128_ps(d, 1);
-      __m128 sum128 = _mm_add_ps(low, high);
-      __m128 shuf = _mm_shuffle_ps(sum128, sum128, _MM_SHUFFLE(2, 3, 0, 1));
-      __m128 sums = _mm_add_ps(sum128, shuf);
-      shuf = _mm_movehl_ps(shuf, sums);
-      sums = _mm_add_ss(sums, shuf);
-      float f;
-      _mm_store_ss(&f, sums);
-      distance += f;
-#elif defined(__SSE__)
-      __m128 a1 = _mm_loadu_ps(ptr_a);
-      __m128 a2 = _mm_loadu_ps(ptr_a + 4);
-      __m128 b1 = _mm_loadu_ps(ptr_b);
-      __m128 b2 = _mm_loadu_ps(ptr_b + 4);
-
-      __m128 d1 = _mm_sub_ps(a1, b1);
-      __m128 d2 = _mm_sub_ps(a2, b2);
-
-      d1 = _mm_mul_ps(d1, d1);
-      d2 = _mm_mul_ps(d2, d2);
-
-      __m128 sum = _mm_add_ps(d1, d2);
-      // Horizontal add
-      __m128 shuf = _mm_shuffle_ps(sum, sum, _MM_SHUFFLE(2, 3, 0, 1));
-      __m128 sums = _mm_add_ps(sum, shuf);
-      shuf = _mm_movehl_ps(shuf, sums);
-      sums = _mm_add_ss(sums, shuf);
-      float f;
-      _mm_store_ss(&f, sums);
-      distance += f;
-#else
-      // Scalar Fallback for 8x8 safely
-      for (int i = 0; i < 8; i++) {
-        float diff = ptr_a[i] - ptr_b[i];
-        distance += diff * diff;
-      }
-#endif
+      distance += sb_vec8_ssd(sb_load8(target_frame + (target_freq - half_patch)),
+                              sb_load8(cand_frame + (candidate_freq - half_patch)));
 
     } else if (safe_bounds && patch_size == 4) {
       // Fast Path for 4x4
-      float* ptr_a = target_frame + (target_freq - half_patch);
-      float* ptr_b = cand_frame + (candidate_freq - half_patch);
-
-#ifdef __ARM_NEON
-      float32x4_t a = vld1q_f32(ptr_a);
-      float32x4_t b = vld1q_f32(ptr_b);
-      float32x4_t d = vsubq_f32(a, b);
-      d = vmulq_f32(d, d);
-      distance += vgetq_lane_f32(d, 0) + vgetq_lane_f32(d, 1) +
-                  vgetq_lane_f32(d, 2) + vgetq_lane_f32(d, 3);
-#else
-#ifdef __SSE__
-      __m128 a = _mm_loadu_ps(ptr_a);
-      __m128 b = _mm_loadu_ps(ptr_b);
-      __m128 d = _mm_sub_ps(a, b);
-      d = _mm_mul_ps(d, d);
-      // H-add
-      __m128 shuf = _mm_shuffle_ps(d, d, _MM_SHUFFLE(2, 3, 0, 1));
-      __m128 sums = _mm_add_ps(d, shuf);
-      shuf = _mm_movehl_ps(shuf, sums);
-      sums = _mm_add_ss(sums, shuf);
-      float f;
-      _mm_store_ss(&f, sums);
-      distance += f;
-#else
-      for (int i = 0; i < 4; i++) {
-        float diff = ptr_a[i] - ptr_b[i];
-        distance += diff * diff;
-      }
-#endif
-#endif
+      distance += sb_vec4_ssd(sb_load4(target_frame + (target_freq - half_patch)),
+                              sb_load4(cand_frame + (candidate_freq - half_patch)));
 
     } else {
       // Slow safe path with clamping
@@ -437,16 +336,7 @@ bool nlm_filter_process(NlmFilter* filter, float* smoothed_snr) {
     // to avoid reloading it ~350 times in the inner loop.
 
     // Storage for pre-loaded target patch (flattened 8x8)
-#ifdef __ARM_NEON
-    float32x4_t target_vecs[16]; // 16 vectors * 4 floats = 64 elements (8x8)
-#elif defined(__AVX__)
-    __m256 target_vecs[8]; // 8 vectors * 8 floats = 64 elements
-#elif defined(__SSE__)
-    __m128 target_vecs[16];
-#else
-    // No pre-load buffer needed for scalar fallback as we use
-    // compute_patch_distance
-#endif
+    sb_vec8_t target_vecs[8];
 
     // Pre-load Target Patch
     // Use nlm_filter 8x8 constraints directly for max speed
@@ -464,18 +354,7 @@ bool nlm_filter_process(NlmFilter* filter, float* smoothed_snr) {
             (block_center >= 4) && (block_center + 4 <= spectrum_size);
 
         if (safe_load) {
-#ifdef __ARM_NEON
-          target_vecs[((size_t)r * 2)] = vld1q_f32(row_ptr);
-          target_vecs[((size_t)r * 2) + 1] = vld1q_f32(row_ptr + 4);
-#elif defined(__AVX__)
-          target_vecs[r] = _mm256_loadu_ps(row_ptr);
-#elif defined(__SSE__)
-          target_vecs[((size_t)r * 2)] = _mm_loadu_ps(row_ptr);
-          target_vecs[((size_t)r * 2) + 1] = _mm_loadu_ps(row_ptr + 4);
-#else
-          // Scalar fallback: No pre-load needed, we read directly in
-          // compute_patch_distance
-#endif
+          target_vecs[r] = sb_load8(row_ptr);
         }
       }
     }
@@ -497,80 +376,14 @@ bool nlm_filter_process(NlmFilter* filter, float* smoothed_snr) {
 
         if (filter->config.patch_size == 8 && safe_bounds) {
           // 8x8 Optimized Path
-#ifdef __ARM_NEON
-          float32x4_t sum = vdupq_n_f32(0.0f);
+          sb_acc8_t sum = sb_acc8_zero();
 
           for (int r = 0; r < 8; r++) {
             int32_t t_cand = dt + r - 4;
             float* cand_ptr = get_frame(filter, t_cand) + (cand_center - 4);
-
-            float32x4_t b1 = vld1q_f32(cand_ptr);
-            float32x4_t b2 = vld1q_f32(cand_ptr + 4);
-
-            float32x4_t d1 = vsubq_f32(target_vecs[((size_t)r * 2)], b1);
-            float32x4_t d2 = vsubq_f32(target_vecs[((size_t)r * 2) + 1], b2);
-
-            d1 = vmulq_f32(d1, d1);
-            d2 = vmulq_f32(d2, d2);
-
-            sum = vaddq_f32(sum, d1);
-            sum = vaddq_f32(sum, d2);
+            sum = sb_acc8_add_ssd(sum, target_vecs[r], sb_load8(cand_ptr));
           }
-
-          distance = vgetq_lane_f32(sum, 0) + vgetq_lane_f32(sum, 1) +
-                     vgetq_lane_f32(sum, 2) + vgetq_lane_f32(sum, 3);
-#elif defined(__AVX__)
-          __m256 sum = _mm256_setzero_ps();
-          for (int r = 0; r < 8; r++) {
-            int32_t t_cand = dt + r - 4;
-            float* cand_ptr = get_frame(filter, t_cand) + (cand_center - 4);
-
-            __m256 b = _mm256_loadu_ps(cand_ptr);
-            __m256 d = _mm256_sub_ps(target_vecs[r], b);
-            d = _mm256_mul_ps(d, d);
-            sum = _mm256_add_ps(sum, d);
-          }
-          // Horizontal add for AVX
-          __m128 low = _mm256_castps256_ps128(sum);
-          __m128 high = _mm256_extractf128_ps(sum, 1);
-          __m128 sum128 = _mm_add_ps(low, high);
-          __m128 shuf = _mm_shuffle_ps(sum128, sum128, _MM_SHUFFLE(2, 3, 0, 1));
-          __m128 sums = _mm_add_ps(sum128, shuf);
-          shuf = _mm_movehl_ps(shuf, sums);
-          sums = _mm_add_ss(sums, shuf);
-          float f;
-          _mm_store_ss(&f, sums);
-          distance = f;
-#elif defined(__SSE__)
-          __m128 sum = _mm_setzero_ps();
-          for (int r = 0; r < 8; r++) {
-            int32_t t_cand = dt + r - 4;
-            float* cand_ptr = get_frame(filter, t_cand) + (cand_center - 4);
-
-            __m128 b1 = _mm_loadu_ps(cand_ptr);
-            __m128 b2 = _mm_loadu_ps(cand_ptr + 4);
-
-            __m128 d1 = _mm_sub_ps(target_vecs[((size_t)r * 2)], b1);
-            __m128 d2 = _mm_sub_ps(target_vecs[((size_t)r * 2) + 1], b2);
-
-            d1 = _mm_mul_ps(d1, d1);
-            d2 = _mm_mul_ps(d2, d2);
-
-            sum = _mm_add_ps(sum, d1);
-            sum = _mm_add_ps(sum, d2);
-          }
-          // Horizontal add
-          __m128 shuf = _mm_shuffle_ps(sum, sum, _MM_SHUFFLE(2, 3, 0, 1));
-          __m128 sums = _mm_add_ps(sum, shuf);
-          shuf = _mm_movehl_ps(shuf, sums);
-          sums = _mm_add_ss(sums, shuf);
-          _mm_store_ss(&f, sums);
-          distance = f;
-#else
-          // Fallback if no SIMD defined but 8x8 requested
-          distance =
-              compute_patch_distance(filter, 0, block_center, dt, cand_center);
-#endif
+          distance = sb_acc8_hsum(sum);
         } else {
           // Fallback for boundaries or non-8x8
           distance =
