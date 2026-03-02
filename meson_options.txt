@@ -5,4 +5,6 @@ option('enable_sanitizers', type : 'boolean', value : false, description : 'Enab
 option('sanitize_address', type : 'boolean', value : false, description : 'Enable AddressSanitizer')
 option('sanitize_undefined', type : 'boolean', value : false, description : 'Enable UndefinedBehaviorSanitizer')
 option('enable_tests', type : 'boolean', value : false, description : 'Enable building tests')
+option('enable_avx', type : 'boolean', value : true, description : 'Enable AVX optimizations if supported')
+option('enable_avx2', type : 'boolean', value : true, description : 'Enable AVX2 optimizations if supported')
 option('static_deps', type : 'boolean', value : false, description : 'Link dependencies (fftw3, etc) statically')

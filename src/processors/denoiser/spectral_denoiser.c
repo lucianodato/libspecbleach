@@ -147,8 +147,7 @@ SpectralProcessorHandle spectral_denoiser_initialize(
     return NULL;
   }
 
-  self->noise_floor_manager = noise_floor_manager_initialize(
-      self->fft_size, self->sample_rate, self->hop);
+  self->noise_floor_manager = noise_floor_manager_initialize(self->fft_size);
 
   self->was_learning = false;
   self->aggressiveness = 0.0f;

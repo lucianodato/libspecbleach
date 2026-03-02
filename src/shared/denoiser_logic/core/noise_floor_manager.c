@@ -30,9 +30,7 @@ struct NoiseFloorManager {
   uint32_t real_spectrum_size;
 };
 
-NoiseFloorManager* noise_floor_manager_initialize(const uint32_t fft_size,
-                                                  const uint32_t sample_rate,
-                                                  const uint32_t hop) {
+NoiseFloorManager* noise_floor_manager_initialize(const uint32_t fft_size) {
   NoiseFloorManager* self =
       (NoiseFloorManager*)calloc(1U, sizeof(NoiseFloorManager));
   if (!self) {

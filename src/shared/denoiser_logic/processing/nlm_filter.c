@@ -77,6 +77,9 @@ static inline float* get_frame(NlmFilter* self, int32_t relative_offset) {
 #else
 #ifdef __SSE__
 #include <xmmintrin.h>
+#ifdef __AVX__
+#include <immintrin.h>
+#endif
 #endif
 #endif
 
@@ -139,8 +142,24 @@ static float compute_patch_distance(NlmFilter* self, int32_t target_time,
       distance += vgetq_lane_f32(sum, 0) + vgetq_lane_f32(sum, 1) +
                   vgetq_lane_f32(sum, 2) + vgetq_lane_f32(sum, 3);
 
-#else
-#ifdef __SSE__
+#elif defined(__AVX__)
+      __m256 a = _mm256_loadu_ps(ptr_a);
+      __m256 b = _mm256_loadu_ps(ptr_b);
+      __m256 d = _mm256_sub_ps(a, b);
+      d = _mm256_mul_ps(d, d);
+
+      // Horizontal add for AVX
+      __m128 low = _mm256_castps256_ps128(d);
+      __m128 high = _mm256_extractf128_ps(d, 1);
+      __m128 sum128 = _mm_add_ps(low, high);
+      __m128 shuf = _mm_shuffle_ps(sum128, sum128, _MM_SHUFFLE(2, 3, 0, 1));
+      __m128 sums = _mm_add_ps(sum128, shuf);
+      shuf = _mm_movehl_ps(shuf, sums);
+      sums = _mm_add_ss(sums, shuf);
+      float f;
+      _mm_store_ss(&f, sums);
+      distance += f;
+#elif defined(__SSE__)
       __m128 a1 = _mm_loadu_ps(ptr_a);
       __m128 a2 = _mm_loadu_ps(ptr_a + 4);
       __m128 b1 = _mm_loadu_ps(ptr_b);
@@ -161,14 +180,12 @@ static float compute_patch_distance(NlmFilter* self, int32_t target_time,
       float f;
       _mm_store_ss(&f, sums);
       distance += f;
-
 #else
       // Scalar Fallback for 8x8 safely
       for (int i = 0; i < 8; i++) {
         float diff = ptr_a[i] - ptr_b[i];
         distance += diff * diff;
       }
-#endif
 #endif
 
     } else if (safe_bounds && patch_size == 4) {
@@ -422,13 +439,13 @@ bool nlm_filter_process(NlmFilter* filter, float* smoothed_snr) {
     // Storage for pre-loaded target patch (flattened 8x8)
 #ifdef __ARM_NEON
     float32x4_t target_vecs[16]; // 16 vectors * 4 floats = 64 elements (8x8)
-#else
-#ifdef __SSE__
+#elif defined(__AVX__)
+    __m256 target_vecs[8]; // 8 vectors * 8 floats = 64 elements
+#elif defined(__SSE__)
     __m128 target_vecs[16];
 #else
     // No pre-load buffer needed for scalar fallback as we use
     // compute_patch_distance
-#endif
 #endif
 
     // Pre-load Target Patch
@@ -450,14 +467,14 @@ bool nlm_filter_process(NlmFilter* filter, float* smoothed_snr) {
 #ifdef __ARM_NEON
           target_vecs[((size_t)r * 2)] = vld1q_f32(row_ptr);
           target_vecs[((size_t)r * 2) + 1] = vld1q_f32(row_ptr + 4);
-#else
-#ifdef __SSE__
+#elif defined(__AVX__)
+          target_vecs[r] = _mm256_loadu_ps(row_ptr);
+#elif defined(__SSE__)
           target_vecs[((size_t)r * 2)] = _mm_loadu_ps(row_ptr);
           target_vecs[((size_t)r * 2) + 1] = _mm_loadu_ps(row_ptr + 4);
 #else
           // Scalar fallback: No pre-load needed, we read directly in
           // compute_patch_distance
-#endif
 #endif
         }
       }
@@ -502,8 +519,29 @@ bool nlm_filter_process(NlmFilter* filter, float* smoothed_snr) {
 
           distance = vgetq_lane_f32(sum, 0) + vgetq_lane_f32(sum, 1) +
                      vgetq_lane_f32(sum, 2) + vgetq_lane_f32(sum, 3);
-#else
-#ifdef __SSE__
+#elif defined(__AVX__)
+          __m256 sum = _mm256_setzero_ps();
+          for (int r = 0; r < 8; r++) {
+            int32_t t_cand = dt + r - 4;
+            float* cand_ptr = get_frame(filter, t_cand) + (cand_center - 4);
+
+            __m256 b = _mm256_loadu_ps(cand_ptr);
+            __m256 d = _mm256_sub_ps(target_vecs[r], b);
+            d = _mm256_mul_ps(d, d);
+            sum = _mm256_add_ps(sum, d);
+          }
+          // Horizontal add for AVX
+          __m128 low = _mm256_castps256_ps128(sum);
+          __m128 high = _mm256_extractf128_ps(sum, 1);
+          __m128 sum128 = _mm_add_ps(low, high);
+          __m128 shuf = _mm_shuffle_ps(sum128, sum128, _MM_SHUFFLE(2, 3, 0, 1));
+          __m128 sums = _mm_add_ps(sum128, shuf);
+          shuf = _mm_movehl_ps(shuf, sums);
+          sums = _mm_add_ss(sums, shuf);
+          float f;
+          _mm_store_ss(&f, sums);
+          distance = f;
+#elif defined(__SSE__)
           __m128 sum = _mm_setzero_ps();
           for (int r = 0; r < 8; r++) {
             int32_t t_cand = dt + r - 4;
@@ -526,14 +564,12 @@ bool nlm_filter_process(NlmFilter* filter, float* smoothed_snr) {
           __m128 sums = _mm_add_ps(sum, shuf);
           shuf = _mm_movehl_ps(shuf, sums);
           sums = _mm_add_ss(sums, shuf);
-          float f;
           _mm_store_ss(&f, sums);
           distance = f;
 #else
           // Fallback if no SIMD defined but 8x8 requested
           distance =
               compute_patch_distance(filter, 0, block_center, dt, cand_center);
-#endif
 #endif
         } else {
           // Fallback for boundaries or non-8x8
@@ -556,8 +592,12 @@ bool nlm_filter_process(NlmFilter* filter, float* smoothed_snr) {
         float* cand_frame = get_frame(filter, dt);
 
         // Apply weight to all bins in the paste block
-        for (uint32_t i = 0;
-             i < paste_size && (block_start + i) < spectrum_size; i++) {
+        uint32_t current_paste_limit = paste_size;
+        if (block_start + paste_size > spectrum_size) {
+          current_paste_limit = spectrum_size - block_start;
+        }
+
+        for (uint32_t i = 0; i < current_paste_limit; i++) {
           uint32_t target_bin = block_start + i;
           uint32_t cand_bin =
               clamp_index((int32_t)target_bin + df, spectrum_size);

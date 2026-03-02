@@ -45,6 +45,23 @@ if (current_arch == 'x86' or current_arch == 'x86_64') and current_os != 'darwin
         '-fomit-frame-pointer',
         '-fno-finite-math-only'
     ])
+
+    if get_option('enable_avx')
+        lib_c_args += cc.get_supported_arguments(['-mavx'])
+    endif
+    if get_option('enable_avx2')
+        lib_c_args += cc.get_supported_arguments(['-mavx2'])
+    endif
+endif
+
+# macOS-specific x86_64 AVX support
+if (current_arch == 'x86' or current_arch == 'x86_64') and current_os == 'darwin'
+    if get_option('enable_avx')
+        lib_c_args += cc.get_supported_arguments(['-mavx'])
+    endif
+    if get_option('enable_avx2')
+        lib_c_args += cc.get_supported_arguments(['-mavx2'])
+    endif
 endif
 
 # ARM64 optimizations (NEON)

@@ -26,9 +26,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 typedef struct NoiseFloorManager NoiseFloorManager;
 
-NoiseFloorManager* noise_floor_manager_initialize(uint32_t fft_size,
-                                                  uint32_t sample_rate,
-                                                  uint32_t hop);
+NoiseFloorManager* noise_floor_manager_initialize(uint32_t fft_size);
 
 void noise_floor_manager_free(NoiseFloorManager* self);
 

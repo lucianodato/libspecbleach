@@ -95,7 +95,7 @@ int main(void) {
   // Noise Floor Manager
   noise_floor_manager_free(NULL);
   NoiseFloorManager* nfm =
-      noise_floor_manager_initialize(fft_size, sample_rate, hop);
+      noise_floor_manager_initialize(fft_size);
   noise_floor_manager_free(nfm);
 
   // Spectral Whitening

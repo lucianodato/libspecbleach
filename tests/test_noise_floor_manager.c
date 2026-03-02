@@ -23,7 +23,7 @@
 void test_noise_floor_manager_lifecycle(void) {
   printf("Testing Noise Floor Manager lifecycle...\n");
 
-  NoiseFloorManager* nfm = noise_floor_manager_initialize(1024, 44100, 256);
+  NoiseFloorManager* nfm = noise_floor_manager_initialize(1024);
   TEST_ASSERT(nfm != NULL, "Initialization should succeed");
 
   noise_floor_manager_free(NULL); // Coverage: free NULL
@@ -36,7 +36,7 @@ void test_noise_floor_manager_apply(void) {
 
   uint32_t fft_size = 1024;
   uint32_t real_size = (fft_size / 2) + 1;
-  NoiseFloorManager* nfm = noise_floor_manager_initialize(fft_size, 44100, 256);
+  NoiseFloorManager* nfm = noise_floor_manager_initialize(fft_size);
 
   float* gain_spectrum = (float*)calloc(fft_size, sizeof(float));
   float* noise_profile = (float*)calloc(real_size, sizeof(float));

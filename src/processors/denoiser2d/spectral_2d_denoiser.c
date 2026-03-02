@@ -224,8 +224,7 @@ SpectralProcessorHandle spectral_2d_denoiser_initialize(
     return NULL;
   }
 
-  self->noise_floor_manager =
-      noise_floor_manager_initialize(fft_size, sample_rate, self->hop);
+  self->noise_floor_manager = noise_floor_manager_initialize(fft_size);
 
   if (!self->noise_floor_manager) {
     spectral_2d_denoiser_free(self);
