@@ -113,13 +113,15 @@ static float compute_patch_distance(NlmFilter* self, int32_t target_time,
 
     if (safe_bounds && patch_size == 8) {
       // Fast Path: Direct pointer access + SIMD for 8x8
-      distance += sb_vec8_ssd(sb_load8(target_frame + (target_freq - half_patch)),
-                              sb_load8(cand_frame + (candidate_freq - half_patch)));
+      distance +=
+          sb_vec8_ssd(sb_load8(target_frame + (target_freq - half_patch)),
+                      sb_load8(cand_frame + (candidate_freq - half_patch)));
 
     } else if (safe_bounds && patch_size == 4) {
       // Fast Path for 4x4
-      distance += sb_vec4_ssd(sb_load4(target_frame + (target_freq - half_patch)),
-                              sb_load4(cand_frame + (candidate_freq - half_patch)));
+      distance +=
+          sb_vec4_ssd(sb_load4(target_frame + (target_freq - half_patch)),
+                      sb_load4(cand_frame + (candidate_freq - half_patch)));
 
     } else {
       // Slow safe path with clamping
