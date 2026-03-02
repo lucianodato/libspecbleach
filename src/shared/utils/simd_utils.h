@@ -161,7 +161,7 @@ SB_SIMD_INLINE sb_acc8_t sb_acc8_zero(void) {
 }
 
 SB_SIMD_INLINE sb_acc8_t sb_acc8_add_ssd(sb_acc8_t acc, sb_vec8_t a,
-                                        sb_vec8_t b) {
+                                         sb_vec8_t b) {
 #ifdef __AVX__
   __m256 d = _mm256_sub_ps(a, b);
   return _mm256_add_ps(acc, _mm256_mul_ps(d, d));
