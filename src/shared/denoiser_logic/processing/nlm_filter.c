@@ -296,10 +296,7 @@ bool nlm_filter_process(NlmFilter* filter, float* smoothed_snr) {
     return false;
   }
 
-#ifdef __SSE__
-  unsigned int old_mxcsr = _mm_getcsr();
-  _mm_setcsr(old_mxcsr | 0x8040); // Set flush-to-zero and denormals-are-zero
-#endif
+  sb_simd_state_t old_simd_state = sb_simd_enable_ftz_daz();
 
   const uint32_t spectrum_size = filter->config.spectrum_size;
   const uint32_t paste_size = filter->config.paste_block_size;
@@ -434,9 +431,7 @@ bool nlm_filter_process(NlmFilter* filter, float* smoothed_snr) {
     }
   }
 
-#ifdef __SSE__
-  _mm_setcsr(old_mxcsr);
-#endif
+  sb_simd_restore_state(old_simd_state);
 
   return true;
 }

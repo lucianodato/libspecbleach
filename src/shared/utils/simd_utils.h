@@ -40,6 +40,44 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #endif
 
 /* ------------------------------------------------------------------------- */
+/* DENORMAL HANDLING (FTZ/DAZ)                                               */
+/* ------------------------------------------------------------------------- */
+
+typedef uint32_t sb_simd_state_t;
+
+/**
+ * Enables "Flush-to-Zero" and "Denormals-are-Zero" modes.
+ * returns the previous state to be restored later.
+ */
+SB_SIMD_INLINE sb_simd_state_t sb_simd_enable_ftz_daz(void) {
+  sb_simd_state_t old_state = 0;
+#ifdef __SSE__
+  old_state = _mm_getcsr();
+  _mm_setcsr(old_state | 0x8040); // MXCSR: bits 15 (FTZ) and 6 (DAZ)
+#elif defined(__ARM_NEON)
+  // On ARM64, we manipulate the FPCR (Floating-point Control Register)
+  // Bit 24 is FZ (Flush-to-zero)
+  __asm__ __volatile__("mrs %x0, fpcr" : "=r"(old_state));
+  sb_simd_state_t new_state = old_state | (1U << 24);
+  __asm__ __volatile__("msr fpcr, %x0" : : "r"(new_state));
+#endif
+  return old_state;
+}
+
+/**
+ * Restores a previously saved SIMD state.
+ */
+SB_SIMD_INLINE void sb_simd_restore_state(sb_simd_state_t state) {
+#ifdef __SSE__
+  _mm_setcsr(state);
+#elif defined(__ARM_NEON)
+  __asm__ __volatile__("msr fpcr, %x0" : : "r"(state));
+#else
+  (void)state;
+#endif
+}
+
+/* ------------------------------------------------------------------------- */
 /* 8-WIDE VECTOR ABSTRACTION (Ideal for 8x8 patches)                         */
 /* ------------------------------------------------------------------------- */
 
