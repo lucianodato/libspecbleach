@@ -249,3 +249,12 @@ test_tonal_reducer = executable('test_tonal_reducer',
   include_directories: [inc, src_inc]
 )
 test('tonal_reducer', test_tonal_reducer)
+
+test_simd_utils = executable('test_simd_utils',
+  sources: ['test_simd_utils.c'],
+  dependencies: [libspecbleach_dep, m_dep],
+  c_args: test_c_args,
+  link_args: test_link_args,
+  include_directories: [inc, src_inc]
+)
+test('simd_utils', test_simd_utils)

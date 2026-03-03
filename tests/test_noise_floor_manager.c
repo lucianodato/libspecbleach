@@ -23,7 +23,7 @@
 void test_noise_floor_manager_lifecycle(void) {
   printf("Testing Noise Floor Manager lifecycle...\n");
 
-  NoiseFloorManager* nfm = noise_floor_manager_initialize(1024, 44100, 256);
+  NoiseFloorManager* nfm = noise_floor_manager_initialize(1024);
   TEST_ASSERT(nfm != NULL, "Initialization should succeed");
 
   noise_floor_manager_free(NULL); // Coverage: free NULL
@@ -36,7 +36,8 @@ void test_noise_floor_manager_apply(void) {
 
   uint32_t fft_size = 1024;
   uint32_t real_size = (fft_size / 2) + 1;
-  NoiseFloorManager* nfm = noise_floor_manager_initialize(fft_size, 44100, 256);
+  NoiseFloorManager* nfm = noise_floor_manager_initialize(fft_size);
+  TEST_ASSERT(nfm != NULL, "Initialization should succeed");
 
   float* gain_spectrum = (float*)calloc(fft_size, sizeof(float));
   float* noise_profile = (float*)calloc(real_size, sizeof(float));
@@ -55,6 +56,18 @@ void test_noise_floor_manager_apply(void) {
                             0.1f, NULL, 0.5f);
   noise_floor_manager_apply(nfm, real_size, fft_size, gain_spectrum, NULL, 0.1f,
                             0.1f, NULL, 0.5f);
+
+  // Coverage: Mismatched sizes
+  // Force 0.0 gain, apply 0.1 reduction, with wrong sizes given.
+  // It should still process using the correct internal sizes and output 0.1
+  for (uint32_t k = 0; k < fft_size; k++) {
+    gain_spectrum[k] = 0.0f;
+  }
+  noise_floor_manager_apply(nfm, 999, 999, gain_spectrum, noise_profile, 0.1f,
+                            0.1f, NULL, 0.0f);
+  TEST_FLOAT_CLOSE(gain_spectrum[0], 0.1f, 0.001f);
+  TEST_FLOAT_CLOSE(gain_spectrum[fft_size - 1], 0.1f,
+                   0.001f); // symmetric copy checks out
 
   // Test with 1.0 linear reduction (should result in 1.0 floor/gain)
   for (uint32_t k = 0; k < fft_size; k++) {
@@ -124,11 +137,191 @@ void test_noise_floor_manager_apply(void) {
   printf("✓ Noise Floor Manager apply tests passed\n");
 }
 
+void test_noise_floor_manager_spectral_shaping(void) {
+  printf("Testing Noise Floor Manager spectral shaping...\n");
+
+  uint32_t fft_size = 512;
+  uint32_t real_size = (fft_size / 2) + 1;
+  NoiseFloorManager* nfm = noise_floor_manager_initialize(fft_size);
+  TEST_ASSERT(nfm != NULL, "Initialization should succeed");
+
+  float* gain_spectrum = (float*)calloc(fft_size, sizeof(float));
+  float* noise_profile = (float*)calloc(real_size, sizeof(float));
+
+  // Create a non-flat noise profile (shaped spectrum)
+  for (uint32_t k = 0; k < real_size; k++) {
+    // Decreasing noise floor with frequency (like pink noise)
+    noise_profile[k] = 1.0f / sqrtf((float)(k + 1));
+  }
+
+  // Zero initial gain
+  for (uint32_t k = 0; k < fft_size; k++) {
+    gain_spectrum[k] = 0.0f;
+  }
+
+  // Apply with whitening to see spectral shaping
+  noise_floor_manager_apply(nfm, real_size, fft_size, gain_spectrum,
+                            noise_profile, 0.1f, 0.1f, NULL, 1.0f);
+
+  // Verify floor was applied
+  TEST_ASSERT(gain_spectrum[0] >= 0.09f && gain_spectrum[0] <= 0.11f,
+              "Floor should be applied at low frequency");
+
+  // Verify symmetry in FFT
+  for (uint32_t k = 1; k < fft_size - k; k++) {
+    TEST_FLOAT_CLOSE(gain_spectrum[k], gain_spectrum[fft_size - k], 1e-5f);
+  }
+
+  free(gain_spectrum);
+  free(noise_profile);
+  noise_floor_manager_free(nfm);
+  printf("✓ Noise Floor Manager spectral shaping tests passed\n");
+}
+
+void test_noise_floor_manager_tonal_handoff(void) {
+  printf("Testing Noise Floor Manager tonal handoff logic...\n");
+
+  uint32_t fft_size = 256;
+  uint32_t real_size = (fft_size / 2) + 1;
+  NoiseFloorManager* nfm = noise_floor_manager_initialize(fft_size);
+  TEST_ASSERT(nfm != NULL, "Initialization should succeed");
+
+  float* gain_spectrum = (float*)calloc(fft_size, sizeof(float));
+  float* noise_profile = (float*)calloc(real_size, sizeof(float));
+  float* tonal_mask = (float*)calloc(real_size, sizeof(float));
+
+  for (uint32_t k = 0; k < real_size; k++) {
+    noise_profile[k] = 1.0f;
+    gain_spectrum[k] = 0.0f;
+    // Create mask with some tonal components
+    tonal_mask[k] = (k % 10 == 0) ? 1.0f : 0.0f;
+  }
+
+  // Test with 0% whitening (tonal reduction should be preserved)
+  noise_floor_manager_apply(nfm, real_size, fft_size, gain_spectrum,
+                            noise_profile, 0.2f, 0.5f, tonal_mask, 0.0f);
+
+  // Bins with mask=1.0 should follow tonal reduction (0.5)
+  // Bins with mask=0.0 should follow broadband reduction (0.2)
+  TEST_FLOAT_CLOSE(gain_spectrum[0], 0.5f, 0.01f);  // Tonal bin
+  TEST_FLOAT_CLOSE(gain_spectrum[1], 0.2f, 0.01f);  // Non-tonal bin
+
+  // Test with 100% whitening (should flatten to broadband)
+  for (uint32_t k = 0; k < fft_size; k++) {
+    gain_spectrum[k] = 0.0f;
+  }
+  noise_floor_manager_apply(nfm, real_size, fft_size, gain_spectrum,
+                            noise_profile, 0.2f, 0.5f, tonal_mask, 1.0f);
+
+  // All bins should converge to broadband reduction
+  TEST_FLOAT_CLOSE(gain_spectrum[0], 0.2f, 0.01f);
+  TEST_FLOAT_CLOSE(gain_spectrum[1], 0.2f, 0.01f);
+
+  free(gain_spectrum);
+  free(noise_profile);
+  free(tonal_mask);
+  noise_floor_manager_free(nfm);
+  printf("✓ Noise Floor Manager tonal handoff tests passed\n");
+}
+
+void test_noise_floor_manager_dynamic_whitening(void) {
+  printf("Testing Noise Floor Manager dynamic whitening depth...\n");
+
+  uint32_t fft_size = 128;
+  uint32_t real_size = (fft_size / 2) + 1;
+  NoiseFloorManager* nfm = noise_floor_manager_initialize(fft_size);
+  TEST_ASSERT(nfm != NULL, "Initialization should succeed");
+
+  float* gain_spectrum = (float*)calloc(fft_size, sizeof(float));
+  float* noise_profile = (float*)calloc(real_size, sizeof(float));
+
+  for (uint32_t k = 0; k < real_size; k++) {
+    noise_profile[k] = 1.0f;
+  }
+
+  // Test: At 0dB reduction (1.0), whitening should have no effect
+  for (uint32_t k = 0; k < fft_size; k++) {
+    gain_spectrum[k] = 0.8f;
+  }
+  noise_floor_manager_apply(nfm, real_size, fft_size, gain_spectrum,
+                            noise_profile, 1.0f, 1.0f, NULL, 1.0f);
+
+  // Transparency guard should force unity gain
+  TEST_FLOAT_CLOSE(gain_spectrum[0], 1.0f, 0.001f);
+
+  // Test: At maximum reduction, whitening should be at full strength
+  for (uint32_t k = 0; k < fft_size; k++) {
+    gain_spectrum[k] = 0.0f;
+  }
+  noise_floor_manager_apply(nfm, real_size, fft_size, gain_spectrum,
+                            noise_profile, 0.0f, 0.0f, NULL, 1.0f);
+
+  // Should apply full whitening effect
+  TEST_ASSERT(gain_spectrum[0] >= 0.0f && gain_spectrum[0] <= 0.1f,
+              "Full reduction should apply strong floor");
+
+  free(gain_spectrum);
+  free(noise_profile);
+  noise_floor_manager_free(nfm);
+  printf("✓ Noise Floor Manager dynamic whitening tests passed\n");
+}
+
+void test_noise_floor_manager_edge_cases(void) {
+  printf("Testing Noise Floor Manager edge cases...\n");
+
+  uint32_t fft_size = 64;
+  uint32_t real_size = (fft_size / 2) + 1;
+  NoiseFloorManager* nfm = noise_floor_manager_initialize(fft_size);
+  TEST_ASSERT(nfm != NULL, "Initialization should succeed");
+
+  float* gain_spectrum = (float*)calloc(fft_size, sizeof(float));
+  float* noise_profile = (float*)calloc(real_size, sizeof(float));
+
+  // Test with very low noise profile values
+  for (uint32_t k = 0; k < real_size; k++) {
+    noise_profile[k] = 1e-10f;
+    gain_spectrum[k] = 0.5f;
+  }
+  noise_floor_manager_apply(nfm, real_size, fft_size, gain_spectrum,
+                            noise_profile, 0.5f, 0.5f, NULL, 0.5f);
+  TEST_ASSERT(gain_spectrum[0] >= 0.4f && gain_spectrum[0] <= 0.6f,
+              "Should handle very low noise profile");
+
+  // Test with very high noise profile values
+  for (uint32_t k = 0; k < real_size; k++) {
+    noise_profile[k] = 1e10f;
+    gain_spectrum[k] = 0.5f;
+  }
+  noise_floor_manager_apply(nfm, real_size, fft_size, gain_spectrum,
+                            noise_profile, 0.5f, 0.5f, NULL, 0.5f);
+  TEST_ASSERT(gain_spectrum[0] >= 0.0f && gain_spectrum[0] <= 1.5f,
+              "Should handle very high noise profile");
+
+  // Test with gain already above floor
+  for (uint32_t k = 0; k < real_size; k++) {
+    noise_profile[k] = 1.0f;
+    gain_spectrum[k] = 0.9f; // Already high
+  }
+  noise_floor_manager_apply(nfm, real_size, fft_size, gain_spectrum,
+                            noise_profile, 0.1f, 0.1f, NULL, 0.0f);
+  // Gain should remain unchanged (no clamping up needed)
+  TEST_FLOAT_CLOSE(gain_spectrum[0], 0.9f, 0.001f);
+
+  free(gain_spectrum);
+  free(noise_profile);
+  noise_floor_manager_free(nfm);
+  printf("✓ Noise Floor Manager edge case tests passed\n");
+}
+
 int main(void) {
   printf("Running Noise Floor Manager tests...\n\n");
 
   test_noise_floor_manager_lifecycle();
   test_noise_floor_manager_apply();
+  test_noise_floor_manager_spectral_shaping();
+  test_noise_floor_manager_tonal_handoff();
+  test_noise_floor_manager_dynamic_whitening();
+  test_noise_floor_manager_edge_cases();
 
   printf("\n✅ All Noise Floor Manager tests passed!\n");
   return 0;
