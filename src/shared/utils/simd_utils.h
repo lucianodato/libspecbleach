@@ -340,7 +340,14 @@ SB_SIMD_INLINE sb_vec8_t sb_div8(sb_vec8_t a, sb_vec8_t b) {
   r.v2 = _mm_div_ps(a.v2, b.v2);
   return r;
 #elif defined(__ARM_NEON)
-  // NEON doesn't have a direct div instruction, use reciprocal or scalar
+#ifdef __aarch64__
+  sb_vec8_t r;
+  r.v1 = vdivq_f32(a.v1, b.v1);
+  r.v2 = vdivq_f32(a.v2, b.v2);
+  return r;
+#else
+  // NEON doesn't have a direct div instruction on ARMv7, use reciprocal or
+  // scalar
   float ta1[4];
   float tb1[4];
   float tr1[4];
@@ -359,6 +366,7 @@ SB_SIMD_INLINE sb_vec8_t sb_div8(sb_vec8_t a, sb_vec8_t b) {
   r.v1 = vld1q_f32(tr1);
   r.v2 = vld1q_f32(tr2);
   return r;
+#endif
 #else
   sb_vec8_t r;
   for (int i = 0; i < 8; i++)
@@ -572,12 +580,18 @@ SB_SIMD_INLINE sb_vec8_t sb_gt8(sb_vec8_t a, sb_vec8_t b) {
  */
 SB_SIMD_INLINE sb_vec8_t sb_sel8(sb_vec8_t mask, sb_vec8_t a, sb_vec8_t b) {
   // Normalize mask: any non-zero value becomes a full-bit mask (all 1s)
-  sb_vec8_t zero = sb_set8(0.0f);
-  sb_vec8_t normalized_mask = sb_gt8(mask, zero);
-
 #ifdef __AVX__
+  sb_vec8_t zero = _mm256_set1_ps(0.0f);
+  sb_vec8_t normalized_mask = _mm256_cmp_ps(mask, zero, _CMP_NEQ_UQ);
   return _mm256_blendv_ps(b, a, normalized_mask);
 #elif defined(__SSE__)
+  sb_vec8_t zero;
+  zero.v1 = _mm_setzero_ps();
+  zero.v2 = _mm_setzero_ps();
+  sb_vec8_t normalized_mask;
+  normalized_mask.v1 = _mm_cmpneq_ps(mask.v1, zero.v1);
+  normalized_mask.v2 = _mm_cmpneq_ps(mask.v2, zero.v2);
+
 // SSE4.1 blendv_ps or manual bitwise
 #ifdef __SSE4_1__
   return (sb_vec8_t){_mm_blendv_ps(b.v1, a.v1, normalized_mask.v1),
@@ -590,12 +604,19 @@ SB_SIMD_INLINE sb_vec8_t sb_sel8(sb_vec8_t mask, sb_vec8_t a, sb_vec8_t b) {
   return (sb_vec8_t){res1, res2};
 #endif
 #elif defined(__ARM_NEON)
+  sb_vec8_t zero;
+  zero.v1 = vdupq_n_f32(0.0f);
+  zero.v2 = vdupq_n_f32(0.0f);
+  sb_vec8_t normalized_mask;
+  normalized_mask.v1 = (float32x4_t)vmvnq_u32(vceqq_f32(mask.v1, zero.v1));
+  normalized_mask.v2 = (float32x4_t)vmvnq_u32(vceqq_f32(mask.v2, zero.v2));
+
   return (sb_vec8_t){vbslq_f32((uint32x4_t)normalized_mask.v1, a.v1, b.v1),
                      vbslq_f32((uint32x4_t)normalized_mask.v2, a.v2, b.v2)};
 #else
   sb_vec8_t r;
   for (int i = 0; i < 8; i++)
-    r.v[i] = (normalized_mask.v[i] != 0.0f) ? a.v[i] : b.v[i];
+    r.v[i] = (mask.v[i] != 0.0f) ? a.v[i] : b.v[i];
   return r;
 #endif
 }
