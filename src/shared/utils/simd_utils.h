@@ -46,23 +46,36 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 /* DENORMAL HANDLING (FTZ/DAZ)                                               */
 /* ------------------------------------------------------------------------- */
 
+#if defined(__ARM_NEON) && defined(__aarch64__)
+typedef uint64_t sb_simd_state_t;
+#else
 typedef uint32_t sb_simd_state_t;
+#endif
 
 /**
  * Enables "Flush-to-Zero" and "Denormals-are-Zero" modes.
  * returns the previous state to be restored later.
  */
+
+#ifdef __SSE__
+#define SB_SIMD_MXCSR_FTZ (1U << 15)
+#define SB_SIMD_MXCSR_DAZ (1U << 6)
+#elif defined(__ARM_NEON) && defined(__aarch64__)
+#define SB_SIMD_FPCR_FZ (1U << 24)
+#endif
+
 SB_SIMD_INLINE sb_simd_state_t sb_simd_enable_ftz_daz(void) {
   sb_simd_state_t old_state = 0;
 #ifdef __SSE__
   old_state = _mm_getcsr();
-  _mm_setcsr(old_state | 0x8040); // MXCSR: bits 15 (FTZ) and 6 (DAZ)
+  _mm_setcsr(old_state | SB_SIMD_MXCSR_FTZ |
+             SB_SIMD_MXCSR_DAZ); // MXCSR: bits 15 (FTZ) and 6 (DAZ)
 #elif defined(__ARM_NEON) && defined(__aarch64__)
   // On ARM64, we manipulate the FPCR (Floating-point Control Register)
   // Bit 24 is FZ (Flush-to-zero)
-  __asm__ __volatile__("mrs %x0, fpcr" : "=r"(old_state));
-  sb_simd_state_t new_state = old_state | (1U << 24);
-  __asm__ __volatile__("msr fpcr, %x0" : : "r"(new_state));
+  __asm__ __volatile__("mrs %0, fpcr" : "=r"(old_state));
+  sb_simd_state_t new_state = old_state | SB_SIMD_FPCR_FZ;
+  __asm__ __volatile__("msr fpcr, %0" : : "r"(new_state));
 #endif
   return old_state;
 }
@@ -74,7 +87,7 @@ SB_SIMD_INLINE void sb_simd_restore_state(sb_simd_state_t state) {
 #ifdef __SSE__
   _mm_setcsr(state);
 #elif defined(__ARM_NEON) && defined(__aarch64__)
-  __asm__ __volatile__("msr fpcr, %x0" : : "r"(state));
+  __asm__ __volatile__("msr fpcr, %0" : : "r"(state));
 #else
   (void)state;
 #endif

@@ -37,6 +37,7 @@ void test_noise_floor_manager_apply(void) {
   uint32_t fft_size = 1024;
   uint32_t real_size = (fft_size / 2) + 1;
   NoiseFloorManager* nfm = noise_floor_manager_initialize(fft_size);
+  TEST_ASSERT(nfm != NULL, "Initialization should succeed");
 
   float* gain_spectrum = (float*)calloc(fft_size, sizeof(float));
   float* noise_profile = (float*)calloc(real_size, sizeof(float));
