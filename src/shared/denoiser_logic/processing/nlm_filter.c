@@ -342,18 +342,19 @@ bool nlm_filter_process(NlmFilter* filter, float* smoothed_snr) {
     const uint32_t half_patch_size =
         4; // Hardcoded for 8x8 optimized path checks
 
+    bool safe_block = (block_center >= half_patch_size) &&
+                      (block_center + half_patch_size <= spectrum_size);
+
     if (filter->config.patch_size == 8) {
       // Unroll loading for 8x8
       for (int r = 0; r < 8; r++) {
-        int32_t t_offset = (int32_t)r - (int32_t)half_patch_size;
-        float* row_ptr =
-            get_frame(filter, t_offset) + (block_center - half_patch_size);
-
-        bool safe_load =
-            (block_center >= 4) && (block_center + 4 <= spectrum_size);
-
-        if (safe_load) {
+        if (safe_block) {
+          int32_t t_offset = (int32_t)r - (int32_t)half_patch_size;
+          float* row_ptr =
+              get_frame(filter, t_offset) + (block_center - half_patch_size);
           target_vecs[r] = sb_load8(row_ptr);
+        } else {
+          target_vecs[r] = sb_set8(0.0f);
         }
       }
     }
@@ -369,9 +370,8 @@ bool nlm_filter_process(NlmFilter* filter, float* smoothed_snr) {
         float distance = 0.0F;
 
         // --- INLINED DISTANCE CALCULATION WITH REGISTER BLOCKING ---
-        bool safe_bounds =
-            (block_center >= 4) && (block_center + 4 <= spectrum_size) &&
-            (cand_center >= 4) && (cand_center + 4 <= spectrum_size);
+        bool safe_bounds = safe_block && (cand_center >= half_patch_size) &&
+                           (cand_center + half_patch_size <= spectrum_size);
 
         if (filter->config.patch_size == 8 && safe_bounds) {
           // 8x8 Optimized Path

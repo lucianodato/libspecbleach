@@ -31,6 +31,9 @@ struct NoiseFloorManager {
 };
 
 NoiseFloorManager* noise_floor_manager_initialize(const uint32_t fft_size) {
+  if (fft_size == 0U) {
+    return NULL;
+  }
   NoiseFloorManager* self =
       (NoiseFloorManager*)calloc(1U, sizeof(NoiseFloorManager));
   if (!self) {

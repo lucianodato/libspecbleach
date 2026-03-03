@@ -87,7 +87,7 @@ typedef __m256 sb_vec8_t;
 typedef struct {
   __m128 v1, v2;
 } sb_vec8_t;
-#elif defined(__ARM_NEON__)
+#elif defined(__ARM_NEON)
 typedef struct {
   float32x4_t v1, v2;
 } sb_vec8_t;
@@ -325,11 +325,23 @@ SB_SIMD_INLINE sb_vec8_t sb_div8(sb_vec8_t a, sb_vec8_t b) {
   return r;
 #elif defined(__ARM_NEON)
   // NEON doesn't have a direct div instruction, use reciprocal or scalar
-  sb_vec8_t r;
+  float ta1[4];
+  float tb1[4];
+  float tr1[4];
+  float ta2[4];
+  float tb2[4];
+  float tr2[4];
+  vst1q_f32(ta1, a.v1);
+  vst1q_f32(tb1, b.v1);
+  vst1q_f32(ta2, a.v2);
+  vst1q_f32(tb2, b.v2);
   for (int i = 0; i < 4; i++) {
-    r.v1[i] = a.v1[i] / b.v1[i];
-    r.v2[i] = a.v2[i] / b.v2[i];
+    tr1[i] = ta1[i] / tb1[i];
+    tr2[i] = ta2[i] / tb2[i];
   }
+  sb_vec8_t r;
+  r.v1 = vld1q_f32(tr1);
+  r.v2 = vld1q_f32(tr2);
   return r;
 #else
   sb_vec8_t r;
@@ -508,7 +520,7 @@ SB_SIMD_INLINE void sb_store4(float* p, sb_vec4_t v) {
 #elif defined(__ARM_NEON)
   vst1q_f32(p, v);
 #else
-  memcpy(p, r.v, 4 * sizeof(float));
+  memcpy(p, v.v, 4 * sizeof(float));
 #endif
 }
 
