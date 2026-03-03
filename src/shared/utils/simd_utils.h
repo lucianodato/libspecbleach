@@ -564,28 +564,38 @@ SB_SIMD_INLINE sb_vec8_t sb_gt8(sb_vec8_t a, sb_vec8_t b) {
 #endif
 }
 
+/**
+ * Selects elements from 'a' or 'b' based on 'mask'.
+ * Contract: 'mask' must be a comparison bitmask (all-bits-1 for true,
+ * all-bits-0 for false) or a value where non-zero lanes mean true.
+ * This function normalizes the mask so that all backends behave identically.
+ */
 SB_SIMD_INLINE sb_vec8_t sb_sel8(sb_vec8_t mask, sb_vec8_t a, sb_vec8_t b) {
+  // Normalize mask: any non-zero value becomes a full-bit mask (all 1s)
+  sb_vec8_t zero = sb_set8(0.0f);
+  sb_vec8_t normalized_mask = sb_gt8(mask, zero);
+
 #ifdef __AVX__
-  return _mm256_blendv_ps(b, a, mask);
+  return _mm256_blendv_ps(b, a, normalized_mask);
 #elif defined(__SSE__)
 // SSE4.1 blendv_ps or manual bitwise
 #ifdef __SSE4_1__
-  return (sb_vec8_t){_mm_blendv_ps(b.v1, a.v1, mask.v1),
-                     _mm_blendv_ps(b.v2, a.v2, mask.v2)};
+  return (sb_vec8_t){_mm_blendv_ps(b.v1, a.v1, normalized_mask.v1),
+                     _mm_blendv_ps(b.v2, a.v2, normalized_mask.v2)};
 #else
-  __m128 res1 =
-      _mm_or_ps(_mm_and_ps(mask.v1, a.v1), _mm_andnot_ps(mask.v1, b.v1));
-  __m128 res2 =
-      _mm_or_ps(_mm_and_ps(mask.v2, a.v2), _mm_andnot_ps(mask.v2, b.v2));
+  __m128 res1 = _mm_or_ps(_mm_and_ps(normalized_mask.v1, a.v1),
+                          _mm_andnot_ps(normalized_mask.v1, b.v1));
+  __m128 res2 = _mm_or_ps(_mm_and_ps(normalized_mask.v2, a.v2),
+                          _mm_andnot_ps(normalized_mask.v2, b.v2));
   return (sb_vec8_t){res1, res2};
 #endif
 #elif defined(__ARM_NEON)
-  return (sb_vec8_t){vbslq_f32((uint32x4_t)mask.v1, a.v1, b.v1),
-                     vbslq_f32((uint32x4_t)mask.v2, a.v2, b.v2)};
+  return (sb_vec8_t){vbslq_f32((uint32x4_t)normalized_mask.v1, a.v1, b.v1),
+                     vbslq_f32((uint32x4_t)normalized_mask.v2, a.v2, b.v2)};
 #else
   sb_vec8_t r;
   for (int i = 0; i < 8; i++)
-    r.v[i] = (mask.v[i] != 0.0f) ? a.v[i] : b.v[i];
+    r.v[i] = (normalized_mask.v[i] != 0.0f) ? a.v[i] : b.v[i];
   return r;
 #endif
 }
