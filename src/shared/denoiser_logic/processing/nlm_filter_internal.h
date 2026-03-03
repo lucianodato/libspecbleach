@@ -50,7 +50,8 @@ struct NlmFilter {
 };
 
 // Helper: clamp index to valid range
-static inline uint32_t clamp_index(int32_t idx, uint32_t max_val) {
+static inline __attribute__((unused)) uint32_t clamp_index(int32_t idx,
+                                                           uint32_t max_val) {
   if (idx < 0) {
     return 0;
   }
@@ -61,7 +62,8 @@ static inline uint32_t clamp_index(int32_t idx, uint32_t max_val) {
 }
 
 // Helper: get frame from ring buffer (handles wrap-around)
-static inline float* get_frame(NlmFilter* self, int32_t relative_offset) {
+static inline __attribute__((unused)) float* get_frame(
+    NlmFilter* self, int32_t relative_offset) {
   int32_t idx = (int32_t)self->buffer_head -
                 (int32_t)self->config.search_range_time_future - 1 +
                 relative_offset;
