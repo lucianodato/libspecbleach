@@ -56,6 +56,18 @@ void test_noise_floor_manager_apply(void) {
   noise_floor_manager_apply(nfm, real_size, fft_size, gain_spectrum, NULL, 0.1f,
                             0.1f, NULL, 0.5f);
 
+  // Coverage: Mismatched sizes
+  // Force 0.0 gain, apply 0.1 reduction, with wrong sizes given.
+  // It should still process using the correct internal sizes and output 0.1
+  for (uint32_t k = 0; k < fft_size; k++) {
+    gain_spectrum[k] = 0.0f;
+  }
+  noise_floor_manager_apply(nfm, 999, 999, gain_spectrum, noise_profile, 0.1f,
+                            0.1f, NULL, 0.0f);
+  TEST_FLOAT_CLOSE(gain_spectrum[0], 0.1f, 0.001f);
+  TEST_FLOAT_CLOSE(gain_spectrum[fft_size - 1], 0.1f,
+                   0.001f); // symmetric copy checks out
+
   // Test with 1.0 linear reduction (should result in 1.0 floor/gain)
   for (uint32_t k = 0; k < fft_size; k++) {
     gain_spectrum[k] = 0.5f;

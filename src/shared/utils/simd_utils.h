@@ -31,6 +31,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #ifdef __AVX__
 #include <immintrin.h>
 #endif
+#ifdef __SSE4_1__
+#include <smmintrin.h>
+#endif
 #endif
 
 #ifdef __GNUC__
@@ -54,7 +57,7 @@ SB_SIMD_INLINE sb_simd_state_t sb_simd_enable_ftz_daz(void) {
 #ifdef __SSE__
   old_state = _mm_getcsr();
   _mm_setcsr(old_state | 0x8040); // MXCSR: bits 15 (FTZ) and 6 (DAZ)
-#elif defined(__ARM_NEON)
+#elif defined(__ARM_NEON) && defined(__aarch64__)
   // On ARM64, we manipulate the FPCR (Floating-point Control Register)
   // Bit 24 is FZ (Flush-to-zero)
   __asm__ __volatile__("mrs %x0, fpcr" : "=r"(old_state));
@@ -70,7 +73,7 @@ SB_SIMD_INLINE sb_simd_state_t sb_simd_enable_ftz_daz(void) {
 SB_SIMD_INLINE void sb_simd_restore_state(sb_simd_state_t state) {
 #ifdef __SSE__
   _mm_setcsr(state);
-#elif defined(__ARM_NEON)
+#elif defined(__ARM_NEON) && defined(__aarch64__)
   __asm__ __volatile__("msr fpcr, %x0" : : "r"(state));
 #else
   (void)state;
