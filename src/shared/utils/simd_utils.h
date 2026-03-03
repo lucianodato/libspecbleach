@@ -621,4 +621,26 @@ SB_SIMD_INLINE sb_vec8_t sb_sel8(sb_vec8_t mask, sb_vec8_t a, sb_vec8_t b) {
 #endif
 }
 
+/**
+ * Computes the Sum of Squared Differences (SSD) for an 8x8 patch block.
+ * Target vectors are provided as an array of 8 pre-loaded sb_vec8_t registers.
+ * Candidate pointers are loaded from row_ptrs[8] to compare against the target.
+ */
+SB_SIMD_INLINE float sb_vec8_patch_ssd(const sb_vec8_t* target_vecs,
+                                       float* const* cand_row_ptrs) {
+  sb_acc8_t sum = sb_acc8_zero();
+
+  // Unroll 8 row comparisons
+  sum = sb_acc8_add_ssd(sum, target_vecs[0], sb_load8(cand_row_ptrs[0]));
+  sum = sb_acc8_add_ssd(sum, target_vecs[1], sb_load8(cand_row_ptrs[1]));
+  sum = sb_acc8_add_ssd(sum, target_vecs[2], sb_load8(cand_row_ptrs[2]));
+  sum = sb_acc8_add_ssd(sum, target_vecs[3], sb_load8(cand_row_ptrs[3]));
+  sum = sb_acc8_add_ssd(sum, target_vecs[4], sb_load8(cand_row_ptrs[4]));
+  sum = sb_acc8_add_ssd(sum, target_vecs[5], sb_load8(cand_row_ptrs[5]));
+  sum = sb_acc8_add_ssd(sum, target_vecs[6], sb_load8(cand_row_ptrs[6]));
+  sum = sb_acc8_add_ssd(sum, target_vecs[7], sb_load8(cand_row_ptrs[7]));
+
+  return sb_acc8_hsum(sum);
+}
+
 #endif // SHARED_UTILS_SIMD_UTILS_H

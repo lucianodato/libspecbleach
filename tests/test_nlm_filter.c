@@ -351,6 +351,53 @@ void test_nlm_filter_process_patch8(void) {
   printf("✓ NLM filter patch_size=8 process tests passed\n");
 }
 
+void test_nlm_filter_snr_and_reconstruct(void) {
+  printf("Testing NLM filter SNR calculation and reconstruction...\n");
+
+  NlmFilterConfig config = {
+      .spectrum_size = 4,
+  };
+
+  NlmFilter* filter = nlm_filter_initialize(config);
+  TEST_ASSERT(filter != NULL, "NLM filter initialization should succeed");
+
+  float reference[4] = {10.0f, 20.0f, 0.0f, 40.0f};
+  float noise[4] = {2.0f, 10.0f, 0.0f, 0.0f}; // Test with zero noise bins
+  float snr[4] = {0.0f};
+
+  nlm_filter_calculate_snr(filter, reference, noise, snr);
+
+  TEST_FLOAT_CLOSE(snr[0], 5.0f, 1e-4f);
+  TEST_FLOAT_CLOSE(snr[1], 2.0f, 1e-4f);
+  TEST_ASSERT(snr[2] == 0.0f, "Zero reference with zero noise should be 0 SNR");
+  TEST_ASSERT(snr[3] > 1000.0f,
+              "High reference with zero noise should produce large SNR");
+
+  float reconstructed[4] = {0.0f};
+  float smoothed_snr[4] = {5.0f, 2.0f, 1.0f, 10.0f};
+
+  nlm_filter_reconstruct_magnitude(filter, smoothed_snr, noise, reconstructed);
+
+  TEST_FLOAT_CLOSE(reconstructed[0], 10.0f, 1e-4f); // 5 * 2
+  TEST_FLOAT_CLOSE(reconstructed[1], 20.0f, 1e-4f); // 2 * 10
+  TEST_FLOAT_CLOSE(reconstructed[2], 0.0f, 1e-4f);  // 1 * epsilon ~ 0
+  TEST_FLOAT_CLOSE(reconstructed[3], 0.0f, 1e-4f);  // 10 * epsilon ~ 0
+
+  // Null testing
+  nlm_filter_calculate_snr(NULL, reference, noise, snr);
+  nlm_filter_calculate_snr(filter, NULL, noise, snr);
+  nlm_filter_calculate_snr(filter, reference, NULL, snr);
+  nlm_filter_calculate_snr(filter, reference, noise, NULL);
+
+  nlm_filter_reconstruct_magnitude(NULL, smoothed_snr, noise, reconstructed);
+  nlm_filter_reconstruct_magnitude(filter, NULL, noise, reconstructed);
+  nlm_filter_reconstruct_magnitude(filter, smoothed_snr, NULL, reconstructed);
+  nlm_filter_reconstruct_magnitude(filter, smoothed_snr, noise, NULL);
+
+  nlm_filter_free(filter);
+  printf("✓ NLM filter SNR calculation and reconstruction tests passed\n");
+}
+
 int main(void) {
   printf("Running NLM filter tests...\n\n");
 
@@ -363,6 +410,7 @@ int main(void) {
   test_nlm_filter_h_parameter();
   test_nlm_filter_latency();
   test_nlm_filter_null_handling();
+  test_nlm_filter_snr_and_reconstruct();
 
   printf("\n✅ All NLM filter tests passed!\n");
   return 0;

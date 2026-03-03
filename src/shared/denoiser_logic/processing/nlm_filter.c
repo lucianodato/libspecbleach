@@ -24,54 +24,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <string.h>
 
 #include "shared/configurations.h"
-#include "shared/denoiser_logic/processing/nlm_filter.h"
+#include "shared/denoiser_logic/processing/nlm_filter_internal.h"
 #include "shared/utils/simd_utils.h"
-
-struct NlmFilter {
-  NlmFilterConfig config;
-
-  // Ring buffer for SNR frames
-  float** frame_buffer;   // [time_buffer_size][spectrum_size]
-  uint32_t buffer_head;   // Next write position
-  uint32_t frames_filled; // Number of frames currently in buffer
-
-  // Target frame index (allows look-ahead)
-  uint32_t target_frame_offset;
-
-  // Precomputed values
-  float h_squared;
-  float inv_h_squared; // Precomputed 1/h^2 for multiplication
-  float distance_threshold_actual;
-
-  // Scratch buffer for processing (avoid realloc)
-  float* weight_accum;
-};
-
-// Helper: clamp index to valid range
-static inline uint32_t clamp_index(int32_t idx, uint32_t max_val) {
-  if (idx < 0) {
-    return 0;
-  }
-  if ((uint32_t)idx >= max_val) {
-    return max_val - 1;
-  }
-  return (uint32_t)idx;
-}
-
-// Helper: get frame from ring buffer (handles wrap-around)
-static inline float* get_frame(NlmFilter* self, int32_t relative_offset) {
-  int32_t idx = (int32_t)self->buffer_head -
-                (int32_t)self->config.search_range_time_future - 1 +
-                relative_offset;
-
-  // Wrap around in ring buffer
-  while (idx < 0) {
-    idx += (int32_t)self->config.time_buffer_size;
-  }
-  idx %= (int32_t)self->config.time_buffer_size;
-
-  return self->frame_buffer[idx];
-}
 
 // Helper: compute squared Euclidean distance between two patches
 // Optimized with SIMD for common patch sizes (4, 8)
@@ -221,6 +175,18 @@ NlmFilter* nlm_filter_initialize(NlmFilterConfig config) {
     return NULL;
   }
 
+  // Determine runtime processor
+  self->process_fn = nlm_filter_process_generic;
+
+#if defined(__x86_64__) || defined(__i386__)
+  // If compiled with AVX dynamically built, check at runtime
+  if (__builtin_cpu_supports("avx")) {
+    // Only map if AVX architecture isn't missing globally
+    // We statically declare this so if nlm_filter_avx is built, it's used
+    self->process_fn = nlm_filter_process_avx;
+  }
+#endif
+
   return self;
 }
 
@@ -287,6 +253,20 @@ bool nlm_filter_is_ready(NlmFilter* filter) {
 }
 
 bool nlm_filter_process(NlmFilter* filter, float* smoothed_snr) {
+  if (!filter || !smoothed_snr) {
+    return false;
+  }
+
+  // Need full buffer for processing
+  if (!nlm_filter_is_ready(filter)) {
+    return false;
+  }
+
+  // Dispatch to the correct implementation
+  return filter->process_fn(filter, smoothed_snr);
+}
+
+bool nlm_filter_process_generic(NlmFilter* filter, float* smoothed_snr) {
   if (!filter || !smoothed_snr) {
     return false;
   }
@@ -374,15 +354,14 @@ bool nlm_filter_process(NlmFilter* filter, float* smoothed_snr) {
                            (cand_center + half_patch_size <= spectrum_size);
 
         if (filter->config.patch_size == 8 && safe_bounds) {
-          // 8x8 Optimized Path
-          sb_acc8_t sum = sb_acc8_zero();
-
+          // Gather candidate row pointers
+          float* cand_row_ptrs[8];
           for (int r = 0; r < 8; r++) {
-            int32_t t_cand = dt + r - 4;
-            float* cand_ptr = get_frame(filter, t_cand) + (cand_center - 4);
-            sum = sb_acc8_add_ssd(sum, target_vecs[r], sb_load8(cand_ptr));
+            cand_row_ptrs[r] =
+                get_frame(filter, dt + r - 4) + (cand_center - 4);
           }
-          distance = sb_acc8_hsum(sum);
+
+          distance = sb_vec8_patch_ssd(target_vecs, cand_row_ptrs);
         } else {
           // Fallback for boundaries or non-8x8
           distance =
