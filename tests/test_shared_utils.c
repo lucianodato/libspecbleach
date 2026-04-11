@@ -10,9 +10,9 @@
 #include "shared/utils/absolute_hearing_thresholds.h"
 #include "shared/utils/critical_bands.h"
 #include "shared/utils/masking_estimator.h"
+#include "shared/utils/simd_utils.h"
 #include "shared/utils/spectral_smoother.h"
 #include "shared/utils/transient_detector.h"
-#include "shared/utils/simd_utils.h"
 
 #define TEST_ASSERT(condition, message)                                        \
   do {                                                                         \
@@ -219,7 +219,7 @@ void test_simd_utils(void) {
   sb_vec8_t vmul = sb_mul8(v1, v2);
   sb_vec8_t vdiv = sb_div8(v1, v2);
   sb_vec8_t vmax = sb_max8(v1, v2);
-  
+
   sb_store8(out, vadd);
   TEST_FLOAT_CLOSE(out[0], 3.0f, 0.001f);
 
@@ -228,7 +228,7 @@ void test_simd_utils(void) {
   sb_vec4_t v4_add = sb_add4(v4_1, v4_2);
   sb_vec4_t v4_sub = sb_sub4(v4_1, v4_2);
   sb_vec4_t v4_mul = sb_mul4(v4_1, v4_2);
-  
+
   sb_store4(out, v4_add);
   TEST_FLOAT_CLOSE(out[0], 3.0f, 0.001f);
 
@@ -237,7 +237,7 @@ void test_simd_utils(void) {
 
   sb_vec8_t mask = sb_gt8(v1, v2);
   sb_vec8_t result = sb_sel8(mask, vsub, vmul);
-  
+
   sb_store8(out, result);
 
   sb_acc8_t acc = sb_acc8_zero();
