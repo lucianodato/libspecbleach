@@ -202,7 +202,7 @@ void test_nlm_filter_process_noisy(void) {
 
   // Output should be non-negative (SNR values)
   for (int i = 0; i < 32; i++) {
-    TEST_ASSERT(output[i] >= 0.0f, "Output SNR (generic) should be non-negative");
+    TEST_ASSERT(output[i] >= 0.0f, "Output SNR (generic) should be >= 0");
   }
 
 #if defined(__x86_64__) || defined(__i386__)
@@ -211,9 +211,9 @@ void test_nlm_filter_process_noisy(void) {
     filter->process_fn = nlm_filter_process_avx;
     TEST_ASSERT(nlm_filter_process(filter, output_avx),
                 "Process should succeed when buffer is full (AVX)");
-    
+
     for (int i = 0; i < 32; i++) {
-      TEST_ASSERT(output_avx[i] >= 0.0f, "Output SNR (AVX) should be non-negative");
+      TEST_ASSERT(output_avx[i] >= 0.0f, "Output SNR (AVX) should be >= 0");
     }
   }
 #endif
@@ -435,7 +435,7 @@ void test_nlm_filter_process_patch8(void) {
     filter->process_fn = nlm_filter_process_avx;
     TEST_ASSERT(nlm_filter_process(filter, output_avx),
                 "Process should succeed with patch_size=8 (AVX)");
-    
+
     for (int i = 0; i < 64; i++) {
       TEST_ASSERT(output_avx[i] > 0.0f, "Output AVX should be positive");
     }
