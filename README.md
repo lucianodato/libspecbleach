@@ -2,6 +2,7 @@
 
 [![build](https://github.com/lucianodato/libspecbleach/actions/workflows/build.yml/badge.svg)](https://github.com/lucianodato/libspecbleach/actions/workflows/build.yml)
 [![codecov](https://codecov.io/gh/lucianodato/libspecbleach/branch/main/graph/badge.svg)](https://codecov.io/gh/lucianodato/libspecbleach)
+[![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/lucianodato/libspecbleach?utm_source=oss&utm_medium=github&utm_campaign=lucianodato%2Flibspecbleach&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)](https://coderabbit.ai)
 [![License: LGPL v2.1](https://img.shields.io/badge/License-LGPL%20v2.1-blue.svg)](https://www.gnu.org/licenses/lgpl-2.1)
 
 C library for audio noise reduction and other spectral effects

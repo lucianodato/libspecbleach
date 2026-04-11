@@ -28,11 +28,13 @@ struct NoiseFloorManager {
   SpectralWhitening* whitening;
   float* whitening_weights;
   uint32_t real_spectrum_size;
+  uint32_t fft_size;
 };
 
-NoiseFloorManager* noise_floor_manager_initialize(const uint32_t fft_size,
-                                                  const uint32_t sample_rate,
-                                                  const uint32_t hop) {
+NoiseFloorManager* noise_floor_manager_initialize(const uint32_t fft_size) {
+  if (fft_size == 0U) {
+    return NULL;
+  }
   NoiseFloorManager* self =
       (NoiseFloorManager*)calloc(1U, sizeof(NoiseFloorManager));
   if (!self) {
@@ -40,6 +42,7 @@ NoiseFloorManager* noise_floor_manager_initialize(const uint32_t fft_size,
   }
 
   self->real_spectrum_size = (fft_size / 2U) + 1U;
+  self->fft_size = fft_size;
 
   self->whitening = spectral_whitening_initialize(fft_size);
   if (!self->whitening) {
@@ -80,6 +83,12 @@ void noise_floor_manager_apply(NoiseFloorManager* self,
                                float whitening_factor) {
   if (!self || !gain_spectrum || !noise_profile) {
     return;
+  }
+
+  if (real_spectrum_size != self->real_spectrum_size ||
+      fft_size != self->fft_size) {
+    real_spectrum_size = self->real_spectrum_size;
+    fft_size = self->fft_size;
   }
 
   if (reduction_amount >= 0.999f && tonal_reduction_amount >= 0.999f) {

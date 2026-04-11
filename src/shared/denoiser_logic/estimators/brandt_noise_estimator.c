@@ -139,7 +139,7 @@ static float calculate_ad_norm(const float* sorted, uint32_t q, float mu,
   float mu_inv = 1.0f / mu;
   float exp_b_mu = expf(-b * mu_inv);
   float denom = 1.0f - exp_b_mu;
-  if (fabsf(denom) < 1e-12f) {
+  if (fabsf(denom) < SPECTRAL_EPSILON) {
     return 1.0f;
   }
 

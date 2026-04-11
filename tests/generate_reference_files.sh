@@ -36,7 +36,6 @@ echo "Generating spectral denoiser reference..."
     --whitening 50.0 \
     --smoothing 0.0 \
     --masking-depth 0.5 \
-    --masking-elasticity 0.1 \
     tests/test_data/Speech.wav tests/test_data/Speech_denoised.wav
 
 echo "Generating adaptive denoiser reference..."
@@ -45,7 +44,6 @@ echo "Generating adaptive denoiser reference..."
     --whitening 50.0 \
     --smoothing 0.0 \
     --masking-depth 0.5 \
-    --masking-elasticity 0.1 \
     --adaptive \
     --frame-size 20.0 \
     --learn-frames 0 \
