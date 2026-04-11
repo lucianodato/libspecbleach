@@ -111,7 +111,7 @@ bool nlm_filter_process_avx(NlmFilter* filter, float* smoothed_snr) {
       current_paste_limit = spectrum_size - block_start;
     }
 
-    // Silence optimization: bypass O(N^2) search explosion if block is practically zero
+    // Silence optimization: bypass search explosion if practically zero
     float target_snr_sum = 0.0F;
     for (uint32_t i = 0; i < current_paste_limit; i++) {
       target_snr_sum += target_frame[block_start + i];
@@ -179,11 +179,6 @@ bool nlm_filter_process_avx(NlmFilter* filter, float* smoothed_snr) {
         }
 
         float* cand_frame = get_frame(filter, dt);
-
-        uint32_t current_paste_limit = paste_size;
-        if (block_start + paste_size > spectrum_size) {
-          current_paste_limit = spectrum_size - block_start;
-        }
 
         for (uint32_t i = 0; i < current_paste_limit; i++) {
           uint32_t target_bin = block_start + i;

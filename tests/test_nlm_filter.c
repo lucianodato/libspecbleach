@@ -305,6 +305,44 @@ void test_nlm_filter_null_handling(void) {
   printf("✓ NLM filter NULL handling tests passed\n");
 }
 
+void test_nlm_filter_process_silent(void) {
+  printf("Testing NLM filter process with silent input...\n");
+
+  NlmFilterConfig config = {
+      .spectrum_size = 32,
+      .time_buffer_size = 5,
+      .patch_size = 4,
+      .paste_block_size = 2,
+      .search_range_freq = 2,
+      .search_range_time_past = 2,
+      .search_range_time_future = 2,
+      .h_parameter = 1.0f,
+  };
+
+  NlmFilter* filter = nlm_filter_initialize(config);
+  TEST_ASSERT(filter != NULL, "NLM filter initialization should succeed");
+
+  float frame[32] = {0.0f};
+  float output[32];
+
+  // Fill buffer
+  for (int f = 0; f < 5; f++) {
+    nlm_filter_push_frame(filter, frame);
+  }
+
+  // Process
+  TEST_ASSERT(nlm_filter_process(filter, output),
+              "Process should succeed when buffer is full");
+
+  // With silent input, output should be zero
+  for (int i = 0; i < 32; i++) {
+    TEST_FLOAT_CLOSE(output[i], 0.0f, 1e-6f);
+  }
+
+  nlm_filter_free(filter);
+  printf("✓ NLM filter silent process tests passed\n");
+}
+
 void test_nlm_filter_process_patch8(void) {
   printf("Testing NLM filter process with patch_size=8...\n");
 
@@ -405,6 +443,7 @@ int main(void) {
   test_nlm_filter_push_frame();
   test_nlm_filter_process_uniform();
   test_nlm_filter_process_noisy();
+  test_nlm_filter_process_silent();
   test_nlm_filter_process_patch8();
   test_nlm_filter_reset();
   test_nlm_filter_h_parameter();
