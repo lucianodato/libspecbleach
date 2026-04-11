@@ -12,6 +12,7 @@
 #include "shared/utils/masking_estimator.h"
 #include "shared/utils/spectral_smoother.h"
 #include "shared/utils/transient_detector.h"
+#include "shared/utils/simd_utils.h"
 
 #define TEST_ASSERT(condition, message)                                        \
   do {                                                                         \
@@ -202,6 +203,52 @@ void test_transient_detector(void) {
   printf("✓ Transient Detector tests passed\n");
 }
 
+void test_simd_utils(void) {
+  printf("Testing SIMD Utils...\n");
+
+  sb_simd_state_t state = sb_simd_enable_ftz_daz();
+
+  float buf[8] = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f};
+  float out[8] = {0.0f};
+
+  sb_vec8_t v1 = sb_load8(buf);
+  sb_vec8_t v2 = sb_set8(2.0f);
+
+  sb_vec8_t vadd = sb_add8(v1, v2);
+  sb_vec8_t vsub = sb_sub8(v1, v2);
+  sb_vec8_t vmul = sb_mul8(v1, v2);
+  sb_vec8_t vdiv = sb_div8(v1, v2);
+  sb_vec8_t vmax = sb_max8(v1, v2);
+  
+  sb_store8(out, vadd);
+  TEST_FLOAT_CLOSE(out[0], 3.0f, 0.001f);
+
+  sb_vec4_t v4_1 = sb_load4(buf);
+  sb_vec4_t v4_2 = sb_set4(2.0f);
+  sb_vec4_t v4_add = sb_add4(v4_1, v4_2);
+  sb_vec4_t v4_sub = sb_sub4(v4_1, v4_2);
+  sb_vec4_t v4_mul = sb_mul4(v4_1, v4_2);
+  
+  sb_store4(out, v4_add);
+  TEST_FLOAT_CLOSE(out[0], 3.0f, 0.001f);
+
+  float ssd4 = sb_vec4_ssd(v4_1, v4_2);
+  (void)ssd4;
+
+  sb_vec8_t mask = sb_gt8(v1, v2);
+  sb_vec8_t result = sb_sel8(mask, vsub, vmul);
+  
+  sb_store8(out, result);
+
+  sb_acc8_t acc = sb_acc8_zero();
+  acc = sb_acc8_add_ssd(acc, v1, v2);
+  float hsum = sb_acc8_hsum(acc);
+  (void)hsum;
+
+  sb_simd_restore_state(state);
+  printf("✓ SIMD Utils tests passed\n");
+}
+
 int main(void) {
   printf("Running pre-estimation tests...\n");
 
@@ -210,6 +257,7 @@ int main(void) {
   test_masking_estimator();
   test_spectral_smoother();
   test_transient_detector();
+  test_simd_utils();
 
   printf("✅ All pre-estimation tests passed!\n");
   return 0;

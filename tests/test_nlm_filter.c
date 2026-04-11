@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "shared/denoiser_logic/processing/nlm_filter.h"
+#include "shared/denoiser_logic/processing/nlm_filter_internal.h"
 
 #define TEST_ASSERT(condition, message)                                        \
   do {                                                                         \
@@ -133,14 +133,28 @@ void test_nlm_filter_process_uniform(void) {
     nlm_filter_push_frame(filter, frame);
   }
 
-  // Process
+  // Process generic
+  filter->process_fn = nlm_filter_process_generic;
   TEST_ASSERT(nlm_filter_process(filter, output),
-              "Process should succeed when buffer is full");
+              "Process should succeed when buffer is full (generic)");
 
   // With uniform input, output should be close to input
   for (int i = 0; i < 32; i++) {
     TEST_FLOAT_CLOSE(output[i], 5.0f, 0.01f);
   }
+
+#if defined(__x86_64__) || defined(__i386__)
+  if (__builtin_cpu_supports("avx")) {
+    float output_avx[32];
+    filter->process_fn = nlm_filter_process_avx;
+    TEST_ASSERT(nlm_filter_process(filter, output_avx),
+                "Process should succeed when buffer is full (AVX)");
+    
+    for (int i = 0; i < 32; i++) {
+      TEST_FLOAT_CLOSE(output_avx[i], 5.0f, 0.01f);
+    }
+  }
+#endif
 
   nlm_filter_free(filter);
   printf("✓ NLM filter uniform process tests passed\n");
@@ -180,13 +194,29 @@ void test_nlm_filter_process_noisy(void) {
   }
 
   float output[32];
+  
+  // Process generic
+  filter->process_fn = nlm_filter_process_generic;
   TEST_ASSERT(nlm_filter_process(filter, output),
-              "Process should succeed when buffer is full");
+              "Process should succeed when buffer is full (generic)");
 
   // Output should be non-negative (SNR values)
   for (int i = 0; i < 32; i++) {
-    TEST_ASSERT(output[i] >= 0.0f, "Output SNR should be non-negative");
+    TEST_ASSERT(output[i] >= 0.0f, "Output SNR (generic) should be non-negative");
   }
+
+#if defined(__x86_64__) || defined(__i386__)
+  if (__builtin_cpu_supports("avx")) {
+    float output_avx[32];
+    filter->process_fn = nlm_filter_process_avx;
+    TEST_ASSERT(nlm_filter_process(filter, output_avx),
+                "Process should succeed when buffer is full (AVX)");
+    
+    for (int i = 0; i < 32; i++) {
+      TEST_ASSERT(output_avx[i] >= 0.0f, "Output SNR (AVX) should be non-negative");
+    }
+  }
+#endif
 
   nlm_filter_free(filter);
   printf("✓ NLM filter noisy process tests passed\n");
@@ -330,14 +360,27 @@ void test_nlm_filter_process_silent(void) {
     nlm_filter_push_frame(filter, frame);
   }
 
-  // Process
+  // Process generic
+  filter->process_fn = nlm_filter_process_generic;
   TEST_ASSERT(nlm_filter_process(filter, output),
-              "Process should succeed when buffer is full");
+              "Process should succeed when buffer is full (generic)");
 
   // With silent input, output should be zero
   for (int i = 0; i < 32; i++) {
     TEST_FLOAT_CLOSE(output[i], 0.0f, 1e-6f);
   }
+
+#if defined(__x86_64__) || defined(__i386__)
+  if (__builtin_cpu_supports("avx")) {
+    float output_avx[32];
+    filter->process_fn = nlm_filter_process_avx;
+    TEST_ASSERT(nlm_filter_process(filter, output_avx),
+                "Process should succeed when buffer is full (AVX)");
+    for (int i = 0; i < 32; i++) {
+      TEST_FLOAT_CLOSE(output_avx[i], 0.0f, 1e-6f);
+    }
+  }
+#endif
 
   nlm_filter_free(filter);
   printf("✓ NLM filter silent process tests passed\n");
@@ -376,13 +419,28 @@ void test_nlm_filter_process_patch8(void) {
     nlm_filter_push_frame(filter, frame);
   }
 
+  // Process generic
+  filter->process_fn = nlm_filter_process_generic;
   TEST_ASSERT(nlm_filter_process(filter, output),
-              "Process should succeed with patch_size=8");
+              "Process should succeed with patch_size=8 (generic)");
 
   // Verify output (should be smoothed but not zero)
   for (int i = 0; i < 64; i++) {
     TEST_ASSERT(output[i] > 0.0f, "Output should be positive");
   }
+
+#if defined(__x86_64__) || defined(__i386__)
+  if (__builtin_cpu_supports("avx")) {
+    float output_avx[64];
+    filter->process_fn = nlm_filter_process_avx;
+    TEST_ASSERT(nlm_filter_process(filter, output_avx),
+                "Process should succeed with patch_size=8 (AVX)");
+    
+    for (int i = 0; i < 64; i++) {
+      TEST_ASSERT(output_avx[i] > 0.0f, "Output AVX should be positive");
+    }
+  }
+#endif
 
   free(alpha);
   nlm_filter_free(filter);

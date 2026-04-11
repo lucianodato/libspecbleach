@@ -65,6 +65,8 @@ void test_noise_floor_manager_apply(void) {
   }
   noise_floor_manager_apply(nfm, 999, 999, gain_spectrum, noise_profile, 0.1f,
                             0.1f, NULL, 0.0f);
+  noise_floor_manager_apply(nfm, real_size, 999, gain_spectrum, noise_profile, 0.1f,
+                            0.1f, NULL, 0.0f);
   TEST_FLOAT_CLOSE(gain_spectrum[0], 0.1f, 0.001f);
   TEST_FLOAT_CLOSE(gain_spectrum[fft_size - 1], 0.1f,
                    0.001f); // symmetric copy checks out
