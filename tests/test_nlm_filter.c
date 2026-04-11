@@ -149,7 +149,7 @@ void test_nlm_filter_process_uniform(void) {
     filter->process_fn = nlm_filter_process_avx;
     TEST_ASSERT(nlm_filter_process(filter, output_avx),
                 "Process should succeed when buffer is full (AVX)");
-    
+
     for (int i = 0; i < 32; i++) {
       TEST_FLOAT_CLOSE(output_avx[i], 5.0f, 0.01f);
     }
@@ -194,7 +194,7 @@ void test_nlm_filter_process_noisy(void) {
   }
 
   float output[32];
-  
+
   // Process generic
   filter->process_fn = nlm_filter_process_generic;
   TEST_ASSERT(nlm_filter_process(filter, output),
