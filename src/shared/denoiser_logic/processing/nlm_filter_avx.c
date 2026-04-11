@@ -106,6 +106,20 @@ bool nlm_filter_process_avx(NlmFilter* filter, float* smoothed_snr) {
       block_center = spectrum_size - 1;
     }
 
+    uint32_t current_paste_limit = paste_size;
+    if (block_start + paste_size > spectrum_size) {
+      current_paste_limit = spectrum_size - block_start;
+    }
+
+    // Silence optimization: bypass O(N^2) search explosion if block is practically zero
+    float target_snr_sum = 0.0F;
+    for (uint32_t i = 0; i < current_paste_limit; i++) {
+      target_snr_sum += target_frame[block_start + i];
+    }
+    if (target_snr_sum < 1e-6F) {
+      continue;
+    }
+
     float current_inv_h2 = filter->inv_h_squared;
     float current_dist_threshold = filter->distance_threshold_actual;
 
