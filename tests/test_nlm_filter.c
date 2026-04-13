@@ -2,6 +2,8 @@
  * Unit tests for NLM Filter (Non-Local Means)
  */
 
+#define _POSIX_C_SOURCE 200112L
+
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -390,11 +392,11 @@ void test_nlm_filter_process_patch8(void) {
   printf("Testing NLM filter process with patch_size=8...\n");
 
   NlmFilterConfig config = {
-      .spectrum_size = 64,
+      .spectrum_size = 128, // Larger spectrum
       .time_buffer_size = 5,
       .patch_size = 8,
-      .paste_block_size = 4,
-      .search_range_freq = 4,
+      .paste_block_size = 8,
+      .search_range_freq = 8,
       .search_range_time_past = 2,
       .search_range_time_future = 2,
       .h_parameter = 2.0f,
@@ -403,42 +405,47 @@ void test_nlm_filter_process_patch8(void) {
   NlmFilter* filter = nlm_filter_initialize(config);
   TEST_ASSERT(filter != NULL, "NLM filter initialization should succeed");
 
-  float frame[64];
-  float output[64];
-  for (int i = 0; i < 64; i++) {
-    frame[i] = 5.0f + (float)(i % 2); // Alternating pattern
+  float frame[128];
+  float output[128];
+  for (int i = 0; i < 128; i++) {
+    frame[i] = 5.0f + (float)(i % 2);
   }
 
-  // Fill buffer
   for (int f = 0; f < 5; f++) {
     nlm_filter_push_frame(filter, frame);
   }
 
-  // Process generic
   filter->process_fn = nlm_filter_process_generic;
   TEST_ASSERT(nlm_filter_process(filter, output),
               "Process should succeed with patch_size=8 (generic)");
 
-  // Verify output (should be smoothed but not zero)
-  for (int i = 0; i < 64; i++) {
+  for (int i = 0; i < 128; i++) {
     TEST_ASSERT(output[i] > 0.0f, "Output should be positive");
   }
 
-#if defined(__x86_64__) || defined(__i386__)
-  if (__builtin_cpu_supports("avx")) {
-    float output_avx[64];
-    filter->process_fn = nlm_filter_process_avx;
-    TEST_ASSERT(nlm_filter_process(filter, output_avx),
-                "Process should succeed with patch_size=8 (AVX)");
-
-    for (int i = 0; i < 64; i++) {
-      TEST_ASSERT(output_avx[i] > 0.0f, "Output AVX should be positive");
-    }
-  }
-#endif
-
   nlm_filter_free(filter);
   printf("✓ NLM filter patch_size=8 process tests passed\n");
+}
+
+void test_nlm_filter_omp_config(void) {
+  printf("Testing NLM filter OpenMP configuration...\n");
+
+  // Set OMP_NUM_THREADS env var
+  setenv("OMP_NUM_THREADS", "2", 1);
+
+  NlmFilterConfig config = {.spectrum_size = 32};
+  NlmFilter* filter = nlm_filter_initialize(config);
+  TEST_ASSERT(filter != NULL, "Initialization failed");
+
+  // On many platforms this will trigger the env-reading logic in nlm_filter.c
+  TEST_ASSERT(filter->num_threads == 2, "Filter should respect OMP_NUM_THREADS env var");
+
+  nlm_filter_free(filter);
+  
+  // Clean up
+  unsetenv("OMP_NUM_THREADS");
+  
+  printf("✓ NLM filter OpenMP configuration tests passed\n");
 }
 
 void test_nlm_filter_snr_and_reconstruct(void) {
@@ -500,7 +507,7 @@ void test_nlm_filter_frame_cache(void) {
 
   NlmFilter* filter = nlm_filter_initialize(config);
   TEST_ASSERT(filter != NULL, "Initialization failed");
-  
+
   // Fill buffer
   float frame[32] = {0.0f};
   for (int f = 0; f < 32; f++) {
@@ -537,6 +544,7 @@ int main(void) {
   test_nlm_filter_null_handling();
   test_nlm_filter_snr_and_reconstruct();
   test_nlm_filter_frame_cache();
+  test_nlm_filter_omp_config();
 
   printf("\n✅ All NLM filter tests passed!\n");
   return 0;

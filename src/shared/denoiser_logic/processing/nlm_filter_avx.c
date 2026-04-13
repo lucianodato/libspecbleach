@@ -174,26 +174,26 @@ bool nlm_filter_process_avx(NlmFilter* filter, float* smoothed_snr) {
           uint32_t cand_f_start = cand_center - 4;
 
           sum = sb_acc8_add_ssd(sum, target_vecs[0],
-                                 sb_load8(cand_rows[0] + cand_f_start));
+                                sb_load8(cand_rows[0] + cand_f_start));
           sum = sb_acc8_add_ssd(sum, target_vecs[1],
-                                 sb_load8(cand_rows[1] + cand_f_start));
+                                sb_load8(cand_rows[1] + cand_f_start));
           sum = sb_acc8_add_ssd(sum, target_vecs[2],
-                                 sb_load8(cand_rows[2] + cand_f_start));
+                                sb_load8(cand_rows[2] + cand_f_start));
           sum = sb_acc8_add_ssd(sum, target_vecs[3],
-                                 sb_load8(cand_rows[3] + cand_f_start));
+                                sb_load8(cand_rows[3] + cand_f_start));
           sum = sb_acc8_add_ssd(sum, target_vecs[4],
-                                 sb_load8(cand_rows[4] + cand_f_start));
+                                sb_load8(cand_rows[4] + cand_f_start));
           sum = sb_acc8_add_ssd(sum, target_vecs[5],
-                                 sb_load8(cand_rows[5] + cand_f_start));
+                                sb_load8(cand_rows[5] + cand_f_start));
           sum = sb_acc8_add_ssd(sum, target_vecs[6],
-                                 sb_load8(cand_rows[6] + cand_f_start));
+                                sb_load8(cand_rows[6] + cand_f_start));
           sum = sb_acc8_add_ssd(sum, target_vecs[7],
-                                 sb_load8(cand_rows[7] + cand_f_start));
+                                sb_load8(cand_rows[7] + cand_f_start));
 
           distance = sb_acc8_hsum(sum);
         } else {
           distance = compute_patch_distance_avx(filter, 0, block_center, dt,
-                                                 cand_center);
+                                                cand_center);
         }
 
         if (distance > current_dist_threshold) {
