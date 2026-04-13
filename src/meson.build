@@ -16,6 +16,7 @@ if has_avx_support and (current_arch == 'x86' or current_arch == 'x86_64')
   libspecbleach_avx = static_library('specbleach_avx',
     avx_sources,
     c_args: lib_c_args + ['-mavx'],
+    dependencies: dep,
     include_directories: [inc, src_inc]
   )
   

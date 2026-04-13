@@ -54,6 +54,7 @@ If you wish to compile yourself and install the library you will need:
 - [Meson](https://mesonbuild.com/) build system (0.60.0 or newer)
 - [Ninja](https://ninja-build.org/) build tool
 - [FFTW3](http://www.fftw.org/) library (float version)
+- [OpenMP](https://www.openmp.org/) for parallel processing
 - [libsndfile](https://github.com/libsndfile/libsndfile) (optional, for examples)
 
 ## Installation
@@ -81,7 +82,13 @@ You can configure the build using `-Doption=value`:
 - `lv2dir`: Install directory for LV2 bundles (absolute path or relative to prefix) (default: '').
 
 > [!IMPORTANT]
-> **Critical Performance Note for Packagers**: The advanced "2D Denoising" (NLM) feature is computationally intensive and relies heavily on SIMD vectorization and function inlining. You **MUST** compile with `--buildtype=release` (or `-O3`) to ensure usability. Debug or unoptimized builds will result in excessive CPU usage and audio dropouts/xruns.
+> **Critical Performance Note for Packagers**: The advanced "2D Denoising" (NLM) feature is computationally intensive and relies heavily on SIMD vectorization, function inlining, and **multi-core parallelization via OpenMP**. 
+>
+> You **MUST** compile with `--buildtype=release` (or `-O3`) to ensure usability. Debug or unoptimized builds will result in excessive CPU usage and audio dropouts/xruns.
+>
+> **Note on DSP Usage**: In DAW environments (like Ardour), the multi-threaded NLM processing may cause the DSP meter to show high usage peaks during the processing cycle. 
+> 
+> The library defaults to **4 threads** for NLM processing if not specified. You can fine-tune the thread usage using the `OMP_NUM_THREADS` environment variable (e.g., `export OMP_NUM_THREADS=2`). Lower thread counts will result in lower DSP peaks but higher total processing time per buffer.
 
 Example for a static build with examples:
 ```bash

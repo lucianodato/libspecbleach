@@ -38,9 +38,6 @@ static float compute_patch_distance(NlmFilter* self, int32_t target_time,
   const uint32_t half_patch = patch_size / 2;
   const uint32_t spectrum_size = self->config.spectrum_size;
 
-  // Check if we can use the fast SIMD path (no frequency boundary checking
-  // needed) Frequency indices must satisfy: 0 <= freq - half_patch  AND freq -
-  // half_patch + patch_size <= spectrum_size
   bool safe_bounds =
       (target_freq >= half_patch) &&
       (target_freq + patch_size - half_patch <= spectrum_size) &&
@@ -51,34 +48,20 @@ static float compute_patch_distance(NlmFilter* self, int32_t target_time,
     int32_t t_target = target_time + (int32_t)dt - (int32_t)half_patch;
     int32_t t_cand = candidate_time + (int32_t)dt - (int32_t)half_patch;
 
-    // Clamp time indices (always needed as time buffer is circular/finite)
-    // But get_frame handles the circular logic relative to buffer_head if we
-    // pass relative offset wait, get_frame argument is 'relative_offset' from
-    // CURRENT time (0) The arguments t_target/t_cand passed here are relative
-    // to current frame? In caller: compute_patch_distance(filter, 0, ...) ->
-    // target_time is 0 (current). So 'dt' is relative offset. We don't need to
-    // clamp 'dt' against buffer size, get_frame handles wrapping. BUT we
-    // usually want to search only within valid history. 'target_time' is 0.
-    // 'candidate_time' is 'dt' (search loop var). loop dt (patch row): operates
-    // on row 't' of the patch. relative offset = time + dt - half_patch.
-
-    float* target_frame = get_frame(self, t_target);
-    float* cand_frame = get_frame(self, t_cand);
+    const float* target_frame = get_frame(self, t_target);
+    const float* cand_frame = get_frame(self, t_cand);
 
     if (safe_bounds && patch_size == 8) {
-      // Fast Path: Direct pointer access + SIMD for 8x8
       distance +=
           sb_vec8_ssd(sb_load8(target_frame + (target_freq - half_patch)),
                       sb_load8(cand_frame + (candidate_freq - half_patch)));
 
     } else if (safe_bounds && patch_size == 4) {
-      // Fast Path for 4x4
       distance +=
           sb_vec4_ssd(sb_load4(target_frame + (target_freq - half_patch)),
                       sb_load4(cand_frame + (candidate_freq - half_patch)));
 
     } else {
-      // Slow safe path with clamping
       for (uint32_t df = 0; df < patch_size; df++) {
         uint32_t f_target = clamp_index(
             (int32_t)target_freq + (int32_t)df - (int32_t)half_patch,
@@ -97,7 +80,6 @@ static float compute_patch_distance(NlmFilter* self, int32_t target_time,
 }
 
 NlmFilter* nlm_filter_initialize(NlmFilterConfig config) {
-  // Validate configuration
   if (config.spectrum_size == 0) {
     return NULL;
   }
@@ -107,7 +89,6 @@ NlmFilter* nlm_filter_initialize(NlmFilterConfig config) {
     return NULL;
   }
 
-  // Apply defaults for zero values
   self->config = config;
   if (self->config.patch_size == 0) {
     self->config.patch_size = NLM_PATCH_SIZE;
@@ -128,26 +109,32 @@ NlmFilter* nlm_filter_initialize(NlmFilterConfig config) {
     self->config.h_parameter = NLM_DEFAULT_H_PARAMETER;
   }
 
-  // Compute time buffer size from search ranges
   if (self->config.time_buffer_size == 0) {
     self->config.time_buffer_size = self->config.search_range_time_past +
                                     self->config.search_range_time_future + 1;
   }
 
-  // Precompute values
   self->h_squared = self->config.h_parameter * self->config.h_parameter;
   self->inv_h_squared = 1.0f / self->h_squared;
   if (self->config.distance_threshold <= 0.0F) {
-    // Default: 4 * h² (patches 2× noise variance away contribute < 2%)
     self->distance_threshold_actual = 4.0F * self->h_squared;
   } else {
     self->distance_threshold_actual = self->config.distance_threshold;
   }
 
-  // Target frame is at the "past" offset to allow look-ahead
   self->target_frame_offset = self->config.search_range_time_past;
 
-  // Allocate ring buffer for frames
+  self->num_threads = 4;
+#ifdef _OPENMP
+  const char* omp_env = getenv("OMP_NUM_THREADS");
+  if (omp_env) {
+    int val = atoi(omp_env);
+    if (val > 0) {
+      self->num_threads = (uint32_t)val;
+    }
+  }
+#endif
+
   self->frame_buffer =
       (float**)calloc(self->config.time_buffer_size, sizeof(float*));
   if (!self->frame_buffer) {
@@ -167,7 +154,6 @@ NlmFilter* nlm_filter_initialize(NlmFilterConfig config) {
   self->buffer_head = 0;
   self->frames_filled = 0;
 
-  // Allocate scratch buffer
   self->weight_accum =
       (float*)calloc(self->config.spectrum_size, sizeof(float));
   if (!self->weight_accum) {
@@ -175,14 +161,18 @@ NlmFilter* nlm_filter_initialize(NlmFilterConfig config) {
     return NULL;
   }
 
-  // Determine runtime processor
+  self->total_time_span = self->config.search_range_time_past +
+                          self->config.search_range_time_future + 1 + 8;
+  self->frame_ptrs = (float**)calloc(self->total_time_span, sizeof(float*));
+  if (!self->frame_ptrs) {
+    nlm_filter_free(self);
+    return NULL;
+  }
+
   self->process_fn = nlm_filter_process_generic;
 
 #if defined(__x86_64__) || defined(__i386__)
-  // If compiled with AVX dynamically built, check at runtime
   if (__builtin_cpu_supports("avx")) {
-    // Only map if AVX architecture isn't missing globally
-    // We statically declare this so if nlm_filter_avx is built, it's used
     self->process_fn = nlm_filter_process_avx;
   }
 #endif
@@ -208,6 +198,10 @@ void nlm_filter_free(NlmFilter* filter) {
     free(filter->weight_accum);
   }
 
+  if (filter->frame_ptrs) {
+    free(filter->frame_ptrs);
+  }
+
   free(filter);
 }
 
@@ -220,7 +214,6 @@ void nlm_filter_set_h_parameter(NlmFilter* filter, float h) {
   filter->h_squared = h * h;
   filter->inv_h_squared = 1.0f / filter->h_squared;
 
-  // Update distance threshold if using default
   if (filter->config.distance_threshold <= 0.0F) {
     filter->distance_threshold_actual = 4.0F * filter->h_squared;
   }
@@ -231,15 +224,12 @@ void nlm_filter_push_frame(NlmFilter* filter, const float* snr_frame) {
     return;
   }
 
-  // Copy frame to ring buffer
   memcpy(filter->frame_buffer[filter->buffer_head], snr_frame,
          filter->config.spectrum_size * sizeof(float));
 
-  // Advance head
   filter->buffer_head =
       (filter->buffer_head + 1) % filter->config.time_buffer_size;
 
-  // Track fill level
   if (filter->frames_filled < filter->config.time_buffer_size) {
     filter->frames_filled++;
   }
@@ -257,21 +247,22 @@ bool nlm_filter_process(NlmFilter* filter, float* smoothed_snr) {
     return false;
   }
 
-  // Need full buffer for processing
   if (!nlm_filter_is_ready(filter)) {
     return false;
   }
 
-  // Dispatch to the correct implementation
   return filter->process_fn(filter, smoothed_snr);
 }
+
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 
 bool nlm_filter_process_generic(NlmFilter* filter, float* smoothed_snr) {
   if (!filter || !smoothed_snr) {
     return false;
   }
 
-  // Need full buffer for processing
   if (!nlm_filter_is_ready(filter)) {
     return false;
   }
@@ -286,19 +277,21 @@ bool nlm_filter_process_generic(NlmFilter* filter, float* smoothed_snr) {
   const int32_t search_time_future =
       (int32_t)filter->config.search_range_time_future;
 
-  // Get target frame (center of buffer)
-  float* target_frame = get_frame(filter, 0);
+  populate_frame_ptrs(filter);
 
-  // Initialize output with zeros
+  float* target_frame = cached_get_frame(filter, 0);
+
   memset(smoothed_snr, 0, spectrum_size * sizeof(float));
 
-  // Use preallocated buffer
   float* weight_sum = filter->weight_accum;
-  // Clear weight buffer for new frame
   memset(weight_sum, 0, spectrum_size * sizeof(float));
 
-  // Process using pasted block optimization
-  // For each paste block position in frequency
+  const float current_inv_h2 = filter->inv_h_squared;
+  const float current_dist_threshold = filter->distance_threshold_actual;
+
+#if SB_HAS_OPENMP
+#pragma omp parallel for schedule(dynamic) num_threads(filter->num_threads)
+#endif
   for (uint32_t block_start = 0; block_start < spectrum_size;
        block_start += paste_size) {
 
@@ -312,7 +305,6 @@ bool nlm_filter_process_generic(NlmFilter* filter, float* smoothed_snr) {
       current_paste_limit = spectrum_size - block_start;
     }
 
-    // Silence optimization: bypass search explosion if practically zero
     float target_snr_sum = 0.0F;
     for (uint32_t i = 0; i < current_paste_limit; i++) {
       target_snr_sum += target_frame[block_start + i];
@@ -321,31 +313,18 @@ bool nlm_filter_process_generic(NlmFilter* filter, float* smoothed_snr) {
       continue;
     }
 
-    float current_inv_h2 = filter->inv_h_squared;
-    float current_dist_threshold = filter->distance_threshold_actual;
-
-    // --- Optimization: Register Blocking for Target Patch ---
-    // We load the 8x8 target patch ONCE here, keeping it in registers
-    // to avoid reloading it ~350 times in the inner loop.
-
-    // Storage for pre-loaded target patch (flattened 8x8)
     sb_vec8_t target_vecs[8];
-
-    // Pre-load Target Patch
-    // Use nlm_filter 8x8 constraints directly for max speed
-    const uint32_t half_patch_size =
-        4; // Hardcoded for 8x8 optimized path checks
+    const uint32_t half_patch_size = 4;
 
     bool safe_block = (block_center >= half_patch_size) &&
                       (block_center + half_patch_size <= spectrum_size);
 
     if (filter->config.patch_size == 8) {
-      // Unroll loading for 8x8
       for (int r = 0; r < 8; r++) {
         if (safe_block) {
           int32_t t_offset = (int32_t)r - (int32_t)half_patch_size;
-          float* row_ptr =
-              get_frame(filter, t_offset) + (block_center - half_patch_size);
+          float* row_ptr = cached_get_frame(filter, t_offset) +
+                           (block_center - half_patch_size);
           target_vecs[r] = sb_load8(row_ptr);
         } else {
           target_vecs[r] = sb_set8(0.0f);
@@ -353,8 +332,14 @@ bool nlm_filter_process_generic(NlmFilter* filter, float* smoothed_snr) {
       }
     }
 
-    // Search over time and frequency window
     for (int32_t dt = -search_time_past; dt <= search_time_future; dt++) {
+      float* cand_rows[8];
+      if (filter->config.patch_size == 8) {
+        for (int r = 0; r < 8; r++) {
+          cand_rows[r] = cached_get_frame(filter, dt + r - 4);
+        }
+      }
+
       for (int32_t df = -(int32_t)search_freq; df <= (int32_t)search_freq;
            df++) {
 
@@ -363,40 +348,47 @@ bool nlm_filter_process_generic(NlmFilter* filter, float* smoothed_snr) {
 
         float distance = 0.0F;
 
-        // --- INLINED DISTANCE CALCULATION WITH REGISTER BLOCKING ---
         bool safe_bounds = safe_block && (cand_center >= half_patch_size) &&
                            (cand_center + half_patch_size <= spectrum_size);
 
         if (filter->config.patch_size == 8 && safe_bounds) {
-          // Gather candidate row pointers
-          float* cand_row_ptrs[8];
-          for (int r = 0; r < 8; r++) {
-            cand_row_ptrs[r] =
-                get_frame(filter, dt + r - 4) + (cand_center - 4);
-          }
+          sb_acc8_t sum = sb_acc8_zero();
+          uint32_t cand_f_start = cand_center - 4;
 
-          distance = sb_vec8_patch_ssd(target_vecs, cand_row_ptrs);
+          sum = sb_acc8_add_ssd(sum, target_vecs[0],
+                                sb_load8(cand_rows[0] + cand_f_start));
+          sum = sb_acc8_add_ssd(sum, target_vecs[1],
+                                sb_load8(cand_rows[1] + cand_f_start));
+          sum = sb_acc8_add_ssd(sum, target_vecs[2],
+                                sb_load8(cand_rows[2] + cand_f_start));
+          sum = sb_acc8_add_ssd(sum, target_vecs[3],
+                                sb_load8(cand_rows[3] + cand_f_start));
+          sum = sb_acc8_add_ssd(sum, target_vecs[4],
+                                sb_load8(cand_rows[4] + cand_f_start));
+          sum = sb_acc8_add_ssd(sum, target_vecs[5],
+                                sb_load8(cand_rows[5] + cand_f_start));
+          sum = sb_acc8_add_ssd(sum, target_vecs[6],
+                                sb_load8(cand_rows[6] + cand_f_start));
+          sum = sb_acc8_add_ssd(sum, target_vecs[7],
+                                sb_load8(cand_rows[7] + cand_f_start));
+
+          distance = sb_acc8_hsum(sum);
         } else {
-          // Fallback for boundaries or non-8x8
           distance =
               compute_patch_distance(filter, 0, block_center, dt, cand_center);
         }
 
-        // Distance thresholding (early termination optimization)
         if (distance > current_dist_threshold) {
           continue;
         }
 
-        // Compute weight
-        float weight = expf(-distance * current_inv_h2);
+        float weight = sb_fast_expf(-distance * current_inv_h2);
         if (weight < NLM_MIN_WEIGHT) {
           continue;
         }
 
-        // Get candidate frame
-        float* cand_frame = get_frame(filter, dt);
+        float* cand_frame = cached_get_frame(filter, dt);
 
-        // Apply weight to all bins in the paste block
         for (uint32_t i = 0; i < current_paste_limit; i++) {
           uint32_t target_bin = block_start + i;
           uint32_t cand_bin =
@@ -409,12 +401,10 @@ bool nlm_filter_process_generic(NlmFilter* filter, float* smoothed_snr) {
     }
   }
 
-  // Normalize by weight sum
   for (uint32_t k = 0; k < spectrum_size; k++) {
     if (weight_sum[k] > NLM_MIN_WEIGHT) {
       smoothed_snr[k] /= weight_sum[k];
     } else {
-      // Fallback to original value if no valid weights
       smoothed_snr[k] = target_frame[k];
     }
   }
@@ -429,7 +419,6 @@ void nlm_filter_reset(NlmFilter* filter) {
     return;
   }
 
-  // Clear all frames
   for (uint32_t i = 0; i < filter->config.time_buffer_size; i++) {
     memset(filter->frame_buffer[i], 0,
            filter->config.spectrum_size * sizeof(float));
@@ -443,7 +432,6 @@ uint32_t nlm_filter_get_latency_frames(NlmFilter* filter) {
   if (!filter) {
     return 0;
   }
-  // Latency is the number of look-ahead frames
   return filter->config.search_range_time_future;
 }
 
@@ -455,8 +443,20 @@ void nlm_filter_calculate_snr(NlmFilter* filter,
   }
 
   const uint32_t spectrum_size = filter->config.spectrum_size;
+  uint32_t k = 0;
 
-  for (uint32_t k = 0; k < spectrum_size; k++) {
+  sb_vec8_t eps = sb_set8(SPECTRAL_EPSILON);
+  sb_vec8_t flt_min = sb_set8(FLT_MIN);
+
+  for (; k + 7 < spectrum_size; k += 8) {
+    sb_vec8_t noise = sb_load8(noise_spectrum + k);
+    sb_vec8_t mask = sb_gt8(noise, flt_min);
+    sb_vec8_t denom = sb_sel8(mask, noise, eps);
+    sb_vec8_t snr = sb_div8(sb_load8(reference_spectrum + k), denom);
+    sb_store8(snr_frame + k, snr);
+  }
+
+  for (; k < spectrum_size; k++) {
     float denom =
         noise_spectrum[k] > FLT_MIN ? noise_spectrum[k] : SPECTRAL_EPSILON;
     snr_frame[k] = reference_spectrum[k] / denom;
@@ -472,8 +472,20 @@ void nlm_filter_reconstruct_magnitude(NlmFilter* filter,
   }
 
   const uint32_t spectrum_size = filter->config.spectrum_size;
+  uint32_t k = 0;
 
-  for (uint32_t k = 0; k < spectrum_size; k++) {
+  sb_vec8_t eps = sb_set8(SPECTRAL_EPSILON);
+  sb_vec8_t flt_min = sb_set8(FLT_MIN);
+
+  for (; k + 7 < spectrum_size; k += 8) {
+    sb_vec8_t noise = sb_load8(noise_spectrum + k);
+    sb_vec8_t mask = sb_gt8(noise, flt_min);
+    sb_vec8_t denom = sb_sel8(mask, noise, eps);
+    sb_vec8_t mag = sb_mul8(sb_load8(smoothed_snr + k), denom);
+    sb_store8(magnitude_spectrum + k, mag);
+  }
+
+  for (; k < spectrum_size; k++) {
     float denom =
         noise_spectrum[k] > FLT_MIN ? noise_spectrum[k] : SPECTRAL_EPSILON;
     magnitude_spectrum[k] = smoothed_snr[k] * denom;

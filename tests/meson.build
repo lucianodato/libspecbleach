@@ -39,14 +39,16 @@ test_audio_files = executable('test_audio_files',
   include_directories: [inc, src_inc]
 )
 
-# Audio file regression tests
-test_audio_file_regression = executable('test_audio_file_regression',
-  sources: ['test_audio_file_regression.c'],
-  dependencies: [libspecbleach_dep, m_dep, sndfile_dep],
-  c_args: test_c_args,
-  link_args: test_link_args,
-  include_directories: [inc, src_inc]
-)
+if sndfile_dep.found()
+  # Audio file regression tests
+  test_audio_file_regression = executable('test_audio_file_regression',
+    sources: ['test_audio_file_regression.c'],
+    dependencies: [libspecbleach_dep, m_dep, sndfile_dep],
+    c_args: test_c_args,
+    link_args: test_link_args,
+    include_directories: [inc, src_inc]
+  )
+endif
 
 # FFT tests
 test_fft = executable('test_fft',
@@ -192,7 +194,9 @@ test('stft_latency', test_stft_latency)
 test('integration', test_integration)
 test('audio_regression', test_audio_regression)
 test('audio_files', test_audio_files)
-test('audio_file_regression', test_audio_file_regression)
+if sndfile_dep.found()
+  test('audio_file_regression', test_audio_file_regression)
+endif
 test('gain_calculator', test_gain_calculator)
 test('shared_utils', test_shared_utils)
 test('noise_profile', test_noise_profile)

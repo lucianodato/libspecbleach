@@ -216,7 +216,10 @@ SB_SIMD_INLINE sb_acc8_t sb_acc8_zero(void) {
 
 SB_SIMD_INLINE sb_acc8_t sb_acc8_add_ssd(sb_acc8_t acc, sb_vec8_t a,
                                          sb_vec8_t b) {
-#ifdef __AVX__
+#if defined(__FMA__) && defined(__AVX__)
+  __m256 d = _mm256_sub_ps(a, b);
+  return _mm256_fmadd_ps(d, d, acc);
+#elif defined(__AVX__)
   __m256 d = _mm256_sub_ps(a, b);
   return _mm256_add_ps(acc, _mm256_mul_ps(d, d));
 #elif defined(__SSE__)
@@ -226,7 +229,14 @@ SB_SIMD_INLINE sb_acc8_t sb_acc8_add_ssd(sb_acc8_t acc, sb_vec8_t a,
 #elif defined(__ARM_NEON)
   float32x4_t d1 = vsubq_f32(a.v1, b.v1);
   float32x4_t d2 = vsubq_f32(a.v2, b.v2);
-  return vaddq_f32(acc, vaddq_f32(vmulq_f32(d1, d1), vmulq_f32(d2, d2)));
+#ifdef __aarch64__
+  acc = vfmaq_f32(acc, d1, d1);
+  return vfmaq_f32(acc, d2, d2);
+#else
+  // Fallback for ARMv7 where vfmaq_f32 is not available
+  acc = vaddq_f32(acc, vmulq_f32(d1, d1));
+  return vaddq_f32(acc, vmulq_f32(d2, d2));
+#endif
 #else
   float ssd = 0.0f;
   for (int i = 0; i < 8; i++) {
@@ -641,6 +651,36 @@ SB_SIMD_INLINE float sb_vec8_patch_ssd(const sb_vec8_t* target_vecs,
   sum = sb_acc8_add_ssd(sum, target_vecs[7], sb_load8(cand_row_ptrs[7]));
 
   return sb_acc8_hsum(sum);
+}
+
+/* ------------------------------------------------------------------------- */
+/* FAST MATH APPROXIMATIONS                                                  */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * Fast exponential approximation for stability and performance.
+ * Based on the Schraudolph (1999) approximation, but refined for float
+ * accuracy. exp(x) approx (1 + x/n)^n, or using the IEEE 754
+ * bit-representation trick. Accuracy: ~4% relative error, suitable for NLM
+ * weight computation where small errors are averaged across many candidates.
+ * Note: The integer reinterpretation trick with (uint32_t)(12102203.0f * x +
+ * 1064866805.0f) is intentional and handles negative values (underflow) via
+ * bit-level wrap-around.
+ */
+SB_SIMD_INLINE float sb_fast_expf(float x) {
+  // Use a simple but effective approximation for exp(-x) where x > 0
+  // v = (12102203 * x + 1064866805)
+  // This is for exp(x). Since NLM uses exp(-dist/h2), x is usually negative.
+  if (x < -20.0f) {
+    return 0.0f; // Underflow protection for NLM weights
+  }
+
+  union {
+    uint32_t i;
+    float f;
+  } v;
+  v.i = (uint32_t)(12102203.0f * x + 1064866805.0f);
+  return v.f;
 }
 
 #endif // SHARED_UTILS_SIMD_UTILS_H
