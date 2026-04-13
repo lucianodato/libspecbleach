@@ -48,8 +48,8 @@ static float compute_patch_distance(NlmFilter* self, int32_t target_time,
     int32_t t_target = target_time + (int32_t)dt - (int32_t)half_patch;
     int32_t t_cand = candidate_time + (int32_t)dt - (int32_t)half_patch;
 
-    float* target_frame = get_frame(self, t_target);
-    float* cand_frame = get_frame(self, t_cand);
+    const float* target_frame = cached_get_frame(self, t_target);
+    const float* cand_frame = cached_get_frame(self, t_cand);
 
     if (safe_bounds && patch_size == 8) {
       distance +=

@@ -167,8 +167,11 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define NLM_SEARCH_RANGE_TIME_PAST 16U
 #define NLM_SEARCH_RANGE_TIME_FUTURE 4U
 #define NLM_DEFAULT_H_PARAMETER 1.0F
-#define DELAY_BUFFER_FRAMES 32U
 #define NLM_MIN_WEIGHT 1e-10F
+
+// Must be >= search_time_past + search_time_future + patch_size for NLM caching
+// Using power-of-two (32U) for efficient modulo wrap-around and future headroom
+#define DELAY_BUFFER_FRAMES 32U
 
 /* --------------------------------------------------------------- */
 /* ------------------- 1D Denoiser configurations ---------------- */

@@ -98,6 +98,9 @@ openmp_dep = dependency('openmp', required: false)
 sndfile_dep = dependency('', required: false)
 if get_option('enable_examples') or get_option('enable_tests')
   sndfile_dep = dependency('sndfile', required: false, include_type: 'system')
+  if not sndfile_dep.found()
+    warning('sndfile not found - examples and tests will not be built')
+  endif
 endif
 
 dep = [m_dep, fftw_dep]
@@ -116,12 +119,12 @@ libspecbleach_dep = declare_dependency(include_directories: [inc, src_inc],
   link_with: libspecbleach)
 
 # Examples building
-if get_option('enable_examples')
+if get_option('enable_examples') and sndfile_dep.found()
   subdir('examples')
 endif
 
 # Tests building
-if get_option('enable_tests')
+if get_option('enable_tests') and sndfile_dep.found()
   subdir('tests')
 endif
 

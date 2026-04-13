@@ -49,8 +49,8 @@ static float compute_patch_distance_avx(NlmFilter* self, int32_t target_time,
     int32_t t_target = target_time + (int32_t)dt - (int32_t)half_patch;
     int32_t t_cand = candidate_time + (int32_t)dt - (int32_t)half_patch;
 
-    float* target_frame = get_frame(self, t_target);
-    float* cand_frame = get_frame(self, t_cand);
+    float* target_frame = cached_get_frame(self, t_target);
+    float* cand_frame = cached_get_frame(self, t_cand);
 
     if (safe_bounds && patch_size == 8) {
       distance +=
@@ -207,63 +207,13 @@ bool nlm_filter_process_avx(NlmFilter* filter, float* smoothed_snr) {
 
         float* cand_frame = cached_get_frame(filter, dt);
 
-        if (current_paste_limit == 8) {
-          uint32_t t0 = block_start, t1 = block_start + 1,
-                   t2 = block_start + 2, t3 = block_start + 3,
-                   t4 = block_start + 4, t5 = block_start + 5,
-                   t6 = block_start + 6, t7 = block_start + 7;
+        for (uint32_t i = 0; i < current_paste_limit; i++) {
+          uint32_t target_bin = block_start + i;
+          uint32_t cand_bin =
+              clamp_index((int32_t)target_bin + df, spectrum_size);
 
-          uint32_t c0 = clamp_index((int32_t)t0 + df, spectrum_size),
-                   c1 = clamp_index((int32_t)t1 + df, spectrum_size),
-                   c2 = clamp_index((int32_t)t2 + df, spectrum_size),
-                   c3 = clamp_index((int32_t)t3 + df, spectrum_size),
-                   c4 = clamp_index((int32_t)t4 + df, spectrum_size),
-                   c5 = clamp_index((int32_t)t5 + df, spectrum_size),
-                   c6 = clamp_index((int32_t)t6 + df, spectrum_size),
-                   c7 = clamp_index((int32_t)t7 + df, spectrum_size);
-
-          smoothed_snr[t0] += weight * cand_frame[c0];
-          weight_sum[t0] += weight;
-          smoothed_snr[t1] += weight * cand_frame[c1];
-          weight_sum[t1] += weight;
-          smoothed_snr[t2] += weight * cand_frame[c2];
-          weight_sum[t2] += weight;
-          smoothed_snr[t3] += weight * cand_frame[c3];
-          weight_sum[t3] += weight;
-          smoothed_snr[t4] += weight * cand_frame[c4];
-          weight_sum[t4] += weight;
-          smoothed_snr[t5] += weight * cand_frame[c5];
-          weight_sum[t5] += weight;
-          smoothed_snr[t6] += weight * cand_frame[c6];
-          weight_sum[t6] += weight;
-          smoothed_snr[t7] += weight * cand_frame[c7];
-          weight_sum[t7] += weight;
-        } else if (current_paste_limit == 4) {
-          uint32_t t0 = block_start, t1 = block_start + 1,
-                   t2 = block_start + 2, t3 = block_start + 3;
-
-          uint32_t c0 = clamp_index((int32_t)t0 + df, spectrum_size),
-                   c1 = clamp_index((int32_t)t1 + df, spectrum_size),
-                   c2 = clamp_index((int32_t)t2 + df, spectrum_size),
-                   c3 = clamp_index((int32_t)t3 + df, spectrum_size);
-
-          smoothed_snr[t0] += weight * cand_frame[c0];
-          weight_sum[t0] += weight;
-          smoothed_snr[t1] += weight * cand_frame[c1];
-          weight_sum[t1] += weight;
-          smoothed_snr[t2] += weight * cand_frame[c2];
-          weight_sum[t2] += weight;
-          smoothed_snr[t3] += weight * cand_frame[c3];
-          weight_sum[t3] += weight;
-        } else {
-          for (uint32_t i = 0; i < current_paste_limit; i++) {
-            uint32_t target_bin = block_start + i;
-            uint32_t cand_bin =
-                clamp_index((int32_t)target_bin + df, spectrum_size);
-
-            smoothed_snr[target_bin] += weight * cand_frame[cand_bin];
-            weight_sum[target_bin] += weight;
-          }
+          smoothed_snr[target_bin] += weight * cand_frame[cand_bin];
+          weight_sum[target_bin] += weight;
         }
       }
     }

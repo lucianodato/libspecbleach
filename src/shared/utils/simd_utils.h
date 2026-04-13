@@ -229,8 +229,14 @@ SB_SIMD_INLINE sb_acc8_t sb_acc8_add_ssd(sb_acc8_t acc, sb_vec8_t a,
 #elif defined(__ARM_NEON)
   float32x4_t d1 = vsubq_f32(a.v1, b.v1);
   float32x4_t d2 = vsubq_f32(a.v2, b.v2);
+#ifdef __aarch64__
   acc = vfmaq_f32(acc, d1, d1);
   return vfmaq_f32(acc, d2, d2);
+#else
+  // Fallback for ARMv7 where vfmaq_f32 is not available
+  acc = vaddq_f32(acc, vmulq_f32(d1, d1));
+  return vaddq_f32(acc, vmulq_f32(d2, d2));
+#endif
 #else
   float ssd = 0.0f;
   for (int i = 0; i < 8; i++) {
@@ -655,6 +661,10 @@ SB_SIMD_INLINE float sb_vec8_patch_ssd(const sb_vec8_t* target_vecs,
  * Fast exponential approximation for stability and performance.
  * Based on the Schraudolph (1999) approximation, but refined for float accuracy.
  * exp(x) ≈ (1 + x/n)^n, or using the IEEE 754 bit-representation trick.
+ * Accuracy: ~4% relative error, suitable for NLM weight computation where
+ * small errors are averaged across many candidates.
+ * Note: The integer reinterpretation trick with (uint32_t)(12102203.0f * x + 1064866805.0f)
+ * is intentional and handles negative values (underflow) via bit-level wrap-around.
  */
 SB_SIMD_INLINE float sb_fast_expf(float x) {
   // Use a simple but effective approximation for exp(-x) where x > 0
