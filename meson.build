@@ -50,7 +50,7 @@ if (current_arch == 'x86' or current_arch == 'x86_64') and current_os != 'darwin
         lib_c_args += cc.get_supported_arguments(['-mavx'])
     endif
     if get_option('enable_avx2')
-        lib_c_args += cc.get_supported_arguments(['-mavx2'])
+        lib_c_args += cc.get_supported_arguments(['-mavx2', '-mfma'])
     endif
 endif
 
@@ -60,7 +60,7 @@ if (current_arch == 'x86' or current_arch == 'x86_64') and current_os == 'darwin
         lib_c_args += cc.get_supported_arguments(['-mavx'])
     endif
     if get_option('enable_avx2')
-        lib_c_args += cc.get_supported_arguments(['-mavx2'])
+        lib_c_args += cc.get_supported_arguments(['-mavx2', '-mfma'])
     endif
 endif
 
@@ -92,14 +92,18 @@ endif
 # Dependencies for libspecbleach
 m_dep = meson.get_compiler('c').find_library('m', required: true)
 fftw_dep = dependency('fftw3f', required: true, static: get_option('static_deps'), include_type: 'system')
+openmp_dep = dependency('openmp', required: false)
 
 # Optional dependency for examples and tests
 sndfile_dep = dependency('', required: false)
 if get_option('enable_examples') or get_option('enable_tests')
-  sndfile_dep = dependency('sndfile', required: true, include_type: 'system')
+  sndfile_dep = dependency('sndfile', required: false, include_type: 'system')
 endif
 
 dep = [m_dep, fftw_dep]
+if openmp_dep.found()
+  dep += openmp_dep
+endif
 
 # Public Headers
 subdir('include')

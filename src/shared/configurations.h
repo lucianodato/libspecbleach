@@ -162,12 +162,12 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 
 // NLM (Lukin Algorithm B) Parameters
 #define NLM_PATCH_SIZE 8U
-#define NLM_PASTE_BLOCK_SIZE 4U
+#define NLM_PASTE_BLOCK_SIZE 8U
 #define NLM_SEARCH_RANGE_FREQ 8U
 #define NLM_SEARCH_RANGE_TIME_PAST 16U
 #define NLM_SEARCH_RANGE_TIME_FUTURE 4U
 #define NLM_DEFAULT_H_PARAMETER 1.0F
-#define DELAY_BUFFER_FRAMES (NLM_SEARCH_RANGE_TIME_PAST + 1U)
+#define DELAY_BUFFER_FRAMES 32U
 #define NLM_MIN_WEIGHT 1e-10F
 
 /* --------------------------------------------------------------- */

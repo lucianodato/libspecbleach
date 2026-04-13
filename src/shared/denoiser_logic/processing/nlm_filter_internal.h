@@ -42,11 +42,20 @@ struct NlmFilter {
   float inv_h_squared; // Precomputed 1/h^2 for multiplication
   float distance_threshold_actual;
 
+  // Pre-computed frame pointer cache (populated once per process call)
+  // Indexed by [time_past + 4 + dt] where dt ranges from
+  // -search_range_time_past - 4 to +search_range_time_future + 4
+  float** frame_ptrs;
+  uint32_t total_time_span; // search_time_past + search_time_future + 1 + 8
+
   // Scratch buffer for processing (avoid realloc)
   float* weight_accum;
 
   // Function pointer for runtime architecture dispatch
   nlm_process_impl_fn process_fn;
+
+  // Number of threads for parallel processing
+  uint32_t num_threads;
 };
 
 // Helper: clamp index to valid range
@@ -64,17 +73,38 @@ static inline __attribute__((unused)) uint32_t clamp_index(int32_t idx,
 // Helper: get frame from ring buffer (handles wrap-around)
 static inline __attribute__((unused)) float* get_frame(
     NlmFilter* self, int32_t relative_offset) {
+  const int32_t size = (int32_t)self->config.time_buffer_size;
+  // Center is at (head - future - 1)
   int32_t idx = (int32_t)self->buffer_head -
                 (int32_t)self->config.search_range_time_future - 1 +
                 relative_offset;
 
-  // Wrap around in ring buffer
-  while (idx < 0) {
-    idx += (int32_t)self->config.time_buffer_size;
-  }
-  idx %= (int32_t)self->config.time_buffer_size;
+  // Standard mathematical modulo for negative numbers
+  idx = ((idx % size) + size) % size;
 
   return self->frame_buffer[idx];
+}
+
+// Pre-compute all frame pointers for the current processing window.
+// After this call, frame_ptrs[search_time_past + 4 + dt] gives the frame
+// at relative offset dt (where dt ranges from -past-4 to +future+4).
+static inline __attribute__((unused)) void populate_frame_ptrs(
+    NlmFilter* self) {
+  const int32_t past = (int32_t)self->config.search_range_time_past;
+  const int32_t future = (int32_t)self->config.search_range_time_future;
+
+  // We need a halo of 4 frames for the 8x8 patch comparison
+  for (int32_t dt = -past - 4; dt <= future + 4; dt++) {
+    self->frame_ptrs[past + 4 + dt] = get_frame(self, dt);
+  }
+}
+
+// O(1) frame lookup using pre-computed pointer cache.
+// dt ranges from -search_time_past - 4 to +search_time_future + 4.
+static inline __attribute__((unused)) float* cached_get_frame(
+    NlmFilter* self, int32_t dt) {
+  return self->frame_ptrs[(int32_t)self->config.search_range_time_past + 4 +
+                          dt];
 }
 
 // Generic implementation (SSE/NEON/Scalar)

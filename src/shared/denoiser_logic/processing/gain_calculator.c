@@ -20,6 +20,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "shared/denoiser_logic/processing/gain_calculator.h"
 #include "shared/configurations.h"
+#include "shared/utils/simd_utils.h"
 #include <float.h>
 #include <math.h>
 
@@ -27,7 +28,28 @@ static void wiener_subtraction(const uint32_t real_spectrum_size,
                                const uint32_t fft_size, const float* spectrum,
                                const float* noise_spectrum, const float* alpha,
                                float* gain_spectrum) {
-  for (uint32_t k = 0U; k < real_spectrum_size; k++) {
+  uint32_t k = 0;
+  sb_vec8_t flt_min = sb_set8(FLT_MIN);
+  sb_vec8_t zero = sb_set8(0.0f);
+  sb_vec8_t one = sb_set8(1.0f);
+
+  for (; k + 7 < real_spectrum_size; k += 8) {
+    sb_vec8_t s = sb_load8(spectrum + k);
+    sb_vec8_t n = sb_load8(noise_spectrum + k);
+    sb_vec8_t a = sb_load8(alpha + k);
+    sb_vec8_t scaled_noise = sb_mul8(n, a);
+
+    sb_vec8_t mask_noise = sb_gt8(scaled_noise, flt_min);
+    sb_vec8_t mask_gain = sb_gt8(s, scaled_noise);
+
+    sb_vec8_t gain = sb_div8(sb_sub8(s, scaled_noise), s);
+    gain = sb_sel8(mask_gain, gain, zero);
+    gain = sb_sel8(mask_noise, gain, one);
+
+    sb_store8(gain_spectrum + k, gain);
+  }
+
+  for (; k < real_spectrum_size; k++) {
     float scaled_noise = noise_spectrum[k] * alpha[k];
     if (scaled_noise > FLT_MIN) {
       if (spectrum[k] > scaled_noise) {
@@ -38,10 +60,11 @@ static void wiener_subtraction(const uint32_t real_spectrum_size,
     } else {
       gain_spectrum[k] = 1.F;
     }
+  }
 
-    if (k > 0U && k < (fft_size - k)) {
-      gain_spectrum[fft_size - k] = gain_spectrum[k];
-    }
+  // Symmetry
+  for (uint32_t i = 1U; i < real_spectrum_size && i < (fft_size - i); i++) {
+    gain_spectrum[fft_size - i] = gain_spectrum[i];
   }
 }
 
@@ -49,7 +72,27 @@ static void spectral_gating(const uint32_t real_spectrum_size,
                             const uint32_t fft_size, const float* spectrum,
                             const float* noise_spectrum, const float* alpha,
                             float* gain_spectrum) {
-  for (uint32_t k = 0U; k < real_spectrum_size; k++) {
+  uint32_t k = 0;
+  sb_vec8_t flt_min = sb_set8(FLT_MIN);
+  sb_vec8_t zero = sb_set8(0.0f);
+  sb_vec8_t one = sb_set8(1.0f);
+
+  for (; k + 7 < real_spectrum_size; k += 8) {
+    sb_vec8_t s = sb_load8(spectrum + k);
+    sb_vec8_t n = sb_load8(noise_spectrum + k);
+    sb_vec8_t a = sb_load8(alpha + k);
+    sb_vec8_t scaled_noise = sb_mul8(n, a);
+
+    sb_vec8_t mask_noise = sb_gt8(scaled_noise, flt_min);
+    sb_vec8_t mask_gate = sb_gt8(s, scaled_noise);
+
+    sb_vec8_t gain = sb_sel8(mask_gate, one, zero);
+    gain = sb_sel8(mask_noise, gain, one);
+
+    sb_store8(gain_spectrum + k, gain);
+  }
+
+  for (; k < real_spectrum_size; k++) {
     float scaled_noise = noise_spectrum[k] * alpha[k];
     if (scaled_noise > FLT_MIN) {
       if (spectrum[k] >= scaled_noise) {
@@ -60,10 +103,11 @@ static void spectral_gating(const uint32_t real_spectrum_size,
     } else {
       gain_spectrum[k] = 1.F;
     }
+  }
 
-    if (k > 0U && k < (fft_size - k)) {
-      gain_spectrum[fft_size - k] = gain_spectrum[k];
-    }
+  // Symmetry
+  for (uint32_t i = 1U; i < real_spectrum_size && i < (fft_size - i); i++) {
+    gain_spectrum[fft_size - i] = gain_spectrum[i];
   }
 }
 
@@ -73,27 +117,22 @@ static void generalized_spectral_subtraction(
     const float* alpha, const float* beta) {
   for (uint32_t k = 0U; k < real_spectrum_size; k++) {
     if (spectrum[k] > FLT_MIN) {
-      if (powf((noise_spectrum[k] / spectrum[k]), GSS_EXPONENT) <
-          (1.F / (alpha[k] + beta[k]))) {
-        gain_spectrum[k] =
-            fmaxf(powf(1.F - (alpha[k] * powf((noise_spectrum[k] / spectrum[k]),
-                                              GSS_EXPONENT)),
-                       1.F / GSS_EXPONENT),
-                  0.F);
+      // Use multiplications instead of powf for exponent 2.0
+      float ratio = noise_spectrum[k] / spectrum[k];
+      float ratio_sq = ratio * ratio;
+      if (ratio_sq < (1.F / (alpha[k] + beta[k]))) {
+        gain_spectrum[k] = fmaxf(sqrtf(fmaxf(1.F - (alpha[k] * ratio_sq), 0.0f)), 0.F);
       } else {
-        gain_spectrum[k] = fmaxf(
-            powf(
-                beta[k] * powf((noise_spectrum[k] / spectrum[k]), GSS_EXPONENT),
-                1.F / GSS_EXPONENT),
-            0.F);
+        gain_spectrum[k] = fmaxf(sqrtf(fmaxf(beta[k] * ratio_sq, 0.0f)), 0.F);
       }
     } else {
       gain_spectrum[k] = 1.F;
     }
+  }
 
-    if (k > 0U && k < (fft_size - k)) {
-      gain_spectrum[fft_size - k] = gain_spectrum[k];
-    }
+  // Symmetry
+  for (uint32_t i = 1U; i < real_spectrum_size && i < (fft_size - i); i++) {
+    gain_spectrum[fft_size - i] = gain_spectrum[i];
   }
 }
 

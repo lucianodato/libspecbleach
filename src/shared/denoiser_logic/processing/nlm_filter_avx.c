@@ -80,6 +80,10 @@ static float compute_patch_distance_avx(NlmFilter* self, int32_t target_time,
   return distance;
 }
 
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
 bool nlm_filter_process_avx(NlmFilter* filter, float* smoothed_snr) {
   sb_simd_state_t old_simd_state = sb_simd_enable_ftz_daz();
 
@@ -91,13 +95,20 @@ bool nlm_filter_process_avx(NlmFilter* filter, float* smoothed_snr) {
   const int32_t search_time_future =
       (int32_t)filter->config.search_range_time_future;
 
-  float* target_frame = get_frame(filter, 0);
+  populate_frame_ptrs(filter);
+
+  float* target_frame = cached_get_frame(filter, 0);
 
   memset(smoothed_snr, 0, spectrum_size * sizeof(float));
 
   float* weight_sum = filter->weight_accum;
   memset(weight_sum, 0, spectrum_size * sizeof(float));
 
+  const float current_inv_h2 = filter->inv_h_squared;
+  const float current_dist_threshold =
+      filter->distance_threshold_actual;
+
+#pragma omp parallel for schedule(dynamic) num_threads(filter->num_threads)
   for (uint32_t block_start = 0; block_start < spectrum_size;
        block_start += paste_size) {
 
@@ -111,7 +122,6 @@ bool nlm_filter_process_avx(NlmFilter* filter, float* smoothed_snr) {
       current_paste_limit = spectrum_size - block_start;
     }
 
-    // Silence optimization: bypass search explosion if practically zero
     float target_snr_sum = 0.0F;
     for (uint32_t i = 0; i < current_paste_limit; i++) {
       target_snr_sum += target_frame[block_start + i];
@@ -120,13 +130,8 @@ bool nlm_filter_process_avx(NlmFilter* filter, float* smoothed_snr) {
       continue;
     }
 
-    float current_inv_h2 = filter->inv_h_squared;
-    float current_dist_threshold = filter->distance_threshold_actual;
-
     sb_vec8_t target_vecs[8];
-
-    const uint32_t half_patch_size =
-        4; // Hardcoded for 8x8 optimized path checks
+    const uint32_t half_patch_size = 4;
 
     bool safe_block = (block_center >= half_patch_size) &&
                       (block_center + half_patch_size <= spectrum_size);
@@ -135,8 +140,8 @@ bool nlm_filter_process_avx(NlmFilter* filter, float* smoothed_snr) {
       for (int r = 0; r < 8; r++) {
         if (safe_block) {
           int32_t t_offset = (int32_t)r - (int32_t)half_patch_size;
-          float* row_ptr =
-              get_frame(filter, t_offset) + (block_center - half_patch_size);
+          float* row_ptr = cached_get_frame(filter, t_offset) +
+                           (block_center - half_patch_size);
           target_vecs[r] = sb_load8(row_ptr);
         } else {
           target_vecs[r] = sb_set8(0.0f);
@@ -145,6 +150,13 @@ bool nlm_filter_process_avx(NlmFilter* filter, float* smoothed_snr) {
     }
 
     for (int32_t dt = -search_time_past; dt <= search_time_future; dt++) {
+      float* cand_rows[8];
+      if (filter->config.patch_size == 8) {
+        for (int r = 0; r < 8; r++) {
+          cand_rows[r] = cached_get_frame(filter, dt + r - 4);
+        }
+      }
+
       for (int32_t df = -(int32_t)search_freq; df <= (int32_t)search_freq;
            df++) {
 
@@ -153,17 +165,32 @@ bool nlm_filter_process_avx(NlmFilter* filter, float* smoothed_snr) {
 
         float distance = 0.0F;
 
-        bool safe_bounds = safe_block && (cand_center >= half_patch_size) &&
-                           (cand_center + half_patch_size <= spectrum_size);
+        bool safe_bounds =
+            safe_block && (cand_center >= half_patch_size) &&
+            (cand_center + half_patch_size <= spectrum_size);
 
         if (filter->config.patch_size == 8 && safe_bounds) {
-          float* cand_row_ptrs[8];
-          for (int r = 0; r < 8; r++) {
-            cand_row_ptrs[r] =
-                get_frame(filter, dt + r - 4) + (cand_center - 4);
-          }
+          sb_acc8_t sum = sb_acc8_zero();
+          uint32_t cand_f_start = cand_center - 4;
 
-          distance = sb_vec8_patch_ssd(target_vecs, cand_row_ptrs);
+          sum = sb_acc8_add_ssd(sum, target_vecs[0],
+                                sb_load8(cand_rows[0] + cand_f_start));
+          sum = sb_acc8_add_ssd(sum, target_vecs[1],
+                                sb_load8(cand_rows[1] + cand_f_start));
+          sum = sb_acc8_add_ssd(sum, target_vecs[2],
+                                sb_load8(cand_rows[2] + cand_f_start));
+          sum = sb_acc8_add_ssd(sum, target_vecs[3],
+                                sb_load8(cand_rows[3] + cand_f_start));
+          sum = sb_acc8_add_ssd(sum, target_vecs[4],
+                                sb_load8(cand_rows[4] + cand_f_start));
+          sum = sb_acc8_add_ssd(sum, target_vecs[5],
+                                sb_load8(cand_rows[5] + cand_f_start));
+          sum = sb_acc8_add_ssd(sum, target_vecs[6],
+                                sb_load8(cand_rows[6] + cand_f_start));
+          sum = sb_acc8_add_ssd(sum, target_vecs[7],
+                                sb_load8(cand_rows[7] + cand_f_start));
+
+          distance = sb_acc8_hsum(sum);
         } else {
           distance = compute_patch_distance_avx(filter, 0, block_center, dt,
                                                 cand_center);
@@ -173,20 +200,70 @@ bool nlm_filter_process_avx(NlmFilter* filter, float* smoothed_snr) {
           continue;
         }
 
-        float weight = expf(-distance * current_inv_h2);
+        float weight = sb_fast_expf(-distance * current_inv_h2);
         if (weight < NLM_MIN_WEIGHT) {
           continue;
         }
 
-        float* cand_frame = get_frame(filter, dt);
+        float* cand_frame = cached_get_frame(filter, dt);
 
-        for (uint32_t i = 0; i < current_paste_limit; i++) {
-          uint32_t target_bin = block_start + i;
-          uint32_t cand_bin =
-              clamp_index((int32_t)target_bin + df, spectrum_size);
+        if (current_paste_limit == 8) {
+          uint32_t t0 = block_start, t1 = block_start + 1,
+                   t2 = block_start + 2, t3 = block_start + 3,
+                   t4 = block_start + 4, t5 = block_start + 5,
+                   t6 = block_start + 6, t7 = block_start + 7;
 
-          smoothed_snr[target_bin] += weight * cand_frame[cand_bin];
-          weight_sum[target_bin] += weight;
+          uint32_t c0 = clamp_index((int32_t)t0 + df, spectrum_size),
+                   c1 = clamp_index((int32_t)t1 + df, spectrum_size),
+                   c2 = clamp_index((int32_t)t2 + df, spectrum_size),
+                   c3 = clamp_index((int32_t)t3 + df, spectrum_size),
+                   c4 = clamp_index((int32_t)t4 + df, spectrum_size),
+                   c5 = clamp_index((int32_t)t5 + df, spectrum_size),
+                   c6 = clamp_index((int32_t)t6 + df, spectrum_size),
+                   c7 = clamp_index((int32_t)t7 + df, spectrum_size);
+
+          smoothed_snr[t0] += weight * cand_frame[c0];
+          weight_sum[t0] += weight;
+          smoothed_snr[t1] += weight * cand_frame[c1];
+          weight_sum[t1] += weight;
+          smoothed_snr[t2] += weight * cand_frame[c2];
+          weight_sum[t2] += weight;
+          smoothed_snr[t3] += weight * cand_frame[c3];
+          weight_sum[t3] += weight;
+          smoothed_snr[t4] += weight * cand_frame[c4];
+          weight_sum[t4] += weight;
+          smoothed_snr[t5] += weight * cand_frame[c5];
+          weight_sum[t5] += weight;
+          smoothed_snr[t6] += weight * cand_frame[c6];
+          weight_sum[t6] += weight;
+          smoothed_snr[t7] += weight * cand_frame[c7];
+          weight_sum[t7] += weight;
+        } else if (current_paste_limit == 4) {
+          uint32_t t0 = block_start, t1 = block_start + 1,
+                   t2 = block_start + 2, t3 = block_start + 3;
+
+          uint32_t c0 = clamp_index((int32_t)t0 + df, spectrum_size),
+                   c1 = clamp_index((int32_t)t1 + df, spectrum_size),
+                   c2 = clamp_index((int32_t)t2 + df, spectrum_size),
+                   c3 = clamp_index((int32_t)t3 + df, spectrum_size);
+
+          smoothed_snr[t0] += weight * cand_frame[c0];
+          weight_sum[t0] += weight;
+          smoothed_snr[t1] += weight * cand_frame[c1];
+          weight_sum[t1] += weight;
+          smoothed_snr[t2] += weight * cand_frame[c2];
+          weight_sum[t2] += weight;
+          smoothed_snr[t3] += weight * cand_frame[c3];
+          weight_sum[t3] += weight;
+        } else {
+          for (uint32_t i = 0; i < current_paste_limit; i++) {
+            uint32_t target_bin = block_start + i;
+            uint32_t cand_bin =
+                clamp_index((int32_t)target_bin + df, spectrum_size);
+
+            smoothed_snr[target_bin] += weight * cand_frame[cand_bin];
+            weight_sum[target_bin] += weight;
+          }
         }
       }
     }
