@@ -49,8 +49,8 @@ static float compute_patch_distance_avx(NlmFilter* self, int32_t target_time,
     int32_t t_target = target_time + (int32_t)dt - (int32_t)half_patch;
     int32_t t_cand = candidate_time + (int32_t)dt - (int32_t)half_patch;
 
-    float* target_frame = cached_get_frame(self, t_target);
-    float* cand_frame = cached_get_frame(self, t_cand);
+    float* target_frame = get_frame(self, t_target);
+    float* cand_frame = get_frame(self, t_cand);
 
     if (safe_bounds && patch_size == 8) {
       distance +=
@@ -107,7 +107,9 @@ bool nlm_filter_process_avx(NlmFilter* filter, float* smoothed_snr) {
   const float current_inv_h2 = filter->inv_h_squared;
   const float current_dist_threshold = filter->distance_threshold_actual;
 
+#if SB_HAS_OPENMP
 #pragma omp parallel for schedule(dynamic) num_threads(filter->num_threads)
+#endif
   for (uint32_t block_start = 0; block_start < spectrum_size;
        block_start += paste_size) {
 
@@ -172,26 +174,26 @@ bool nlm_filter_process_avx(NlmFilter* filter, float* smoothed_snr) {
           uint32_t cand_f_start = cand_center - 4;
 
           sum = sb_acc8_add_ssd(sum, target_vecs[0],
-                                sb_load8(cand_rows[0] + cand_f_start));
+                                 sb_load8(cand_rows[0] + cand_f_start));
           sum = sb_acc8_add_ssd(sum, target_vecs[1],
-                                sb_load8(cand_rows[1] + cand_f_start));
+                                 sb_load8(cand_rows[1] + cand_f_start));
           sum = sb_acc8_add_ssd(sum, target_vecs[2],
-                                sb_load8(cand_rows[2] + cand_f_start));
+                                 sb_load8(cand_rows[2] + cand_f_start));
           sum = sb_acc8_add_ssd(sum, target_vecs[3],
-                                sb_load8(cand_rows[3] + cand_f_start));
+                                 sb_load8(cand_rows[3] + cand_f_start));
           sum = sb_acc8_add_ssd(sum, target_vecs[4],
-                                sb_load8(cand_rows[4] + cand_f_start));
+                                 sb_load8(cand_rows[4] + cand_f_start));
           sum = sb_acc8_add_ssd(sum, target_vecs[5],
-                                sb_load8(cand_rows[5] + cand_f_start));
+                                 sb_load8(cand_rows[5] + cand_f_start));
           sum = sb_acc8_add_ssd(sum, target_vecs[6],
-                                sb_load8(cand_rows[6] + cand_f_start));
+                                 sb_load8(cand_rows[6] + cand_f_start));
           sum = sb_acc8_add_ssd(sum, target_vecs[7],
-                                sb_load8(cand_rows[7] + cand_f_start));
+                                 sb_load8(cand_rows[7] + cand_f_start));
 
           distance = sb_acc8_hsum(sum);
         } else {
           distance = compute_patch_distance_avx(filter, 0, block_center, dt,
-                                                cand_center);
+                                                 cand_center);
         }
 
         if (distance > current_dist_threshold) {

@@ -409,11 +409,6 @@ void test_nlm_filter_process_patch8(void) {
     frame[i] = 5.0f + (float)(i % 2); // Alternating pattern
   }
 
-  float* alpha = (float*)malloc(64 * sizeof(float));
-  for (int i = 0; i < 64; i++) {
-    alpha[i] = 1.0f;
-  }
-
   // Fill buffer
   for (int f = 0; f < 5; f++) {
     nlm_filter_push_frame(filter, frame);
@@ -442,7 +437,6 @@ void test_nlm_filter_process_patch8(void) {
   }
 #endif
 
-  free(alpha);
   nlm_filter_free(filter);
   printf("✓ NLM filter patch_size=8 process tests passed\n");
 }
@@ -514,18 +508,14 @@ void test_nlm_filter_frame_cache(void) {
   }
 
   // Precompute cache
-  nlm_filter_prepare_frame_ptrs(filter);
+  populate_frame_ptrs(filter);
 
-  // Check all offsets in search range
-  for (int32_t dt = -8; dt <= 8; dt++) {
-    TEST_ASSERT(cached_get_frame(filter, dt) == get_frame(filter, dt),
-                "Cached pointer should match direct lookup");
-  }
-
-  // Also check halo range (+/- 4)
+  // Check offsets in cache range (-past-4 to +future+4)
+  // For past=8, future=8, range is -12 to 12.
   for (int32_t dt = -12; dt <= 12; dt++) {
-    TEST_ASSERT(cached_get_frame(filter, dt) == get_frame(filter, dt),
-                "Cached pointer (halo) should match direct lookup");
+    float* cached = cached_get_frame(filter, dt);
+    float* direct = get_frame(filter, dt);
+    TEST_ASSERT(cached == direct, "Cached pointer should match direct lookup");
   }
 
   nlm_filter_free(filter);

@@ -106,6 +106,9 @@ endif
 dep = [m_dep, fftw_dep]
 if openmp_dep.found()
   dep += openmp_dep
+  lib_c_args += ['-DSB_HAS_OPENMP=1']
+else
+  lib_c_args += ['-DSB_HAS_OPENMP=0']
 endif
 
 # Public Headers
@@ -124,7 +127,7 @@ if get_option('enable_examples') and sndfile_dep.found()
 endif
 
 # Tests building
-if get_option('enable_tests') and sndfile_dep.found()
+if get_option('enable_tests')
   subdir('tests')
 endif
 

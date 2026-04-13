@@ -48,8 +48,8 @@ static float compute_patch_distance(NlmFilter* self, int32_t target_time,
     int32_t t_target = target_time + (int32_t)dt - (int32_t)half_patch;
     int32_t t_cand = candidate_time + (int32_t)dt - (int32_t)half_patch;
 
-    const float* target_frame = cached_get_frame(self, t_target);
-    const float* cand_frame = cached_get_frame(self, t_cand);
+    const float* target_frame = get_frame(self, t_target);
+    const float* cand_frame = get_frame(self, t_cand);
 
     if (safe_bounds && patch_size == 8) {
       distance +=
@@ -289,7 +289,9 @@ bool nlm_filter_process_generic(NlmFilter* filter, float* smoothed_snr) {
   const float current_inv_h2 = filter->inv_h_squared;
   const float current_dist_threshold = filter->distance_threshold_actual;
 
+#if SB_HAS_OPENMP
 #pragma omp parallel for schedule(dynamic) num_threads(filter->num_threads)
+#endif
   for (uint32_t block_start = 0; block_start < spectrum_size;
        block_start += paste_size) {
 

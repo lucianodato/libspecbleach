@@ -84,9 +84,9 @@ static void spectral_gating(const uint32_t real_spectrum_size,
     sb_vec8_t scaled_noise = sb_mul8(n, a);
 
     sb_vec8_t mask_noise = sb_gt8(scaled_noise, flt_min);
-    sb_vec8_t mask_gate = sb_gt8(s, scaled_noise);
+    sb_vec8_t mask_gate_fail = sb_gt8(scaled_noise, s);
 
-    sb_vec8_t gain = sb_sel8(mask_gate, one, zero);
+    sb_vec8_t gain = sb_sel8(mask_gate_fail, zero, one);
     gain = sb_sel8(mask_noise, gain, one);
 
     sb_store8(gain_spectrum + k, gain);
