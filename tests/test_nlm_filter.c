@@ -438,13 +438,14 @@ void test_nlm_filter_omp_config(void) {
   TEST_ASSERT(filter != NULL, "Initialization failed");
 
   // On many platforms this will trigger the env-reading logic in nlm_filter.c
-  TEST_ASSERT(filter->num_threads == 2, "Filter should respect OMP_NUM_THREADS env var");
+  TEST_ASSERT(filter->num_threads == 2,
+              "Filter should respect OMP_NUM_THREADS env var");
 
   nlm_filter_free(filter);
-  
+
   // Clean up
   unsetenv("OMP_NUM_THREADS");
-  
+
   printf("✓ NLM filter OpenMP configuration tests passed\n");
 }
 

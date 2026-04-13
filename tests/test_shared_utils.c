@@ -288,7 +288,8 @@ void test_patch_ssd(void) {
 
   float ssd = sb_vec8_patch_ssd(target_vecs, cand_rows);
 
-  // Expected SSD: 64 elements, each with diff = 1.0 -> SSD = 64 * (1.0^2) = 64.0
+  // Expected SSD: 64 elements, each with diff = 1.0 -> SSD = 64 * (1.0^2)
+  // = 64.0
   TEST_FLOAT_CLOSE(ssd, 64.0f, 0.001f);
 
   printf("✓ 8x8 patch SSD tests passed\n");

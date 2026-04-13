@@ -2,11 +2,11 @@
  * Unit tests for Gain Calculator
  */
 
+#include <float.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <float.h>
 
 #include "shared/denoiser_logic/processing/gain_calculator.h"
 
@@ -33,7 +33,7 @@ void test_gain_estimation_wiener(void) {
   float alpha[32];
   float beta[32];
 
-  for(int i = 0; i < 32; i++) {
+  for (int i = 0; i < 32; i++) {
     spectrum[i] = 1.0f + (float)i;
     noise_spectrum[i] = 0.5f * spectrum[i];
     alpha[i] = 1.0f;
@@ -54,7 +54,7 @@ void test_gain_estimation_wiener(void) {
 void test_gain_estimation_gates(void) {
   printf("Testing Gates gain calculation...\n");
 
-  uint32_t fft_size = 32; 
+  uint32_t fft_size = 32;
   uint32_t real_spectrum_size = fft_size / 2 + 1;
 
   float spectrum[32] = {0.0f};
@@ -63,7 +63,7 @@ void test_gain_estimation_gates(void) {
   float alpha[32];
   float beta[32];
 
-  for(int i = 0; i < 32; i++) {
+  for (int i = 0; i < 32; i++) {
     spectrum[i] = 2.0f;
     noise_spectrum[i] = (i < 10) ? 1.0f : 3.0f;
     alpha[i] = 1.0f;
@@ -96,7 +96,7 @@ void test_gain_estimation_spectral_subtraction(void) {
   float alpha[32];
   float beta[32];
 
-  for(int i = 0; i < 32; i++) {
+  for (int i = 0; i < 32; i++) {
     spectrum[i] = 10.0f;
     noise_spectrum[i] = 2.0f;
     alpha[i] = 1.0f;
@@ -111,20 +111,20 @@ void test_gain_estimation_spectral_subtraction(void) {
   TEST_FLOAT_CLOSE(gain_spectrum[0], 0.9798f, 0.01f);
 
   // Test Wiener-like fallback (large noise)
-  for(int i = 0; i < 32; i++) {
+  for (int i = 0; i < 32; i++) {
     spectrum[i] = 1.0f;
     noise_spectrum[i] = 10.0f;
   }
   calculate_gains(real_spectrum_size, fft_size, spectrum, noise_spectrum,
                   gain_spectrum, alpha, beta, GENERALIZED_SPECTRALSUBTRACTION);
-  
-  // gain = sqrt(max(0, beta*noise^2 / spectrum^2)) -> Wait, fallback in lib is beta*ratio_sq?
-  // spectrum[k] = 1.0, noise[k] = 10.0 -> ratio = 10.0, ratio_sq = 100.0
-  // beta = 1.0. gain = sqrt(beta * ratio_sq) = sqrt(100) = 10.0?
-  // Wait, for GSS, gain is usually clamped. Let's check logic.
-  // if (ratio_sq < (1.F / (alpha[k] + beta[k]))) ... else { gain = sqrt(beta * ratio_sq) }
-  // This seems like a strange Wiener fallback if it increases gain, but that's the code.
-  
+
+  // gain = sqrt(max(0, beta*noise^2 / spectrum^2)) -> Wait, fallback in lib is
+  // beta*ratio_sq? spectrum[k] = 1.0, noise[k] = 10.0 -> ratio = 10.0, ratio_sq
+  // = 100.0 beta = 1.0. gain = sqrt(beta * ratio_sq) = sqrt(100) = 10.0? Wait,
+  // for GSS, gain is usually clamped. Let's check logic. if (ratio_sq < (1.F /
+  // (alpha[k] + beta[k]))) ... else { gain = sqrt(beta * ratio_sq) } This seems
+  // like a strange Wiener fallback if it increases gain, but that's the code.
+
   printf("✓ Generalized Spectral Subtraction gain calculation tests passed\n");
 }
 
@@ -140,7 +140,7 @@ void test_gain_estimation_edge_cases(void) {
   float alpha[32];
   float beta[32];
 
-  for(int i = 0; i < 32; i++) {
+  for (int i = 0; i < 32; i++) {
     alpha[i] = 1.0f;
     beta[i] = 1.0f;
     spectrum[i] = 0.0f; // SILENCE
@@ -150,17 +150,21 @@ void test_gain_estimation_edge_cases(void) {
   // Test with zero spectrum values (division by zero safety)
   calculate_gains(real_spectrum_size, fft_size, spectrum, noise_spectrum,
                   gain_spectrum, alpha, beta, WIENER);
-  TEST_ASSERT(gain_spectrum[0] == 0.0f, "Silent spectrum with noise should result in zero gain");
+  TEST_ASSERT(gain_spectrum[0] == 0.0f,
+              "Silent spectrum with noise should result in zero gain");
 
   calculate_gains(real_spectrum_size, fft_size, spectrum, noise_spectrum,
                   gain_spectrum, alpha, beta, GATES);
-  TEST_ASSERT(gain_spectrum[0] == 0.0f, "Silent spectrum with noise should result in zero gain");
+  TEST_ASSERT(gain_spectrum[0] == 0.0f,
+              "Silent spectrum with noise should result in zero gain");
 
   // Test with FLT_MIN spectrum
-  for(int i = 0; i < 32; i++) spectrum[i] = FLT_MIN / 2.0f;
+  for (int i = 0; i < 32; i++)
+    spectrum[i] = FLT_MIN / 2.0f;
   calculate_gains(real_spectrum_size, fft_size, spectrum, noise_spectrum,
                   gain_spectrum, alpha, beta, GENERALIZED_SPECTRALSUBTRACTION);
-  TEST_ASSERT(gain_spectrum[0] == 1.0f, "Sub-FLT_MIN spectrum should result in unity gain");
+  TEST_ASSERT(gain_spectrum[0] == 1.0f,
+              "Sub-FLT_MIN spectrum should result in unity gain");
 
   printf("✓ Gain calculation edge cases tests passed\n");
 }
