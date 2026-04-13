@@ -101,10 +101,10 @@ static inline __attribute__((unused)) void populate_frame_ptrs(
 
 // O(1) frame lookup using pre-computed pointer cache.
 // dt ranges from -search_time_past - 4 to +search_time_future + 4.
-static inline __attribute__((unused)) float* cached_get_frame(
-    NlmFilter* self, int32_t dt) {
-  return self->frame_ptrs[(int32_t)self->config.search_range_time_past + 4 +
-                          dt];
+static inline __attribute__((unused)) float* cached_get_frame(NlmFilter* self,
+                                                              int32_t dt) {
+  return self
+      ->frame_ptrs[(int32_t)self->config.search_range_time_past + 4 + dt];
 }
 
 // Generic implementation (SSE/NEON/Scalar)

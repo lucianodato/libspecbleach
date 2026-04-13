@@ -249,6 +249,51 @@ void test_simd_utils(void) {
   printf("✓ SIMD Utils tests passed\n");
 }
 
+void test_fast_exp(void) {
+  printf("Testing fast exponential approximation...\n");
+
+  // x = 0 -> exp(0) = 1
+  TEST_FLOAT_CLOSE(sb_fast_expf(0.0f), 1.0f, 0.05f);
+
+  // x = -1.0 -> exp(-1) approx 0.3678
+  TEST_FLOAT_CLOSE(sb_fast_expf(-1.0f), expf(-1.0f), 0.05f);
+
+  // x = -5.0 -> exp(-5) approx 0.0067
+  TEST_FLOAT_CLOSE(sb_fast_expf(-5.0f), expf(-5.0f), 0.05f);
+
+  // Underflow protection: x < -20 should be 0
+  TEST_ASSERT(sb_fast_expf(-21.0f) == 0.0f, "Should underflow to 0.0f");
+  TEST_ASSERT(sb_fast_expf(-100.0f) == 0.0f, "Should underflow to 0.0f");
+
+  printf("✓ fast exponential tests passed\n");
+}
+
+void test_patch_ssd(void) {
+  printf("Testing 8x8 patch SSD...\n");
+
+  float target[64];
+  float candidate[64];
+  float* cand_rows[8];
+
+  for (int i = 0; i < 64; i++) {
+    target[i] = (float)i;
+    candidate[i] = (float)i + 1.0f; // Difference of 1.0 for each element
+  }
+
+  sb_vec8_t target_vecs[8];
+  for (int r = 0; r < 8; r++) {
+    target_vecs[r] = sb_load8(target + r * 8);
+    cand_rows[r] = candidate + r * 8;
+  }
+
+  float ssd = sb_vec8_patch_ssd(target_vecs, cand_rows);
+
+  // Expected SSD: 64 elements, each with diff = 1.0 -> SSD = 64 * (1.0^2) = 64.0
+  TEST_FLOAT_CLOSE(ssd, 64.0f, 0.001f);
+
+  printf("✓ 8x8 patch SSD tests passed\n");
+}
+
 int main(void) {
   printf("Running pre-estimation tests...\n");
 
@@ -258,6 +303,8 @@ int main(void) {
   test_spectral_smoother();
   test_transient_detector();
   test_simd_utils();
+  test_fast_exp();
+  test_patch_ssd();
 
   printf("✅ All pre-estimation tests passed!\n");
   return 0;

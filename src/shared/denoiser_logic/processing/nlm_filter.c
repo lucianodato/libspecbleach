@@ -287,8 +287,7 @@ bool nlm_filter_process_generic(NlmFilter* filter, float* smoothed_snr) {
   memset(weight_sum, 0, spectrum_size * sizeof(float));
 
   const float current_inv_h2 = filter->inv_h_squared;
-  const float current_dist_threshold =
-      filter->distance_threshold_actual;
+  const float current_dist_threshold = filter->distance_threshold_actual;
 
 #pragma omp parallel for schedule(dynamic) num_threads(filter->num_threads)
   for (uint32_t block_start = 0; block_start < spectrum_size;
@@ -331,8 +330,7 @@ bool nlm_filter_process_generic(NlmFilter* filter, float* smoothed_snr) {
       }
     }
 
-    for (int32_t dt = -search_time_past; dt <= search_time_future;
-         dt++) {
+    for (int32_t dt = -search_time_past; dt <= search_time_future; dt++) {
       float* cand_rows[8];
       if (filter->config.patch_size == 8) {
         for (int r = 0; r < 8; r++) {
@@ -340,17 +338,16 @@ bool nlm_filter_process_generic(NlmFilter* filter, float* smoothed_snr) {
         }
       }
 
-      for (int32_t df = -(int32_t)search_freq;
-           df <= (int32_t)search_freq; df++) {
+      for (int32_t df = -(int32_t)search_freq; df <= (int32_t)search_freq;
+           df++) {
 
         uint32_t cand_center =
             clamp_index((int32_t)block_center + df, spectrum_size);
 
         float distance = 0.0F;
 
-        bool safe_bounds =
-            safe_block && (cand_center >= half_patch_size) &&
-            (cand_center + half_patch_size <= spectrum_size);
+        bool safe_bounds = safe_block && (cand_center >= half_patch_size) &&
+                           (cand_center + half_patch_size <= spectrum_size);
 
         if (filter->config.patch_size == 8 && safe_bounds) {
           sb_acc8_t sum = sb_acc8_zero();
@@ -375,8 +372,8 @@ bool nlm_filter_process_generic(NlmFilter* filter, float* smoothed_snr) {
 
           distance = sb_acc8_hsum(sum);
         } else {
-          distance = compute_patch_distance(filter, 0, block_center,
-                                            dt, cand_center);
+          distance =
+              compute_patch_distance(filter, 0, block_center, dt, cand_center);
         }
 
         if (distance > current_dist_threshold) {

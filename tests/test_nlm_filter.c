@@ -494,6 +494,44 @@ void test_nlm_filter_snr_and_reconstruct(void) {
   printf("✓ NLM filter SNR calculation and reconstruction tests passed\n");
 }
 
+void test_nlm_filter_frame_cache(void) {
+  printf("Testing NLM filter frame cache indexing...\n");
+
+  NlmFilterConfig config = {
+      .spectrum_size = 32,
+      .time_buffer_size = 32,
+      .search_range_time_past = 8,
+      .search_range_time_future = 8,
+  };
+
+  NlmFilter* filter = nlm_filter_initialize(config);
+  TEST_ASSERT(filter != NULL, "Initialization failed");
+  
+  // Fill buffer
+  float frame[32] = {0.0f};
+  for (int f = 0; f < 32; f++) {
+    nlm_filter_push_frame(filter, frame);
+  }
+
+  // Precompute cache
+  nlm_filter_prepare_frame_ptrs(filter);
+
+  // Check all offsets in search range
+  for (int32_t dt = -8; dt <= 8; dt++) {
+    TEST_ASSERT(cached_get_frame(filter, dt) == get_frame(filter, dt),
+                "Cached pointer should match direct lookup");
+  }
+
+  // Also check halo range (+/- 4)
+  for (int32_t dt = -12; dt <= 12; dt++) {
+    TEST_ASSERT(cached_get_frame(filter, dt) == get_frame(filter, dt),
+                "Cached pointer (halo) should match direct lookup");
+  }
+
+  nlm_filter_free(filter);
+  printf("✓ NLM filter frame cache tests passed\n");
+}
+
 int main(void) {
   printf("Running NLM filter tests...\n\n");
 
@@ -508,6 +546,7 @@ int main(void) {
   test_nlm_filter_latency();
   test_nlm_filter_null_handling();
   test_nlm_filter_snr_and_reconstruct();
+  test_nlm_filter_frame_cache();
 
   printf("\n✅ All NLM filter tests passed!\n");
   return 0;
