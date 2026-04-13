@@ -659,18 +659,21 @@ SB_SIMD_INLINE float sb_vec8_patch_ssd(const sb_vec8_t* target_vecs,
 
 /**
  * Fast exponential approximation for stability and performance.
- * Based on the Schraudolph (1999) approximation, but refined for float accuracy.
- * exp(x) ≈ (1 + x/n)^n, or using the IEEE 754 bit-representation trick.
- * Accuracy: ~4% relative error, suitable for NLM weight computation where
- * small errors are averaged across many candidates.
- * Note: The integer reinterpretation trick with (uint32_t)(12102203.0f * x + 1064866805.0f)
- * is intentional and handles negative values (underflow) via bit-level wrap-around.
+ * Based on the Schraudolph (1999) approximation, but refined for float
+ * accuracy. exp(x) approx (1 + x/n)^n, or using the IEEE 754
+ * bit-representation trick. Accuracy: ~4% relative error, suitable for NLM
+ * weight computation where small errors are averaged across many candidates.
+ * Note: The integer reinterpretation trick with (uint32_t)(12102203.0f * x +
+ * 1064866805.0f) is intentional and handles negative values (underflow) via
+ * bit-level wrap-around.
  */
 SB_SIMD_INLINE float sb_fast_expf(float x) {
   // Use a simple but effective approximation for exp(-x) where x > 0
   // v = (12102203 * x + 1064866805)
   // This is for exp(x). Since NLM uses exp(-dist/h2), x is usually negative.
-  if (x < -20.0f) return 0.0f; // Underflow protection for NLM weights
+  if (x < -20.0f) {
+    return 0.0f; // Underflow protection for NLM weights
+  }
 
   union {
     uint32_t i;

@@ -121,9 +121,11 @@ static void generalized_spectral_subtraction(
       float ratio = noise_spectrum[k] / spectrum[k];
       float ratio_sq = ratio * ratio;
       if (ratio_sq < (1.F / (alpha[k] + beta[k]))) {
-        gain_spectrum[k] = fmaxf(sqrtf(fmaxf(1.F - (alpha[k] * ratio_sq), 0.0f)), 0.F);
+        float val = fmaxf(1.F - (alpha[k] * ratio_sq), 0.0f);
+        gain_spectrum[k] = fmaxf(sqrtf(val), 0.F);
       } else {
-        gain_spectrum[k] = fmaxf(sqrtf(fmaxf(beta[k] * ratio_sq, 0.0f)), 0.F);
+        float val = fmaxf(beta[k] * ratio_sq, 0.0f);
+        gain_spectrum[k] = fmaxf(sqrtf(val), 0.F);
       }
     } else {
       gain_spectrum[k] = 1.F;

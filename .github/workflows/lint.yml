@@ -43,6 +43,7 @@ jobs:
             ninja-build \
             libfftw3-dev \
             libsndfile1-dev \
+            libomp-dev \
             meson
 
       - name: Configure build
