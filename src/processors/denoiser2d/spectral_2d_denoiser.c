@@ -214,7 +214,7 @@ SpectralProcessorHandle spectral_2d_denoiser_initialize(
 
   self->masking_veto = masking_veto_initialize(
       self->fft_size, self->sample_rate, CRITICAL_BANDS_TYPE_2D,
-      self->spectrum_type, false, USE_TEMPORAL_MASKING_2D_DEFAULT);
+      self->spectrum_type, true, USE_TEMPORAL_MASKING_2D_DEFAULT);
   self->suppression_engine = suppression_engine_initialize(
       self->real_spectrum_size, self->sample_rate, CRITICAL_BANDS_TYPE_2D,
       self->spectrum_type, true, USE_TEMPORAL_MASKING_2D_DEFAULT);

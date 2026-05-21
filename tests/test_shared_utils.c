@@ -38,7 +38,7 @@ void test_absolute_hearing_thresholds(void) {
 
   float spectrum[513] = {0.0f}; // 513 = fft_size/2 + 1
   for (int i = 0; i < 513; i++) {
-    spectrum[i] = 0.001f; // Set low values that should be floored
+    spectrum[i] = 0.0f; // Set low values that should be floored
   }
 
   TEST_ASSERT(apply_thresholds_as_floor(aht, spectrum),
@@ -47,7 +47,7 @@ void test_absolute_hearing_thresholds(void) {
   // Check that some values were floored to hearing thresholds
   bool some_values_changed = false;
   for (int i = 0; i < 513; i++) {
-    if (spectrum[i] > 0.001f) {
+    if (spectrum[i] > 0.0f) {
       some_values_changed = true;
       break;
     }

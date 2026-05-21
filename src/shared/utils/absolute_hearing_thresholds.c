@@ -147,8 +147,12 @@ bool apply_thresholds_as_floor(AbsoluteHearingThresholds* self,
   for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
     const float spl_level = (10.F * log10f(spectrum[k] + SPECTRAL_EPSILON)) +
                             self->spl_reference_value;
-    spectrum[k] =
-        powf(10.F, fmaxf(spl_level, self->absolute_thresholds[k]) / 10.F);
+    const float max_spl = fmaxf(spl_level, self->absolute_thresholds[k]);
+    spectrum[k] = powf(10.F, (max_spl - self->spl_reference_value) / 10.F) -
+                  SPECTRAL_EPSILON;
+    if (spectrum[k] < 0.0F) {
+      spectrum[k] = 0.0F;
+    }
   }
 
   return true;

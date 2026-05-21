@@ -252,10 +252,16 @@ void masking_veto_apply(MaskingVeto* self, const float* smoothed_spectrum,
       bin_protection = self->band_audibility[num_bands - 1];
     }
 
-    // Lerp alpha toward 1.0 (no extra subtraction) based on protection.
-    // At full protection (depth=1.0, protection=1.0): alpha -> 1.0
-    // At zero protection: alpha unchanged
-    const float veto_amount = bin_protection * depth;
+    const float bin_clean = self->clean_signal_estimation[k];
+    const float bin_noise = noise_spectrum[k];
+    const float bin_snr = bin_clean / (bin_noise + SPECTRAL_EPSILON);
+    const float bin_snr_scale =
+        fminf(bin_snr / MASKING_VETO_SNR_THRESHOLD, 1.0F);
+
+    // Lerp alpha toward 1.0 (no extra subtraction) based on protection and bin
+    // SNR. At full protection (depth=1.0, protection=1.0): alpha -> 1.0 At zero
+    // protection: alpha unchanged
+    const float veto_amount = bin_protection * bin_snr_scale * depth;
     alpha[k] = alpha[k] + ((1.0F - alpha[k]) * veto_amount);
   }
 }
