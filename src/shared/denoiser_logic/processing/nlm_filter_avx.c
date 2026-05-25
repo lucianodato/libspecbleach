@@ -104,9 +104,6 @@ bool nlm_filter_process_avx(NlmFilter* filter, float* smoothed_snr) {
   float* weight_sum = filter->weight_accum;
   memset(weight_sum, 0, spectrum_size * sizeof(float));
 
-  const float current_inv_h2 = filter->inv_h_squared;
-  const float current_dist_threshold = filter->distance_threshold_actual;
-
 #if SB_HAS_OPENMP
 #pragma omp parallel for schedule(dynamic) num_threads(filter->num_threads)
 #endif
@@ -129,6 +126,24 @@ bool nlm_filter_process_avx(NlmFilter* filter, float* smoothed_snr) {
     }
     if (target_snr_sum < 1e-6F) {
       continue;
+    }
+
+    float current_inv_h2 = filter->inv_h_squared;
+    float current_dist_threshold = filter->distance_threshold_actual;
+
+    if (spectrum_size > 1) {
+      float normalized_freq = (float)block_center / (float)(spectrum_size - 1);
+      float freq_scale = 1.0F + NLM_FREQ_DEPENDENT_SMOOTHING_SCALE *
+                                    normalized_freq * normalized_freq;
+      float h_val = filter->config.h_parameter * freq_scale;
+      float h_squared = h_val * h_val;
+      current_inv_h2 = 1.0F / h_squared;
+      if (filter->config.distance_threshold <= 0.0F) {
+        current_dist_threshold = NLM_DISTANCE_THRESHOLD_MULTIPLIER * h_squared;
+      } else {
+        current_dist_threshold =
+            filter->config.distance_threshold * freq_scale * freq_scale;
+      }
     }
 
     sb_vec8_t target_vecs[8];

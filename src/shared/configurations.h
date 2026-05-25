@@ -90,6 +90,8 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 // Veto Parameters
 #define MASKING_VETO_SMOOTHING 0.5F  // Stabilization alpha for clean signal
 #define MASKING_VETO_NMR_RANGE 20.0F // NMR range for protection mapping (dB)
+#define MASKING_VETO_SNR_THRESHOLD                                             \
+  1.0F // 0dB SNR local bin-level threshold for full protection
 
 // Gain Estimators
 #define GSS_EXPONENT                                                           \
@@ -168,6 +170,9 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define NLM_SEARCH_RANGE_TIME_FUTURE 4U
 #define NLM_DEFAULT_H_PARAMETER 1.0F
 #define NLM_MIN_WEIGHT 1e-10F
+#define NLM_SNR_NOISE_FLOOR_MIN 1e-9F
+#define NLM_FREQ_DEPENDENT_SMOOTHING_SCALE 3.0F
+#define NLM_DISTANCE_THRESHOLD_MULTIPLIER 4.0F
 
 // Must be >= search_time_past + search_time_future + patch_size for NLM caching
 // Using power-of-two (32U) for efficient modulo wrap-around and future headroom

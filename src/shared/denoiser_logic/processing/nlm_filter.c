@@ -286,9 +286,6 @@ bool nlm_filter_process_generic(NlmFilter* filter, float* smoothed_snr) {
   float* weight_sum = filter->weight_accum;
   memset(weight_sum, 0, spectrum_size * sizeof(float));
 
-  const float current_inv_h2 = filter->inv_h_squared;
-  const float current_dist_threshold = filter->distance_threshold_actual;
-
 #if SB_HAS_OPENMP
 #pragma omp parallel for schedule(dynamic) num_threads(filter->num_threads)
 #endif
@@ -311,6 +308,24 @@ bool nlm_filter_process_generic(NlmFilter* filter, float* smoothed_snr) {
     }
     if (target_snr_sum < 1e-6F) {
       continue;
+    }
+
+    float current_inv_h2 = filter->inv_h_squared;
+    float current_dist_threshold = filter->distance_threshold_actual;
+
+    if (spectrum_size > 1) {
+      float normalized_freq = (float)block_center / (float)(spectrum_size - 1);
+      float freq_scale = 1.0F + NLM_FREQ_DEPENDENT_SMOOTHING_SCALE *
+                                    normalized_freq * normalized_freq;
+      float h_val = filter->config.h_parameter * freq_scale;
+      float h_squared = h_val * h_val;
+      current_inv_h2 = 1.0F / h_squared;
+      if (filter->config.distance_threshold <= 0.0F) {
+        current_dist_threshold = NLM_DISTANCE_THRESHOLD_MULTIPLIER * h_squared;
+      } else {
+        current_dist_threshold =
+            filter->config.distance_threshold * freq_scale * freq_scale;
+      }
     }
 
     sb_vec8_t target_vecs[8];
@@ -445,20 +460,20 @@ void nlm_filter_calculate_snr(NlmFilter* filter,
   const uint32_t spectrum_size = filter->config.spectrum_size;
   uint32_t k = 0;
 
-  sb_vec8_t eps = sb_set8(SPECTRAL_EPSILON);
-  sb_vec8_t flt_min = sb_set8(FLT_MIN);
+  sb_vec8_t noise_floor_min = sb_set8(NLM_SNR_NOISE_FLOOR_MIN);
 
   for (; k + 7 < spectrum_size; k += 8) {
     sb_vec8_t noise = sb_load8(noise_spectrum + k);
-    sb_vec8_t mask = sb_gt8(noise, flt_min);
-    sb_vec8_t denom = sb_sel8(mask, noise, eps);
+    sb_vec8_t mask = sb_gt8(noise, noise_floor_min);
+    sb_vec8_t denom = sb_sel8(mask, noise, noise_floor_min);
     sb_vec8_t snr = sb_div8(sb_load8(reference_spectrum + k), denom);
     sb_store8(snr_frame + k, snr);
   }
 
   for (; k < spectrum_size; k++) {
-    float denom =
-        noise_spectrum[k] > FLT_MIN ? noise_spectrum[k] : SPECTRAL_EPSILON;
+    float denom = noise_spectrum[k] > NLM_SNR_NOISE_FLOOR_MIN
+                      ? noise_spectrum[k]
+                      : NLM_SNR_NOISE_FLOOR_MIN;
     snr_frame[k] = reference_spectrum[k] / denom;
   }
 }
@@ -474,20 +489,20 @@ void nlm_filter_reconstruct_magnitude(NlmFilter* filter,
   const uint32_t spectrum_size = filter->config.spectrum_size;
   uint32_t k = 0;
 
-  sb_vec8_t eps = sb_set8(SPECTRAL_EPSILON);
-  sb_vec8_t flt_min = sb_set8(FLT_MIN);
+  sb_vec8_t noise_floor_min = sb_set8(NLM_SNR_NOISE_FLOOR_MIN);
 
   for (; k + 7 < spectrum_size; k += 8) {
     sb_vec8_t noise = sb_load8(noise_spectrum + k);
-    sb_vec8_t mask = sb_gt8(noise, flt_min);
-    sb_vec8_t denom = sb_sel8(mask, noise, eps);
+    sb_vec8_t mask = sb_gt8(noise, noise_floor_min);
+    sb_vec8_t denom = sb_sel8(mask, noise, noise_floor_min);
     sb_vec8_t mag = sb_mul8(sb_load8(smoothed_snr + k), denom);
     sb_store8(magnitude_spectrum + k, mag);
   }
 
   for (; k < spectrum_size; k++) {
-    float denom =
-        noise_spectrum[k] > FLT_MIN ? noise_spectrum[k] : SPECTRAL_EPSILON;
+    float denom = noise_spectrum[k] > NLM_SNR_NOISE_FLOOR_MIN
+                      ? noise_spectrum[k]
+                      : NLM_SNR_NOISE_FLOOR_MIN;
     magnitude_spectrum[k] = smoothed_snr[k] * denom;
   }
 }
