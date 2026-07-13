@@ -110,6 +110,9 @@ void noise_floor_manager_apply(NoiseFloorManager* self,
   // 2. Apply biasing + frequency-dependent floor
   for (uint32_t k = 0U; k < real_spectrum_size; k++) {
     float mask = (tonal_mask) ? tonal_mask[k] : 0.0f;
+    if (mask > 0.0f) {
+      mask = sqrtf(sqrtf(mask));
+    }
     // Proportional interpolation between regular reduction and tonal reduction
     // Note: These are already linear gains (0.0 to 1.0) passed from the loading
     // layer.

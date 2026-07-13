@@ -22,7 +22,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "shared/denoiser_logic/core/noise_floor_manager.h"
 #include "shared/denoiser_logic/processing/tonal_reducer.h"
 #include "shared/utils/spectral_utils.h"
-#include <stdlib.h>
 
 void denoiser_post_process_apply(DenoiserPostProcessParams params) {
   // 1. Apply noise floor management

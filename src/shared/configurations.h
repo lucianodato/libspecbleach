@@ -139,14 +139,9 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 
 // Tonal Detector Constants
 #define PEAK_THRESHOLD 1.41f        // ~3dB above neighbor background
-#define STATIONARITY_THRESHOLD 2.5f // Ratio of Max/Median spread
-#define LOW_FREQ_HZ 200.0f
-#define MID_FREQ_HZ 1000.0f
-#define BG_RADIUS_LOW 15
-#define BG_RADIUS_HIGH 7
-#define THRESHOLD_FACTOR_LOW 0.85f
-#define THRESHOLD_FACTOR_HIGH 1.0f
-#define MAX_NEIGHBORS 30
+#define STATIONARITY_THRESHOLD 5.0f // Ratio of Max/Median spread
+#define MIN_PEAK_PROMINENCE 1e-7f    // Minimum absolute prominence above background
+#define TONAL_MEDIAN_FILTER_WINDOW 51 // Window size for frequency-domain median filter
 
 // Transient Detector Constants
 #define UPPER_LIMIT (5.F)
