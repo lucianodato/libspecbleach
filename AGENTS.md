@@ -17,10 +17,10 @@ This file contains foundational mandates and architectural context for Gemini CL
 
 - **Core Logic**: Located in `src/shared/`. This is where the math happens.
 - **Processors**: `src/processors/` orchestrates shared modules into the public API.
-- **SIMD Utilities**: Explicit SIMD abstractions are centralized in [simd_utils.h](file:///Users/luciandato/repos/libspecbleach/src/shared/utils/simd_utils.h).
+- **SIMD Utilities**: Explicit SIMD abstractions are centralized in [simd_utils.h](src/shared/utils/simd_utils.h).
 - **Reference Generation**: If an algorithm change is intentional and the reference audio needs updating, use:
   - `./tests/generate_reference_files.sh`
-- **Build**: Use `meson setup build --buildtype=release` for performance testing. Use `debug` for development.
+- **Build**: Use `meson setup build --reconfigure --buildtype=release` for performance testing. Use `debug` for development.
 
 ## Architectural Notes
 
@@ -90,7 +90,7 @@ The audio thread runs with strict system deadlines. Unbounded execution times wi
 ### 2. Denormal Number Prevention
 Extremely small floating-point values near zero can trigger costly FPU exceptions and massive CPU spikes.
 *   **Flush-to-Zero (FTZ) & Denormals-are-Zero (DAZ)**: Enable hardware-level FTZ/DAZ during heavy math loops.
-*   **DC Bias**: Alternatively, add a tiny bias (e.g., `1.0e-18f`) to internal filter feedback states to prevent values from decaying to denormal thresholds.
+*   **DC Bias**: Alternatively, if a DC bias is proposed to prevent values from decaying to denormal thresholds, it must be defined as a named tuning constant in `src/shared/configurations.h` (do not use hardcoded magic values) and requires algorithm-specific regression validation to verify its effect on filter response and check for unwanted DC offset.
 
 ### 3. Inter-Thread Communication
 *   **Atomics**: Use atomic types (C11 `stdatomic.h` or C++ `std::atomic`) for thread-safe controls (bypass, levels, parameters).
