@@ -195,18 +195,6 @@ void test_initialize_spectrum_with_value(void) {
   printf("✓ initialize_spectrum_with_value tests passed\n");
 }
 
-void test_spectral_min_max(void) {
-  printf("Testing max_spectral_value and min_spectral_value...\n");
-
-  float spectrum[] = {1.0f, 5.0f, 2.0f, 10.0f, -3.0f, 4.0f};
-  uint32_t size = 6;
-
-  TEST_FLOAT_CLOSE(max_spectral_value(spectrum, size), 10.0f, 1e-6f);
-  TEST_FLOAT_CLOSE(min_spectral_value(spectrum, size), -3.0f, 1e-6f);
-
-  printf("✓ spectral min/max tests passed\n");
-}
-
 void test_fft_frequency_conversions(void) {
   printf("Testing fft_bin_to_freq and freq_to_fft_bin...\n");
 
@@ -270,12 +258,6 @@ void test_spectral_utils_null_and_edge_cases(void) {
   TEST_ASSERT(!initialize_spectrum_with_value(spectrum, 0, 1.0f),
               "initialize_spectrum_with_value should fail with size 0");
 
-  TEST_FLOAT_CLOSE(max_spectral_value(NULL, 10), 0.0f, 1e-6f);
-  TEST_FLOAT_CLOSE(max_spectral_value(spectrum, 0), 0.0f, 1e-6f);
-
-  TEST_FLOAT_CLOSE(min_spectral_value(NULL, 10), 0.0f, 1e-6f);
-  TEST_FLOAT_CLOSE(min_spectral_value(spectrum, 0), 0.0f, 1e-6f);
-
   TEST_ASSERT(!min_spectrum_float(NULL, spectrum2, 10),
               "min_spectrum_float should fail with NULL spectrum_one");
   TEST_ASSERT(!min_spectrum_float(spectrum, NULL, 10),
@@ -289,24 +271,6 @@ void test_spectral_utils_null_and_edge_cases(void) {
               "max_spectrum_float should fail with NULL spectrum_two");
   TEST_ASSERT(!max_spectrum_float(spectrum, spectrum2, 0),
               "max_spectrum_float should fail with size 0");
-
-  // Test double version edge cases
-  double dspectrum[10] = {1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0};
-  double dspectrum2[10] = {10.0, 9.0, 8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0};
-
-  TEST_ASSERT(!min_spectrum_double(NULL, dspectrum2, 10),
-              "min_spectrum_double should fail with NULL");
-  TEST_ASSERT(!min_spectrum_double(dspectrum, NULL, 10),
-              "min_spectrum_double should fail with NULL");
-  TEST_ASSERT(!min_spectrum_double(dspectrum, dspectrum2, 0),
-              "min_spectrum_double should fail with size 0");
-
-  TEST_ASSERT(!max_spectrum_double(NULL, dspectrum2, 10),
-              "max_spectrum_double should fail with NULL");
-  TEST_ASSERT(!max_spectrum_double(dspectrum, NULL, 10),
-              "max_spectrum_double should fail with NULL");
-  TEST_ASSERT(!max_spectrum_double(dspectrum, dspectrum2, 0),
-              "max_spectrum_double should fail with size 0");
 
   // Test get_fft_window edge cases
   float window[10];
@@ -335,7 +299,7 @@ int main(void) {
   test_remap_percentage_log_like_unity();
   test_get_fft_window();
   test_initialize_spectrum_with_value();
-  test_spectral_min_max();
+
   test_fft_frequency_conversions();
   test_min_max_spectrum_float();
   test_spectral_utils_null_and_edge_cases();

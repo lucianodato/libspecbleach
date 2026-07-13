@@ -32,7 +32,6 @@ static int float_comparator(const void* a, const void* b) {
 }
 
 struct SpectralWhitening {
-  float* tapering_window;
   uint32_t fft_size;
   uint32_t real_spectrum_size;
 };
@@ -47,27 +46,12 @@ SpectralWhitening* spectral_whitening_initialize(const uint32_t fft_size) {
   self->fft_size = fft_size;
   self->real_spectrum_size = (self->fft_size / 2U) + 1U;
 
-  self->tapering_window =
-      (float*)calloc(self->real_spectrum_size, sizeof(float));
-  if (!self->tapering_window) {
-    free(self);
-    return NULL;
-  }
-
-  // Tapering is disabled to allow true 100% flat whitening across the spectrum.
-  for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
-    self->tapering_window[k] = 1.0f;
-  }
-
   return self;
 }
 
 void spectral_whitening_free(SpectralWhitening* self) {
   if (!self) {
     return;
-  }
-  if (self->tapering_window) {
-    free(self->tapering_window);
   }
   free(self);
 }
@@ -120,8 +104,7 @@ void spectral_whitening_get_weights(SpectralWhitening* self,
       // This results in weights >= 1.0 for valleys and <= 1.0 for spikes
       weight = powf(anchor_magnitude / smoothed_profile[k], normalized_factor);
     }
-    // Weights include unity-tapering (for now)
-    weights_out[k] = weight * self->tapering_window[k];
+    weights_out[k] = weight;
   }
 
   free(smoothed_profile);
