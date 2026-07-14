@@ -18,6 +18,8 @@ License along with this library; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
+#include <math.h>
+
 #include "shared/denoiser_logic/core/denoiser_post_process.h"
 #include "shared/denoiser_logic/core/noise_floor_manager.h"
 #include "shared/denoiser_logic/processing/tonal_reducer.h"
@@ -25,11 +27,123 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 void denoiser_post_process_apply(DenoiserPostProcessParams params) {
   // 1. Apply noise floor management
+  const float* tonal_mask = tonal_reducer_get_mask(params.tonal_reducer);
   noise_floor_manager_apply(
       params.noise_floor_manager, params.real_spectrum_size, params.fft_size,
       params.gain_spectrum, params.noise_spectrum, params.reduction_amount,
-      params.tonal_reduction, tonal_reducer_get_mask(params.tonal_reducer),
-      params.whitening_factor);
+      params.tonal_reduction, tonal_mask, params.whitening_factor);
+
+  // 1.1. Spectral Gain Patching (Tonal Gain Interpolation)
+  //      For bins where tonal hum noise was aggressively reduced, we
+  //      interpolate the target gains from adjacent non-tonal bins to avoid
+  //      notches/holes in the spectrum.
+  //      - In silence, the gain at the hum bin is matched to the surrounding
+  //      broadband noise
+  //        floor level so that the background noise sounds flat and natural
+  //        (not hollow).
+  //      - During signal playback, the gain is restored to the neighbor gain
+  //      level to protect
+  //        the wanted audio.
+  if (tonal_mask) {
+    for (uint32_t k = 0U; k < params.real_spectrum_size; k++) {
+      if (tonal_mask[k] > 0.0f) {
+        // Find nearest non-tonal neighbor on the left (scan up to 6 bins)
+        int left_idx = -1;
+        for (int i = 1; i <= 6; i++) {
+          int idx = (int)k - i;
+          if (idx >= 0 && tonal_mask[idx] == 0.0f) {
+            left_idx = idx;
+            break;
+          }
+        }
+
+        // Find nearest non-tonal neighbor on the right (scan up to 6 bins)
+        int right_idx = -1;
+        for (int i = 1; i <= 6; i++) {
+          int idx = (int)k + i;
+          if (idx < (int)params.real_spectrum_size && tonal_mask[idx] == 0.0f) {
+            right_idx = idx;
+            break;
+          }
+        }
+
+        // Calculate the interpolated total gain and noise spectrum from
+        // neighbors
+        float G_floor = params.gain_spectrum[k];
+        float S_noise = 0.0f;
+        if (left_idx >= 0 && right_idx >= 0) {
+          float t = (float)(k - left_idx) / (float)(right_idx - left_idx);
+          G_floor = params.gain_spectrum[left_idx] +
+                    t * (params.gain_spectrum[right_idx] -
+                         params.gain_spectrum[left_idx]);
+          S_noise = params.noise_spectrum[left_idx] +
+                    t * (params.noise_spectrum[right_idx] -
+                         params.noise_spectrum[left_idx]);
+        } else if (left_idx >= 0) {
+          G_floor = params.gain_spectrum[left_idx];
+          S_noise = params.noise_spectrum[left_idx];
+        } else if (right_idx >= 0) {
+          G_floor = params.gain_spectrum[right_idx];
+          S_noise = params.noise_spectrum[right_idx];
+        }
+
+        // Compute signal magnitude at bin k from complex halfcomplex format
+        float S_in = 0.0f;
+        if (k == 0U) {
+          S_in = fabsf(params.fft_spectrum[0]);
+        } else if (k == params.fft_size / 2U && (params.fft_size % 2U == 0)) {
+          S_in = fabsf(params.fft_spectrum[k]);
+        } else {
+          float r_val = params.fft_spectrum[k];
+          float i_val = params.fft_spectrum[params.fft_size - k];
+          S_in = sqrtf(r_val * r_val + i_val * i_val);
+        }
+
+        // Compute signal-presence weight (W_sig) based on the neighbor gains
+        float G_base = params.reduction_amount;
+        float G_max = 0.0f;
+        if (left_idx >= 0) {
+          G_max = fmaxf(G_max, params.gain_spectrum[left_idx]);
+        }
+        if (right_idx >= 0) {
+          G_max = fmaxf(G_max, params.gain_spectrum[right_idx]);
+        }
+
+        float W_sig = 0.0f;
+        if (G_max > G_base) {
+          W_sig = (G_max - G_base) / 0.2f;
+          if (W_sig > 1.0f) {
+            W_sig = 1.0f;
+          }
+        }
+
+        // Calculate flat noise target ratio
+        float ratio = 1.0f;
+        if (S_in > 1e-12f) {
+          ratio = S_noise / S_in;
+          if (ratio > 1.0f) {
+            ratio = 1.0f;
+          }
+        }
+
+        // Blend: G_final = G_floor * ((1.0 - W_sig) * ratio + W_sig)
+        float mask_strength = sqrtf(sqrtf(tonal_mask[k]));
+        float target_factor = (1.0f - W_sig) * ratio + W_sig;
+        float patched_gain = G_floor * target_factor;
+
+        // Blend the patched gain based on the mask strength
+        params.gain_spectrum[k] =
+            (1.0f - mask_strength) * params.gain_spectrum[k] +
+            mask_strength * patched_gain;
+      }
+    }
+
+    // Apply symmetric copy of the patched gains to the upper half of the
+    // spectrum (gain_spectrum size is fft_size)
+    for (uint32_t k = 1U; k < params.fft_size - k; k++) {
+      params.gain_spectrum[params.fft_size - k] = params.gain_spectrum[k];
+    }
+  }
 
   // 2. Mixing Logic (formerly denoise_mixer)
   // We perform mixing in-place or with stack variables avoiding extra heap
