@@ -95,6 +95,16 @@ test_shared_utils = executable('test_shared_utils',
   include_directories: [inc, src_inc]
 )
 
+# Spectral Utils tests
+test_spectral_utils = executable('test_spectral_utils',
+  sources: ['test_spectral_utils.c'],
+  dependencies: [libspecbleach_dep, m_dep],
+  c_args: test_c_args,
+  link_args: test_link_args,
+  include_directories: [inc, src_inc]
+)
+
+
 
 # Noise profile tests
 test_noise_profile = executable('test_noise_profile',
@@ -199,6 +209,7 @@ if sndfile_dep.found()
 endif
 test('gain_calculator', test_gain_calculator)
 test('shared_utils', test_shared_utils)
+test('spectral_utils', test_spectral_utils)
 test('noise_profile', test_noise_profile)
 test('specbleach_denoiser', test_specbleach_denoiser)
 test('specbleach_2d_denoiser', test_specbleach_2d_denoiser)
