@@ -87,32 +87,6 @@ bool initialize_spectrum_with_value(float* spectrum, uint32_t spectrum_size,
   return true;
 }
 
-float max_spectral_value(const float* spectrum,
-                         const uint32_t real_spectrum_size) {
-  if (!spectrum || real_spectrum_size == 0U) {
-    return 0.F;
-  }
-
-  float max = spectrum[0];
-  for (uint32_t k = 1U; k < real_spectrum_size; k++) {
-    max = fmaxf(spectrum[k], max);
-  }
-  return max;
-}
-
-float min_spectral_value(const float* spectrum,
-                         const uint32_t real_spectrum_size) {
-  if (!spectrum || real_spectrum_size == 0U) {
-    return 0.F;
-  }
-
-  float min = spectrum[0];
-  for (uint32_t k = 1U; k < real_spectrum_size; k++) {
-    min = fminf(spectrum[k], min);
-  }
-  return min;
-}
-
 bool min_spectrum_float(float* spectrum_one, const float* spectrum_two,
                         const uint32_t spectrum_size) {
   if (!spectrum_one || !spectrum_two || spectrum_size == 0U) {
@@ -139,51 +113,6 @@ bool max_spectrum_float(float* spectrum_one, const float* spectrum_two,
   return true;
 }
 
-bool min_spectrum_double(double* spectrum_one, const double* spectrum_two,
-                         const uint32_t spectrum_size) {
-  if (!spectrum_one || !spectrum_two || spectrum_size == 0U) {
-    return false;
-  }
-
-  for (uint32_t k = 0; k < spectrum_size; k++) {
-    spectrum_one[k] = fmin(spectrum_one[k], spectrum_two[k]);
-  }
-
-  return true;
-}
-
-bool max_spectrum_double(double* spectrum_one, const double* spectrum_two,
-                         const uint32_t spectrum_size) {
-  if (!spectrum_one || !spectrum_two || spectrum_size == 0U) {
-    return false;
-  }
-
-  for (uint32_t k = 0; k < spectrum_size; k++) {
-    spectrum_one[k] = fmax(spectrum_one[k], spectrum_two[k]);
-  }
-
-  return true;
-}
-
-bool direct_matrix_to_vector_spectral_convolution(const float* matrix_spectum,
-                                                  const float* spectrum,
-                                                  float* out_spectrum,
-                                                  uint32_t spectrum_size) {
-  if (!matrix_spectum || !spectrum || !out_spectrum || spectrum_size == 0U) {
-    return false;
-  }
-
-  for (uint32_t i = 0U; i < spectrum_size; i++) {
-    out_spectrum[i] = 0.F;
-    for (uint32_t j = 0U; j < spectrum_size; j++) {
-      out_spectrum[i] +=
-          (matrix_spectum[(i * spectrum_size) + j] * spectrum[j]);
-    }
-  }
-
-  return true;
-}
-
 float fft_bin_to_freq(const uint32_t bin_index, const uint32_t sample_rate,
                       const uint32_t fft_size) {
   return (float)bin_index * ((float)sample_rate / (float)fft_size);
@@ -192,21 +121,6 @@ float fft_bin_to_freq(const uint32_t bin_index, const uint32_t sample_rate,
 uint32_t freq_to_fft_bin(const float freq, const uint32_t sample_rate,
                          const uint32_t fft_size) {
   return (uint32_t)((freq / ((float)sample_rate / (float)fft_size)) + 0.5f);
-}
-
-float spectral_flux(const float* spectrum, const float* previous_spectrum,
-                    const uint32_t spectrum_size) {
-  if (!spectrum || !previous_spectrum || spectrum_size == 0U) {
-    return 0.F;
-  }
-
-  float spectral_flux = 0.F;
-
-  for (uint32_t i = 0U; i < spectrum_size; i++) {
-    const float temp = sqrtf(spectrum[i]) - sqrtf(previous_spectrum[i]);
-    spectral_flux += (temp + fabsf(temp)) / 2.F;
-  }
-  return spectral_flux;
 }
 
 bool get_rolling_mean_spectrum(float* averaged_spectrum,
