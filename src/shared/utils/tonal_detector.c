@@ -50,20 +50,82 @@ void detect_tonal_components(const float* profile, const float* max_profile,
   const int half_win = win_size / 2;
   float win_buf[TONAL_MEDIAN_FILTER_WINDOW];
 
-  for (uint32_t k = 0U; k < size; k++) {
-    int n_count = 0;
-    for (int i = -half_win; i <= half_win; i++) {
-      int idx = (int)k + i;
-      // Clamp boundaries
-      if (idx < 0) {
-        idx = 0;
-      }
-      if (idx >= (int)size) {
-        idx = (int)size - 1;
-      }
-      win_buf[n_count++] = detection_profile[idx];
+  // Initialize the first window at k = 0
+  for (int i = -half_win; i <= half_win; i++) {
+    int idx = i;
+    if (idx < 0) {
+      idx = 0;
     }
-    insertion_sort(win_buf, win_size);
+    if (idx >= (int)size) {
+      idx = (int)size - 1;
+    }
+    win_buf[i + half_win] = detection_profile[idx];
+  }
+  insertion_sort(win_buf, win_size);
+  tonal_mask[0] = win_buf[half_win];
+
+  // Slide window for k = 1 to size - 1
+  for (uint32_t k = 1U; k < size; k++) {
+    int prev_idx = (int)k - 1 - half_win;
+    if (prev_idx < 0) {
+      prev_idx = 0;
+    }
+    if (prev_idx >= (int)size) {
+      prev_idx = (int)size - 1;
+    }
+    float val_remove = detection_profile[prev_idx];
+
+    int next_idx = (int)k + half_win;
+    if (next_idx < 0) {
+      next_idx = 0;
+    }
+    if (next_idx >= (int)size) {
+      next_idx = (int)size - 1;
+    }
+    float val_add = detection_profile[next_idx];
+
+    // Find the element to remove in the sorted buffer
+    int remove_idx = -1;
+    for (int i = 0; i < win_size; i++) {
+      if (win_buf[i] == val_remove) {
+        remove_idx = i;
+        break;
+      }
+    }
+
+    if (remove_idx == -1) {
+      // Fallback: rebuild and sort if value not found
+      for (int i = -half_win; i <= half_win; i++) {
+        int idx = (int)k + i;
+        if (idx < 0) {
+          idx = 0;
+        }
+        if (idx >= (int)size) {
+          idx = (int)size - 1;
+        }
+        win_buf[i + half_win] = detection_profile[idx];
+      }
+      insertion_sort(win_buf, win_size);
+    } else {
+      // Shift elements to insert val_add in sorted position
+      if (val_add > val_remove) {
+        int j = remove_idx;
+        while (j < win_size - 1 && win_buf[j + 1] < val_add) {
+          win_buf[j] = win_buf[j + 1];
+          j++;
+        }
+        win_buf[j] = val_add;
+      } else if (val_add < val_remove) {
+        int j = remove_idx;
+        while (j > 0 && win_buf[j - 1] > val_add) {
+          win_buf[j] = win_buf[j - 1];
+          j--;
+        }
+        win_buf[j] = val_add;
+      } else {
+        win_buf[remove_idx] = val_add;
+      }
+    }
     tonal_mask[k] = win_buf[half_win];
   }
 

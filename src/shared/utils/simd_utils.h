@@ -679,7 +679,7 @@ SB_SIMD_INLINE float sb_fast_expf(float x) {
     uint32_t i;
     float f;
   } v;
-  v.i = (uint32_t)(12102203.0f * x + 1064866805.0f);
+  v.i = (uint32_t)((12102203.0f * x) + 1064866805.0f);
   return v.f;
 }
 

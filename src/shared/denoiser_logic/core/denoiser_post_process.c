@@ -69,58 +69,58 @@ void denoiser_post_process_apply(DenoiserPostProcessParams params) {
 
         // Calculate the interpolated total gain and noise spectrum from
         // neighbors
-        float G_floor = params.gain_spectrum[k];
-        float S_noise = 0.0f;
+        float g_floor = params.gain_spectrum[k];
+        float s_noise = 0.0f;
         if (left_idx >= 0 && right_idx >= 0) {
           float t = (float)(k - left_idx) / (float)(right_idx - left_idx);
-          G_floor = params.gain_spectrum[left_idx] +
+          g_floor = params.gain_spectrum[left_idx] +
                     t * (params.gain_spectrum[right_idx] -
                          params.gain_spectrum[left_idx]);
-          S_noise = params.noise_spectrum[left_idx] +
+          s_noise = params.noise_spectrum[left_idx] +
                     t * (params.noise_spectrum[right_idx] -
                          params.noise_spectrum[left_idx]);
         } else if (left_idx >= 0) {
-          G_floor = params.gain_spectrum[left_idx];
-          S_noise = params.noise_spectrum[left_idx];
+          g_floor = params.gain_spectrum[left_idx];
+          s_noise = params.noise_spectrum[left_idx];
         } else if (right_idx >= 0) {
-          G_floor = params.gain_spectrum[right_idx];
-          S_noise = params.noise_spectrum[right_idx];
+          g_floor = params.gain_spectrum[right_idx];
+          s_noise = params.noise_spectrum[right_idx];
         }
 
         // Compute signal magnitude at bin k from complex halfcomplex format
-        float S_in = 0.0f;
+        float s_in = 0.0f;
         if (k == 0U) {
-          S_in = fabsf(params.fft_spectrum[0]);
+          s_in = fabsf(params.fft_spectrum[0]);
         } else if (k == params.fft_size / 2U && (params.fft_size % 2U == 0)) {
-          S_in = fabsf(params.fft_spectrum[k]);
+          s_in = fabsf(params.fft_spectrum[k]);
         } else {
           float r_val = params.fft_spectrum[k];
           float i_val = params.fft_spectrum[params.fft_size - k];
-          S_in = sqrtf(r_val * r_val + i_val * i_val);
+          s_in = sqrtf(r_val * r_val + i_val * i_val);
         }
 
-        // Compute signal-presence weight (W_sig) based on the neighbor gains
-        float G_base = params.reduction_amount;
-        float G_max = 0.0f;
+        // Compute signal-presence weight (w_sig) based on the neighbor gains
+        float g_base = params.reduction_amount;
+        float g_max = 0.0f;
         if (left_idx >= 0) {
-          G_max = fmaxf(G_max, params.gain_spectrum[left_idx]);
+          g_max = fmaxf(g_max, params.gain_spectrum[left_idx]);
         }
         if (right_idx >= 0) {
-          G_max = fmaxf(G_max, params.gain_spectrum[right_idx]);
+          g_max = fmaxf(g_max, params.gain_spectrum[right_idx]);
         }
 
-        float W_sig = 0.0f;
-        if (G_max > G_base) {
-          W_sig = (G_max - G_base) / 0.2f;
-          if (W_sig > 1.0f) {
-            W_sig = 1.0f;
+        float w_sig = 0.0f;
+        if (g_max > g_base) {
+          w_sig = (g_max - g_base) / 0.2f;
+          if (w_sig > 1.0f) {
+            w_sig = 1.0f;
           }
         }
 
         // Calculate flat noise target ratio
         float ratio = 1.0f;
-        if (S_in > 1e-12f) {
-          ratio = S_noise / S_in;
+        if (s_in > 1e-12f) {
+          ratio = s_noise / s_in;
           if (ratio > 1.0f) {
             ratio = 1.0f;
           }
@@ -128,8 +128,8 @@ void denoiser_post_process_apply(DenoiserPostProcessParams params) {
 
         // Blend: G_final = G_floor * ((1.0 - W_sig) * ratio + W_sig)
         float mask_strength = sqrtf(sqrtf(tonal_mask[k]));
-        float target_factor = (1.0f - W_sig) * ratio + W_sig;
-        float patched_gain = G_floor * target_factor;
+        float target_factor = (1.0f - w_sig) * ratio + w_sig;
+        float patched_gain = g_floor * target_factor;
 
         // Blend the patched gain based on the mask strength
         params.gain_spectrum[k] =

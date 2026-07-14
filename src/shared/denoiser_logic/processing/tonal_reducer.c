@@ -67,7 +67,7 @@ void tonal_reducer_run(TonalReducer* self, const float* noise_spectrum,
     }
   }
   const float* detection_profile =
-      profile_learned ? median_profile : noise_spectrum;
+      profile_learned ? max_profile : noise_spectrum;
 
   // Compute profile checksum
   float current_sum = 0.0f;
