@@ -101,25 +101,7 @@ void denoiser_post_process_apply(DenoiserPostProcessParams params) {
           // Compute signal magnitude at bin k
           float s_in = get_bin_magnitude(params.fft_spectrum, k, params.fft_size);
 
-          // Compute signal-presence weight (w_sig) based on the neighbor gains
-          float g_base = params.reduction_amount;
-          float g_max = 0.0f;
-          if (left_idx >= 0) {
-            g_max = fmaxf(g_max, params.gain_spectrum[left_idx]);
-          }
-          if (right_idx >= 0) {
-            g_max = fmaxf(g_max, params.gain_spectrum[right_idx]);
-          }
-
-          float w_sig = 0.0f;
-          if (g_max > g_base) {
-            w_sig = (g_max - g_base) / 0.2f;
-            if (w_sig > 1.0f) {
-              w_sig = 1.0f;
-            }
-          }
-
-          // Calculate dynamic noise target ratio
+          // Calculate target attenuation ratio relative to surrounding broadband envelope
           float ratio = 1.0f;
           if (s_in > 1e-12f) {
             ratio = s_in_broadband / s_in;
@@ -129,8 +111,7 @@ void denoiser_post_process_apply(DenoiserPostProcessParams params) {
           }
 
           if (has_neighbor) {
-            float target_factor = (1.0f - w_sig) * ratio + w_sig;
-            params.gain_spectrum[k] = g_floor * target_factor;
+            params.gain_spectrum[k] = g_floor * ratio;
           }
         }
       }
