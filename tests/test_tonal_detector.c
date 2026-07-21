@@ -186,7 +186,7 @@ void test_high_frequency_detection(void) {
 }
 
 void test_adaptive_width(void) {
-  printf("Testing adaptive width detection (Walk-Down)...\n");
+  printf("Testing adaptive width detection via median filter...\n");
 
   float* profile = (float*)calloc(TEST_SPECTRUM_SIZE, sizeof(float));
   float* max_profile = (float*)calloc(TEST_SPECTRUM_SIZE, sizeof(float));
@@ -201,16 +201,13 @@ void test_adaptive_width(void) {
     median_profile[i] = noise_floor;
   }
 
-  // Create a wide peak centered at bin 100
-  // Peak: 0.1, Neighbors: 0.08, Next: 0.04 (still > 1.1*floor approx 0.011)
+  // Create a peak centered at bin 100
+  // Peak: 0.1, Neighbors: 0.08, 0.04, 0.02 (still > PEAK_THRESHOLD * floor)
   int center = 100;
-
-  // Center
   profile[center] = 0.1f;
   max_profile[center] = 0.1f;
   median_profile[center] = 0.1f;
 
-  // +/- 1
   profile[center - 1] = 0.08f;
   max_profile[center - 1] = 0.08f;
   median_profile[center - 1] = 0.08f;
@@ -218,7 +215,6 @@ void test_adaptive_width(void) {
   max_profile[center + 1] = 0.08f;
   median_profile[center + 1] = 0.08f;
 
-  // +/- 2
   profile[center - 2] = 0.04f;
   max_profile[center - 2] = 0.04f;
   median_profile[center - 2] = 0.04f;
@@ -226,16 +222,12 @@ void test_adaptive_width(void) {
   max_profile[center + 2] = 0.04f;
   median_profile[center + 2] = 0.04f;
 
-  // +/- 3 (Close to floor but above)
   profile[center - 3] = 0.02f;
   max_profile[center - 3] = 0.02f;
   median_profile[center - 3] = 0.02f;
   profile[center + 3] = 0.02f;
   max_profile[center + 3] = 0.02f;
   median_profile[center + 3] = 0.02f;
-
-  // +/- 4 (Noise floor)
-  // already 0.01
 
   detect_tonal_components(profile, max_profile, median_profile,
                           TEST_SPECTRUM_SIZE, TEST_SAMPLE_RATE, TEST_FFT_SIZE,
@@ -248,12 +240,11 @@ void test_adaptive_width(void) {
     exit(1);
   }
 
-  // +/- 3 should be detected because they are > 0.011 and monotonic
+  // +/- 3 should be detected because they are > PEAK_THRESHOLD * floor
   if (tonal_mask[center - 3] <= 0.0f || tonal_mask[center + 3] <= 0.0f) {
-    fprintf(
-        stderr,
-        "FAIL: Wide peak edges (+/-3) not detected. Mask[-3]=%f, Mask[+3]=%f\n",
-        tonal_mask[center - 3], tonal_mask[center + 3]);
+    fprintf(stderr,
+            "FAIL: Peak edges (+/-3) not detected. Mask[-3]=%f, Mask[+3]=%f\n",
+            tonal_mask[center - 3], tonal_mask[center + 3]);
     exit(1);
   }
 
@@ -370,6 +361,48 @@ void test_off_center_peak_interpolation(void) {
   printf("✓ Off-center peak interpolation passed\n");
 }
 
+void test_adaptive_mode_detection(void) {
+  printf(
+      "Testing adaptive mode detection (unlearned noise profile, fallback to "
+      "profile)...\n");
+
+  float* profile = (float*)calloc(TEST_SPECTRUM_SIZE, sizeof(float));
+  float* max_profile = (float*)calloc(TEST_SPECTRUM_SIZE, sizeof(float));
+  float* median_profile = (float*)calloc(TEST_SPECTRUM_SIZE, sizeof(float));
+  float* tonal_mask = (float*)calloc(TEST_SPECTRUM_SIZE, sizeof(float));
+
+  // max_profile and median_profile are kept at 0.0f (unlearned)
+  // profile (representing the active noise spectrum) has a tone at 1 kHz
+  int bin = freq_to_bin(1000.0f);
+  float noise_floor = 0.01f;
+
+  for (uint32_t k = 0; k < TEST_SPECTRUM_SIZE; k++) {
+    profile[k] = noise_floor;
+  }
+  profile[bin] = 0.1f;
+  profile[bin - 1] = 0.03f;
+  profile[bin + 1] = 0.03f;
+
+  detect_tonal_components(profile, max_profile, median_profile,
+                          TEST_SPECTRUM_SIZE, TEST_SAMPLE_RATE, TEST_FFT_SIZE,
+                          tonal_mask);
+
+  if (tonal_mask[bin] <= 0.0f) {
+    fprintf(stderr,
+            "FAIL: Adaptive mode fallback failed to detect tone at bin %d\n",
+            bin);
+    exit(1);
+  }
+  printf("  Tone detected in adaptive mode at bin %d (mask=%.3f) ✓\n", bin,
+         tonal_mask[bin]);
+
+  free(profile);
+  free(max_profile);
+  free(median_profile);
+  free(tonal_mask);
+  printf("✓ Adaptive mode detection passed\n");
+}
+
 int main(void) {
   printf("=== Tonal Detector Tests ===\n\n");
 
@@ -379,6 +412,7 @@ int main(void) {
   test_high_frequency_detection();
   test_adaptive_width();
   test_off_center_peak_interpolation();
+  test_adaptive_mode_detection();
 
   printf("\n=== All tonal detector tests passed ===\n");
   return 0;

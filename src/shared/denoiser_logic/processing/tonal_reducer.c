@@ -13,6 +13,9 @@ struct TonalReducer {
   uint32_t sample_rate;
   uint32_t fft_size;
   float* tonal_mask;
+  float last_profile_sum;
+  const float* last_detection_profile;
+  bool has_cached_mask;
 };
 
 TonalReducer* tonal_reducer_initialize(uint32_t real_spectrum_size,
@@ -33,6 +36,10 @@ TonalReducer* tonal_reducer_initialize(uint32_t real_spectrum_size,
     return NULL;
   }
 
+  self->last_profile_sum = -1.0f;
+  self->last_detection_profile = NULL;
+  self->has_cached_mask = false;
+
   return self;
 }
 
@@ -51,10 +58,33 @@ void tonal_reducer_run(TonalReducer* self, const float* noise_spectrum,
     return;
   }
 
-  // 1. Detect tonal components in the noise profile
-  detect_tonal_components(noise_spectrum, max_profile, median_profile,
-                          self->real_spectrum_size, self->sample_rate,
-                          self->fft_size, self->tonal_mask);
+  // 1. Determine which profile is active for detection
+  bool profile_learned = false;
+  for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
+    if (median_profile[k] > 0.0f) {
+      profile_learned = true;
+      break;
+    }
+  }
+  const float* detection_profile =
+      profile_learned ? max_profile : noise_spectrum;
+
+  // Compute profile checksum
+  float current_sum = 0.0f;
+  for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
+    current_sum += detection_profile[k];
+  }
+
+  // 2. Run detection only if the profile has changed
+  if (!self->has_cached_mask || current_sum != self->last_profile_sum ||
+      detection_profile != self->last_detection_profile) {
+    detect_tonal_components(noise_spectrum, max_profile, median_profile,
+                            self->real_spectrum_size, self->sample_rate,
+                            self->fft_size, self->tonal_mask);
+    self->last_profile_sum = current_sum;
+    self->last_detection_profile = detection_profile;
+    self->has_cached_mask = true;
+  }
 
   // 2. Skip alpha boosting if reduction is 0 (no tonal suppression)
   // Gain of 1.0 means no reduction.
@@ -73,8 +103,10 @@ void tonal_reducer_run(TonalReducer* self, const float* noise_spectrum,
       continue;
     }
 
-    // Weight by mask strength (partial tonal bins get proportional boost)
-    float target_alpha = alpha_needed * self->tonal_mask[k];
+    // Weight by mask strength (partial tonal bins get proportional boost
+    // between ALPHA_MIN and alpha_needed)
+    float target_alpha =
+        ALPHA_MIN + self->tonal_mask[k] * (alpha_needed - ALPHA_MIN);
 
     // Only boost, never reduce (preserve existing suppression intent)
     alpha[k] = fmaxf(alpha[k], target_alpha);
