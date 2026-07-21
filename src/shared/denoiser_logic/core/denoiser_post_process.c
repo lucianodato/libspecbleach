@@ -56,21 +56,19 @@ void denoiser_post_process_apply(DenoiserPostProcessParams params) {
     if (tonal_mask) {
       for (uint32_t k = 0U; k < params.real_spectrum_size; k++) {
         if (tonal_mask[k] > 0.0f) {
-          // Find nearest non-tonal neighbor on the left (scan up to 6 bins)
+          // Find nearest non-tonal neighbor on the left
           int left_idx = -1;
-          for (int i = 1; i <= 6; i++) {
-            int idx = (int)k - i;
-            if (idx >= 0 && tonal_mask[idx] == 0.0f) {
+          for (int idx = (int)k - 1; idx >= 0; idx--) {
+            if (tonal_mask[idx] == 0.0f) {
               left_idx = idx;
               break;
             }
           }
 
-          // Find nearest non-tonal neighbor on the right (scan up to 6 bins)
+          // Find nearest non-tonal neighbor on the right
           int right_idx = -1;
-          for (int i = 1; i <= 6; i++) {
-            int idx = (int)k + i;
-            if (idx < (int)params.real_spectrum_size && tonal_mask[idx] == 0.0f) {
+          for (int idx = (int)k + 1; idx < (int)params.real_spectrum_size; idx++) {
+            if (tonal_mask[idx] == 0.0f) {
               right_idx = idx;
               break;
             }
