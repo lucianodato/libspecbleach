@@ -129,8 +129,7 @@ void test_tonal_boost(void) {
   }
   printf("  Tone detected at bin %d (mask=%.3f)\n", bin, mask[bin]);
 
-  // Alpha should be boosted.
-  // With ALPHA_MAX_TONAL=10.0, we expect it to be close to 10.0.
+  // Alpha should be boosted aggressively.
   if (alpha[bin] <= 9.0f) {
     fprintf(stderr,
             "FAIL: Alpha not boosted aggressively (<=9.0) at tonal bin %d (got "
