@@ -130,18 +130,10 @@ void denoiser_post_process_apply(DenoiserPostProcessParams params) {
             }
           }
 
-          // Blend: G_final = G_floor * ((1.0 - W_sig) * ratio + W_sig)
-          float mask_strength = sqrtf(sqrtf(tonal_mask[k]));
-          float patched_gain = g_floor;
           if (has_neighbor) {
             float target_factor = (1.0f - w_sig) * ratio + w_sig;
-            patched_gain = g_floor * target_factor;
+            params.gain_spectrum[k] = g_floor * target_factor;
           }
-
-          // Blend the patched gain based on the mask strength
-          params.gain_spectrum[k] =
-              (1.0f - mask_strength) * params.gain_spectrum[k] +
-              mask_strength * patched_gain;
         }
       }
 
