@@ -58,11 +58,6 @@ NoiseEstimator* noise_estimation_initialize(const uint32_t fft_size,
   self->layer_median = spectral_circular_buffer_add_layer(
       self->median_buffer, self->real_spectrum_size);
 
-  if (!self->median_buffer) {
-    noise_estimation_free(self);
-    return NULL;
-  }
-
   return self;
 }
 
@@ -80,6 +75,51 @@ void noise_estimation_free(NoiseEstimator* self) {
   free(self);
 }
 
+static void update_rolling_mean(NoiseEstimator* self, float* noise_profile,
+                                const float* signal_spectrum,
+                                NoiseEstimatorType type) {
+  get_rolling_mean_spectrum(
+      noise_profile, signal_spectrum,
+      get_noise_profile_block_count(self->noise_profile, type),
+      self->real_spectrum_size);
+  increment_block_count(self->noise_profile, type);
+}
+
+static void update_median(NoiseEstimator* self, float* noise_profile,
+                          const float* signal_spectrum,
+                          NoiseEstimatorType type) {
+  spectral_circular_buffer_push(self->median_buffer, self->layer_median,
+                                signal_spectrum);
+  spectral_circular_buffer_advance(self->median_buffer);
+
+  const uint32_t blocks = NUMBER_OF_MEDIAN_SPECTRUM;
+  const float* history_frames[blocks];
+
+  for (uint32_t i = 0; i < blocks; i++) {
+    history_frames[i] = spectral_circular_buffer_retrieve(
+        self->median_buffer, self->layer_median, i + 1);
+  }
+
+  if (get_rolling_median_spectrum(noise_profile, history_frames, blocks,
+                                  self->real_spectrum_size)) {
+    set_noise_profile_available(self->noise_profile, type);
+  }
+}
+
+static void update_max(NoiseEstimator* self, float* noise_profile,
+                       const float* signal_spectrum,
+                       NoiseEstimatorType type) {
+  (void)max_spectrum(noise_profile, signal_spectrum, self->real_spectrum_size);
+  set_noise_profile_available(self->noise_profile, type);
+}
+
+static void update_minimum(NoiseEstimator* self, float* noise_profile,
+                           const float* signal_spectrum,
+                           NoiseEstimatorType type) {
+  (void)min_spectrum(noise_profile, signal_spectrum, self->real_spectrum_size);
+  set_noise_profile_available(self->noise_profile, type);
+}
+
 bool noise_estimation_run(NoiseEstimator* self,
                           const NoiseEstimatorType noise_estimator_type,
                           float* signal_spectrum) {
@@ -92,49 +132,17 @@ bool noise_estimation_run(NoiseEstimator* self,
 
   switch (noise_estimator_type) {
     case ROLLING_MEAN:
-      get_rolling_mean_spectrum(noise_profile, signal_spectrum,
-                                get_noise_profile_block_count(
-                                    self->noise_profile, noise_estimator_type),
-                                self->real_spectrum_size);
-      increment_block_count(self->noise_profile, noise_estimator_type);
+      update_rolling_mean(self, noise_profile, signal_spectrum, noise_estimator_type);
       break;
-    case MEDIAN: {
-      spectral_circular_buffer_push(self->median_buffer, self->layer_median,
-                                    signal_spectrum);
-      spectral_circular_buffer_advance(self->median_buffer);
-
-      const uint32_t blocks = NUMBER_OF_MEDIAN_SPECTRUM;
-      const float* history_frames[blocks];
-
-      // Retrieve history (0 = most recent, blocks-1 = oldest)
-      for (uint32_t i = 0; i < blocks; i++) {
-        // We retrieve with delay 'i + 1' because 'advance' was already called
-        // so current write index is at +1 relative to the frame we just pushed.
-        // wait, usually we push then advance.
-        // Retrieve(delay=1) gets the frame we just pushed.
-        history_frames[i] = spectral_circular_buffer_retrieve(
-            self->median_buffer, self->layer_median, i + 1);
-      }
-
-      bool is_valid_median = get_rolling_median_spectrum(
-          noise_profile, history_frames, blocks, self->real_spectrum_size);
-
-      if (is_valid_median) {
-        set_noise_profile_available(self->noise_profile, noise_estimator_type);
-      }
+    case MEDIAN:
+      update_median(self, noise_profile, signal_spectrum, noise_estimator_type);
       break;
-    }
     case MAX:
-      (void)max_spectrum(noise_profile, signal_spectrum,
-                         self->real_spectrum_size);
-      set_noise_profile_available(self->noise_profile, noise_estimator_type);
+      update_max(self, noise_profile, signal_spectrum, noise_estimator_type);
       break;
     case MINIMUM:
-      (void)min_spectrum(noise_profile, signal_spectrum,
-                         self->real_spectrum_size);
-      set_noise_profile_available(self->noise_profile, noise_estimator_type);
+      update_minimum(self, noise_profile, signal_spectrum, noise_estimator_type);
       break;
-
     default:
       break;
   }

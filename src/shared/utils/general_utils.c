@@ -31,7 +31,7 @@ float sanitize_denormal(float value) {
 }
 
 float from_db_to_coefficient(const float value_db) {
-  return expf(value_db / 20.F * logf(10.F));
+  return powf(10.0F, value_db / 20.0F);
 }
 
 float remap_percentage_log_like_unity(const float value) {
@@ -54,4 +54,43 @@ int get_next_power_two(int number) {
   number |= number >> 16;
   number++;
   return number;
+}
+
+DenoiserParameters sb_denoiser_params_sanitize(
+    SpectralBleachDenoiserParameters parameters) {
+  return (DenoiserParameters){
+      .learn_noise = parameters.learn_noise,
+      .residual_listen = parameters.residual_listen,
+      .reduction_amount =
+          from_db_to_coefficient(parameters.reduction_amount * -1.F),
+      .smoothing_factor =
+          remap_percentage_log_like_unity(parameters.smoothing_factor / 100.F),
+      .whitening_factor = parameters.whitening_factor / 100.F,
+      .adaptive_noise = parameters.adaptive_noise,
+      .noise_estimation_method = parameters.noise_estimation_method,
+      .masking_depth = parameters.masking_depth,
+      .suppression_strength = parameters.suppression_strength / 100.F,
+      .aggressiveness = parameters.aggressiveness,
+      .tonal_reduction =
+          from_db_to_coefficient(parameters.tonal_reduction * -1.F),
+  };
+}
+
+Denoiser2DParameters sb_denoiser_2d_params_sanitize(
+    SpectralBleach2DDenoiserParameters parameters) {
+  return (Denoiser2DParameters){
+      .learn_noise = parameters.learn_noise,
+      .residual_listen = parameters.residual_listen,
+      .reduction_amount =
+          from_db_to_coefficient(parameters.reduction_amount * -1.F),
+      .smoothing_factor = parameters.smoothing_factor,
+      .whitening_factor = parameters.whitening_factor / 100.F,
+      .adaptive_noise = parameters.adaptive_noise,
+      .noise_estimation_method = parameters.noise_estimation_method,
+      .nlm_masking_protection = parameters.nlm_masking_protection,
+      .suppression_strength = parameters.suppression_strength / 100.F,
+      .aggressiveness = parameters.aggressiveness,
+      .tonal_reduction =
+          from_db_to_coefficient(parameters.tonal_reduction * -1.F),
+  };
 }

@@ -200,6 +200,23 @@ bool fft_get_output_samples(FftTransform* self, float* output) {
   return true;
 }
 
+bool fft_accumulate_output_samples(FftTransform* self, float* accumulator) {
+  if (!self || !accumulator) {
+    return false;
+  }
+
+  if (self->frame_size + self->copy_position > self->fft_size) {
+    return false;
+  }
+
+  for (uint32_t i = self->copy_position;
+       i < (self->frame_size + self->copy_position); i++) {
+    accumulator[i - self->copy_position] += self->input_fft_buffer[i];
+  }
+
+  return true;
+}
+
 bool compute_forward_fft(FftTransform* self) {
   if (!self) {
     return false;

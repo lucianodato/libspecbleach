@@ -23,8 +23,6 @@ typedef struct SbSpectralDenoiser {
   uint32_t real_spectrum_size;
   uint32_t sample_rate;
   uint32_t hop;
-  float default_oversubtraction;
-  float default_undersubtraction;
 
   float* gain_spectrum;
   float* alpha;
@@ -77,8 +75,6 @@ SpectralProcessorHandle spectral_denoiser_initialize(
   self->sample_rate = sample_rate;
   self->spectrum_type = SPECTRAL_TYPE_1D;
   self->band_type = CRITICAL_BANDS_TYPE_1D;
-  self->default_oversubtraction = DEFAULT_OVERSUBTRACTION;
-  self->default_undersubtraction = DEFAULT_UNDERSUBTRACTION;
   self->gain_calculation_type = GAIN_ESTIMATION_TYPE_1D;
   self->time_smoothing_type = FIXED;
 

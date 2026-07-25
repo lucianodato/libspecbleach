@@ -125,13 +125,14 @@ bool stft_window_apply(StftWindows* self, float* frame, WindowPlace place) {
   float* window =
       (place == INPUT_WINDOW) ? self->input_window : self->output_window;
 
-  for (uint32_t k = 0U; k < self->stft_fft_size; k++) {
-    frame[k] *= window[k];
-  }
-
   if (place == OUTPUT_WINDOW) {
+    float inv_scale = 1.0F / self->scale_factor;
     for (uint32_t k = 0U; k < self->stft_fft_size; k++) {
-      frame[k] /= self->scale_factor;
+      frame[k] *= window[k] * inv_scale;
+    }
+  } else {
+    for (uint32_t k = 0U; k < self->stft_fft_size; k++) {
+      frame[k] *= window[k];
     }
   }
 

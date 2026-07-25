@@ -31,7 +31,6 @@ struct StftProcessor {
   uint32_t fft_size;
   uint32_t frame_size;
   float* output_accumulator;
-  float* tmp_buffer;
 
   FftTransform* fft_transform;
   StftBuffer* stft_buffer;
@@ -75,12 +74,6 @@ StftProcessor* stft_processor_initialize(const uint32_t sample_rate,
     return NULL;
   }
 
-  self->tmp_buffer = (float*)calloc(self->frame_size, sizeof(float));
-  if (!self->tmp_buffer) {
-    stft_processor_free(self);
-    return NULL;
-  }
-
   self->stft_buffer = stft_buffer_initialize(
       self->frame_size, self->input_latency - self->hop, self->hop);
   if (!self->stft_buffer) {
@@ -115,9 +108,6 @@ void stft_processor_free(StftProcessor* self) {
 
   if (self->output_accumulator) {
     free(self->output_accumulator);
-  }
-  if (self->tmp_buffer) {
-    free(self->tmp_buffer);
   }
 
   free(self);
@@ -157,12 +147,8 @@ bool stft_processor_run(StftProcessor* self, const uint32_t number_of_samples,
                         get_fft_input_buffer(self->fft_transform),
                         OUTPUT_WINDOW);
 
-      fft_get_output_samples(self->fft_transform, self->tmp_buffer);
-
-      // STFT Overlap Add
-      for (uint32_t j = 0U; j < self->frame_size; j++) {
-        self->output_accumulator[j] += self->tmp_buffer[j];
-      }
+      // Directly accumulate output samples into overlap-add accumulator
+      fft_accumulate_output_samples(self->fft_transform, self->output_accumulator);
 
       stft_buffer_advance_block(self->stft_buffer, self->output_accumulator);
 

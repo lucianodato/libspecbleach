@@ -47,6 +47,7 @@ FftTransform* fft_transform_initialize_bins(uint32_t fft_size);
 void fft_transform_free(FftTransform* self);
 bool fft_load_input_samples(FftTransform* self, const float* input);
 bool fft_get_output_samples(FftTransform* self, float* output);
+bool fft_accumulate_output_samples(FftTransform* self, float* accumulator);
 uint32_t get_fft_size(FftTransform* self);
 uint32_t get_fft_real_spectrum_size(FftTransform* self);
 bool compute_forward_fft(FftTransform* self);

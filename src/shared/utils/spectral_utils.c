@@ -87,8 +87,8 @@ bool initialize_spectrum_with_value(float* spectrum, uint32_t spectrum_size,
   return true;
 }
 
-bool min_spectrum_float(float* spectrum_one, const float* spectrum_two,
-                        const uint32_t spectrum_size) {
+bool min_spectrum(float* spectrum_one, const float* spectrum_two,
+                 const uint32_t spectrum_size) {
   if (!spectrum_one || !spectrum_two || spectrum_size == 0U) {
     return false;
   }
@@ -100,8 +100,8 @@ bool min_spectrum_float(float* spectrum_one, const float* spectrum_two,
   return true;
 }
 
-bool max_spectrum_float(float* spectrum_one, const float* spectrum_two,
-                        const uint32_t spectrum_size) {
+bool max_spectrum(float* spectrum_one, const float* spectrum_two,
+                 const uint32_t spectrum_size) {
   if (!spectrum_one || !spectrum_two || spectrum_size == 0U) {
     return false;
   }
