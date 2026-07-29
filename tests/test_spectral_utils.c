@@ -126,6 +126,16 @@ void test_min_max_spectrum_float(void) {
   TEST_FLOAT_CLOSE(s1_max[2], 5.0f, 1e-6f);
   TEST_FLOAT_CLOSE(s1_max[3], 2.0f, 1e-6f);
 
+  float s1_min_float[] = {1.0f, 10.0f, 5.0f, 2.0f};
+  TEST_ASSERT(min_spectrum_float(s1_min_float, s2, size),
+              "min_spectrum_float execution");
+  TEST_FLOAT_CLOSE(s1_min_float[0], 1.0f, 1e-6f);
+
+  float s1_max_float[] = {1.0f, 10.0f, 5.0f, 2.0f};
+  TEST_ASSERT(max_spectrum_float(s1_max_float, s2, size),
+              "max_spectrum_float execution");
+  TEST_FLOAT_CLOSE(s1_max_float[0], 2.0f, 1e-6f);
+
   printf("✓ min/max spectrum float tests passed\n");
 }
 
