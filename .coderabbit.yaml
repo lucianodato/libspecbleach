@@ -4,7 +4,7 @@ language: "en-US"
 reviews:
   profile: "chill"
   auto_review:
-    enabled: true
+    enabled: false
     drafts: false
   auto_approve: true
   path_instructions:
