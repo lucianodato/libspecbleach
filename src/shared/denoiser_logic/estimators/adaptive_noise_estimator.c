@@ -164,7 +164,8 @@ bool adaptive_estimator_run(AdaptiveNoiseEstimator* self, const float* spectrum,
     return false;
   }
 
-  bool success = self->ops.run(self->internal_estimator, spectrum, noise_spectrum);
+  bool success =
+      self->ops.run(self->internal_estimator, spectrum, noise_spectrum);
 
   if (success) {
     if (aggressiveness) {

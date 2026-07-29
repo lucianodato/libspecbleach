@@ -118,8 +118,8 @@ static void calculate_berouti_per_bin(SuppressionEngine* self,
   const float higher_ratio = powf(10.0F, SUPPRESSION_HIGHER_SNR_DB / 10.0F);
 
   for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
-    const float ratio = reference_spectrum[k] /
-                        (noise_spectrum[k] + SPECTRAL_EPSILON);
+    const float ratio =
+        reference_spectrum[k] / (noise_spectrum[k] + SPECTRAL_EPSILON);
 
     if (ratio <= lower_ratio) {
       alpha[k] = alpha_max_user;

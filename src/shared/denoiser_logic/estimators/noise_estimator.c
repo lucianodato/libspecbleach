@@ -107,8 +107,7 @@ static void update_median(NoiseEstimator* self, float* noise_profile,
 }
 
 static void update_max(NoiseEstimator* self, float* noise_profile,
-                       const float* signal_spectrum,
-                       NoiseEstimatorType type) {
+                       const float* signal_spectrum, NoiseEstimatorType type) {
   (void)max_spectrum(noise_profile, signal_spectrum, self->real_spectrum_size);
   set_noise_profile_available(self->noise_profile, type);
 }
@@ -132,7 +131,8 @@ bool noise_estimation_run(NoiseEstimator* self,
 
   switch (noise_estimator_type) {
     case ROLLING_MEAN:
-      update_rolling_mean(self, noise_profile, signal_spectrum, noise_estimator_type);
+      update_rolling_mean(self, noise_profile, signal_spectrum,
+                          noise_estimator_type);
       break;
     case MEDIAN:
       update_median(self, noise_profile, signal_spectrum, noise_estimator_type);
@@ -141,7 +141,8 @@ bool noise_estimation_run(NoiseEstimator* self,
       update_max(self, noise_profile, signal_spectrum, noise_estimator_type);
       break;
     case MINIMUM:
-      update_minimum(self, noise_profile, signal_spectrum, noise_estimator_type);
+      update_minimum(self, noise_profile, signal_spectrum,
+                     noise_estimator_type);
       break;
     default:
       break;

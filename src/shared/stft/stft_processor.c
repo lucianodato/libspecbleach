@@ -148,7 +148,8 @@ bool stft_processor_run(StftProcessor* self, const uint32_t number_of_samples,
                         OUTPUT_WINDOW);
 
       // Directly accumulate output samples into overlap-add accumulator
-      fft_accumulate_output_samples(self->fft_transform, self->output_accumulator);
+      fft_accumulate_output_samples(self->fft_transform,
+                                    self->output_accumulator);
 
       stft_buffer_advance_block(self->stft_buffer, self->output_accumulator);
 

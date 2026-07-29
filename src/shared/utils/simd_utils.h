@@ -493,8 +493,6 @@ SB_SIMD_INLINE float sb_vec4_ssd(sb_vec4_t a, sb_vec4_t b) {
 #endif
 }
 
-
-
 /**
  * 8-Wide Bitwise/Logic (for masks)
  */
