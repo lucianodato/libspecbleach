@@ -27,8 +27,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "shared/denoiser_logic/processing/nlm_filter_internal.h"
 #include "shared/utils/simd_utils.h"
 
-
-
 NlmFilter* nlm_filter_initialize(NlmFilterConfig config) {
   if (config.spectrum_size == 0) {
     return NULL;

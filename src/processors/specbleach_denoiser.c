@@ -100,8 +100,8 @@ bool specbleach_process(SpectralBleachHandle instance,
 
   SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
 
-  stft_processor_run(self->core->stft_processor, number_of_samples, input, output,
-                     &spectral_denoiser_run, self->spectral_denoiser);
+  stft_processor_run(self->core->stft_processor, number_of_samples, input,
+                     output, &spectral_denoiser_run, self->spectral_denoiser);
 
   return true;
 }
@@ -118,7 +118,8 @@ bool specbleach_load_noise_profile_for_mode(SpectralBleachHandle instance,
                                             const int mode) {
   SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
   return self ? sb_processor_core_load_noise_profile_for_mode(
-                    self->core, restored_profile, profile_size, block_count, mode)
+                    self->core, restored_profile, profile_size, block_count,
+                    mode)
               : false;
 }
 
@@ -145,7 +146,8 @@ float* specbleach_get_noise_profile_for_mode(SpectralBleachHandle instance,
 bool specbleach_noise_profile_available_for_mode(SpectralBleachHandle instance,
                                                  int mode) {
   SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
-  return self ? sb_processor_core_noise_profile_available_for_mode(self->core, mode)
+  return self ? sb_processor_core_noise_profile_available_for_mode(self->core,
+                                                                   mode)
               : false;
 }
 

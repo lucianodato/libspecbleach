@@ -28,10 +28,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 _Static_assert(sizeof(float) >= 4, "float must be at least 32 bits");
 _Static_assert(sizeof(double) >= 8, "double must be at least 64 bits");
 
-#include "specbleach_2d_denoiser.h"
-#include "specbleach_denoiser.h"
 #include "processors/denoiser/spectral_denoiser.h"
 #include "processors/denoiser2d/spectral_2d_denoiser.h"
+#include "specbleach_2d_denoiser.h"
+#include "specbleach_denoiser.h"
 
 __attribute__((warn_unused_result)) float sanitize_denormal(float value);
 __attribute__((warn_unused_result)) float from_db_to_coefficient(
@@ -42,9 +42,9 @@ __attribute__((warn_unused_result)) int get_next_divisible_two(int number);
 __attribute__((warn_unused_result)) int get_next_power_two(int number);
 
 DenoiserParameters sb_denoiser_params_sanitize(
-    SpectralBleachDenoiserParameters params);
+    SpectralBleachDenoiserParameters parameters);
 
 Denoiser2DParameters sb_denoiser_2d_params_sanitize(
-    SpectralBleach2DDenoiserParameters params);
+    SpectralBleach2DDenoiserParameters parameters);
 
 #endif

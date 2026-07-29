@@ -37,8 +37,8 @@ SbProcessorCore* sb_processor_core_initialize(
 
   core->sample_rate = sample_rate;
   core->stft_processor = stft_processor_initialize(
-      sample_rate, frame_size, overlap_factor, padding_type,
-      zeropadding_amount, input_window, output_window);
+      sample_rate, frame_size, overlap_factor, padding_type, zeropadding_amount,
+      input_window, output_window);
 
   if (!core->stft_processor) {
     sb_processor_core_free(core);

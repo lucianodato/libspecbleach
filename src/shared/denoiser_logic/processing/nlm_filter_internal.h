@@ -119,10 +119,9 @@ static inline __attribute__((unused)) float* cached_get_frame(NlmFilter* self,
 #endif
 
 // Helper: compute squared Euclidean distance between two patches
-static inline float compute_patch_distance(NlmFilter* self, int32_t target_time,
-                                           uint32_t target_freq,
-                                           int32_t candidate_time,
-                                           uint32_t candidate_freq) {
+static inline __attribute__((unused)) float compute_patch_distance(
+    NlmFilter* self, int32_t target_time, uint32_t target_freq,
+    int32_t candidate_time, uint32_t candidate_freq) {
   float distance = 0.0F;
   const uint32_t patch_size = self->config.patch_size;
   const uint32_t half_patch = patch_size / 2;
@@ -169,8 +168,8 @@ static inline float compute_patch_distance(NlmFilter* self, int32_t target_time,
   return distance;
 }
 
-static inline bool nlm_filter_process_core(NlmFilter* filter,
-                                           float* smoothed_snr) {
+static inline __attribute__((unused)) bool nlm_filter_process_core(
+    NlmFilter* filter, float* smoothed_snr) {
   if (!filter || !smoothed_snr) {
     return false;
   }

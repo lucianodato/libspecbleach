@@ -33,22 +33,19 @@ typedef struct SbProcessorCore {
   NoiseProfile* noise_profile;
 } SbProcessorCore;
 
-SbProcessorCore* sb_processor_core_initialize(uint32_t sample_rate,
-                                               float frame_size,
-                                               uint32_t overlap_factor,
-                                               ZeroPaddingType padding_type,
-                                               uint32_t zeropadding_amount,
-                                               WindowTypes input_window,
-                                               WindowTypes output_window,
-                                               uint32_t profile_spectrum_size);
+SbProcessorCore* sb_processor_core_initialize(
+    uint32_t sample_rate, float frame_size, uint32_t overlap_factor,
+    ZeroPaddingType padding_type, uint32_t zeropadding_amount,
+    WindowTypes input_window, WindowTypes output_window,
+    uint32_t profile_spectrum_size);
 
 void sb_processor_core_free(SbProcessorCore* core);
 
 uint32_t sb_processor_core_get_noise_profile_size(SbProcessorCore* core);
 
 bool sb_processor_core_load_noise_profile_for_mode(
-    SbProcessorCore* core, const float* restored_profile,
-    uint32_t profile_size, uint32_t block_count, int mode);
+    SbProcessorCore* core, const float* restored_profile, uint32_t profile_size,
+    uint32_t block_count, int mode);
 
 bool sb_processor_core_reset_noise_profile(SbProcessorCore* core);
 

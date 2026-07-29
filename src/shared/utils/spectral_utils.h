@@ -67,9 +67,8 @@ bool get_morphed_profile(float* output_profile, const float* mean_profile,
                          const float* min_profile, uint32_t size,
                          float aggressiveness);
 
-static inline void sb_apply_spectral_symmetry(float* spectrum,
-                                               uint32_t real_spectrum_size,
-                                               uint32_t fft_size) {
+static inline __attribute__((unused)) void sb_apply_spectral_symmetry(
+    float* spectrum, uint32_t real_spectrum_size, uint32_t fft_size) {
   for (uint32_t i = 1U; i < real_spectrum_size && i < (fft_size - i); i++) {
     spectrum[fft_size - i] = spectrum[i];
   }

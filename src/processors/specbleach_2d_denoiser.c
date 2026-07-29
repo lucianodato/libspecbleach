@@ -113,8 +113,9 @@ bool specbleach_2d_process(SpectralBleachHandle instance,
 
   Sb2DDenoiser* self = (Sb2DDenoiser*)instance;
 
-  stft_processor_run(self->core->stft_processor, number_of_samples, input, output,
-                     &spectral_2d_denoiser_run, self->spectral_2d_denoiser);
+  stft_processor_run(self->core->stft_processor, number_of_samples, input,
+                     output, &spectral_2d_denoiser_run,
+                     self->spectral_2d_denoiser);
 
   return true;
 }
@@ -131,7 +132,8 @@ bool specbleach_2d_load_noise_profile_for_mode(SpectralBleachHandle instance,
                                                const int mode) {
   Sb2DDenoiser* self = (Sb2DDenoiser*)instance;
   return self ? sb_processor_core_load_noise_profile_for_mode(
-                    self->core, restored_profile, profile_size, block_count, mode)
+                    self->core, restored_profile, profile_size, block_count,
+                    mode)
               : false;
 }
 
@@ -158,7 +160,8 @@ float* specbleach_2d_get_noise_profile_for_mode(SpectralBleachHandle instance,
 bool specbleach_2d_noise_profile_available_for_mode(
     SpectralBleachHandle instance, int mode) {
   Sb2DDenoiser* self = (Sb2DDenoiser*)instance;
-  return self ? sb_processor_core_noise_profile_available_for_mode(self->core, mode)
+  return self ? sb_processor_core_noise_profile_available_for_mode(self->core,
+                                                                   mode)
               : false;
 }
 
@@ -173,8 +176,7 @@ bool specbleach_2d_load_parameters(
   Denoiser2DParameters denoise_parameters =
       sb_denoiser_2d_params_sanitize(parameters);
 
-  load_2d_reduction_parameters(self->spectral_2d_denoiser,
-                               denoise_parameters);
+  load_2d_reduction_parameters(self->spectral_2d_denoiser, denoise_parameters);
 
   return true;
 }
