@@ -1,0 +1,18 @@
+# CodeRabbit Configuration File
+version: "2"
+language: "en-US"
+reviews:
+  profile: "chill"
+  auto_review:
+    enabled: true
+    drafts: false
+  auto_approve: true
+  path_instructions:
+    - path: "src/**/*"
+      instructions: |
+        Pay attention to real-time DSP safety:
+        - No dynamic memory allocations (malloc, free, calloc) in the audio processing thread.
+        - No blocking synchronization (mutexes, locks) or I/O operations in audio callbacks.
+        - Verify SIMD FTZ/DAZ handling and vectorization compatibility.
+chat:
+  auto_reply: true
