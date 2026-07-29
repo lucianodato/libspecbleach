@@ -45,30 +45,18 @@ SpectralBleachHandle specbleach_2d_initialize(const uint32_t sample_rate,
     return NULL;
   }
 
-  // Temporary STFT processor initialization to compute FFT size for 2D profile
-  StftProcessor* tmp_stft = stft_processor_initialize(
-      sample_rate, frame_size, OVERLAP_FACTOR_2D, PADDING_CONFIGURATION_2D,
-      ZEROPADDING_AMOUNT_2D, INPUT_WINDOW_TYPE_2D, OUTPUT_WINDOW_TYPE_2D);
-
-  if (!tmp_stft) {
-    specbleach_2d_free(self);
-    return NULL;
-  }
-
-  const uint32_t fft_size = get_stft_fft_size(tmp_stft);
-  stft_processor_free(tmp_stft);
-
-  self->hop = fft_size / OVERLAP_FACTOR_2D;
-
   self->core = sb_processor_core_initialize(
       sample_rate, frame_size, OVERLAP_FACTOR_2D, PADDING_CONFIGURATION_2D,
       ZEROPADDING_AMOUNT_2D, INPUT_WINDOW_TYPE_2D, OUTPUT_WINDOW_TYPE_2D,
-      fft_size);
+      SB_PROCESSOR_CORE_FULL_FFT_SPECTRUM);
 
   if (!self->core) {
     specbleach_2d_free(self);
     return NULL;
   }
+
+  const uint32_t fft_size = get_stft_fft_size(self->core->stft_processor);
+  self->hop = fft_size / OVERLAP_FACTOR_2D;
 
   self->spectral_2d_denoiser = spectral_2d_denoiser_initialize(
       sample_rate, fft_size, OVERLAP_FACTOR_2D, self->core->noise_profile);

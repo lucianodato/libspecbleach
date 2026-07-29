@@ -21,6 +21,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #ifndef SPECBLEACH_PROCESSOR_CORE_H
 #define SPECBLEACH_PROCESSOR_CORE_H
 
+#include "shared/configurations.h"
 #include "shared/denoiser_logic/core/noise_profile.h"
 #include "shared/stft/stft_processor.h"
 #include <stdbool.h>

@@ -46,8 +46,10 @@ SbProcessorCore* sb_processor_core_initialize(
   }
 
   uint32_t spectrum_size = profile_spectrum_size;
-  if (spectrum_size == 0) {
+  if (spectrum_size == SB_PROCESSOR_CORE_DEFAULT_REAL_SPECTRUM) {
     spectrum_size = get_stft_real_spectrum_size(core->stft_processor);
+  } else if (spectrum_size == SB_PROCESSOR_CORE_FULL_FFT_SPECTRUM) {
+    spectrum_size = get_stft_fft_size(core->stft_processor);
   }
 
   core->noise_profile = noise_profile_initialize(spectrum_size);

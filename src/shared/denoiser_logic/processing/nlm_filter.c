@@ -204,10 +204,6 @@ bool nlm_filter_process(NlmFilter* filter, float* smoothed_snr) {
   return filter->process_fn(filter, smoothed_snr);
 }
 
-#ifdef _OPENMP
-#include <omp.h>
-#endif
-
 bool nlm_filter_process_generic(NlmFilter* filter, float* smoothed_snr) {
   return nlm_filter_process_core(filter, smoothed_snr);
 }
