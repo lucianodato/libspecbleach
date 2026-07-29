@@ -19,14 +19,54 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 #include "specbleach_processor_core.h"
+#include "shared/utils/general_utils.h"
 #include <stdlib.h>
+
+DenoiserParameters sb_denoiser_params_sanitize(
+    SpectralBleachDenoiserParameters parameters) {
+  return (DenoiserParameters){
+      .learn_noise = parameters.learn_noise,
+      .residual_listen = parameters.residual_listen,
+      .reduction_amount =
+          from_db_to_coefficient(parameters.reduction_amount * -1.F),
+      .smoothing_factor =
+          remap_percentage_log_like_unity(parameters.smoothing_factor / 100.F),
+      .whitening_factor = parameters.whitening_factor / 100.F,
+      .adaptive_noise = parameters.adaptive_noise,
+      .noise_estimation_method = parameters.noise_estimation_method,
+      .masking_depth = parameters.masking_depth,
+      .suppression_strength = parameters.suppression_strength / 100.F,
+      .aggressiveness = parameters.aggressiveness,
+      .tonal_reduction =
+          from_db_to_coefficient(parameters.tonal_reduction * -1.F),
+  };
+}
+
+Denoiser2DParameters sb_denoiser_2d_params_sanitize(
+    SpectralBleach2DDenoiserParameters parameters) {
+  return (Denoiser2DParameters){
+      .learn_noise = parameters.learn_noise,
+      .residual_listen = parameters.residual_listen,
+      .reduction_amount =
+          from_db_to_coefficient(parameters.reduction_amount * -1.F),
+      .smoothing_factor = parameters.smoothing_factor,
+      .whitening_factor = parameters.whitening_factor / 100.F,
+      .adaptive_noise = parameters.adaptive_noise,
+      .noise_estimation_method = parameters.noise_estimation_method,
+      .nlm_masking_protection = parameters.nlm_masking_protection,
+      .suppression_strength = parameters.suppression_strength / 100.F,
+      .aggressiveness = parameters.aggressiveness,
+      .tonal_reduction =
+          from_db_to_coefficient(parameters.tonal_reduction * -1.F),
+  };
+}
 
 SbProcessorCore* sb_processor_core_initialize(
     const uint32_t sample_rate, const float frame_size,
     const uint32_t overlap_factor, const ZeroPaddingType padding_type,
     const uint32_t zeropadding_amount, const WindowTypes input_window,
     const WindowTypes output_window, const uint32_t profile_spectrum_size) {
-  if (sample_rate < 4000 || sample_rate > 192000 || frame_size <= 0.0f) {
+  if (sample_rate == 0 || frame_size <= 0.0f) {
     return NULL;
   }
 

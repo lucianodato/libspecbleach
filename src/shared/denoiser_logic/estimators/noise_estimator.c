@@ -93,7 +93,7 @@ static void update_median(NoiseEstimator* self, float* noise_profile,
   spectral_circular_buffer_advance(self->median_buffer);
 
   const uint32_t blocks = NUMBER_OF_MEDIAN_SPECTRUM;
-  const float* history_frames[blocks];
+  const float* history_frames[NUMBER_OF_MEDIAN_SPECTRUM];
 
   for (uint32_t i = 0; i < blocks; i++) {
     history_frames[i] = spectral_circular_buffer_retrieve(
@@ -108,15 +108,17 @@ static void update_median(NoiseEstimator* self, float* noise_profile,
 
 static void update_max(NoiseEstimator* self, float* noise_profile,
                        const float* signal_spectrum, NoiseEstimatorType type) {
-  (void)max_spectrum(noise_profile, signal_spectrum, self->real_spectrum_size);
-  set_noise_profile_available(self->noise_profile, type);
+  if (max_spectrum(noise_profile, signal_spectrum, self->real_spectrum_size)) {
+    set_noise_profile_available(self->noise_profile, type);
+  }
 }
 
 static void update_minimum(NoiseEstimator* self, float* noise_profile,
                            const float* signal_spectrum,
                            NoiseEstimatorType type) {
-  (void)min_spectrum(noise_profile, signal_spectrum, self->real_spectrum_size);
-  set_noise_profile_available(self->noise_profile, type);
+  if (min_spectrum(noise_profile, signal_spectrum, self->real_spectrum_size)) {
+    set_noise_profile_available(self->noise_profile, type);
+  }
 }
 
 bool noise_estimation_run(NoiseEstimator* self,

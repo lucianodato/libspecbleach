@@ -21,8 +21,19 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #ifndef NLM_FILTER_INTERNAL_H
 #define NLM_FILTER_INTERNAL_H
 
+#include "shared/configurations.h"
 #include "shared/denoiser_logic/processing/nlm_filter.h"
+#include "shared/utils/simd_utils.h"
+#include <float.h>
+#include <math.h>
+#include <stdbool.h>
 #include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 
 typedef bool (*nlm_process_impl_fn)(NlmFilter* filter, float* smoothed_snr);
 
@@ -106,17 +117,6 @@ static inline __attribute__((unused)) float* cached_get_frame(NlmFilter* self,
   return self
       ->frame_ptrs[(int32_t)self->config.search_range_time_past + 4 + dt];
 }
-
-#include "shared/configurations.h"
-#include "shared/utils/simd_utils.h"
-#include <float.h>
-#include <math.h>
-#include <stdlib.h>
-#include <string.h>
-
-#ifdef _OPENMP
-#include <omp.h>
-#endif
 
 // Helper: compute squared Euclidean distance between two patches
 static inline __attribute__((unused)) float compute_patch_distance(
@@ -228,7 +228,10 @@ static inline __attribute__((unused)) bool nlm_filter_process_core(
       float normalized_freq = (float)block_center / (float)(spectrum_size - 1);
       float freq_scale = 1.0F + NLM_FREQ_DEPENDENT_SMOOTHING_SCALE *
                                     normalized_freq * normalized_freq;
-      float h_val = filter->config.h_parameter * freq_scale;
+      float base_h = filter->config.h_parameter > 0.0F
+                         ? filter->config.h_parameter
+                         : NLM_DEFAULT_H_PARAMETER;
+      float h_val = base_h * freq_scale;
       float h_squared = h_val * h_val;
       current_inv_h2 = 1.0F / h_squared;
       if (filter->config.distance_threshold <= 0.0F) {
@@ -240,7 +243,8 @@ static inline __attribute__((unused)) bool nlm_filter_process_core(
     }
 
     sb_vec8_t target_vecs[8];
-    const uint32_t half_patch_size = 4;
+    const uint32_t patch_size = filter->config.patch_size;
+    const uint32_t half_patch_size = patch_size / 2;
 
     bool safe_block = (block_center >= half_patch_size) &&
                       (block_center + half_patch_size <= spectrum_size);

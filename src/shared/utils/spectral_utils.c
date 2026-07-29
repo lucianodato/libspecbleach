@@ -113,6 +113,16 @@ bool max_spectrum(float* spectrum_one, const float* spectrum_two,
   return true;
 }
 
+bool min_spectrum_float(float* spectrum_one, const float* spectrum_two,
+                        uint32_t spectrum_size) {
+  return min_spectrum(spectrum_one, spectrum_two, spectrum_size);
+}
+
+bool max_spectrum_float(float* spectrum_one, const float* spectrum_two,
+                        uint32_t spectrum_size) {
+  return max_spectrum(spectrum_one, spectrum_two, spectrum_size);
+}
+
 float fft_bin_to_freq(const uint32_t bin_index, const uint32_t sample_rate,
                       const uint32_t fft_size) {
   return (float)bin_index * ((float)sample_rate / (float)fft_size);
