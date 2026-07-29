@@ -115,6 +115,16 @@ test_noise_profile = executable('test_noise_profile',
   include_directories: inc
 )
 
+# Specbleach processor core tests
+test_specbleach_processor_core = executable('test_specbleach_processor_core',
+  sources: ['test_specbleach_processor_core.c'],
+  dependencies: [libspecbleach_dep, m_dep],
+  c_args: test_c_args,
+  link_args: test_link_args,
+  include_directories: [inc, src_inc]
+)
+test('specbleach_processor_core', test_specbleach_processor_core)
+
 # Specbleach denoiser tests
 test_specbleach_denoiser = executable('test_specbleach_denoiser',
   sources: ['test_specbleach_denoiser.c'],

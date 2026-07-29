@@ -34,8 +34,10 @@ typedef enum WindowTypes {
 bool get_fft_window(float* window, uint32_t fft_size, WindowTypes window_type);
 bool initialize_spectrum_with_value(float* spectrum, uint32_t spectrum_size,
                                     float value);
-#define min_spectrum min_spectrum_float
-#define max_spectrum max_spectrum_float
+bool min_spectrum(float* spectrum_one, const float* spectrum_two,
+                  uint32_t spectrum_size);
+bool max_spectrum(float* spectrum_one, const float* spectrum_two,
+                  uint32_t spectrum_size);
 
 bool min_spectrum_float(float* spectrum_one, const float* spectrum_two,
                         uint32_t spectrum_size);
@@ -69,5 +71,12 @@ bool get_morphed_profile(float* output_profile, const float* mean_profile,
                          const float* median_profile, const float* max_profile,
                          const float* min_profile, uint32_t size,
                          float aggressiveness);
+
+static inline __attribute__((unused)) void sb_apply_spectral_symmetry(
+    float* spectrum, uint32_t real_spectrum_size, uint32_t fft_size) {
+  for (uint32_t i = 1U; i < real_spectrum_size && i < (fft_size - i); i++) {
+    spectrum[fft_size - i] = spectrum[i];
+  }
+}
 
 #endif

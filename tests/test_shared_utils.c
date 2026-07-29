@@ -224,16 +224,9 @@ void test_simd_utils(void) {
   TEST_FLOAT_CLOSE(out[0], 3.0f, 0.001f);
 
   sb_vec4_t v4_1 = sb_load4(buf);
-  sb_vec4_t v4_2 = sb_set4(2.0f);
-  sb_vec4_t v4_add = sb_add4(v4_1, v4_2);
-  sb_vec4_t v4_sub = sb_sub4(v4_1, v4_2);
-  sb_vec4_t v4_mul = sb_mul4(v4_1, v4_2);
-
-  sb_store4(out, v4_add);
-  TEST_FLOAT_CLOSE(out[0], 3.0f, 0.001f);
-
+  sb_vec4_t v4_2 = sb_load4(buf + 4);
   float ssd4 = sb_vec4_ssd(v4_1, v4_2);
-  (void)ssd4;
+  TEST_FLOAT_CLOSE(ssd4, 64.0f, 0.001f);
 
   sb_vec8_t mask = sb_gt8(v1, v2);
   sb_vec8_t result = sb_sel8(mask, vsub, vmul);

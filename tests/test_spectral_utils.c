@@ -101,30 +101,40 @@ void test_min_max_spectrum_float(void) {
   float s1[] = {1.0f, 10.0f, 5.0f, 2.0f};
   float s2[] = {2.0f, 5.0f, 5.0f, 1.0f};
 
-  // Test NULL and size 0 checks for min_spectrum_float
-  TEST_ASSERT(!min_spectrum_float(NULL, s2, size), "min_spectrum NULL 1");
-  TEST_ASSERT(!min_spectrum_float(s1, NULL, size), "min_spectrum NULL 2");
-  TEST_ASSERT(!min_spectrum_float(s1, s2, 0), "min_spectrum size 0");
+  // Test NULL and size 0 checks for min_spectrum
+  TEST_ASSERT(!min_spectrum(NULL, s2, size), "min_spectrum NULL 1");
+  TEST_ASSERT(!min_spectrum(s1, NULL, size), "min_spectrum NULL 2");
+  TEST_ASSERT(!min_spectrum(s1, s2, 0), "min_spectrum size 0");
 
-  // Test NULL and size 0 checks for max_spectrum_float
-  TEST_ASSERT(!max_spectrum_float(NULL, s2, size), "max_spectrum NULL 1");
-  TEST_ASSERT(!max_spectrum_float(s1, NULL, size), "max_spectrum NULL 2");
-  TEST_ASSERT(!max_spectrum_float(s1, s2, 0), "max_spectrum size 0");
+  // Test NULL and size 0 checks for max_spectrum
+  TEST_ASSERT(!max_spectrum(NULL, s2, size), "max_spectrum NULL 1");
+  TEST_ASSERT(!max_spectrum(s1, NULL, size), "max_spectrum NULL 2");
+  TEST_ASSERT(!max_spectrum(s1, s2, 0), "max_spectrum size 0");
 
   // Test operations
   float s1_min[] = {1.0f, 10.0f, 5.0f, 2.0f};
-  TEST_ASSERT(min_spectrum_float(s1_min, s2, size), "min_spectrum execution");
+  TEST_ASSERT(min_spectrum(s1_min, s2, size), "min_spectrum execution");
   TEST_FLOAT_CLOSE(s1_min[0], 1.0f, 1e-6f);
   TEST_FLOAT_CLOSE(s1_min[1], 5.0f, 1e-6f);
   TEST_FLOAT_CLOSE(s1_min[2], 5.0f, 1e-6f);
   TEST_FLOAT_CLOSE(s1_min[3], 1.0f, 1e-6f);
 
   float s1_max[] = {1.0f, 10.0f, 5.0f, 2.0f};
-  TEST_ASSERT(max_spectrum_float(s1_max, s2, size), "max_spectrum execution");
+  TEST_ASSERT(max_spectrum(s1_max, s2, size), "max_spectrum execution");
   TEST_FLOAT_CLOSE(s1_max[0], 2.0f, 1e-6f);
   TEST_FLOAT_CLOSE(s1_max[1], 10.0f, 1e-6f);
   TEST_FLOAT_CLOSE(s1_max[2], 5.0f, 1e-6f);
   TEST_FLOAT_CLOSE(s1_max[3], 2.0f, 1e-6f);
+
+  float s1_min_float[] = {1.0f, 10.0f, 5.0f, 2.0f};
+  TEST_ASSERT(min_spectrum_float(s1_min_float, s2, size),
+              "min_spectrum_float execution");
+  TEST_FLOAT_CLOSE(s1_min_float[0], 1.0f, 1e-6f);
+
+  float s1_max_float[] = {1.0f, 10.0f, 5.0f, 2.0f};
+  TEST_ASSERT(max_spectrum_float(s1_max_float, s2, size),
+              "max_spectrum_float execution");
+  TEST_FLOAT_CLOSE(s1_max_float[0], 2.0f, 1e-6f);
 
   printf("✓ min/max spectrum float tests passed\n");
 }

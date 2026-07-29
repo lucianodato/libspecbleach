@@ -41,7 +41,6 @@ struct MaskingVeto {
   float* band_centers;           // Store center bin for each band
   uint32_t sample_rate;
   float* future_clean_estimation_buf;
-  float* band_energies_buf;
 };
 
 MaskingVeto* masking_veto_initialize(uint32_t fft_size, uint32_t sample_rate,
@@ -83,13 +82,12 @@ MaskingVeto* masking_veto_initialize(uint32_t fft_size, uint32_t sample_rate,
   self->band_centers = (float*)calloc(num_bands, sizeof(float));
   self->future_clean_estimation_buf =
       (float*)calloc(self->real_spectrum_size, sizeof(float));
-  self->band_energies_buf = (float*)calloc(num_bands, sizeof(float));
   self->sample_rate = sample_rate;
 
   if (!self->clean_signal_estimation || !self->stable_clean_signal ||
       !self->masking_thresholds || !self->band_audibility ||
       !self->band_audibility_memory || !self->band_centers ||
-      !self->future_clean_estimation_buf || !self->band_energies_buf) {
+      !self->future_clean_estimation_buf) {
     masking_veto_free(self);
     return NULL;
   }
@@ -120,7 +118,6 @@ void masking_veto_free(MaskingVeto* self) {
   free(self->band_audibility_memory);
   free(self->band_centers);
   free(self->future_clean_estimation_buf);
-  free(self->band_energies_buf);
   free(self);
 }
 

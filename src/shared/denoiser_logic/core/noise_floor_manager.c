@@ -20,6 +20,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "shared/denoiser_logic/core/noise_floor_manager.h"
 #include "shared/denoiser_logic/processing/spectral_whitening.h"
+#include "shared/utils/spectral_utils.h"
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -97,9 +98,7 @@ void noise_floor_manager_apply(NoiseFloorManager* self,
     for (uint32_t k = 0U; k < real_spectrum_size; k++) {
       gain_spectrum[k] = 1.0f;
     }
-    for (uint32_t k = 1U; k < fft_size - k; k++) {
-      gain_spectrum[fft_size - k] = gain_spectrum[k];
-    }
+    sb_apply_spectral_symmetry(gain_spectrum, real_spectrum_size, fft_size);
     return;
   }
 
@@ -156,8 +155,5 @@ void noise_floor_manager_apply(NoiseFloorManager* self,
     gain_spectrum[k] = fmaxf(whitened_floor, gain_spectrum[k]);
   }
 
-  // 3. Symmetric copy
-  for (uint32_t k = 1U; k < fft_size - k; k++) {
-    gain_spectrum[fft_size - k] = gain_spectrum[k];
-  }
+  sb_apply_spectral_symmetry(gain_spectrum, real_spectrum_size, fft_size);
 }

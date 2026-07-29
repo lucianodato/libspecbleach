@@ -99,3 +99,11 @@ Extremely small floating-point values near zero can trigger costly FPU exception
 ### 4. Performance Optimizations
 *   **Memory Alignment**: Align buffers to SIMD boundaries (16 or 32 bytes) to ensure compiler auto-vectorization is optimal.
 *   **Reciprocal Multiplication**: Use multiplications by reciprocals ($1.0 / x$) instead of division operations inside hot processing loops.
+
+---
+
+## CodeRabbit PR Review Workflow
+- **Manual Review Trigger**: `auto_review.enabled` is set to `false` in `.coderabbit.yaml` to conserve the daily free quota.
+- **Trigger Command**: Post `@coderabbitai review` as a comment on the PR when ready for review.
+- **Auto-Approval**: CodeRabbit will review on demand and automatically approve if checks pass.
+

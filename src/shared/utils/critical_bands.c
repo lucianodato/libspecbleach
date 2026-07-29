@@ -31,8 +31,6 @@ static const float opus_bands[20] = {200.F,  400.F,  600.F,  800.F,   1000.F,
                                      1200.F, 1400.F, 1600.F, 2000.F,  2400.F,
                                      2800.F, 3200.F, 4000.F, 4800.F,  5600.F,
                                      6800.F, 8000.F, 9600.F, 12000.F, 15600.F};
-
-void set_number_of_bands(CriticalBands* self);
 static void compute_mapping_spectrum(CriticalBands* self);
 static void compute_band_indexes(CriticalBands* self);
 static uint32_t get_last_valid_band_for_samplerate(CriticalBands* self,

@@ -24,17 +24,14 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "shared/denoiser_logic/core/noise_profile.h"
 #include "shared/stft/stft_processor.h"
 #include "shared/utils/general_utils.h"
+#include "specbleach_processor_core.h"
 #include <stdlib.h>
 #include <string.h>
 
 typedef struct Sb2DDenoiser {
-  uint32_t sample_rate;
   uint32_t hop;
-  Denoiser2DParameters denoise_parameters;
-
-  NoiseProfile* noise_profile;
+  SbProcessorCore* core;
   SpectralProcessorHandle spectral_2d_denoiser;
-  StftProcessor* stft_processor;
 } Sb2DDenoiser;
 
 SpectralBleachHandle specbleach_2d_initialize(const uint32_t sample_rate,
@@ -48,28 +45,21 @@ SpectralBleachHandle specbleach_2d_initialize(const uint32_t sample_rate,
     return NULL;
   }
 
-  self->sample_rate = sample_rate;
-
-  self->stft_processor = stft_processor_initialize(
+  self->core = sb_processor_core_initialize(
       sample_rate, frame_size, OVERLAP_FACTOR_2D, PADDING_CONFIGURATION_2D,
-      ZEROPADDING_AMOUNT_2D, INPUT_WINDOW_TYPE_2D, OUTPUT_WINDOW_TYPE_2D);
+      ZEROPADDING_AMOUNT_2D, INPUT_WINDOW_TYPE_2D, OUTPUT_WINDOW_TYPE_2D,
+      SB_PROCESSOR_CORE_FULL_FFT_SPECTRUM);
 
-  if (!self->stft_processor) {
+  if (!self->core) {
     specbleach_2d_free(self);
     return NULL;
   }
 
-  const uint32_t fft_size = get_stft_fft_size(self->stft_processor);
+  const uint32_t fft_size = get_stft_fft_size(self->core->stft_processor);
   self->hop = fft_size / OVERLAP_FACTOR_2D;
 
-  self->noise_profile = noise_profile_initialize(fft_size);
-  if (!self->noise_profile) {
-    specbleach_2d_free(self);
-    return NULL;
-  }
-
   self->spectral_2d_denoiser = spectral_2d_denoiser_initialize(
-      sample_rate, fft_size, OVERLAP_FACTOR_2D, self->noise_profile);
+      sample_rate, fft_size, OVERLAP_FACTOR_2D, self->core->noise_profile);
 
   if (!self->spectral_2d_denoiser) {
     specbleach_2d_free(self);
@@ -89,11 +79,8 @@ void specbleach_2d_free(SpectralBleachHandle instance) {
   if (self->spectral_2d_denoiser) {
     spectral_2d_denoiser_free(self->spectral_2d_denoiser);
   }
-  if (self->noise_profile) {
-    noise_profile_free(self->noise_profile);
-  }
-  if (self->stft_processor) {
-    stft_processor_free(self->stft_processor);
+  if (self->core) {
+    sb_processor_core_free(self->core);
   }
 
   free(self);
@@ -102,12 +89,12 @@ void specbleach_2d_free(SpectralBleachHandle instance) {
 uint32_t specbleach_2d_get_latency(SpectralBleachHandle instance) {
   Sb2DDenoiser* self = (Sb2DDenoiser*)instance;
 
-  if (!self) {
+  if (!self || !self->core || !self->core->stft_processor) {
     return 0;
   }
 
   // Base STFT latency
-  uint32_t stft_latency = get_stft_latency(self->stft_processor);
+  uint32_t stft_latency = get_stft_latency(self->core->stft_processor);
 
   // Additional NLM look-ahead latency
   uint32_t nlm_latency_frames =
@@ -126,20 +113,16 @@ bool specbleach_2d_process(SpectralBleachHandle instance,
 
   Sb2DDenoiser* self = (Sb2DDenoiser*)instance;
 
-  stft_processor_run(self->stft_processor, number_of_samples, input, output,
-                     &spectral_2d_denoiser_run, self->spectral_2d_denoiser);
+  stft_processor_run(self->core->stft_processor, number_of_samples, input,
+                     output, &spectral_2d_denoiser_run,
+                     self->spectral_2d_denoiser);
 
   return true;
 }
 
 uint32_t specbleach_2d_get_noise_profile_size(SpectralBleachHandle instance) {
   Sb2DDenoiser* self = (Sb2DDenoiser*)instance;
-
-  if (!self || !self->noise_profile) {
-    return 0;
-  }
-
-  return get_noise_profile_size(self->noise_profile);
+  return self ? sb_processor_core_get_noise_profile_size(self->core) : 0;
 }
 
 bool specbleach_2d_load_noise_profile_for_mode(SpectralBleachHandle instance,
@@ -148,76 +131,38 @@ bool specbleach_2d_load_noise_profile_for_mode(SpectralBleachHandle instance,
                                                const uint32_t block_count,
                                                const int mode) {
   Sb2DDenoiser* self = (Sb2DDenoiser*)instance;
-
-  if (!self || !self->noise_profile || !restored_profile || mode < 1 ||
-      mode > 4) {
-    return false;
-  }
-
-  if (profile_size != get_noise_profile_size(self->noise_profile)) {
-    return false;
-  }
-
-  set_noise_profile(self->noise_profile, mode, restored_profile, profile_size,
-                    block_count);
-
-  return true;
+  return self ? sb_processor_core_load_noise_profile_for_mode(
+                    self->core, restored_profile, profile_size, block_count,
+                    mode)
+              : false;
 }
 
 bool specbleach_2d_reset_noise_profile(SpectralBleachHandle instance) {
   Sb2DDenoiser* self = (Sb2DDenoiser*)instance;
-
-  if (!self || !self->noise_profile) {
-    return false;
-  }
-
-  reset_noise_profile(self->noise_profile);
-  return true;
+  return self ? sb_processor_core_reset_noise_profile(self->core) : false;
 }
 
 uint32_t specbleach_2d_get_noise_profile_block_count_for_mode(
     SpectralBleachHandle instance, int mode) {
   Sb2DDenoiser* self = (Sb2DDenoiser*)instance;
-
-  if (!self || !self->noise_profile) {
-    return 0;
-  }
-
-  if (mode < 1 || mode > 4) {
-    return 0;
-  }
-
-  return get_noise_profile_block_count(self->noise_profile, mode);
+  return self ? sb_processor_core_get_noise_profile_block_count_for_mode(
+                    self->core, mode)
+              : 0;
 }
 
 float* specbleach_2d_get_noise_profile_for_mode(SpectralBleachHandle instance,
                                                 int mode) {
   Sb2DDenoiser* self = (Sb2DDenoiser*)instance;
-
-  if (!self || !self->noise_profile) {
-    return NULL;
-  }
-
-  if (mode < 1 || mode > 4) {
-    return NULL;
-  }
-
-  return get_noise_profile(self->noise_profile, mode);
+  return self ? sb_processor_core_get_noise_profile_for_mode(self->core, mode)
+              : NULL;
 }
 
 bool specbleach_2d_noise_profile_available_for_mode(
     SpectralBleachHandle instance, int mode) {
   Sb2DDenoiser* self = (Sb2DDenoiser*)instance;
-
-  if (!self || !self->noise_profile) {
-    return false;
-  }
-
-  if (mode < 1 || mode > 4) {
-    return false;
-  }
-
-  return is_noise_estimation_available(self->noise_profile, mode);
+  return self ? sb_processor_core_noise_profile_available_for_mode(self->core,
+                                                                   mode)
+              : false;
 }
 
 bool specbleach_2d_load_parameters(
@@ -228,28 +173,10 @@ bool specbleach_2d_load_parameters(
   }
 
   Sb2DDenoiser* self = (Sb2DDenoiser*)instance;
+  Denoiser2DParameters denoise_parameters =
+      sb_denoiser_2d_params_sanitize(parameters);
 
-  // Convert public parameters to internal format
-  // clang-format off
-  self->denoise_parameters = (Denoiser2DParameters){
-      .learn_noise = parameters.learn_noise,
-      .residual_listen = parameters.residual_listen,
-      .reduction_amount =
-          from_db_to_coefficient(parameters.reduction_amount * -1.F),
-      .smoothing_factor = parameters.smoothing_factor,
-      .whitening_factor = parameters.whitening_factor / 100.F,
-      .adaptive_noise = parameters.adaptive_noise,
-      .noise_estimation_method = parameters.noise_estimation_method,
-      .nlm_masking_protection = parameters.nlm_masking_protection,
-      .suppression_strength = parameters.suppression_strength / 100.F,
-      .aggressiveness = parameters.aggressiveness,
-      .tonal_reduction =
-          from_db_to_coefficient(parameters.tonal_reduction * -1.F),
-  };
-  // clang-format on
-
-  load_2d_reduction_parameters(self->spectral_2d_denoiser,
-                               self->denoise_parameters);
+  load_2d_reduction_parameters(self->spectral_2d_denoiser, denoise_parameters);
 
   return true;
 }

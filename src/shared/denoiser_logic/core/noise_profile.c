@@ -132,8 +132,8 @@ bool reset_noise_profile(NoiseProfile* self) {
   }
 
   for (int i = 0; i < NOISE_PROFILE_MODES; i++) {
-    (void)initialize_spectrum_with_value(self->noise_profiles[i],
-                                         self->noise_profile_size, 0.F);
+    memset(self->noise_profiles[i], 0,
+           self->noise_profile_size * sizeof(float));
     self->noise_profile_block_count[i] = 0U;
     self->noise_spectrum_available[i] = false;
   }

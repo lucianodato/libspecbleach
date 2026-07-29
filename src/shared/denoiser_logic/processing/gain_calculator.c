@@ -21,6 +21,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "shared/denoiser_logic/processing/gain_calculator.h"
 #include "shared/configurations.h"
 #include "shared/utils/simd_utils.h"
+#include "shared/utils/spectral_utils.h"
 #include <float.h>
 #include <math.h>
 
@@ -62,10 +63,7 @@ static void wiener_subtraction(const uint32_t real_spectrum_size,
     }
   }
 
-  // Symmetry
-  for (uint32_t i = 1U; i < real_spectrum_size && i < (fft_size - i); i++) {
-    gain_spectrum[fft_size - i] = gain_spectrum[i];
-  }
+  sb_apply_spectral_symmetry(gain_spectrum, real_spectrum_size, fft_size);
 }
 
 static void spectral_gating(const uint32_t real_spectrum_size,
@@ -105,10 +103,7 @@ static void spectral_gating(const uint32_t real_spectrum_size,
     }
   }
 
-  // Symmetry
-  for (uint32_t i = 1U; i < real_spectrum_size && i < (fft_size - i); i++) {
-    gain_spectrum[fft_size - i] = gain_spectrum[i];
-  }
+  sb_apply_spectral_symmetry(gain_spectrum, real_spectrum_size, fft_size);
 }
 
 static void generalized_spectral_subtraction(
@@ -132,10 +127,7 @@ static void generalized_spectral_subtraction(
     }
   }
 
-  // Symmetry
-  for (uint32_t i = 1U; i < real_spectrum_size && i < (fft_size - i); i++) {
-    gain_spectrum[fft_size - i] = gain_spectrum[i];
-  }
+  sb_apply_spectral_symmetry(gain_spectrum, real_spectrum_size, fft_size);
 }
 
 void calculate_gains(uint32_t real_spectrum_size, uint32_t fft_size,

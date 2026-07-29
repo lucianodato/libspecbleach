@@ -32,11 +32,8 @@ static void spectrum_transient_aware_time_smoothing(SpectralSmoother* self,
 struct SpectralSmoother {
   uint32_t fft_size;
   uint32_t real_spectrum_size;
-  float adaptive_coefficient;
-  float previous_adaptive_coefficient;
   TimeSmoothingType type;
 
-  float* noise_spectrum;
   float* smoothed_spectrum;
   float* smoothed_spectrum_previous;
 
@@ -59,11 +56,7 @@ SpectralSmoother* spectral_smoothing_initialize(const uint32_t fft_size,
   self->fft_size = fft_size;
   self->real_spectrum_size = (self->fft_size / 2U) + 1U;
   self->type = type;
-  self->previous_adaptive_coefficient = 0.F;
-  self->adaptive_coefficient = 0.F;
 
-  self->noise_spectrum =
-      (float*)calloc(self->real_spectrum_size, sizeof(float));
   self->smoothed_spectrum =
       (float*)calloc(self->real_spectrum_size, sizeof(float));
   self->smoothed_spectrum_previous =
@@ -82,9 +75,9 @@ SpectralSmoother* spectral_smoothing_initialize(const uint32_t fft_size,
 
   self->transient_detection = transient_detector_initialize(num_bands);
 
-  if (!self->noise_spectrum || !self->smoothed_spectrum ||
-      !self->smoothed_spectrum_previous || !self->band_energies ||
-      !self->onset_weights || !self->transient_detection) {
+  if (!self->smoothed_spectrum || !self->smoothed_spectrum_previous ||
+      !self->band_energies || !self->onset_weights ||
+      !self->transient_detection) {
     spectral_smoothing_free(self);
     return NULL;
   }
@@ -99,7 +92,6 @@ void spectral_smoothing_free(SpectralSmoother* self) {
   critical_bands_free(self->critical_bands);
   transient_detector_free(self->transient_detection);
 
-  free(self->noise_spectrum);
   free(self->smoothed_spectrum);
   free(self->smoothed_spectrum_previous);
   free(self->band_energies);
