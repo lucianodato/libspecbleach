@@ -263,7 +263,7 @@ static inline __attribute__((unused)) bool nlm_filter_process_core(
     }
 
     for (int32_t dt = -search_time_past; dt <= search_time_future; dt++) {
-      float* cand_rows[8];
+      float* cand_rows[8] = {NULL};
       if (filter->config.patch_size == 8) {
         for (int r = 0; r < 8; r++) {
           cand_rows[r] = cached_get_frame(filter, dt + r - 4);
