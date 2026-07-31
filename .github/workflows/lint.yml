@@ -19,9 +19,7 @@ jobs:
 
       - name: Check code formatting
         run: |
-          find . -type f \( -name "*.c" -o -name "*.h" \) \
-            ! -path "./build*" \
-            ! -path "./.git/*" \
+          find src include tests -type f \( -name "*.c" -o -name "*.h" \) \
             | xargs clang-format --dry-run --Werror || {
             echo "Code formatting check failed. Please run: clang-format -i <file>"
             exit 1
@@ -40,27 +38,27 @@ jobs:
             clang \
             clang-tidy \
             clang-tools \
+            cmake \
             ninja-build \
             libfftw3-dev \
             libsndfile1-dev \
-            libomp-dev \
-            meson
+            libomp-dev
 
       - name: Configure build
         run: |
-          meson setup build \
-            --buildtype=debug \
-            -Dwarning_level=3 \
-            -Denable_examples=true
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DENABLE_EXAMPLES=ON \
+            -DENABLE_TESTS=ON
 
       - name: Run scan-build
         run: |
           scan-build --status-bugs \
-            meson compile -C build
+            cmake --build build
 
       - name: Run clang-tidy
         run: |
-          # Use compile_commands.json from build directory
           find src include -type f \( -name "*.c" -o -name "*.h" \) | \
             xargs clang-tidy -p build --config-file=.clang-tidy
 
@@ -83,4 +81,3 @@ jobs:
             --inline-suppr \
             --quiet \
             src/ include/
-

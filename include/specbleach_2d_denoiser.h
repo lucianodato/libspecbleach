@@ -170,6 +170,35 @@ float* specbleach_2d_get_noise_profile_for_mode(SpectralBleachHandle instance,
 bool specbleach_2d_noise_profile_available_for_mode(
     SpectralBleachHandle instance, int mode);
 
+/**
+ * Returns a pointer to the tonal mask array detected during spectral processing.
+ * Array size matches specbleach_2d_get_noise_profile_size(instance).
+ * Values range from 0.0 (broadband) to 1.0 (pure tone).
+ */
+const float* specbleach_2d_get_tonal_mask(SpectralBleachHandle instance);
+
+/**
+ * Returns the detected tonal peak frequencies in Hz.
+ * Writes up to max_peaks peak frequencies into peak_freqs_hz.
+ * @return Number of peak frequencies written.
+ */
+uint32_t specbleach_2d_get_tonal_peaks(SpectralBleachHandle instance,
+                                      float* peak_freqs_hz, uint32_t max_peaks);
+
+/**
+ * Returns peak frequencies in Hz directly for a given noise profile array.
+ */
+uint32_t specbleach_2d_get_tonal_peaks_for_profile(SpectralBleachHandle instance,
+                                                   const float* profile,
+                                                   uint32_t profile_size,
+                                                   float* peak_freqs_hz,
+                                                   uint32_t max_peaks);
+
+/**
+ * Returns a pointer to the active morphed noise profile array.
+ */
+float* specbleach_2d_get_active_noise_profile(SpectralBleachHandle instance);
+
 #ifdef __cplusplus
 }
 #endif

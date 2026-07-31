@@ -142,11 +142,13 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
   (0.1F) // Safety floor for duration calcs
 
 // Tonal Detector Constants
-#define PEAK_THRESHOLD 1.41f // ~3dB above neighbor background
+#define PEAK_THRESHOLD 1.22f // ~1.7dB above neighbor background
 #define MIN_PEAK_PROMINENCE                                                    \
   1e-7f // Minimum absolute prominence above background
 #define TONAL_MEDIAN_FILTER_WINDOW                                             \
-  51 // Window size for frequency-domain median filter
+  15 // Window size for frequency-domain median filter (220 Hz window)
+#define TONAL_PEAK_MIN_SIGNIFICANCE 0.15f // Minimum tonal mask value to report as peak
+#define MAX_TONAL_PEAKS_REPORTED 32U     // Maximum candidate peaks returned
 
 // Transient Detector Constants
 #define UPPER_LIMIT (5.F)

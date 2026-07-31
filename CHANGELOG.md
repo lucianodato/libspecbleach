@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-07-31
+
+### Changed
+- **Build System Migration**: Migrated primary build system from Meson to CMake 3.16+.
+- Updated CTest test suite configuration and options (`ENABLE_TESTS`, `ENABLE_EXAMPLES`, `ENABLE_AVX`, `ENABLE_SANITIZERS`).
+- Improved CMake target export (`libspecbleach::libspecbleach`) for easy downstream inclusion via `add_subdirectory` or `find_package`.
+
 ## [0.2.1] - 2026-01-28
 ### Fixed
 - **Critical**: Fixed NLM filter ring buffer indexing bug. The filter was using past search range instead of future look-ahead for target frame alignment, causing significant output latency.

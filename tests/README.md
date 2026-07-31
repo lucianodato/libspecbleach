@@ -17,7 +17,7 @@ The reference denoised files are generated from the original `Speech.wav` using 
 If you need to update the reference files (e.g., after algorithm changes), use the provided script. 
 
 > [!NOTE]
-> This script is a manual utility and is **not** part of the automated `meson test` suite. It is used to establish the "ground truth" for the regression tests.
+> This script is a manual utility and is **not** part of the automated CTest suite. It is used to establish the "ground truth" for the regression tests.
 
 ```bash
 # Generate reference files automatically with canonical parameters
@@ -28,12 +28,12 @@ Or manually using the demo applications:
 
 ```bash
 # Build the examples
-meson setup build -Denable_examples=true
-meson compile -C build
+cmake -B build -DENABLE_EXAMPLES=ON
+cmake --build build
 
 # Generate reference files with canonical parameters
-./build/examples/denoiser_demo --reduction 20.0 --whitening 50.0 --smoothing 0.0 --masking-depth 0.5 --masking-elasticity 0.1 tests/test_data/Speech.wav tests/test_data/Speech_denoised.wav
-./build/examples/denoiser_demo --reduction 20.0 --whitening 50.0 --smoothing 0.0 --masking-depth 0.5 --masking-elasticity 0.1 --learn-avg 3 tests/test_data/Speech.wav tests/test_data/Speech_adaptive_denoised.wav
+./build/denoiser_demo --reduction 20.0 --whitening 50.0 --smoothing 0.0 --masking-depth 0.5 --masking-elasticity 0.1 tests/test_data/Speech.wav tests/test_data/Speech_denoised.wav
+./build/denoiser_demo --reduction 20.0 --whitening 50.0 --smoothing 0.0 --masking-depth 0.5 --masking-elasticity 0.1 --learn-avg 3 tests/test_data/Speech.wav tests/test_data/Speech_adaptive_denoised.wav
 ```
 
 ### Why Reference Files Aren't Committed
@@ -46,21 +46,25 @@ meson compile -C build
 ## Running Tests
 
 ```bash
+# Configure and build tests
+cmake -B build -DENABLE_TESTS=ON
+cmake --build build
+
 # Run all tests
-meson test -C build
+cd build && ctest --output-on-failure
 
 # Run specific test suites
-meson test -C build --suite utils
-meson test -C build --suite integration
-meson test -C build --suite audio_regression
-meson test -C build --suite audio_files
-meson test -C build --suite audio_file_regression
+ctest -R test_utils --output-on-failure
+ctest -R test_integration --output-on-failure
+ctest -R test_audio_regression --output-on-failure
+ctest -R test_audio_files --output-on-failure
+ctest -R test_audio_file_regression --output-on-failure
 ```
 
 ## Test Categories
 
-- **Unit Tests** (`test_utils`): Validate individual mathematical functions
+- **Unit Tests** (`test_utils`, `test_fft`, etc.): Validate individual mathematical functions
 - **Integration Tests** (`test_integration`): Test full denoising pipeline
 - **Audio Regression** (`test_audio_regression`): Synthetic audio processing validation
 - **File Validation** (`test_audio_files`): Ensure test data accessibility
-- **Audio File Regression** (`test_audio_file_regression`): Compare library output against the reference `.wav` files bit-for-bit.
+- **Audio File Regression** (`test_audio_file_regression`): Compare library output against reference `.wav` files bit-for-bit.
