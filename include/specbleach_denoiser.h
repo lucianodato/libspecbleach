@@ -164,7 +164,7 @@ uint32_t specbleach_get_tonal_peaks_for_profile(SpectralBleachHandle instance,
 /**
  * Returns a pointer to the active morphed noise profile array.
  */
-float* specbleach_get_active_noise_profile(SpectralBleachHandle instance);
+const float* specbleach_get_active_noise_profile(SpectralBleachHandle instance);
 
 #ifdef __cplusplus
 }

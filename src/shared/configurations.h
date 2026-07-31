@@ -140,6 +140,7 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
   5U // Minimum frames for history-based tracking
 #define BRANDT_ESTIMATOR_MIN_DURATION_MS                                       \
   (0.1F) // Safety floor for duration calcs
+#define BRANDT_ESTIMATOR_STATS_UPDATE_INTERVAL_FRAMES 4U
 
 // Tonal Detector Constants
 #define PEAK_THRESHOLD 1.75f // ~2.4dB above local median background

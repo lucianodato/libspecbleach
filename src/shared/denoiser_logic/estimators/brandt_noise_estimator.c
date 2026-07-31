@@ -37,6 +37,7 @@ struct BrandtNoiseEstimator {
   uint32_t trim_count; // Number of items to average (history_size * percentile)
   float correction_factor;
   float correction_factors[5]; // Pre-calculated for search
+  uint32_t active_frame_count;
   bool is_first_frame;
 };
 
@@ -112,6 +113,7 @@ BrandtNoiseEstimator* brandt_noise_estimator_initialize(
   }
 
   self->is_first_frame = true;
+  self->active_frame_count = 0;
   return self;
 }
 
@@ -226,7 +228,10 @@ bool brandt_noise_estimator_run(BrandtNoiseEstimator* self,
   self->history_index = (current_idx + 1) % self->history_size;
 
   // Subsample expensive statistical update every 4 frames (or on first frame)
-  bool update_stats = self->is_first_frame || ((current_idx % 4) == 0);
+  bool update_stats = self->is_first_frame ||
+                      ((self->active_frame_count %
+                        BRANDT_ESTIMATOR_STATS_UPDATE_INTERVAL_FRAMES) == 0);
+  self->active_frame_count++;
 
   if (update_stats) {
     static const float p_candidates[] = {0.1f, 0.25f, 0.5f, 0.75f, 1.0f};

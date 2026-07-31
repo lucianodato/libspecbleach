@@ -58,7 +58,7 @@ ctest -R test_utils --output-on-failure
 ctest -R test_integration --output-on-failure
 ctest -R test_audio_regression --output-on-failure
 ctest -R test_audio_files --output-on-failure
-ctest -R test_audio_file_regression --output-on-failure
+ctest -R test_audio_file_regression --output-on-failure # requires libsndfile
 ```
 
 ## Test Categories

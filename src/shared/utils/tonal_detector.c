@@ -7,6 +7,10 @@ libspecbleach - A spectral processing library
 #include <stdlib.h>
 #include <string.h>
 
+#if defined(__GNUC__) || defined(__clang__) || defined(_MSC_VER)
+#include <alloca.h>
+#endif
+
 #include "shared/configurations.h"
 
 static void insertion_sort(float* arr, int n) {
@@ -69,6 +73,18 @@ void detect_tonal_components(const float* profile, const float* max_profile,
   // 2. Compute the tonal mask based on the ratio of the spectrum to the
   // broadband floor and octave-band relative dynamic range.
   //    In this pass, we overwrite the tonal_mask in-place.
+  // 1-Octave sliding window max profile calculation via monotonic queue (O(N)
+  // total)
+  uint32_t deque_head = 0;
+  uint32_t deque_tail = 0;
+  uint32_t current_end = 0;
+
+  uint32_t stack_deque_buf[4097];
+  uint32_t* deque = stack_deque_buf;
+  if (size > 4097) {
+    deque = (uint32_t*)alloca(size * sizeof(uint32_t));
+  }
+
   for (uint32_t k = 0U; k < size; k++) {
     float floor_val = tonal_mask[k];
     float peak_val = detection_profile[k];
@@ -93,12 +109,22 @@ void detect_tonal_components(const float* profile, const float* max_profile,
       end_octave = (int)size - 1;
     }
 
-    float octave_max_val = 0.0f;
-    for (int j = start_octave; j <= end_octave; j++) {
-      if (detection_profile[j] > octave_max_val) {
-        octave_max_val = detection_profile[j];
+    while (current_end <= (uint32_t)end_octave) {
+      float val = detection_profile[current_end];
+      while (deque_tail > deque_head &&
+             detection_profile[deque[deque_tail - 1]] <= val) {
+        deque_tail--;
       }
+      deque[deque_tail++] = current_end++;
     }
+
+    while (deque_head < deque_tail &&
+           deque[deque_head] < (uint32_t)start_octave) {
+      deque_head++;
+    }
+
+    float octave_max_val =
+        (deque_head < deque_tail) ? detection_profile[deque[deque_head]] : 0.0f;
 
     // Reject candidates more than 20 dB below the max peak in their octave band
     if (peak_val < octave_max_val * TONAL_PEAK_MIN_OCTAVE_RELATIVE_POWER) {
@@ -178,6 +204,17 @@ uint32_t tonal_detector_get_peaks(const float* tonal_mask, uint32_t size,
           candidates[candidate_count].freq_hz = freq_hz;
           candidates[candidate_count].strength = mask_val;
           candidate_count++;
+        } else {
+          uint32_t weakest_idx = 0;
+          for (uint32_t c = 1; c < candidate_count; c++) {
+            if (candidates[c].strength < candidates[weakest_idx].strength) {
+              weakest_idx = c;
+            }
+          }
+          if (mask_val > candidates[weakest_idx].strength) {
+            candidates[weakest_idx].freq_hz = freq_hz;
+            candidates[weakest_idx].strength = mask_val;
+          }
         }
       }
     }

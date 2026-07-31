@@ -53,7 +53,7 @@ To compile and install `libspecbleach`, you will need:
 - A C compiling toolchain (GCC or Clang supporting C17)
 - [CMake](https://cmake.org/) (3.16 or newer)
 - [FFTW3](http://www.fftw.org/) library (`libfftw3f`)
-- [OpenMP](https://www.openmp.org/) for parallel processing
+- [OpenMP](https://www.openmp.org/) for parallel processing (optional, recommended for NLM 2D denoising)
 - [libsndfile](https://github.com/libsndfile/libsndfile) (optional, for test suite and demo tools)
 
 ## Installation
@@ -77,7 +77,7 @@ You can configure the build using `-Doption=VALUE`:
 - `ENABLE_SANITIZERS`: Enable AddressSanitizer and UndefinedBehaviorSanitizer (default: `OFF`).
 
 > [!IMPORTANT]
-> **Critical Performance Note for Packagers**: The advanced "2D Denoising" (NLM) feature is computationally intensive and relies heavily on SIMD vectorization, function inlining, and **multi-core parallelization via OpenMP**. 
+> **Critical Performance Note for Packagers**: The advanced "2D Denoising" (NLM) feature is computationally intensive and relies heavily on SIMD vectorization, function inlining, and **multi-core parallelization via OpenMP**. Builds without OpenMP will skip OpenMP-backed NLM parallelization and may run slower.
 >
 > You **MUST** compile with `-DCMAKE_BUILD_TYPE=Release` (or `-O3`) to ensure usability. Debug or unoptimized builds will result in excessive CPU usage and audio dropouts/xruns.
 
@@ -147,14 +147,14 @@ find src include -type f \( -name "*.c" -o -name "*.h" \) | xargs clang-format -
 Run the full CTest suite:
 
 ```bash
-cd build && ctest --output-on-failure
+ctest --test-dir build --output-on-failure
 ```
 
 Or run individual test executables:
 
 ```bash
 ./build/test_integration
-./build/test_audio_file_regression
+./build/test_audio_file_regression # requires libsndfile
 ```
 
 ## License

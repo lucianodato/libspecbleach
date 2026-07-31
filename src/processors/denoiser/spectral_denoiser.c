@@ -354,7 +354,7 @@ uint32_t spectral_denoiser_get_peaks(SpectralProcessorHandle instance,
               : 0;
 }
 
-float* spectral_denoiser_get_active_noise_profile(
+const float* spectral_denoiser_get_active_noise_profile(
     SpectralProcessorHandle instance) {
   SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
   return self ? self->noise_spectrum : NULL;

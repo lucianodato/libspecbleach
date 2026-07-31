@@ -210,7 +210,8 @@ uint32_t specbleach_2d_get_tonal_peaks_for_profile(
       max_peaks);
 }
 
-float* specbleach_2d_get_active_noise_profile(SpectralBleachHandle instance) {
+const float* specbleach_2d_get_active_noise_profile(
+    SpectralBleachHandle instance) {
   Sb2DDenoiser* self = (Sb2DDenoiser*)instance;
   return self ? spectral_2d_denoiser_get_active_noise_profile(
                     self->spectral_2d_denoiser)
