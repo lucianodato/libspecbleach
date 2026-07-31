@@ -7,10 +7,6 @@ libspecbleach - A spectral processing library
 #include <stdlib.h>
 #include <string.h>
 
-#if defined(__GNUC__) || defined(__clang__) || defined(_MSC_VER)
-#include <alloca.h>
-#endif
-
 #include "shared/configurations.h"
 
 static void insertion_sort(float* arr, int n) {
@@ -79,11 +75,8 @@ void detect_tonal_components(const float* profile, const float* max_profile,
   uint32_t deque_tail = 0;
   uint32_t current_end = 0;
 
-  uint32_t stack_deque_buf[4097];
-  uint32_t* deque = stack_deque_buf;
-  if (size > 4097) {
-    deque = (uint32_t*)alloca(size * sizeof(uint32_t));
-  }
+  uint32_t deque_buf[size];
+  uint32_t* deque = deque_buf;
 
   for (uint32_t k = 0U; k < size; k++) {
     float floor_val = tonal_mask[k];
