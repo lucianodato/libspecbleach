@@ -98,10 +98,14 @@ if(OpenMP_C_FOUND)
     target_link_libraries(libspecbleach PRIVATE OpenMP::OpenMP_C)
 endif()
 
-# AVX compilation target for x86_64 architecture
-if(ENABLE_AVX AND (CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64" OR CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64"))
+# AVX compilation target
+if(ENABLE_AVX)
     add_library(specbleach_avx STATIC "${CMAKE_CURRENT_SOURCE_DIR}/src/shared/denoiser_logic/processing/nlm_filter_avx.c")
-    target_compile_options(specbleach_avx PRIVATE -mavx)
+    if(MSVC)
+        target_compile_options(specbleach_avx PRIVATE /arch:AVX)
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64" OR CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64" OR CMAKE_OSX_ARCHITECTURES MATCHES "x86_64")
+        target_compile_options(specbleach_avx PRIVATE -mavx)
+    endif()
     target_include_directories(specbleach_avx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/src)
     if(FFTW3F_INCLUDE_DIR)
         target_include_directories(specbleach_avx PRIVATE ${FFTW3F_INCLUDE_DIR})
