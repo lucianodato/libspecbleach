@@ -39,7 +39,6 @@ jobs:
             clang-tidy \
             clang-tools \
             cmake \
-            ninja-build \
             libfftw3-dev \
             libsndfile1-dev \
             libomp-dev

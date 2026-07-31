@@ -32,7 +32,6 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -qq \
             cmake \
-            ninja-build \
             libfftw3-dev \
             libsndfile1-dev \
             libomp-dev
