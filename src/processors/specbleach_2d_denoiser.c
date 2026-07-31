@@ -49,7 +49,7 @@ SpectralBleachHandle specbleach_2d_initialize(const uint32_t sample_rate,
   self->core = sb_processor_core_initialize(
       sample_rate, frame_size, OVERLAP_FACTOR_2D, PADDING_CONFIGURATION_2D,
       ZEROPADDING_AMOUNT_2D, INPUT_WINDOW_TYPE_2D, OUTPUT_WINDOW_TYPE_2D,
-      SB_PROCESSOR_CORE_FULL_FFT_SPECTRUM);
+      SB_PROCESSOR_CORE_DEFAULT_REAL_SPECTRUM);
 
   if (!self->core) {
     specbleach_2d_free(self);

@@ -62,7 +62,7 @@ void detect_tonal_components(const float* profile, const float* max_profile,
   }
 
   // 2. Compute the tonal mask based on the ratio of the spectrum to the
-  // broadband floor.
+  // broadband floor and octave-band relative dynamic range.
   //    In this pass, we overwrite the tonal_mask in-place.
   for (uint32_t k = 0U; k < size; k++) {
     float floor_val = tonal_mask[k];
@@ -70,6 +70,29 @@ void detect_tonal_components(const float* profile, const float* max_profile,
 
     // Prominence Guard: Peak must stand out in absolute terms
     if (peak_val - floor_val < MIN_PEAK_PROMINENCE) {
+      tonal_mask[k] = 0.0f;
+      continue;
+    }
+
+    // 1-Octave sliding window max profile calculation
+    int start_octave = (int)((float)k * 0.7071f);
+    int end_octave = (int)((float)k * 1.4142f);
+    if (end_octave - start_octave < 8) {
+      start_octave = (int)k - 4;
+      end_octave = (int)k + 4;
+    }
+    if (start_octave < 0) start_octave = 0;
+    if (end_octave >= (int)size) end_octave = (int)size - 1;
+
+    float octave_max_val = 0.0f;
+    for (int j = start_octave; j <= end_octave; j++) {
+      if (detection_profile[j] > octave_max_val) {
+        octave_max_val = detection_profile[j];
+      }
+    }
+
+    // Reject candidates more than 20 dB below the max peak in their octave band
+    if (peak_val < octave_max_val * TONAL_PEAK_MIN_OCTAVE_RELATIVE_POWER) {
       tonal_mask[k] = 0.0f;
       continue;
     }
@@ -114,9 +137,13 @@ uint32_t tonal_detector_get_peaks(const float* tonal_mask, uint32_t size,
   for (uint32_t k = 1U; k < size - 1U; k++) {
     float mask_val = tonal_mask[k];
 
-    // Peak center must be a local maximum above the significance threshold
+    float neighbor_avg = 0.5f * (tonal_mask[k - 1] + tonal_mask[k + 1]);
+    float local_prominence = mask_val - neighbor_avg;
+
+    // Peak center must be a local maximum above the significance threshold and stand out sharply from immediate neighbors
     if (mask_val >= TONAL_PEAK_MIN_SIGNIFICANCE &&
-        mask_val > tonal_mask[k - 1] && mask_val > tonal_mask[k + 1]) {
+        mask_val > tonal_mask[k - 1] && mask_val > tonal_mask[k + 1] &&
+        local_prominence >= TONAL_PEAK_MIN_LOCAL_PROMINENCE) {
 
       // Parabolic interpolation for sub-bin frequency accuracy
       float left = tonal_mask[k - 1];
