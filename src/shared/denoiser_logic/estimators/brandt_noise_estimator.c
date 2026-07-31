@@ -133,7 +133,7 @@ static inline void sb_sort_floats_inline(float* arr, uint32_t n) {
   }
   uint32_t h = 1;
   while (h < n / 3) {
-    h = 3 * h + 1;
+    h = (3 * h) + 1;
   }
   while (h >= 1) {
     for (uint32_t i = h; i < n; i++) {

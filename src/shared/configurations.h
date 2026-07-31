@@ -157,6 +157,12 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define TONAL_PEAK_MIN_OCTAVE_RELATIVE_POWER                                   \
   0.01f                              // Power ratio within octave (10^(-20/10))
 #define MAX_TONAL_PEAKS_REPORTED 32U // Maximum candidate peaks returned
+#define TONAL_OCTAVE_LOWER_RATIO 0.7071f
+#define TONAL_OCTAVE_UPPER_RATIO 1.4142f
+#define TONAL_OCTAVE_MIN_WIDTH_BINS 8
+#define TONAL_OCTAVE_FALLBACK_HALF_WIDTH 4
+#define TONAL_PEAK_MIN_FREQ_HZ 20.0f
+#define TONAL_PEAK_NYQUIST_SAFETY_FACTOR 0.48f
 
 // Transient Detector Constants
 #define UPPER_LIMIT (5.F)

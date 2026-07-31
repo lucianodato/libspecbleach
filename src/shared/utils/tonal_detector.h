@@ -9,12 +9,12 @@ libspecbleach - A spectral processing library
 #include <stdint.h>
 
 /**
- * Identify tonal peaks in a noise profile using frequency-adaptive detection
- * with parabolic peak interpolation.
+ * Identify tonal peaks in a noise profile using a fixed-window median filter
+ * with boundary clamping and 1-octave sliding window peak prominence.
  *
- * At low frequencies, the detector uses wider background estimation windows
- * and sideband spread to account for the dense harmonic spacing. Parabolic
- * interpolation corrects for FFT scalloping loss to improve threshold accuracy.
+ * Uses TONAL_MEDIAN_FILTER_WINDOW for background noise floor estimation with
+ * boundary clamping at spectrum edges, and evaluates peak prominence relative
+ * to local octave maxima.
  *
  * @param profile Noise profile (magnitude or power)
  * @param max_profile Maximum captured profile (for stationarity check)

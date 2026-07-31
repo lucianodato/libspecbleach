@@ -147,6 +147,8 @@ const float* specbleach_get_tonal_mask(SpectralBleachHandle instance);
 /**
  * Returns the detected tonal peak frequencies in Hz.
  * Writes up to max_peaks peak frequencies into peak_freqs_hz.
+ * Note: This is an offline/query-only API and must NOT be called from the
+ * real-time audio thread.
  * @return Number of peak frequencies written.
  */
 uint32_t specbleach_get_tonal_peaks(SpectralBleachHandle instance,
@@ -154,6 +156,8 @@ uint32_t specbleach_get_tonal_peaks(SpectralBleachHandle instance,
 
 /**
  * Returns peak frequencies in Hz directly for a given noise profile array.
+ * Note: This is an offline/query-only API and must NOT be called from the
+ * real-time audio thread.
  */
 uint32_t specbleach_get_tonal_peaks_for_profile(SpectralBleachHandle instance,
                                                 const float* profile,

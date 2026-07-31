@@ -187,7 +187,8 @@ uint32_t specbleach_get_tonal_peaks_for_profile(SpectralBleachHandle instance,
                                                 float* peak_freqs_hz,
                                                 uint32_t max_peaks) {
   SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
-  if (!self || !self->core || !profile || profile_size == 0) {
+  if (!self || !self->core || !profile || profile_size == 0 ||
+      profile_size != sb_processor_core_get_noise_profile_size(self->core)) {
     return 0;
   }
   uint32_t fft_size = get_stft_fft_size(self->core->stft_processor);

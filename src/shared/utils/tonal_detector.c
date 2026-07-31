@@ -89,11 +89,11 @@ void detect_tonal_components(const float* profile, const float* max_profile,
     }
 
     // 1-Octave sliding window max profile calculation
-    int start_octave = (int)((float)k * 0.7071f);
-    int end_octave = (int)((float)k * 1.4142f);
-    if (end_octave - start_octave < 8) {
-      start_octave = (int)k - 4;
-      end_octave = (int)k + 4;
+    int start_octave = (int)((float)k * TONAL_OCTAVE_LOWER_RATIO);
+    int end_octave = (int)((float)k * TONAL_OCTAVE_UPPER_RATIO);
+    if (end_octave - start_octave < TONAL_OCTAVE_MIN_WIDTH_BINS) {
+      start_octave = (int)k - TONAL_OCTAVE_FALLBACK_HALF_WIDTH;
+      end_octave = (int)k + TONAL_OCTAVE_FALLBACK_HALF_WIDTH;
     }
     if (start_octave < 0) {
       start_octave = 0;
@@ -177,7 +177,7 @@ uint32_t tonal_detector_get_peaks(const float* tonal_mask, uint32_t size,
       // Parabolic interpolation for sub-bin frequency accuracy
       float left = tonal_mask[k - 1];
       float right = tonal_mask[k + 1];
-      float denom = left - 2.0f * mask_val + right;
+      float denom = (left - (2.0f * mask_val)) + right;
       float delta = 0.0f;
       if (fabsf(denom) > 1e-9f) {
         delta = 0.5f * (left - right) / denom;
@@ -192,7 +192,8 @@ uint32_t tonal_detector_get_peaks(const float* tonal_mask, uint32_t size,
       float peak_bin = (float)k + delta;
       float freq_hz = peak_bin * bin_width_hz;
 
-      if (freq_hz >= 20.0f && freq_hz <= (float)sample_rate * 0.48f) {
+      if (freq_hz >= TONAL_PEAK_MIN_FREQ_HZ &&
+          freq_hz <= (float)sample_rate * TONAL_PEAK_NYQUIST_SAFETY_FACTOR) {
         if (candidate_count < MAX_TONAL_PEAKS_REPORTED) {
           candidates[candidate_count].freq_hz = freq_hz;
           candidates[candidate_count].strength = mask_val;

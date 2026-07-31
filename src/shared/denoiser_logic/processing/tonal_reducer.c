@@ -106,7 +106,7 @@ void tonal_reducer_run(TonalReducer* self, const float* noise_spectrum,
     // Weight by mask strength (partial tonal bins get proportional boost
     // between ALPHA_MIN and alpha_needed)
     float target_alpha =
-        ALPHA_MIN + self->tonal_mask[k] * (alpha_needed - ALPHA_MIN);
+        ALPHA_MIN + (self->tonal_mask[k] * (alpha_needed - ALPHA_MIN));
 
     // Only boost, never reduce (preserve existing suppression intent)
     alpha[k] = fmaxf(alpha[k], target_alpha);

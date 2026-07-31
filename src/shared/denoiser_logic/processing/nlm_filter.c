@@ -147,7 +147,7 @@ void nlm_filter_free(NlmFilter* filter) {
   }
 
   if (filter->frame_ptrs) {
-    free(filter->frame_ptrs);
+    free((void*)filter->frame_ptrs);
   }
 
   free(filter);
