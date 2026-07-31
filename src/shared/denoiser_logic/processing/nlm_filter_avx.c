@@ -24,7 +24,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "shared/denoiser_logic/processing/nlm_filter_internal.h"
 
 bool nlm_filter_process_avx(NlmFilter* filter, float* smoothed_snr) {
-#if defined(__x86_64__) || defined(__i386__) || defined(_M_X64) || defined(_M_IX86)
+#if defined(__x86_64__) || defined(__i386__) || defined(_M_X64) ||             \
+    defined(_M_IX86)
   return nlm_filter_process_core(filter, smoothed_snr);
 #else
   (void)filter;

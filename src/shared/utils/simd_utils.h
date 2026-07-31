@@ -24,7 +24,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdint.h>
 #include <string.h>
 
-#if defined(_M_X64) || defined(_M_AMD64) || (defined(_M_IX86_FP) && _M_IX86_FP >= 1)
+#if defined(_M_X64) || defined(_M_AMD64) ||                                    \
+    (defined(_M_IX86_FP) && _M_IX86_FP >= 1)
 #ifndef __SSE__
 #define __SSE__ 1
 #endif

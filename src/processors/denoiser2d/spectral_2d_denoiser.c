@@ -45,14 +45,15 @@ typedef struct Spectral2DDenoiser {
 
   Denoiser2DParameters parameters;
 
-  float* snr_frame;          // Current SNR frame for NLM input
-  float* smoothed_snr;       // Smoothed SNR output from NLM
-  float* gain_spectrum;          // Computed gains
-  float* noise_spectrum;         // Copy of noise profile for processing
-  float* noise_spectrum_snapshot; // Snapshot of noise spectrum for thread-safe reads
-  float* alpha;                  // Oversubtraction factors
-  float* beta;               // Undersubtraction factors
-  float* manual_noise_floor; // Manual profile floor
+  float* snr_frame;               // Current SNR frame for NLM input
+  float* smoothed_snr;            // Smoothed SNR output from NLM
+  float* gain_spectrum;           // Computed gains
+  float* noise_spectrum;          // Copy of noise profile for processing
+  float* noise_spectrum_snapshot; // Snapshot of noise spectrum for thread-safe
+                                  // reads
+  float* alpha;                   // Oversubtraction factors
+  float* beta;                    // Undersubtraction factors
+  float* manual_noise_floor;      // Manual profile floor
   TonalReducer* tonal_reducer;
 
   // Reusable circular buffer for aligned temporal analysis

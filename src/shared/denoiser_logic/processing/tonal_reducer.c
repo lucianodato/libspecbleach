@@ -137,7 +137,7 @@ uint32_t tonal_reducer_get_peaks(const TonalReducer* self, float* peak_freqs_hz,
   if (!self || !self->tonal_mask_snapshot || !peak_freqs_hz || max_peaks == 0) {
     return 0;
   }
-  return tonal_detector_get_peaks(self->tonal_mask_snapshot, self->real_spectrum_size,
-                                  self->sample_rate, self->fft_size,
-                                  peak_freqs_hz, max_peaks);
+  return tonal_detector_get_peaks(self->tonal_mask_snapshot,
+                                  self->real_spectrum_size, self->sample_rate,
+                                  self->fft_size, peak_freqs_hz, max_peaks);
 }

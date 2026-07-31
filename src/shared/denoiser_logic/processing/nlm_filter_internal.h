@@ -71,8 +71,7 @@ struct NlmFilter {
 };
 
 // Helper: clamp index to valid range
-static inline SB_UNUSED uint32_t clamp_index(int32_t idx,
-                                                           uint32_t max_val) {
+static inline SB_UNUSED uint32_t clamp_index(int32_t idx, uint32_t max_val) {
   if (idx < 0) {
     return 0;
   }
@@ -83,8 +82,8 @@ static inline SB_UNUSED uint32_t clamp_index(int32_t idx,
 }
 
 // Helper: get frame from ring buffer (handles wrap-around)
-static inline SB_UNUSED float* get_frame(
-    NlmFilter* self, int32_t relative_offset) {
+static inline SB_UNUSED float* get_frame(NlmFilter* self,
+                                         int32_t relative_offset) {
   const int32_t size = (int32_t)self->config.time_buffer_size;
   // Center is at (head - future - 1)
   int32_t idx = (int32_t)self->buffer_head -
@@ -100,8 +99,7 @@ static inline SB_UNUSED float* get_frame(
 // Pre-compute all frame pointers for the current processing window.
 // After this call, frame_ptrs[search_time_past + 4 + dt] gives the frame
 // at relative offset dt (where dt ranges from -past-4 to +future+4).
-static inline SB_UNUSED void populate_frame_ptrs(
-    NlmFilter* self) {
+static inline SB_UNUSED void populate_frame_ptrs(NlmFilter* self) {
   const int32_t past = (int32_t)self->config.search_range_time_past;
   const int32_t future = (int32_t)self->config.search_range_time_future;
 
@@ -113,16 +111,17 @@ static inline SB_UNUSED void populate_frame_ptrs(
 
 // O(1) frame lookup using pre-computed pointer cache.
 // dt ranges from -search_time_past - 4 to +search_time_future + 4.
-static inline SB_UNUSED float* cached_get_frame(NlmFilter* self,
-                                                               int32_t dt) {
+static inline SB_UNUSED float* cached_get_frame(NlmFilter* self, int32_t dt) {
   return self
       ->frame_ptrs[(int32_t)self->config.search_range_time_past + 4 + dt];
 }
 
 // Helper: compute squared Euclidean distance between two patches
-static inline SB_UNUSED float compute_patch_distance(
-    NlmFilter* self, int32_t target_time, uint32_t target_freq,
-    int32_t candidate_time, uint32_t candidate_freq) {
+static inline SB_UNUSED float compute_patch_distance(NlmFilter* self,
+                                                     int32_t target_time,
+                                                     uint32_t target_freq,
+                                                     int32_t candidate_time,
+                                                     uint32_t candidate_freq) {
   float distance = 0.0F;
   const uint32_t patch_size = self->config.patch_size;
   const uint32_t half_patch = patch_size / 2;
@@ -169,8 +168,8 @@ static inline SB_UNUSED float compute_patch_distance(
   return distance;
 }
 
-static inline SB_UNUSED bool nlm_filter_process_core(
-    NlmFilter* filter, float* smoothed_snr) {
+static inline SB_UNUSED bool nlm_filter_process_core(NlmFilter* filter,
+                                                     float* smoothed_snr) {
   if (!filter || !smoothed_snr) {
     return false;
   }
