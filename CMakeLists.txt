@@ -76,6 +76,7 @@ add_library(libspecbleach
     ${SPECLEACH_SHARED_SOURCES}
     ${SPECLEACH_PROCESSOR_SOURCES}
 )
+set_target_properties(libspecbleach PROPERTIES OUTPUT_NAME "specbleach")
 
 target_include_directories(libspecbleach PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
