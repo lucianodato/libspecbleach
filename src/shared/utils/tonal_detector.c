@@ -49,9 +49,13 @@ void detect_tonal_components(const float* profile, const float* max_profile,
 
   for (uint32_t k = 0U; k < size; k++) {
     int start_idx = (int)k - half_win;
-    if (start_idx < 0) start_idx = 0;
+    if (start_idx < 0) {
+      start_idx = 0;
+    }
     int end_idx = (int)k + half_win;
-    if (end_idx >= (int)size) end_idx = (int)size - 1;
+    if (end_idx >= (int)size) {
+      end_idx = (int)size - 1;
+    }
     int count = end_idx - start_idx + 1;
 
     for (int i = 0; i < count; i++) {
@@ -81,8 +85,12 @@ void detect_tonal_components(const float* profile, const float* max_profile,
       start_octave = (int)k - 4;
       end_octave = (int)k + 4;
     }
-    if (start_octave < 0) start_octave = 0;
-    if (end_octave >= (int)size) end_octave = (int)size - 1;
+    if (start_octave < 0) {
+      start_octave = 0;
+    }
+    if (end_octave >= (int)size) {
+      end_octave = (int)size - 1;
+    }
 
     float octave_max_val = 0.0f;
     for (int j = start_octave; j <= end_octave; j++) {
@@ -152,8 +160,12 @@ uint32_t tonal_detector_get_peaks(const float* tonal_mask, uint32_t size,
       float delta = 0.0f;
       if (fabsf(denom) > 1e-9f) {
         delta = 0.5f * (left - right) / denom;
-        if (delta < -0.5f) delta = -0.5f;
-        if (delta > 0.5f) delta = 0.5f;
+        if (delta < -0.5f) {
+          delta = -0.5f;
+        }
+        if (delta > 0.5f) {
+          delta = 0.5f;
+        }
       }
 
       float peak_bin = (float)k + delta;
