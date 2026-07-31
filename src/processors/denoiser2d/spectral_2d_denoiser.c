@@ -456,17 +456,26 @@ uint32_t spectral_2d_denoiser_get_latency_frames(
   return nlm_filter_get_latency_frames(self->nlm_filter);
 }
 
-const float* spectral_2d_denoiser_get_tonal_mask(SpectralProcessorHandle instance) {
+const float* spectral_2d_denoiser_get_tonal_mask(
+    SpectralProcessorHandle instance) {
   Spectral2DDenoiser* self = (Spectral2DDenoiser*)instance;
-  return (self && self->tonal_reducer) ? tonal_reducer_get_mask(self->tonal_reducer) : NULL;
+  return (self && self->tonal_reducer)
+             ? tonal_reducer_get_mask(self->tonal_reducer)
+             : NULL;
 }
 
-uint32_t spectral_2d_denoiser_get_peaks(SpectralProcessorHandle instance, float* peak_freqs_hz, uint32_t max_peaks) {
+uint32_t spectral_2d_denoiser_get_peaks(SpectralProcessorHandle instance,
+                                        float* peak_freqs_hz,
+                                        uint32_t max_peaks) {
   Spectral2DDenoiser* self = (Spectral2DDenoiser*)instance;
-  return (self && self->tonal_reducer) ? tonal_reducer_get_peaks(self->tonal_reducer, peak_freqs_hz, max_peaks) : 0;
+  return (self && self->tonal_reducer)
+             ? tonal_reducer_get_peaks(self->tonal_reducer, peak_freqs_hz,
+                                       max_peaks)
+             : 0;
 }
 
-float* spectral_2d_denoiser_get_active_noise_profile(SpectralProcessorHandle instance) {
+float* spectral_2d_denoiser_get_active_noise_profile(
+    SpectralProcessorHandle instance) {
   Spectral2DDenoiser* self = (Spectral2DDenoiser*)instance;
   return self ? self->noise_spectrum : NULL;
 }

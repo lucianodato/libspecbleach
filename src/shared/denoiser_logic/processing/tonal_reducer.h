@@ -53,6 +53,7 @@ const float* tonal_reducer_get_mask(const TonalReducer* self);
 /**
  * Extract detected peak frequencies in Hz directly from the tonal reducer.
  */
-uint32_t tonal_reducer_get_peaks(const TonalReducer* self, float* peak_freqs_hz, uint32_t max_peaks);
+uint32_t tonal_reducer_get_peaks(const TonalReducer* self, float* peak_freqs_hz,
+                                 uint32_t max_peaks);
 
 #endif

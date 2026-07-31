@@ -120,7 +120,8 @@ const float* tonal_reducer_get_mask(const TonalReducer* self) {
   return self->tonal_mask;
 }
 
-uint32_t tonal_reducer_get_peaks(const TonalReducer* self, float* peak_freqs_hz, uint32_t max_peaks) {
+uint32_t tonal_reducer_get_peaks(const TonalReducer* self, float* peak_freqs_hz,
+                                 uint32_t max_peaks) {
   if (!self || !self->tonal_mask || !peak_freqs_hz || max_peaks == 0) {
     return 0;
   }

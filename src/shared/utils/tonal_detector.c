@@ -42,7 +42,8 @@ void detect_tonal_components(const float* profile, const float* max_profile,
   const float* detection_profile = profile_learned ? max_profile : profile;
 
   // 1. Perform frequency-domain median filtering to estimate the broadband
-  // colored noise floor using boundary-safe windowing (no DC padding duplication).
+  // colored noise floor using boundary-safe windowing (no DC padding
+  // duplication).
   const int win_size = TONAL_MEDIAN_FILTER_WINDOW;
   const int half_win = win_size / 2;
   float win_buf[TONAL_MEDIAN_FILTER_WINDOW];
@@ -148,7 +149,8 @@ uint32_t tonal_detector_get_peaks(const float* tonal_mask, uint32_t size,
     float neighbor_avg = 0.5f * (tonal_mask[k - 1] + tonal_mask[k + 1]);
     float local_prominence = mask_val - neighbor_avg;
 
-    // Peak center must be a local maximum above the significance threshold and stand out sharply from immediate neighbors
+    // Peak center must be a local maximum above the significance threshold and
+    // stand out sharply from immediate neighbors
     if (mask_val >= TONAL_PEAK_MIN_SIGNIFICANCE &&
         mask_val > tonal_mask[k - 1] && mask_val > tonal_mask[k + 1] &&
         local_prominence >= TONAL_PEAK_MIN_LOCAL_PROMINENCE) {
@@ -193,7 +195,8 @@ uint32_t tonal_detector_get_peaks(const float* tonal_mask, uint32_t size,
   }
 
   // Limit to max_peaks
-  uint32_t return_count = candidate_count < max_peaks ? candidate_count : max_peaks;
+  uint32_t return_count =
+      candidate_count < max_peaks ? candidate_count : max_peaks;
 
   // Re-sort selected peaks by frequency ascending for ordered output
   for (uint32_t i = 1; i < return_count; i++) {
@@ -213,9 +216,9 @@ uint32_t tonal_detector_get_peaks(const float* tonal_mask, uint32_t size,
   return return_count;
 }
 
-uint32_t tonal_detector_get_peaks_from_profile(const float* profile, uint32_t size,
-                                                uint32_t sample_rate, uint32_t fft_size,
-                                                float* peak_freqs_hz, uint32_t max_peaks) {
+uint32_t tonal_detector_get_peaks_from_profile(
+    const float* profile, uint32_t size, uint32_t sample_rate,
+    uint32_t fft_size, float* peak_freqs_hz, uint32_t max_peaks) {
   if (!profile || !peak_freqs_hz || size < 5 || sample_rate == 0 ||
       fft_size == 0 || max_peaks == 0) {
     return 0;
@@ -226,9 +229,11 @@ uint32_t tonal_detector_get_peaks_from_profile(const float* profile, uint32_t si
     return 0;
   }
 
-  detect_tonal_components(profile, profile, profile, size, sample_rate, fft_size, temp_mask);
+  detect_tonal_components(profile, profile, profile, size, sample_rate,
+                          fft_size, temp_mask);
 
-  uint32_t count = tonal_detector_get_peaks(temp_mask, size, sample_rate, fft_size, peak_freqs_hz, max_peaks);
+  uint32_t count = tonal_detector_get_peaks(temp_mask, size, sample_rate,
+                                            fft_size, peak_freqs_hz, max_peaks);
 
   free(temp_mask);
   return count;

@@ -47,8 +47,8 @@ uint32_t tonal_detector_get_peaks(const float* tonal_mask, uint32_t size,
 /**
  * Extract peak frequencies directly from a noise profile array.
  */
-uint32_t tonal_detector_get_peaks_from_profile(const float* profile, uint32_t size,
-                                                uint32_t sample_rate, uint32_t fft_size,
-                                                float* peak_freqs_hz, uint32_t max_peaks);
+uint32_t tonal_detector_get_peaks_from_profile(
+    const float* profile, uint32_t size, uint32_t sample_rate,
+    uint32_t fft_size, float* peak_freqs_hz, uint32_t max_peaks);
 
 #endif

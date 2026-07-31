@@ -88,8 +88,12 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
 uint32_t spectral_2d_denoiser_get_latency_frames(
     SpectralProcessorHandle instance);
 
-const float* spectral_2d_denoiser_get_tonal_mask(SpectralProcessorHandle instance);
-uint32_t spectral_2d_denoiser_get_peaks(SpectralProcessorHandle instance, float* peak_freqs_hz, uint32_t max_peaks);
-float* spectral_2d_denoiser_get_active_noise_profile(SpectralProcessorHandle instance);
+const float* spectral_2d_denoiser_get_tonal_mask(
+    SpectralProcessorHandle instance);
+uint32_t spectral_2d_denoiser_get_peaks(SpectralProcessorHandle instance,
+                                        float* peak_freqs_hz,
+                                        uint32_t max_peaks);
+float* spectral_2d_denoiser_get_active_noise_profile(
+    SpectralProcessorHandle instance);
 
 #endif /* SPECTRAL_2D_DENOISER_H */

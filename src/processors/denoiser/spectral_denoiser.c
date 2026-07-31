@@ -338,17 +338,24 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
   return true;
 }
 
-const float* spectral_denoiser_get_tonal_mask(SpectralProcessorHandle instance) {
+const float* spectral_denoiser_get_tonal_mask(
+    SpectralProcessorHandle instance) {
   SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
-  return (self && self->tonal_reducer) ? tonal_reducer_get_mask(self->tonal_reducer) : NULL;
+  return (self && self->tonal_reducer)
+             ? tonal_reducer_get_mask(self->tonal_reducer)
+             : NULL;
 }
 
-uint32_t spectral_denoiser_get_peaks(SpectralProcessorHandle instance, float* peak_freqs_hz, uint32_t max_peaks) {
+uint32_t spectral_denoiser_get_peaks(SpectralProcessorHandle instance,
+                                     float* peak_freqs_hz, uint32_t max_peaks) {
   SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
-  return self ? tonal_reducer_get_peaks(self->tonal_reducer, peak_freqs_hz, max_peaks) : 0;
+  return self ? tonal_reducer_get_peaks(self->tonal_reducer, peak_freqs_hz,
+                                        max_peaks)
+              : 0;
 }
 
-float* spectral_denoiser_get_active_noise_profile(SpectralProcessorHandle instance) {
+float* spectral_denoiser_get_active_noise_profile(
+    SpectralProcessorHandle instance) {
   SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
   return self ? self->noise_spectrum : NULL;
 }

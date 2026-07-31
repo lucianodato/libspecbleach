@@ -147,11 +147,15 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
   1e-7f // Minimum absolute prominence above background
 #define TONAL_MEDIAN_FILTER_WINDOW                                             \
   15 // Window size for frequency-domain median filter (220 Hz window)
-#define TONAL_PEAK_MIN_SIGNIFICANCE 0.25f // Minimum tonal mask value to report as peak
-#define TONAL_PEAK_MIN_LOCAL_PROMINENCE 0.04f // Minimum sharpness over immediate neighbors
-#define TONAL_PEAK_OCTAVE_DYNAMIC_RANGE_DB 20.0f // Max dB below strongest peak within same octave band
-#define TONAL_PEAK_MIN_OCTAVE_RELATIVE_POWER 0.01f // Power ratio within octave (10^(-20/10))
-#define MAX_TONAL_PEAKS_REPORTED 32U     // Maximum candidate peaks returned
+#define TONAL_PEAK_MIN_SIGNIFICANCE                                            \
+  0.25f // Minimum tonal mask value to report as peak
+#define TONAL_PEAK_MIN_LOCAL_PROMINENCE                                        \
+  0.04f // Minimum sharpness over immediate neighbors
+#define TONAL_PEAK_OCTAVE_DYNAMIC_RANGE_DB                                     \
+  20.0f // Max dB below strongest peak within same octave band
+#define TONAL_PEAK_MIN_OCTAVE_RELATIVE_POWER                                   \
+  0.01f                              // Power ratio within octave (10^(-20/10))
+#define MAX_TONAL_PEAKS_REPORTED 32U // Maximum candidate peaks returned
 
 // Transient Detector Constants
 #define UPPER_LIMIT (5.F)
