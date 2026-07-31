@@ -24,6 +24,21 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdint.h>
 #include <string.h>
 
+#if defined(_M_X64) || defined(_M_AMD64) || (defined(_M_IX86_FP) && _M_IX86_FP >= 1)
+#ifndef __SSE__
+#define __SSE__ 1
+#endif
+#ifndef __SSE2__
+#define __SSE2__ 1
+#endif
+#endif
+
+#if defined(_M_AVX) || defined(_M_AVX2)
+#ifndef __AVX__
+#define __AVX__ 1
+#endif
+#endif
+
 #ifdef __ARM_NEON
 #include <arm_neon.h>
 #elif defined(__SSE__)
@@ -36,8 +51,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #endif
 #endif
 
-#ifdef __GNUC__
+#if defined(__GNUC__) || defined(__clang__)
 #define SB_SIMD_INLINE static inline __attribute__((unused))
+#elif defined(_MSC_VER)
+#define SB_SIMD_INLINE static __inline
 #else
 #define SB_SIMD_INLINE static inline
 #endif
