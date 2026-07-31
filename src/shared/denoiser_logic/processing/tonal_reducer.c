@@ -7,12 +7,14 @@ libspecbleach - A spectral processing library
 #include "shared/utils/tonal_detector.h"
 #include <math.h>
 #include <stdlib.h>
+#include <string.h>
 
 struct TonalReducer {
   uint32_t real_spectrum_size;
   uint32_t sample_rate;
   uint32_t fft_size;
   float* tonal_mask;
+  float* tonal_mask_snapshot;
   float last_profile_sum;
   const float* last_detection_profile;
   bool has_cached_mask;
@@ -36,6 +38,13 @@ TonalReducer* tonal_reducer_initialize(uint32_t real_spectrum_size,
     return NULL;
   }
 
+  self->tonal_mask_snapshot = (float*)calloc(real_spectrum_size, sizeof(float));
+  if (!self->tonal_mask_snapshot) {
+    free(self->tonal_mask);
+    free(self);
+    return NULL;
+  }
+
   self->last_profile_sum = -1.0f;
   self->last_detection_profile = NULL;
   self->has_cached_mask = false;
@@ -47,6 +56,7 @@ void tonal_reducer_free(TonalReducer* self) {
   if (!self) {
     return;
   }
+  free(self->tonal_mask_snapshot);
   free(self->tonal_mask);
   free(self);
 }
@@ -81,6 +91,8 @@ void tonal_reducer_run(TonalReducer* self, const float* noise_spectrum,
     detect_tonal_components(noise_spectrum, max_profile, median_profile,
                             self->real_spectrum_size, self->sample_rate,
                             self->fft_size, self->tonal_mask);
+    memcpy(self->tonal_mask_snapshot, self->tonal_mask,
+           self->real_spectrum_size * sizeof(float));
     self->last_profile_sum = current_sum;
     self->last_detection_profile = detection_profile;
     self->has_cached_mask = true;
@@ -117,15 +129,15 @@ const float* tonal_reducer_get_mask(const TonalReducer* self) {
   if (!self) {
     return NULL;
   }
-  return self->tonal_mask;
+  return self->tonal_mask_snapshot;
 }
 
 uint32_t tonal_reducer_get_peaks(const TonalReducer* self, float* peak_freqs_hz,
                                  uint32_t max_peaks) {
-  if (!self || !self->tonal_mask || !peak_freqs_hz || max_peaks == 0) {
+  if (!self || !self->tonal_mask_snapshot || !peak_freqs_hz || max_peaks == 0) {
     return 0;
   }
-  return tonal_detector_get_peaks(self->tonal_mask, self->real_spectrum_size,
+  return tonal_detector_get_peaks(self->tonal_mask_snapshot, self->real_spectrum_size,
                                   self->sample_rate, self->fft_size,
                                   peak_freqs_hz, max_peaks);
 }

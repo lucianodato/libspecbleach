@@ -7,7 +7,7 @@ This file contains foundational mandates and architectural context for Gemini CL
 1. **DSP Integrity**: Never introduce non-deterministic logic or blocking calls (locks, I/O, malloc) into the processing path (functions like `specbleach_process` or anything called within it).
 2. **Scientific Rigor**: All tuning constants MUST be defined in `src/shared/configurations.h`. Do not use magic numbers in implementation files.
 3. **Regression Testing**: After any change to DSP logic, you MUST run the audio regression suite:
-   - `cd build && ctest -R test_audio_file_regression --output-on-failure`
+   - `cd build && ctest -R test_audio_file_regression --output-on-failure` (requires `libsndfile`; skip if unavailable)
 4. **SIMD Awareness & FTZ/DAZ**: The "2D Denoising" (NLM) feature is extremely sensitive to optimization. Always verify that changes don't break SIMD auto-vectorization or explicit vector instructions.
    - **FTZ/DAZ**: For real-time safety, always enable FTZ (Flush-To-Zero) and DAZ (Denormals-Are-Zero) using `sb_simd_enable_ftz_daz()` and restore with `sb_simd_restore_state(...)` during heavy SIMD processing loops.
    - **sb_sel8 Mask Contract**: The mask argument for `sb_sel8` must be normalized (any non-zero lane treated as true) to guarantee consistent behavior across SSE, AVX, ARM NEON, and Scalar backends.

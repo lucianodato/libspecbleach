@@ -147,7 +147,7 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define MIN_PEAK_PROMINENCE                                                    \
   1e-7f // Minimum absolute prominence above background
 #define TONAL_MEDIAN_FILTER_WINDOW                                             \
-  15 // Window size for frequency-domain median filter (220 Hz window)
+  15 // 15-bin frequency-domain median-filter window
 #define TONAL_PEAK_MIN_SIGNIFICANCE                                            \
   0.25f // Minimum tonal mask value to report as peak
 #define TONAL_PEAK_MIN_LOCAL_PROMINENCE                                        \

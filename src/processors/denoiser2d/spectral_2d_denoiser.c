@@ -47,9 +47,10 @@ typedef struct Spectral2DDenoiser {
 
   float* snr_frame;          // Current SNR frame for NLM input
   float* smoothed_snr;       // Smoothed SNR output from NLM
-  float* gain_spectrum;      // Computed gains
-  float* noise_spectrum;     // Copy of noise profile for processing
-  float* alpha;              // Oversubtraction factors
+  float* gain_spectrum;          // Computed gains
+  float* noise_spectrum;         // Copy of noise profile for processing
+  float* noise_spectrum_snapshot; // Snapshot of noise spectrum for thread-safe reads
+  float* alpha;                  // Oversubtraction factors
   float* beta;               // Undersubtraction factors
   float* manual_noise_floor; // Manual profile floor
   TonalReducer* tonal_reducer;
@@ -125,6 +126,13 @@ SpectralProcessorHandle spectral_2d_denoiser_initialize(
   self->noise_spectrum =
       (float*)calloc(self->real_spectrum_size, sizeof(float));
   if (!self->noise_spectrum) {
+    spectral_2d_denoiser_free(self);
+    return NULL;
+  }
+
+  self->noise_spectrum_snapshot =
+      (float*)calloc(self->real_spectrum_size, sizeof(float));
+  if (!self->noise_spectrum_snapshot) {
     spectral_2d_denoiser_free(self);
     return NULL;
   }
@@ -267,6 +275,7 @@ void spectral_2d_denoiser_free(SpectralProcessorHandle instance) {
   free(self->smoothed_snr);
   free(self->gain_spectrum);
   free(self->noise_spectrum);
+  free(self->noise_spectrum_snapshot);
   free(self->alpha);
   free(self->beta);
   if (self->manual_noise_floor) {
@@ -442,6 +451,10 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
   // Finalize: Advance circular buffer write index
   spectral_circular_buffer_advance(self->circular_buffer);
 
+  // Update noise spectrum snapshot for lock-free thread-safe reads
+  memcpy(self->noise_spectrum_snapshot, self->noise_spectrum,
+         self->real_spectrum_size * sizeof(float));
+
   return true;
 }
 
@@ -477,5 +490,5 @@ uint32_t spectral_2d_denoiser_get_peaks(SpectralProcessorHandle instance,
 const float* spectral_2d_denoiser_get_active_noise_profile(
     SpectralProcessorHandle instance) {
   Spectral2DDenoiser* self = (Spectral2DDenoiser*)instance;
-  return self ? self->noise_spectrum : NULL;
+  return self ? self->noise_spectrum_snapshot : NULL;
 }
