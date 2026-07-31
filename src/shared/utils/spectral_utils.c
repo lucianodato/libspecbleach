@@ -182,10 +182,14 @@ bool get_rolling_median_spectrum(float* median_spectrum,
     return false;
   }
 
-  // Optimize for small block counts to avoid VLA if possible, but keep simple
-  // for now Note: VLA usage is generally discouraged in strict C
-  // standards/security contexts, but this matches existing pattern.
-  float tmp_buffer[number_of_blocks];
+  float tmp_stack_buffer[256];
+  float* tmp_buffer = tmp_stack_buffer;
+  if (number_of_blocks > 256U) {
+    tmp_buffer = (float*)malloc(number_of_blocks * sizeof(float));
+    if (!tmp_buffer) {
+      return false;
+    }
+  }
 
   for (uint32_t i = 0U; i < spectrum_size; i++) {
     for (uint32_t j = 0U; j < number_of_blocks; j++) {
@@ -200,6 +204,10 @@ bool get_rolling_median_spectrum(float* median_spectrum,
     qsort(tmp_buffer, number_of_blocks, sizeof(float), min_max_comparator);
 
     median_spectrum[i] = find_median(tmp_buffer, number_of_blocks);
+  }
+
+  if (tmp_buffer != tmp_stack_buffer) {
+    free(tmp_buffer);
   }
 
   return true;

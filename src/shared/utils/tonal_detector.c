@@ -75,8 +75,14 @@ void detect_tonal_components(const float* profile, const float* max_profile,
   uint32_t deque_tail = 0;
   uint32_t current_end = 0;
 
-  uint32_t deque_buf[size];
-  uint32_t* deque = deque_buf;
+  uint32_t deque_stack[4096];
+  uint32_t* deque = deque_stack;
+  if (size > 4096U) {
+    deque = (uint32_t*)malloc(size * sizeof(uint32_t));
+    if (!deque) {
+      return;
+    }
+  }
 
   for (uint32_t k = 0U; k < size; k++) {
     float floor_val = tonal_mask[k];
@@ -141,6 +147,10 @@ void detect_tonal_components(const float* profile, const float* max_profile,
     } else {
       tonal_mask[k] = 0.0f;
     }
+  }
+
+  if (deque != deque_stack) {
+    free(deque);
   }
 }
 

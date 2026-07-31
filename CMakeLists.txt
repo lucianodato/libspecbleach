@@ -3,6 +3,7 @@ project(libspecbleach VERSION 0.3.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(BUILD_SHARED_LIBS "Build shared libraries" OFF)
 option(ENABLE_AVX "Enable AVX optimizations on x86_64" ON)
