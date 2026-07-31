@@ -54,12 +54,6 @@ static float calculate_correction_factor(float p) {
   return 1.0f / denominator;
 }
 
-// Helper: Compare floats for qsort
-static int compare_floats(const void* a, const void* b) {
-  float fa = *(const float*)a;
-  float fb = *(const float*)b;
-  return (fa > fb) - (fa < fb);
-}
 
 BrandtNoiseEstimator* brandt_noise_estimator_initialize(
     uint32_t spectrum_size, float history_duration_ms, uint32_t sample_rate,
@@ -131,13 +125,36 @@ void brandt_noise_estimator_free(BrandtNoiseEstimator* self) {
   }
 }
 
+// Helper: Fast inline Shell sort for float arrays
+static inline void sb_sort_floats_inline(float* arr, uint32_t n) {
+  if (n < 2) {
+    return;
+  }
+  uint32_t h = 1;
+  while (h < n / 3) {
+    h = 3 * h + 1;
+  }
+  while (h >= 1) {
+    for (uint32_t i = h; i < n; i++) {
+      float temp = arr[i];
+      uint32_t j = i;
+      while (j >= h && arr[j - h] > temp) {
+        arr[j] = arr[j - h];
+        j -= h;
+      }
+      arr[j] = temp;
+    }
+    h /= 3;
+  }
+}
+
 static float calculate_ad_norm(const float* sorted, uint32_t q, float mu,
                                float b) {
   if (mu < 1e-15f) {
     return 1.0f;
   }
   float mu_inv = 1.0f / mu;
-  float exp_b_mu = expf(-b * mu_inv);
+  float exp_b_mu = (b * mu_inv > 20.0f) ? 0.0f : expf(-b * mu_inv);
   float denom = 1.0f - exp_b_mu;
   if (fabsf(denom) < SPECTRAL_EPSILON) {
     return 1.0f;
@@ -147,10 +164,18 @@ static float calculate_ad_norm(const float* sorted, uint32_t q, float mu,
   float q_inv = 1.0f / (float)q;
   float denom_inv = 1.0f / denom;
 
-  // Most expensive loop in denoiser: 5 * spectrum_size * q calls per frame
-  // q is roughly history_size / 2.
   for (uint32_t i = 0; i < q; i++) {
-    float f_te = (1.0f - expf(-sorted[i] * mu_inv)) * denom_inv;
+    float val = sorted[i] * mu_inv;
+    float f_te;
+    if (val > 20.0f) {
+      // Since sorted array is ascending, all remaining elements will also have val > 20.0f
+      for (uint32_t j = i; j < q; j++) {
+        float f_emp = (float)(j + 1) * q_inv;
+        abs_diff_sum += fabsf(f_emp - denom_inv);
+      }
+      break;
+    }
+    f_te = (1.0f - expf(-val)) * denom_inv;
     float f_empirical = (float)(i + 1) * q_inv;
     abs_diff_sum += fabsf(f_empirical - f_te);
   }
@@ -192,51 +217,62 @@ bool brandt_noise_estimator_run(BrandtNoiseEstimator* self,
     return true;
   }
 
+  // Record current frame into circular buffer
+  uint32_t current_idx = self->history_index;
   for (uint32_t k = 0; k < self->spectrum_size; k++) {
     self->history_buffer[((size_t)k * self->history_size) +
-                         self->history_index] = spectrum[k];
+                         current_idx] = spectrum[k];
   }
-  self->history_index = (self->history_index + 1) % self->history_size;
+  self->history_index = (current_idx + 1) % self->history_size;
 
-  static const float p_candidates[] = {0.1f, 0.25f, 0.5f, 0.75f, 1.0f};
+  // Subsample expensive statistical update every 4 frames (or on first frame)
+  bool update_stats = self->is_first_frame || ((current_idx % 4) == 0);
 
-  for (uint32_t k = 0; k < self->spectrum_size; k++) {
-    float* bin_history = &self->history_buffer[(size_t)k * self->history_size];
-    memcpy(self->sort_buffer, bin_history, self->history_size * sizeof(float));
-    qsort(self->sort_buffer, self->history_size, sizeof(float), compare_floats);
+  if (update_stats) {
+    static const float p_candidates[] = {0.1f, 0.25f, 0.5f, 0.75f, 1.0f};
 
-    float min_ad_norm = 2.0f;
-    float best_mu = self->last_noise_spectrum[k];
+    for (uint32_t k = 0; k < self->spectrum_size; k++) {
+      float* bin_history = &self->history_buffer[(size_t)k * self->history_size];
+      memcpy(self->sort_buffer, bin_history, self->history_size * sizeof(float));
+      sb_sort_floats_inline(self->sort_buffer, self->history_size);
 
-    for (int i = 0; i < 5; i++) {
-      float p = p_candidates[i];
-      uint32_t q = (uint32_t)(p * (float)self->history_size);
-      if (q < 10) {
-        continue;
-      }
+      float min_ad_norm = 2.0f;
+      float best_mu = self->last_noise_spectrum[k];
 
-      float b = self->sort_buffer[q - 1];
-      float sum = 0.0f;
-      for (uint32_t j = 0; j < q; j++) {
-        sum += self->sort_buffer[j];
-      }
-      float mu_trunc = sum / (float)q;
+      for (int i = 0; i < 5; i++) {
+        float p = p_candidates[i];
+        uint32_t q = (uint32_t)(p * (float)self->history_size);
+        if (q < 10) {
+          continue;
+        }
 
-      if (mu_trunc > ESTIMATOR_SILENCE_THRESHOLD) {
-        float factor = self->correction_factors[i];
-        float mu_full = mu_trunc * factor;
-        float ad_norm = calculate_ad_norm(self->sort_buffer, q, mu_full, b);
-        if (ad_norm < min_ad_norm) {
-          min_ad_norm = ad_norm;
-          best_mu = mu_full;
+        float b = self->sort_buffer[q - 1];
+        float sum = 0.0f;
+        for (uint32_t j = 0; j < q; j++) {
+          sum += self->sort_buffer[j];
+        }
+        float mu_trunc = sum / (float)q;
+
+        if (mu_trunc > ESTIMATOR_SILENCE_THRESHOLD) {
+          float factor = self->correction_factors[i];
+          float mu_full = mu_trunc * factor;
+          float ad_norm = calculate_ad_norm(self->sort_buffer, q, mu_full, b);
+          if (ad_norm < min_ad_norm) {
+            min_ad_norm = ad_norm;
+            best_mu = mu_full;
+          }
         }
       }
-    }
 
-    if (1.0f - min_ad_norm >= BRANDT_MIN_CONFIDENCE) {
-      self->last_noise_spectrum[k] = best_mu;
+      if (1.0f - min_ad_norm >= BRANDT_MIN_CONFIDENCE) {
+        self->last_noise_spectrum[k] = best_mu;
+      }
+      noise_spectrum[k] = self->last_noise_spectrum[k];
     }
-    noise_spectrum[k] = self->last_noise_spectrum[k];
+  } else {
+    // Copy persistent noise estimate
+    memcpy(noise_spectrum, self->last_noise_spectrum,
+           self->spectrum_size * sizeof(float));
   }
 
   return true;
