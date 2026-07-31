@@ -249,7 +249,7 @@ static inline __attribute__((unused)) bool nlm_filter_process_core(
     bool safe_block = (block_center >= half_patch_size) &&
                       (block_center + half_patch_size <= spectrum_size);
 
-    if (filter->config.patch_size == 8) {
+    if (patch_size == 8) {
       for (int r = 0; r < 8; r++) {
         if (safe_block) {
           int32_t t_offset = (int32_t)r - (int32_t)half_patch_size;
@@ -264,7 +264,7 @@ static inline __attribute__((unused)) bool nlm_filter_process_core(
 
     for (int32_t dt = -search_time_past; dt <= search_time_future; dt++) {
       float* cand_rows[8] = {NULL};
-      if (filter->config.patch_size == 8) {
+      if (patch_size == 8) {
         for (int r = 0; r < 8; r++) {
           cand_rows[r] = cached_get_frame(filter, dt + r - 4);
         }
@@ -281,7 +281,7 @@ static inline __attribute__((unused)) bool nlm_filter_process_core(
         bool safe_bounds = safe_block && (cand_center >= half_patch_size) &&
                            (cand_center + half_patch_size <= spectrum_size);
 
-        if (filter->config.patch_size == 8 && safe_bounds) {
+        if (patch_size == 8 && safe_bounds && cand_rows[0]) {
           uint32_t cand_f_start = cand_center - 4;
           float* cand_row_ptrs[8] = {
               cand_rows[0] + cand_f_start, cand_rows[1] + cand_f_start,
