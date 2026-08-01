@@ -178,18 +178,19 @@ bool get_rolling_median_spectrum(float* median_spectrum,
                                  const float** input_spectra,
                                  const uint32_t number_of_blocks,
                                  const uint32_t spectrum_size) {
-  if (!median_spectrum || !input_spectra || spectrum_size == 0U) {
+  if (!median_spectrum || !input_spectra || spectrum_size == 0U ||
+      number_of_blocks == 0U) {
     return false;
   }
 
-  float tmp_stack_buffer[256];
-  float* tmp_buffer = tmp_stack_buffer;
-  if (number_of_blocks > 256U) {
-    tmp_buffer = (float*)malloc(number_of_blocks * sizeof(float));
-    if (!tmp_buffer) {
-      return false;
-    }
+  // Validate element count against size_t overflow and fixed workspace bound
+  // (no malloc in audio path)
+  if ((size_t)number_of_blocks > (SIZE_MAX / sizeof(float)) ||
+      number_of_blocks > 256U) {
+    return false;
   }
+
+  float tmp_buffer[256];
 
   for (uint32_t i = 0U; i < spectrum_size; i++) {
     for (uint32_t j = 0U; j < number_of_blocks; j++) {
@@ -204,10 +205,6 @@ bool get_rolling_median_spectrum(float* median_spectrum,
     qsort(tmp_buffer, number_of_blocks, sizeof(float), min_max_comparator);
 
     median_spectrum[i] = find_median(tmp_buffer, number_of_blocks);
-  }
-
-  if (tmp_buffer != tmp_stack_buffer) {
-    free(tmp_buffer);
   }
 
   return true;

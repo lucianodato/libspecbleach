@@ -24,7 +24,7 @@ static void insertion_sort(float* arr, int n) {
 void detect_tonal_components(const float* profile, const float* max_profile,
                              const float* median_profile, uint32_t size,
                              uint32_t sample_rate, uint32_t fft_size,
-                             float* tonal_mask) {
+                             float* tonal_mask, uint32_t* deque_workspace) {
   if (!profile || !tonal_mask || size < 5 || !max_profile || !median_profile ||
       sample_rate == 0 || fft_size == 0) {
     return;
@@ -44,16 +44,15 @@ void detect_tonal_components(const float* profile, const float* max_profile,
   // 1. Perform frequency-domain median filtering to estimate the broadband
   // colored noise floor using boundary-safe windowing (no DC padding
   // duplication).
-  const int win_size = TONAL_MEDIAN_FILTER_WINDOW;
-  const int half_win = win_size / 2;
+  uint32_t half_win = TONAL_MEDIAN_FILTER_WINDOW / 2U;
   float win_buf[TONAL_MEDIAN_FILTER_WINDOW];
 
   for (uint32_t k = 0U; k < size; k++) {
-    int start_idx = (int)k - half_win;
+    int start_idx = (int)k - (int)half_win;
     if (start_idx < 0) {
       start_idx = 0;
     }
-    int end_idx = (int)k + half_win;
+    int end_idx = (int)k + (int)half_win;
     if (end_idx >= (int)size) {
       end_idx = (int)size - 1;
     }
@@ -75,13 +74,10 @@ void detect_tonal_components(const float* profile, const float* max_profile,
   uint32_t deque_tail = 0;
   uint32_t current_end = 0;
 
-  uint32_t deque_stack[4096];
-  uint32_t* deque = deque_stack;
-  if (size > 4096U) {
-    deque = (uint32_t*)malloc(size * sizeof(uint32_t));
-    if (!deque) {
-      return;
-    }
+  uint32_t deque_stack[TONAL_DETECTOR_DEQUE_CAPACITY];
+  uint32_t* deque = deque_workspace ? deque_workspace : deque_stack;
+  if (!deque_workspace && size > TONAL_DETECTOR_DEQUE_CAPACITY) {
+    return;
   }
 
   for (uint32_t k = 0U; k < size; k++) {
@@ -147,10 +143,6 @@ void detect_tonal_components(const float* profile, const float* max_profile,
     } else {
       tonal_mask[k] = 0.0f;
     }
-  }
-
-  if (deque != deque_stack) {
-    free(deque);
   }
 }
 
@@ -271,7 +263,7 @@ uint32_t tonal_detector_get_peaks_from_profile(
   }
 
   detect_tonal_components(profile, profile, profile, size, sample_rate,
-                          fft_size, temp_mask);
+                          fft_size, temp_mask, NULL);
 
   uint32_t count = tonal_detector_get_peaks(temp_mask, size, sample_rate,
                                             fft_size, peak_freqs_hz, max_peaks);

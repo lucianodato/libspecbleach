@@ -34,6 +34,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "shared/utils/spectral_circular_buffer.h"
 #include "shared/utils/spectral_utils.h"
 #include <float.h>
+#include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -45,15 +46,17 @@ typedef struct Spectral2DDenoiser {
 
   Denoiser2DParameters parameters;
 
-  float* snr_frame;               // Current SNR frame for NLM input
-  float* smoothed_snr;            // Smoothed SNR output from NLM
-  float* gain_spectrum;           // Computed gains
-  float* noise_spectrum;          // Copy of noise profile for processing
-  float* noise_spectrum_snapshot; // Snapshot of noise spectrum for thread-safe
-                                  // reads
-  float* alpha;                   // Oversubtraction factors
-  float* beta;                    // Undersubtraction factors
-  float* manual_noise_floor;      // Manual profile floor
+  float* snr_frame;                 // Current SNR frame for NLM input
+  float* smoothed_snr;              // Smoothed SNR output from NLM
+  float* gain_spectrum;             // Computed gains
+  float* noise_spectrum;            // Copy of noise profile for processing
+  float* noise_spectrum_buffers[2]; // Double-buffered noise spectrum for
+                                    // lock-free SPSC publication
+  atomic_int
+      active_noise_idx; // Index of current published noise spectrum (0 or 1)
+  float* alpha;         // Oversubtraction factors
+  float* beta;          // Undersubtraction factors
+  float* manual_noise_floor; // Manual profile floor
   TonalReducer* tonal_reducer;
 
   // Reusable circular buffer for aligned temporal analysis
@@ -131,12 +134,17 @@ SpectralProcessorHandle spectral_2d_denoiser_initialize(
     return NULL;
   }
 
-  self->noise_spectrum_snapshot =
+  self->noise_spectrum_buffers[0] =
       (float*)calloc(self->real_spectrum_size, sizeof(float));
-  if (!self->noise_spectrum_snapshot) {
+  self->noise_spectrum_buffers[1] =
+      (float*)calloc(self->real_spectrum_size, sizeof(float));
+  if (!self->noise_spectrum_buffers[0] || !self->noise_spectrum_buffers[1]) {
+    free(self->noise_spectrum_buffers[0]);
+    free(self->noise_spectrum_buffers[1]);
     spectral_2d_denoiser_free(self);
     return NULL;
   }
+  atomic_init(&self->active_noise_idx, 0);
 
   self->alpha = (float*)calloc(self->real_spectrum_size, sizeof(float));
   if (!self->alpha) {
@@ -276,7 +284,12 @@ void spectral_2d_denoiser_free(SpectralProcessorHandle instance) {
   free(self->smoothed_snr);
   free(self->gain_spectrum);
   free(self->noise_spectrum);
-  free(self->noise_spectrum_snapshot);
+  if (self->noise_spectrum_buffers[0]) {
+    free(self->noise_spectrum_buffers[0]);
+  }
+  if (self->noise_spectrum_buffers[1]) {
+    free(self->noise_spectrum_buffers[1]);
+  }
   free(self->alpha);
   free(self->beta);
   if (self->manual_noise_floor) {
@@ -452,9 +465,15 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
   // Finalize: Advance circular buffer write index
   spectral_circular_buffer_advance(self->circular_buffer);
 
-  // Update noise spectrum snapshot for lock-free thread-safe reads
-  memcpy(self->noise_spectrum_snapshot, self->noise_spectrum,
+  // Safely publish noise spectrum to inactive double buffer via SPSC atomic
+  // release
+  int published_idx =
+      atomic_load_explicit(&self->active_noise_idx, memory_order_relaxed);
+  int write_noise_idx = 1 - published_idx;
+  memcpy(self->noise_spectrum_buffers[write_noise_idx], self->noise_spectrum,
          self->real_spectrum_size * sizeof(float));
+  atomic_store_explicit(&self->active_noise_idx, write_noise_idx,
+                        memory_order_release);
 
   return true;
 }
@@ -491,5 +510,9 @@ uint32_t spectral_2d_denoiser_get_peaks(SpectralProcessorHandle instance,
 const float* spectral_2d_denoiser_get_active_noise_profile(
     SpectralProcessorHandle instance) {
   Spectral2DDenoiser* self = (Spectral2DDenoiser*)instance;
-  return self ? self->noise_spectrum_snapshot : NULL;
+  if (!self) {
+    return NULL;
+  }
+  int idx = atomic_load_explicit(&self->active_noise_idx, memory_order_acquire);
+  return self->noise_spectrum_buffers[idx];
 }

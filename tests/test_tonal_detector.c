@@ -51,24 +51,26 @@ void test_null_inputs(void) {
 
   // NULL profile should not crash
   detect_tonal_components(NULL, max_profile, median_profile, TEST_SPECTRUM_SIZE,
-                          TEST_SAMPLE_RATE, TEST_FFT_SIZE, tonal_mask);
+                          TEST_SAMPLE_RATE, TEST_FFT_SIZE, tonal_mask, NULL);
 
   // NULL tonal_mask should not crash
   detect_tonal_components(profile, max_profile, median_profile,
                           TEST_SPECTRUM_SIZE, TEST_SAMPLE_RATE, TEST_FFT_SIZE,
-                          NULL);
+                          NULL, NULL);
 
   // size < 5 should not crash
   detect_tonal_components(profile, max_profile, median_profile, 3,
-                          TEST_SAMPLE_RATE, TEST_FFT_SIZE, tonal_mask);
+                          TEST_SAMPLE_RATE, TEST_FFT_SIZE, tonal_mask, NULL);
 
   // Zero sample_rate should not crash
   detect_tonal_components(profile, max_profile, median_profile,
-                          TEST_SPECTRUM_SIZE, 0, TEST_FFT_SIZE, tonal_mask);
+                          TEST_SPECTRUM_SIZE, 0, TEST_FFT_SIZE, tonal_mask,
+                          NULL);
 
   // Zero fft_size should not crash
   detect_tonal_components(profile, max_profile, median_profile,
-                          TEST_SPECTRUM_SIZE, TEST_SAMPLE_RATE, 0, tonal_mask);
+                          TEST_SPECTRUM_SIZE, TEST_SAMPLE_RATE, 0, tonal_mask,
+                          NULL);
 
   printf("✓ NULL/edge-case inputs handled safely\n");
 }
@@ -99,7 +101,7 @@ void test_low_frequency_hum_detection(void) {
 
   detect_tonal_components(profile, max_profile, median_profile,
                           TEST_SPECTRUM_SIZE, TEST_SAMPLE_RATE, TEST_FFT_SIZE,
-                          tonal_mask);
+                          tonal_mask, NULL);
 
   // Both bins should be detected
   if (tonal_mask[bin_60] <= 0.0f) {
@@ -128,7 +130,7 @@ void test_low_frequency_hum_detection(void) {
   memset(tonal_mask, 0, TEST_SPECTRUM_SIZE * sizeof(float));
   detect_tonal_components(profile, max_profile, median_profile,
                           TEST_SPECTRUM_SIZE, TEST_SAMPLE_RATE, TEST_FFT_SIZE,
-                          tonal_mask);
+                          tonal_mask, NULL);
 
   if (tonal_mask[bin_30] <= 0.0f) {
     fprintf(stderr,
@@ -169,7 +171,7 @@ void test_high_frequency_detection(void) {
 
   detect_tonal_components(profile, max_profile, median_profile,
                           TEST_SPECTRUM_SIZE, TEST_SAMPLE_RATE, TEST_FFT_SIZE,
-                          tonal_mask);
+                          tonal_mask, NULL);
 
   if (tonal_mask[bin_5k] <= 0.0f) {
     fprintf(stderr, "FAIL: 5 kHz bin %d not detected (mask = %f)\n", bin_5k,
@@ -231,7 +233,7 @@ void test_adaptive_width(void) {
 
   detect_tonal_components(profile, max_profile, median_profile,
                           TEST_SPECTRUM_SIZE, TEST_SAMPLE_RATE, TEST_FFT_SIZE,
-                          tonal_mask);
+                          tonal_mask, NULL);
 
   // Verification:
   // Center should be detected
@@ -283,7 +285,7 @@ void test_flat_noise_no_false_detection(void) {
 
   detect_tonal_components(profile, max_profile, median_profile,
                           TEST_SPECTRUM_SIZE, TEST_SAMPLE_RATE, TEST_FFT_SIZE,
-                          tonal_mask);
+                          tonal_mask, NULL);
 
   int detections = 0;
   for (uint32_t k = 0; k < TEST_SPECTRUM_SIZE; k++) {
@@ -336,7 +338,7 @@ void test_off_center_peak_interpolation(void) {
 
   detect_tonal_components(profile, max_profile, median_profile,
                           TEST_SPECTRUM_SIZE, TEST_SAMPLE_RATE, TEST_FFT_SIZE,
-                          tonal_mask);
+                          tonal_mask, NULL);
 
   // The peak bin should still be detected
   if (tonal_mask[100] <= 0.0f) {
@@ -385,7 +387,7 @@ void test_adaptive_mode_detection(void) {
 
   detect_tonal_components(profile, max_profile, median_profile,
                           TEST_SPECTRUM_SIZE, TEST_SAMPLE_RATE, TEST_FFT_SIZE,
-                          tonal_mask);
+                          tonal_mask, NULL);
 
   if (tonal_mask[bin] <= 0.0f) {
     fprintf(stderr,

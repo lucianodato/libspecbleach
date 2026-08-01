@@ -203,6 +203,7 @@ void test_caching_and_adaptive_support(void) {
   // The cached mask should still have tone at bin1 and NOT at bin2.
   tonal_reducer_run(reducer, noise_spectrum, max_profile, median_profile, alpha,
                     reduction_gain);
+  mask = tonal_reducer_get_mask(reducer);
 
   if (mask[bin1] <= 0.0f) {
     fprintf(stderr, "FAIL: Caching failed, cached mask at bin %d cleared\n",
@@ -232,6 +233,7 @@ void test_caching_and_adaptive_support(void) {
   // at bin2 detected.
   tonal_reducer_run(reducer, noise_spectrum, max_profile, median_profile, alpha,
                     reduction_gain);
+  mask = tonal_reducer_get_mask(reducer);
 
   if (mask[bin1] > 0.0f) {
     fprintf(stderr,
@@ -268,6 +270,7 @@ void test_caching_and_adaptive_support(void) {
   // Run 4: Initial run in learned mode
   tonal_reducer_run(reducer, noise_spectrum, max_profile, median_profile, alpha,
                     reduction_gain);
+  mask = tonal_reducer_get_mask(reducer);
 
   if (mask[learned_bin1] <= 0.0f) {
     fprintf(stderr,
@@ -301,6 +304,7 @@ void test_caching_and_adaptive_support(void) {
   // recompute the mask.
   tonal_reducer_run(reducer, noise_spectrum, max_profile, median_profile, alpha,
                     reduction_gain);
+  mask = tonal_reducer_get_mask(reducer);
 
   if (mask[learned_bin1] > 0.0f) {
     fprintf(

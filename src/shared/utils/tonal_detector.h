@@ -27,7 +27,7 @@ libspecbleach - A spectral processing library
 void detect_tonal_components(const float* profile, const float* max_profile,
                              const float* median_profile, uint32_t size,
                              uint32_t sample_rate, uint32_t fft_size,
-                             float* tonal_mask);
+                             float* tonal_mask, uint32_t* deque_workspace);
 
 /**
  * Extract distinct peak frequencies in Hz from a tonal mask.
