@@ -20,13 +20,13 @@ NOISE_PREFIX_SEC = 2.5
 
 # Standard Presets
 PRESETS_ALL = [
-    {"name": "light",    "args": ["--learn-frames", "200", "--reduction", "12.0", "--whitening", "10.0"]},
-    {"name": "moderate", "args": ["--learn-frames", "200", "--reduction", "18.0", "--whitening", "20.0"]},
-    {"name": "heavy",    "args": ["--learn-frames", "200", "--reduction", "24.0", "--whitening", "30.0"]}
+    {"name": "light",    "args": ["--learn-frames", "200", "--reduction", "12.0", "--whitening", "10.0", "--smoothing", "0.05" ]},
+    {"name": "moderate", "args": ["--learn-frames", "200", "--reduction", "18.0", "--whitening", "20.0", "--smoothing", "0.15" ]},
+    {"name": "heavy",    "args": ["--learn-frames", "200", "--reduction", "24.0", "--whitening", "30.0", "--smoothing", "0.25" ]}
 ]
 
 PRESET_FAST = [
-    {"name": "moderate", "args": ["--learn-frames", "200", "--reduction", "18.0", "--whitening", "20.0"]}
+    {"name": "moderate", "args": ["--learn-frames", "200", "--reduction", "18.0", "--whitening", "20.0", "--smoothing", "0.15" ]}
 ]
 
 def compile_libspecbleach() -> bool:
