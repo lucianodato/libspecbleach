@@ -72,3 +72,29 @@ While you can overhaul internal modules, you **MUST** adhere to the following bu
    - If you create new internal structures or replace existing ones, ensure `init` and `free`/`destroy` functions properly allocate and clean up memory to prevent pointer crashes or leaks.
 3. **Compilation Integrity:** 
    - All changes across modified files must build without CMake compilation errors or missing symbol warnings.
+
+## ⚡ PERFORMANCE & REAL-TIME OPTIMIZATION OBJECTIVES
+
+Your proposed algorithms are evaluated on **Audio Quality AND Computational Performance**.
+
+---
+
+### Performance Targets
+1. **CPU Overhead / Real-Time Factor (RTF):**
+   - Target: $\text{RTF} \le 0.05$ (Processing must take under 5% of real-time audio playback duration).
+   - *Guidance:* Utilize OpenMP vectorization, efficient FFT windowing, avoid redundant matrix allocations inside frame loops, and streamline STFT hop iterations.
+
+2. **Algorithmic Latency:**
+   - Target: $\le 10 \text{ ms}$ buffer delay.
+   - *Guidance:* Keep STFT hop sizes and lookahead buffers minimal. Avoid unnecessarily huge single-window STFT frame sizes (e.g., preference multi-resolution STFT with short transient windows or partitioned FFT processing over massive 8192-sample windows).
+
+---
+
+### Balanced Trade-off Metric
+The benchmark calculates a composite score:
+$$\text{Final Score} = \text{Quality Score} - (10.0 \times \text{RTF}) - (0.05 \times \text{Latency}_{\text{ms}})$$
+
+An edit that achieves slightly cleaner audio but doubles CPU time or adds 50ms of latency will **BE REJECTED**. Always aim for lean, cache-friendly C code.
+
+### Default configurations for the library
+When adding new DSP features or modifying fallback struct defaults, ensure default struct initializers in configurations.h or config constructors reflect your optimized baseline values.
