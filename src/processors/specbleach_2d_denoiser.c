@@ -24,6 +24,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "shared/denoiser_logic/core/noise_profile.h"
 #include "shared/stft/stft_processor.h"
 #include "shared/utils/general_utils.h"
+#include "shared/utils/tonal_detector.h"
 #include "specbleach_processor_core.h"
 #include <stdlib.h>
 #include <string.h>
@@ -48,7 +49,7 @@ SpectralBleachHandle specbleach_2d_initialize(const uint32_t sample_rate,
   self->core = sb_processor_core_initialize(
       sample_rate, frame_size, OVERLAP_FACTOR_2D, PADDING_CONFIGURATION_2D,
       ZEROPADDING_AMOUNT_2D, INPUT_WINDOW_TYPE_2D, OUTPUT_WINDOW_TYPE_2D,
-      SB_PROCESSOR_CORE_FULL_FFT_SPECTRUM);
+      SB_PROCESSOR_CORE_DEFAULT_REAL_SPECTRUM);
 
   if (!self->core) {
     specbleach_2d_free(self);
@@ -179,4 +180,41 @@ bool specbleach_2d_load_parameters(
   load_2d_reduction_parameters(self->spectral_2d_denoiser, denoise_parameters);
 
   return true;
+}
+
+const float* specbleach_2d_get_tonal_mask(SpectralBleachHandle instance) {
+  Sb2DDenoiser* self = (Sb2DDenoiser*)instance;
+  return self ? spectral_2d_denoiser_get_tonal_mask(self->spectral_2d_denoiser)
+              : NULL;
+}
+
+uint32_t specbleach_2d_get_tonal_peaks(SpectralBleachHandle instance,
+                                       float* peak_freqs_hz,
+                                       uint32_t max_peaks) {
+  Sb2DDenoiser* self = (Sb2DDenoiser*)instance;
+  return self ? spectral_2d_denoiser_get_peaks(self->spectral_2d_denoiser,
+                                               peak_freqs_hz, max_peaks)
+              : 0;
+}
+
+uint32_t specbleach_2d_get_tonal_peaks_for_profile(
+    SpectralBleachHandle instance, const float* profile, uint32_t profile_size,
+    float* peak_freqs_hz, uint32_t max_peaks) {
+  Sb2DDenoiser* self = (Sb2DDenoiser*)instance;
+  if (!self || !self->core || !profile || profile_size == 0 ||
+      profile_size != sb_processor_core_get_noise_profile_size(self->core)) {
+    return 0;
+  }
+  uint32_t fft_size = get_stft_fft_size(self->core->stft_processor);
+  return tonal_detector_get_peaks_from_profile(
+      profile, profile_size, self->core->sample_rate, fft_size, peak_freqs_hz,
+      max_peaks);
+}
+
+const float* specbleach_2d_get_active_noise_profile(
+    SpectralBleachHandle instance) {
+  Sb2DDenoiser* self = (Sb2DDenoiser*)instance;
+  return self ? spectral_2d_denoiser_get_active_noise_profile(
+                    self->spectral_2d_denoiser)
+              : NULL;
 }

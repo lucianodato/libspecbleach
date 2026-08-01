@@ -28,12 +28,18 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 _Static_assert(sizeof(float) >= 4, "float must be at least 32 bits");
 _Static_assert(sizeof(double) >= 8, "double must be at least 64 bits");
 
-__attribute__((warn_unused_result)) float sanitize_denormal(float value);
-__attribute__((warn_unused_result)) float from_db_to_coefficient(
-    float value_db);
-__attribute__((warn_unused_result)) float remap_percentage_log_like_unity(
-    float value);
-__attribute__((warn_unused_result)) int get_next_divisible_two(int number);
-__attribute__((warn_unused_result)) int get_next_power_two(int number);
+#if defined(__GNUC__) || defined(__clang__)
+#define SB_WARN_UNUSED __attribute__((warn_unused_result))
+#define SB_UNUSED __attribute__((unused))
+#else
+#define SB_WARN_UNUSED
+#define SB_UNUSED
+#endif
+
+SB_WARN_UNUSED float sanitize_denormal(float value);
+SB_WARN_UNUSED float from_db_to_coefficient(float value_db);
+SB_WARN_UNUSED float remap_percentage_log_like_unity(float value);
+SB_WARN_UNUSED int get_next_divisible_two(int number);
+SB_WARN_UNUSED int get_next_power_two(int number);
 
 #endif

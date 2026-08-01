@@ -178,14 +178,19 @@ bool get_rolling_median_spectrum(float* median_spectrum,
                                  const float** input_spectra,
                                  const uint32_t number_of_blocks,
                                  const uint32_t spectrum_size) {
-  if (!median_spectrum || !input_spectra || spectrum_size == 0U) {
+  if (!median_spectrum || !input_spectra || spectrum_size == 0U ||
+      number_of_blocks == 0U) {
     return false;
   }
 
-  // Optimize for small block counts to avoid VLA if possible, but keep simple
-  // for now Note: VLA usage is generally discouraged in strict C
-  // standards/security contexts, but this matches existing pattern.
-  float tmp_buffer[number_of_blocks];
+  // Validate element count against size_t overflow and fixed workspace bound
+  // (no malloc in audio path)
+  if ((size_t)number_of_blocks > (SIZE_MAX / sizeof(float)) ||
+      number_of_blocks > 256U) {
+    return false;
+  }
+
+  float tmp_buffer[256];
 
   for (uint32_t i = 0U; i < spectrum_size; i++) {
     for (uint32_t j = 0U; j < number_of_blocks; j++) {

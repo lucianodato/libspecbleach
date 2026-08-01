@@ -140,13 +140,30 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
   5U // Minimum frames for history-based tracking
 #define BRANDT_ESTIMATOR_MIN_DURATION_MS                                       \
   (0.1F) // Safety floor for duration calcs
+#define BRANDT_ESTIMATOR_STATS_UPDATE_INTERVAL_FRAMES 4U
 
 // Tonal Detector Constants
-#define PEAK_THRESHOLD 1.41f // ~3dB above neighbor background
+#define PEAK_THRESHOLD 1.75f // ~2.4dB above local median background
 #define MIN_PEAK_PROMINENCE                                                    \
   1e-7f // Minimum absolute prominence above background
 #define TONAL_MEDIAN_FILTER_WINDOW                                             \
-  51 // Window size for frequency-domain median filter
+  15 // 15-bin frequency-domain median-filter window
+#define TONAL_PEAK_MIN_SIGNIFICANCE                                            \
+  0.25f // Minimum tonal mask value to report as peak
+#define TONAL_PEAK_MIN_LOCAL_PROMINENCE                                        \
+  0.04f // Minimum sharpness over immediate neighbors
+#define TONAL_PEAK_OCTAVE_DYNAMIC_RANGE_DB                                     \
+  20.0f // Max dB below strongest peak within same octave band
+#define TONAL_PEAK_MIN_OCTAVE_RELATIVE_POWER                                   \
+  0.01f                              // Power ratio within octave (10^(-20/10))
+#define MAX_TONAL_PEAKS_REPORTED 32U // Maximum candidate peaks returned
+#define TONAL_OCTAVE_LOWER_RATIO 0.7071f
+#define TONAL_OCTAVE_UPPER_RATIO 1.4142f
+#define TONAL_OCTAVE_MIN_WIDTH_BINS 8
+#define TONAL_OCTAVE_FALLBACK_HALF_WIDTH 4
+#define TONAL_PEAK_MIN_FREQ_HZ 20.0f
+#define TONAL_PEAK_NYQUIST_SAFETY_FACTOR 0.48f
+#define TONAL_DETECTOR_DEQUE_CAPACITY 4096U
 
 // Transient Detector Constants
 #define UPPER_LIMIT (5.F)

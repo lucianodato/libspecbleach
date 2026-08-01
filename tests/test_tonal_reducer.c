@@ -203,6 +203,7 @@ void test_caching_and_adaptive_support(void) {
   // The cached mask should still have tone at bin1 and NOT at bin2.
   tonal_reducer_run(reducer, noise_spectrum, max_profile, median_profile, alpha,
                     reduction_gain);
+  mask = tonal_reducer_get_mask(reducer);
 
   if (mask[bin1] <= 0.0f) {
     fprintf(stderr, "FAIL: Caching failed, cached mask at bin %d cleared\n",
@@ -232,6 +233,7 @@ void test_caching_and_adaptive_support(void) {
   // at bin2 detected.
   tonal_reducer_run(reducer, noise_spectrum, max_profile, median_profile, alpha,
                     reduction_gain);
+  mask = tonal_reducer_get_mask(reducer);
 
   if (mask[bin1] > 0.0f) {
     fprintf(stderr,
@@ -268,6 +270,7 @@ void test_caching_and_adaptive_support(void) {
   // Run 4: Initial run in learned mode
   tonal_reducer_run(reducer, noise_spectrum, max_profile, median_profile, alpha,
                     reduction_gain);
+  mask = tonal_reducer_get_mask(reducer);
 
   if (mask[learned_bin1] <= 0.0f) {
     fprintf(stderr,
@@ -301,6 +304,7 @@ void test_caching_and_adaptive_support(void) {
   // recompute the mask.
   tonal_reducer_run(reducer, noise_spectrum, max_profile, median_profile, alpha,
                     reduction_gain);
+  mask = tonal_reducer_get_mask(reducer);
 
   if (mask[learned_bin1] > 0.0f) {
     fprintf(
@@ -325,12 +329,43 @@ void test_caching_and_adaptive_support(void) {
   printf("✓ Cache and adaptive support tests passed\n");
 }
 
+void test_tonal_reducer_peaks(void) {
+  printf("Testing tonal_reducer_get_peaks and edge cases...\n");
+  float freqs[10];
+  if (tonal_reducer_get_peaks(NULL, freqs, 10) != 0 ||
+      tonal_reducer_get_mask(NULL) != NULL) {
+    fprintf(stderr, "FAIL: Null reducer handling failed\n");
+    exit(1);
+  }
+
+  TonalReducer* reducer = tonal_reducer_initialize(
+      TEST_SPECTRUM_SIZE, TEST_SAMPLE_RATE, TEST_FFT_SIZE);
+
+  if (tonal_reducer_get_peaks(reducer, freqs, 10) != 0 ||
+      tonal_reducer_get_peaks(reducer, freqs, 0) != 0) {
+    fprintf(stderr,
+            "FAIL: Uninitialized mask or max_peaks=0 should return 0 peaks\n");
+    exit(1);
+  }
+
+  float alpha[TEST_SPECTRUM_SIZE];
+  float noise[TEST_SPECTRUM_SIZE] = {0.01f};
+  float max_prof[TEST_SPECTRUM_SIZE] = {0.01f};
+  float med_prof[TEST_SPECTRUM_SIZE] = {0.01f};
+  // Gain 1.0f (no reduction requested, short-circuits early)
+  tonal_reducer_run(reducer, noise, max_prof, med_prof, alpha, 1.0f);
+
+  tonal_reducer_free(reducer);
+  printf("✓ Tonal reducer peaks test passed\n");
+}
+
 int main(void) {
   printf("=== Tonal Reducer Tests ===\n\n");
   test_initialization();
   test_flat_noise_no_boost();
   test_tonal_boost();
   test_caching_and_adaptive_support();
+  test_tonal_reducer_peaks();
   printf("\n=== All tonal reducer tests passed ===\n");
   return 0;
 }

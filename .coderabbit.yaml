@@ -1,8 +1,8 @@
 # CodeRabbit Configuration File
-version: "2"
 language: "en-US"
 reviews:
-  profile: "chill"
+  profile: "quiet"
+  request_changes_workflow: true
   auto_review:
     enabled: false
     drafts: false

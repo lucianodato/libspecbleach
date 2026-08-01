@@ -401,9 +401,33 @@ int main(void) {
 
   // Verify getters work with valid handle
   specbleach_get_noise_profile_for_mode(h, ROLLING_MEAN);
-  specbleach_get_noise_profile_size(h);
+  uint32_t prof_size = specbleach_get_noise_profile_size(h);
   specbleach_get_latency(h);
   specbleach_noise_profile_available_for_mode(h, ROLLING_MEAN);
+
+  // New PR #99 getters
+  specbleach_get_tonal_mask(h);
+  specbleach_get_active_noise_profile(h);
+  float peak_freqs[10];
+  specbleach_get_tonal_peaks(h, peak_freqs, 10);
+
+  float* dummy_prof = calloc(prof_size, sizeof(float));
+  specbleach_get_tonal_peaks_for_profile(h, dummy_prof, prof_size, peak_freqs,
+                                         10);
+  free(dummy_prof);
+
+  // Process with tonal reduction enabled
+  float in_buf[1024] = {0};
+  float out_buf[1024] = {0};
+  SpectralBleachDenoiserParameters t_params = {
+      .learn_noise = false,
+      .tonal_reduction = 0.5f,
+      .reduction_amount = 20.0f,
+  };
+  specbleach_load_parameters(h, t_params);
+  specbleach_process(h, 1024, in_buf, out_buf);
+  specbleach_get_tonal_mask(h);
+  specbleach_get_tonal_peaks(h, peak_freqs, 10);
 
   // Verify NULL handle protections
   TEST_ASSERT(specbleach_get_latency(NULL) == 0, "NULL latency");
@@ -417,6 +441,14 @@ int main(void) {
   TEST_ASSERT(specbleach_load_parameters(
                   NULL, (SpectralBleachDenoiserParameters){0}) == false,
               "NULL load");
+  TEST_ASSERT(specbleach_get_tonal_mask(NULL) == NULL, "NULL tonal mask");
+  TEST_ASSERT(specbleach_get_active_noise_profile(NULL) == NULL,
+              "NULL active profile");
+  TEST_ASSERT(specbleach_get_tonal_peaks(NULL, peak_freqs, 10) == 0,
+              "NULL tonal peaks");
+  TEST_ASSERT(specbleach_get_tonal_peaks_for_profile(NULL, NULL, 0, peak_freqs,
+                                                     10) == 0,
+              "NULL tonal peaks for profile");
 
   specbleach_free(h);
 

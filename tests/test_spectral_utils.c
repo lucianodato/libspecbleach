@@ -204,13 +204,17 @@ void test_get_rolling_median_spectrum(void) {
 
   float median[3] = {0.0f};
 
-  // Test NULL and size 0 checks
+  // Test NULL, size 0, blocks 0, and blocks > 256 checks
   TEST_ASSERT(!get_rolling_median_spectrum(NULL, history3, 3, size),
               "rolling_median NULL output");
   TEST_ASSERT(!get_rolling_median_spectrum(median, NULL, 3, size),
               "rolling_median NULL history");
   TEST_ASSERT(!get_rolling_median_spectrum(median, history3, 3, 0),
               "rolling_median size 0");
+  TEST_ASSERT(!get_rolling_median_spectrum(median, history3, 0, size),
+              "rolling_median blocks 0");
+  TEST_ASSERT(!get_rolling_median_spectrum(median, history3, 300, size),
+              "rolling_median blocks > 256");
 
   // Odd number of blocks (3)
   // Sorted inputs for bin 0: 1.0, 2.0, 3.0 -> median is 2.0

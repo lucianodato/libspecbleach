@@ -1,4 +1,4 @@
-name: build
+name: Build & Test libspecbleach
 
 on:
   push:
@@ -11,16 +11,16 @@ on:
 jobs:
   build:
     name: ${{ matrix.config.name }}
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
         config:
           - name: "Standard + Coverage"
-            meson_args: "-Db_coverage=true"
+            cmake_flags: "-DENABLE_TESTS=ON -DENABLE_EXAMPLES=ON -DENABLE_COVERAGE=ON -DCMAKE_BUILD_TYPE=Debug"
             run_coverage: true
           - name: "Sanitizers (ASan + UBSan)"
-            meson_args: "-Denable_sanitizers=true -Dsanitize_address=true -Dsanitize_undefined=true"
+            cmake_flags: "-DENABLE_TESTS=ON -DENABLE_EXAMPLES=ON -DENABLE_SANITIZERS=ON -DCMAKE_BUILD_TYPE=Release"
             run_coverage: false
 
     steps:
@@ -33,37 +33,34 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -qq \
+            cmake \
+            gcovr \
             libfftw3-dev \
-            ninja-build \
             libsndfile1-dev \
-            meson \
-            gcovr
+            libomp-dev
 
       - name: Configure build
         run: |
-          meson setup build \
-            --buildtype=debug \
-            -Denable_examples=true \
-            -Denable_tests=true \
-            ${{ matrix.config.meson_args }}
+          cmake -B build \
+            ${{ matrix.config.cmake_flags }}
 
       - name: Build project
         run: |
-          meson compile -C build -v
+          cmake --build build -j4
 
-      - name: Run tests
+      - name: Run CTest Suite
         run: |
-          meson test -C build --print-errorlogs
+          cd build && ctest --output-on-failure --test-dir .
 
       - name: Generate coverage report
         if: matrix.config.run_coverage
         run: |
-          ninja -C build coverage-xml
+          gcovr --xml build/coverage.xml -r . -e tests/ -e examples/
 
       - name: Upload coverage to Codecov
         if: matrix.config.run_coverage
         uses: codecov/codecov-action@v5
         with:
-          files: build/meson-logs/coverage.xml
+          files: build/coverage.xml
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
