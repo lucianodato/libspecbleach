@@ -263,6 +263,38 @@ void test_process_loop(void) {
   TEST_ASSERT(specbleach_2d_noise_profile_available_for_mode(h, ROLLING_MEAN),
               "Profile should be available after learning");
 
+  // New PR #99 2D getters
+  specbleach_2d_get_tonal_mask(h);
+  specbleach_2d_get_active_noise_profile(h);
+  float peak_freqs[10];
+  specbleach_2d_get_tonal_peaks(h, peak_freqs, 10);
+  uint32_t prof_size = specbleach_2d_get_noise_profile_size(h);
+  float* dummy_prof = calloc(prof_size, sizeof(float));
+  specbleach_2d_get_tonal_peaks_for_profile(h, dummy_prof, prof_size,
+                                            peak_freqs, 10);
+  free(dummy_prof);
+
+  // Process with tonal reduction
+  float in_buf[1024] = {0};
+  float out_buf[1024] = {0};
+  params.learn_noise = 0;
+  params.tonal_reduction = 0.5f;
+  params.reduction_amount = 20.0f;
+  specbleach_2d_load_parameters(h, params);
+  specbleach_2d_process(h, 1024, in_buf, out_buf);
+  specbleach_2d_get_tonal_mask(h);
+  specbleach_2d_get_tonal_peaks(h, peak_freqs, 10);
+
+  // NULL checks
+  TEST_ASSERT(specbleach_2d_get_tonal_mask(NULL) == NULL, "NULL 2D tonal mask");
+  TEST_ASSERT(specbleach_2d_get_active_noise_profile(NULL) == NULL,
+              "NULL 2D active profile");
+  TEST_ASSERT(specbleach_2d_get_tonal_peaks(NULL, peak_freqs, 10) == 0,
+              "NULL 2D tonal peaks");
+  TEST_ASSERT(specbleach_2d_get_tonal_peaks_for_profile(NULL, NULL, 0,
+                                                        peak_freqs, 10) == 0,
+              "NULL 2D tonal peaks for profile");
+
   specbleach_2d_free(h);
 }
 

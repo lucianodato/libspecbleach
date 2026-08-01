@@ -405,6 +405,51 @@ void test_adaptive_mode_detection(void) {
   printf("✓ Adaptive mode detection passed\n");
 }
 
+void test_get_peaks_and_profile_peaks(void) {
+  printf("Testing tonal_detector_get_peaks and get_peaks_from_profile...\n");
+
+  float peak_freqs[10];
+  // Null and invalid parameter checks
+  if (tonal_detector_get_peaks(NULL, TEST_SPECTRUM_SIZE, TEST_SAMPLE_RATE,
+                               TEST_FFT_SIZE, peak_freqs, 10) != 0 ||
+      tonal_detector_get_peaks_from_profile(NULL, TEST_SPECTRUM_SIZE,
+                                            TEST_SAMPLE_RATE, TEST_FFT_SIZE,
+                                            peak_freqs, 10) != 0) {
+    fprintf(stderr, "FAIL: Null handling failed in peak functions\n");
+    exit(1);
+  }
+
+  float* profile = calloc(TEST_SPECTRUM_SIZE, sizeof(float));
+  int bin = 100;
+  float amp = 0.5f;
+  create_test_profile(profile, TEST_SPECTRUM_SIZE, 0.001f, &bin, &amp, 1);
+
+  uint32_t count = tonal_detector_get_peaks_from_profile(
+      profile, TEST_SPECTRUM_SIZE, TEST_SAMPLE_RATE, TEST_FFT_SIZE, peak_freqs,
+      10);
+  if (count == 0) {
+    fprintf(stderr, "FAIL: Expected peak detection from profile\n");
+    exit(1);
+  }
+
+  float* tonal_mask = calloc(TEST_SPECTRUM_SIZE, sizeof(float));
+  tonal_mask[bin] = 0.9f;
+  tonal_mask[bin - 1] = 0.3f;
+  tonal_mask[bin + 1] = 0.3f;
+
+  uint32_t count_mask =
+      tonal_detector_get_peaks(tonal_mask, TEST_SPECTRUM_SIZE, TEST_SAMPLE_RATE,
+                               TEST_FFT_SIZE, peak_freqs, 10);
+  if (count_mask == 0) {
+    fprintf(stderr, "FAIL: Expected peak detection from mask\n");
+    exit(1);
+  }
+
+  free(profile);
+  free(tonal_mask);
+  printf("✓ Peak functions passed\n");
+}
+
 int main(void) {
   printf("=== Tonal Detector Tests ===\n\n");
 
@@ -415,6 +460,7 @@ int main(void) {
   test_adaptive_width();
   test_off_center_peak_interpolation();
   test_adaptive_mode_detection();
+  test_get_peaks_and_profile_peaks();
 
   printf("\n=== All tonal detector tests passed ===\n");
   return 0;

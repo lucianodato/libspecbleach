@@ -329,12 +329,33 @@ void test_caching_and_adaptive_support(void) {
   printf("✓ Cache and adaptive support tests passed\n");
 }
 
+void test_tonal_reducer_peaks(void) {
+  printf("Testing tonal_reducer_get_peaks...\n");
+  float freqs[10];
+  if (tonal_reducer_get_peaks(NULL, freqs, 10) != 0) {
+    fprintf(stderr, "FAIL: Null reducer handling failed\n");
+    exit(1);
+  }
+
+  TonalReducer* reducer = tonal_reducer_initialize(
+      TEST_SPECTRUM_SIZE, TEST_SAMPLE_RATE, TEST_FFT_SIZE);
+
+  if (tonal_reducer_get_peaks(reducer, freqs, 10) != 0) {
+    fprintf(stderr, "FAIL: Uninitialized mask should return 0 peaks\n");
+    exit(1);
+  }
+
+  tonal_reducer_free(reducer);
+  printf("✓ Tonal reducer peaks test passed\n");
+}
+
 int main(void) {
   printf("=== Tonal Reducer Tests ===\n\n");
   test_initialization();
   test_flat_noise_no_boost();
   test_tonal_boost();
   test_caching_and_adaptive_support();
+  test_tonal_reducer_peaks();
   printf("\n=== All tonal reducer tests passed ===\n");
   return 0;
 }
