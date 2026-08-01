@@ -10,6 +10,7 @@ option(ENABLE_AVX "Enable AVX optimizations on x86_64" ON)
 option(ENABLE_TESTS "Build test suite" ON)
 option(ENABLE_EXAMPLES "Build example executables" ON)
 option(ENABLE_SANITIZERS "Enable Address and Undefined Behavior Sanitizers" OFF)
+option(ENABLE_COVERAGE "Enable code coverage instrumentation" OFF)
 
 # Dependencies
 find_library(MATH_LIB m)
@@ -51,6 +52,11 @@ endif()
 if(ENABLE_SANITIZERS AND NOT MSVC)
     add_compile_options(-fsanitize=address -fsanitize=undefined)
     add_link_options(-fsanitize=address -fsanitize=undefined)
+endif()
+
+if(ENABLE_COVERAGE AND NOT MSVC)
+    add_compile_options(--coverage -O0)
+    add_link_options(--coverage)
 endif()
 
 # Include directories
