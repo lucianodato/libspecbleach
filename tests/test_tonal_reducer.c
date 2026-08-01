@@ -330,9 +330,10 @@ void test_caching_and_adaptive_support(void) {
 }
 
 void test_tonal_reducer_peaks(void) {
-  printf("Testing tonal_reducer_get_peaks...\n");
+  printf("Testing tonal_reducer_get_peaks and edge cases...\n");
   float freqs[10];
-  if (tonal_reducer_get_peaks(NULL, freqs, 10) != 0) {
+  if (tonal_reducer_get_peaks(NULL, freqs, 10) != 0 ||
+      tonal_reducer_get_mask(NULL) != NULL) {
     fprintf(stderr, "FAIL: Null reducer handling failed\n");
     exit(1);
   }
@@ -340,10 +341,19 @@ void test_tonal_reducer_peaks(void) {
   TonalReducer* reducer = tonal_reducer_initialize(
       TEST_SPECTRUM_SIZE, TEST_SAMPLE_RATE, TEST_FFT_SIZE);
 
-  if (tonal_reducer_get_peaks(reducer, freqs, 10) != 0) {
-    fprintf(stderr, "FAIL: Uninitialized mask should return 0 peaks\n");
+  if (tonal_reducer_get_peaks(reducer, freqs, 10) != 0 ||
+      tonal_reducer_get_peaks(reducer, freqs, 0) != 0) {
+    fprintf(stderr,
+            "FAIL: Uninitialized mask or max_peaks=0 should return 0 peaks\n");
     exit(1);
   }
+
+  float alpha[TEST_SPECTRUM_SIZE];
+  float noise[TEST_SPECTRUM_SIZE] = {0.01f};
+  float max_prof[TEST_SPECTRUM_SIZE] = {0.01f};
+  float med_prof[TEST_SPECTRUM_SIZE] = {0.01f};
+  // Gain 1.0f (no reduction requested, short-circuits early)
+  tonal_reducer_run(reducer, noise, max_prof, med_prof, alpha, 1.0f);
 
   tonal_reducer_free(reducer);
   printf("✓ Tonal reducer peaks test passed\n");
