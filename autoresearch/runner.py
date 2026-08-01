@@ -8,6 +8,17 @@ from pydantic import BaseModel, Field
 from google import genai
 from google.genai import types
 
+MODEL_NAME = "gemini-3.6-flash"
+MODEL_TEMPERATURE = 0.4 
+MAX_ITERATIONS = 10
+BEST_SCORE = -999.0
+
+# Priority list of models to rotate through as daily limits get hit
+MODEL_FALLBACK_LIST = [
+    "gemini-3.5-flash",
+    "gemini-3.5-flash-lite"
+]
+
 # Anchor working directory to repository root
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(SCRIPT_DIR) if os.path.basename(SCRIPT_DIR) == "autoresearch" else SCRIPT_DIR
@@ -32,17 +43,6 @@ if not os.environ.get("GEMINI_API_KEY"):
     sys.exit(1)
 
 client = genai.Client()
-MODEL_NAME = "gemini-3.6-flash"
-MAX_ITERATIONS = 10
-BEST_SCORE = -999.0
-
-# Priority list of models to rotate through as daily limits get hit
-MODEL_FALLBACK_LIST = [
-    "gemini-3.6-flash", # Best
-    "gemini-3.5-flash",
-    "gemini-3.5-flash-lite"
-]
-
 class CEditProposal(BaseModel):
     filepath: str = Field(description="Relative path to C source file, e.g., 'src/denoiser_core.c'")
     new_code: str = Field(description="The full updated content of the C file")
@@ -147,8 +147,8 @@ def main():
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json",
                     response_schema=CEditProposal,
-                    temperature=0.3,
-                    thinking_config=types.ThinkingConfig(thinking_budget=1024)
+                    temperature=MODEL_TEMPERATURE,
+                    thinking_config=types.ThinkingConfig(thinking_budget=-1)
                 ),
             )
             
