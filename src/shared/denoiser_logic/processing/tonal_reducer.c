@@ -46,20 +46,14 @@ TonalReducer* tonal_reducer_initialize(uint32_t real_spectrum_size,
   self->tonal_mask_buffers[1] =
       (float*)calloc(real_spectrum_size, sizeof(float));
   if (!self->tonal_mask_buffers[0] || !self->tonal_mask_buffers[1]) {
-    free(self->tonal_mask_buffers[0]);
-    free(self->tonal_mask_buffers[1]);
-    free(self->tonal_mask);
-    free(self);
+    tonal_reducer_free(self);
     return NULL;
   }
 
   self->deque_workspace =
       (uint32_t*)calloc(real_spectrum_size, sizeof(uint32_t));
   if (!self->deque_workspace) {
-    free(self->tonal_mask_buffers[0]);
-    free(self->tonal_mask_buffers[1]);
-    free(self->tonal_mask);
-    free(self);
+    tonal_reducer_free(self);
     return NULL;
   }
 

@@ -139,8 +139,6 @@ SpectralProcessorHandle spectral_2d_denoiser_initialize(
   self->noise_spectrum_buffers[1] =
       (float*)calloc(self->real_spectrum_size, sizeof(float));
   if (!self->noise_spectrum_buffers[0] || !self->noise_spectrum_buffers[1]) {
-    free(self->noise_spectrum_buffers[0]);
-    free(self->noise_spectrum_buffers[1]);
     spectral_2d_denoiser_free(self);
     return NULL;
   }
