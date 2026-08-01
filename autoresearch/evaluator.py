@@ -18,10 +18,13 @@ TIMEOUT_SEC = 15
 NOISE_PREFIX_SEC = 2.5
 
 # --- Define presets globally near the top of evaluator.py ---
+# PRESETS = [
+#     {"name": "light",    "args": ["--learn-frames", "200", "--reduction", "12.0", "--whitening", "10.0"]},
+#     {"name": "moderate", "args": ["--learn-frames", "200", "--reduction", "18.0", "--whitening", "20.0"]},
+#     {"name": "heavy",    "args": ["--learn-frames", "200", "--reduction", "24.0", "--whitening", "35.0"]}
+# ]
 PRESETS = [
-    {"name": "light",    "args": ["--learn-frames", "200", "--reduction", "12.0", "--whitening", "10.0"]},
     {"name": "moderate", "args": ["--learn-frames", "200", "--reduction", "18.0", "--whitening", "20.0"]},
-    {"name": "heavy",    "args": ["--learn-frames", "200", "--reduction", "24.0", "--whitening", "35.0"]}
 ]
 
 def compile_libspecbleach() -> bool:
