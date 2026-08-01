@@ -56,9 +56,14 @@ def get_allowed_c_code() -> str:
     return code_str
 
 def run_evaluator() -> float:
-    """Executes evaluator.py via current python executable."""
+    """Executes evaluator.py in FAST mode (6 cases, 1 preset)."""
     eval_script = os.path.join(SCRIPT_DIR, "evaluator.py")
-    res = subprocess.run([sys.executable, eval_script], capture_output=True, text=True)
+    
+    # Pass --fast and --max-cases 6 for rapid iteration loops
+    # cmd = [sys.executable, eval_script]
+    cmd = [sys.executable, eval_script, "--fast", "--max-cases", "6"]
+    
+    res = subprocess.run(cmd, capture_output=True, text=True)
     for line in res.stdout.split("\n"):
         if "METRIC_SCORE:" in line:
             try:

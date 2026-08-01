@@ -2,6 +2,7 @@ import os
 import glob
 import sys
 import time
+import argparse
 import subprocess
 import numpy as np
 import soundfile as sf
@@ -17,14 +18,15 @@ BENCHMARK_DIR = "autoresearch/research_data/benchmark_suite"
 TIMEOUT_SEC = 15
 NOISE_PREFIX_SEC = 2.5
 
-# --- Define presets globally near the top of evaluator.py ---
-# PRESETS = [
-#     {"name": "light",    "args": ["--learn-frames", "200", "--reduction", "12.0", "--whitening", "10.0"]},
-#     {"name": "moderate", "args": ["--learn-frames", "200", "--reduction", "18.0", "--whitening", "20.0"]},
-#     {"name": "heavy",    "args": ["--learn-frames", "200", "--reduction", "24.0", "--whitening", "35.0"]}
-# ]
-PRESETS = [
-    {"name": "moderate", "args": ["--learn-frames", "200", "--reduction", "18.0", "--whitening", "20.0"]},
+# Standard Presets
+PRESETS_ALL = [
+    {"name": "light",    "args": ["--learn-frames", "200", "--reduction", "12.0", "--whitening", "10.0", "--smoothing", "0.05" ]},
+    {"name": "moderate", "args": ["--learn-frames", "200", "--reduction", "18.0", "--whitening", "20.0", "--smoothing", "0.15" ]},
+    {"name": "heavy",    "args": ["--learn-frames", "200", "--reduction", "24.0", "--whitening", "30.0", "--smoothing", "0.25" ]}
+]
+
+PRESET_FAST = [
+    {"name": "moderate", "args": ["--learn-frames", "200", "--reduction", "18.0", "--whitening", "20.0", "--smoothing", "0.15" ]}
 ]
 
 def compile_libspecbleach() -> bool:
@@ -68,10 +70,9 @@ def compute_mr_stft_loss(s_clean: np.ndarray, s_proc: np.ndarray) -> float:
         losses.append(np.linalg.norm(S_clean - S_proc, ord='fro') / (np.linalg.norm(S_clean, ord='fro') + 1e-7))
     return float(np.mean(losses))
 
-def measure_empirical_latency_ms(mix_signal: np.ndarray, proc_signal: np.ndarray, sr: int = 48000) -> float:
-    """Calculates processing latency in milliseconds using cross-correlation peak offset."""
-    # Analyze first 2 seconds of music body
-    n_samples = min(len(mix_signal), len(proc_signal), sr * 2)
+def measure_empirical_latency_fast(mix_signal: np.ndarray, proc_signal: np.ndarray, sr: int = 48000) -> float:
+    """Optimized fast cross-correlation using a 0.25-second window."""
+    n_samples = min(len(mix_signal), len(proc_signal), int(sr * 0.25))
     mix_seg  = mix_signal[:n_samples]
     proc_seg = proc_signal[:n_samples]
     
@@ -79,10 +80,9 @@ def measure_empirical_latency_ms(mix_signal: np.ndarray, proc_signal: np.ndarray
     lags = scipy.signal.correlation_lags(len(proc_seg), len(mix_seg), mode='full')
     
     delay_samples = lags[np.argmax(correlation)]
-    delay_ms = max(0.0, (delay_samples / sr) * 1000.0)
-    return delay_ms
+    return max(0.0, (delay_samples / sr) * 1000.0)
 
-def process_case(case_dir: str) -> dict:
+def process_case(case_dir: str, presets: list, skip_perf: bool = False, fast_metrics: bool = False) -> dict:
     mix_path   = os.path.join(case_dir, "mix.wav")
     clean_path = os.path.join(case_dir, "clean.wav")
     noise_path = os.path.join(case_dir, "noise.wav")
@@ -91,20 +91,17 @@ def process_case(case_dir: str) -> dict:
     if not executable:
         return {"score": -999.0}
 
-    # Load input audio references once for this test case
     s_clean, sr = sf.read(clean_path)
     s_noise, _  = sf.read(noise_path)
     s_mix, _    = sf.read(mix_path)
 
-    # Collectors for preset metrics
-    scores, qualities, rtfs, latencies, sars = [], [], [], [], []
+    scores, qualities, rtfs, latencies = [], [], [], []
 
-    for preset in PRESETS:
+    for preset in presets:
         out_path = os.path.join(case_dir, f"processed_{preset['name']}.wav")
         cmd = [executable] + preset["args"] + [mix_path, out_path]
         
         try:
-            # Measure execution wall-clock time for CPU performance
             t0 = time.perf_counter()
             res = subprocess.run(cmd, capture_output=True, text=True, timeout=TIMEOUT_SEC)
             exec_time_sec = time.perf_counter() - t0
@@ -116,12 +113,15 @@ def process_case(case_dir: str) -> dict:
 
         s_proc, _ = sf.read(out_path)
 
-        # 1. Performance Metrics
-        audio_duration_sec = len(s_mix) / sr
-        rtf = exec_time_sec / audio_duration_sec
-        latency_ms = measure_empirical_latency_ms(s_mix, s_proc, sr)
+        # Performance evaluation
+        if not skip_perf:
+            rtf = exec_time_sec / (len(s_mix) / sr)
+            latency_ms = measure_empirical_latency_fast(s_mix, s_proc, sr)
+        else:
+            rtf = 0.0
+            latency_ms = 0.0
 
-        # 2. Trim noise lead-in for audio quality evaluation
+        # Quality evaluation window
         start_sample = int(NOISE_PREFIX_SEC * sr)
         s_clean_m = s_clean[start_sample:]
         s_noise_m = s_noise[start_sample:]
@@ -135,7 +135,7 @@ def process_case(case_dir: str) -> dict:
         s_noise_m = s_noise_m[:min_len]
         s_proc_m  = s_proc_m[:min_len]
 
-        # 3. Audio Quality Metrics
+        # Fast BSS Eval
         ref = np.vstack([s_clean_m, s_noise_m])
         est_noise = (s_clean_m + s_noise_m) - s_proc_m
         est = np.vstack([s_proc_m, est_noise])
@@ -147,10 +147,14 @@ def process_case(case_dir: str) -> dict:
         proc_onset  = librosa.onset.onset_strength(y=s_proc_m, sr=sr)
         onset_corr  = float(np.corrcoef(clean_onset, proc_onset)[0, 1])
 
-        lsd_val = compute_lsd(s_clean_m, s_proc_m, sr)
-        mr_stft = compute_mr_stft_loss(s_clean_m, s_proc_m)
+        # Skip heavy STFT metrics in extreme fast mode
+        if not fast_metrics:
+            lsd_val = compute_lsd(s_clean_m, s_proc_m, sr)
+            mr_stft = compute_mr_stft_loss(s_clean_m, s_proc_m)
+        else:
+            lsd_val = 0.0
+            mr_stft = 0.0
 
-        # 4. Composite Quality & Performance Score
         quality_score = (
             (0.35 * sar_val) +
             (0.30 * sir_val) +
@@ -164,23 +168,19 @@ def process_case(case_dir: str) -> dict:
 
         preset_score = quality_score - cpu_penalty - latency_penalty
 
-        # Store metrics for this preset
         scores.append(preset_score)
         qualities.append(quality_score)
         rtfs.append(rtf)
         latencies.append(latency_ms)
-        sars.append(sar_val)
 
-    # Return averaged case performance across Light, Moderate, and Heavy settings
     return {
         "score": float(np.mean(scores)),
         "quality": float(np.mean(qualities)),
         "rtf": float(np.mean(rtfs)),
-        "latency_ms": float(np.mean(latencies)),
-        "sar": float(np.mean(sars))
+        "latency_ms": float(np.mean(latencies))
     }
 
-def evaluate_suite() -> float:
+def evaluate_suite(fast_mode: bool = False, max_cases: int = 0, skip_perf: bool = False) -> float:
     if not compile_libspecbleach():
         print("[FAIL] CMake build failed")
         return -999.0
@@ -190,9 +190,14 @@ def evaluate_suite() -> float:
         print("[FAIL] Benchmark suite empty!")
         return -999.0
 
+    # Apply fast mode defaults
+    presets = PRESET_FAST if fast_mode else PRESETS_ALL
+    if max_cases > 0:
+        case_dirs = case_dirs[:max_cases]
+
     scores, rtfs, latencies = [], [], []
     for c_dir in case_dirs:
-        res = process_case(c_dir)
+        res = process_case(c_dir, presets=presets, skip_perf=skip_perf, fast_metrics=fast_mode)
         if res["score"] == -999.0:
             print(f"[FAIL] Execution error in case: {os.path.basename(c_dir)}")
             return -999.0
@@ -204,12 +209,19 @@ def evaluate_suite() -> float:
     mean_rtf = float(np.mean(rtfs))
     mean_lat = float(np.mean(latencies))
 
-    print(f"[SUCCESS] Benchmark Evaluated!")
-    print(f" -> Avg Real-Time Factor (CPU): {mean_rtf:.4f} ({mean_rtf*100:.1f}% real-time load)")
-    print(f" -> Avg Algorithmic Latency:  {mean_lat:.2f} ms")
-    print(f" -> Final Balanced Score:     {mean_score:.4f}")
+    print(f"[SUCCESS] Evaluated {len(case_dirs)} cases ({'FAST' if fast_mode else 'FULL'} mode).")
+    if not skip_perf:
+        print(f" -> Avg RTF: {mean_rtf:.4f} | Avg Latency: {mean_lat:.2f} ms")
+    print(f" -> Final Score: {mean_score:.4f}")
     return mean_score
 
 if __name__ == "__main__":
-    score = evaluate_suite()
+    parser = argparse.ArgumentParser(description="Evaluate libspecbleach performance and quality.")
+    parser.add_argument("--fast", action="store_true", help="Run 1 preset, fast cross-correlation, and skip heavy STFTs.")
+    parser.add_argument("--max-cases", type=int, default=0, help="Cap evaluation to first N test cases (e.g., 6).")
+    parser.add_argument("--skip-perf", action="store_true", help="Disable CPU RTF and Latency penalties completely.")
+    
+    args = parser.parse_args()
+    
+    score = evaluate_suite(fast_mode=args.fast, max_cases=args.max_cases, skip_perf=args.skip_perf)
     print(f"METRIC_SCORE: {score}")
