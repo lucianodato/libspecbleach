@@ -32,7 +32,7 @@ if not os.environ.get("GEMINI_API_KEY"):
     sys.exit(1)
 
 client = genai.Client()
-MODEL_NAME = "gemini-3.6-flash"
+MODEL_NAME = "gemini-3.5-flash-lite"
 MAX_ITERATIONS = 10
 BEST_SCORE = -999.0
 
