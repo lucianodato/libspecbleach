@@ -12,7 +12,7 @@ MODEL_TEMPERATURE = 0.4
 MAX_ITERATIONS = 10
 BEST_SCORE = -999.0
 
-# Priority list using your exact model preferences
+# Priority list using your specified models
 MODEL_FALLBACK_LIST = [
     "gemini-3.6-flash",
     "gemini-3.5-flash",
@@ -147,10 +147,17 @@ C CODEBASE CONTEXT:
 {c_code[:100000]}
 """
 
+        filepath = None
         try:
             patch: CEditProposal = generate_patch_with_fallback(prompt)
             filepath = patch.filepath
-            
+
+            # --- GUARDRAIL: Prevent LLM from editing anything outside src/ or include/ ---
+            clean_path = os.path.normpath(filepath)
+            if not (clean_path.startswith("src") or clean_path.startswith("include")):
+                print(f"[REJECTED] Agent attempted to modify a forbidden path: {filepath}")
+                continue
+
             os.makedirs(os.path.dirname(filepath), exist_ok=True)
             
             print(f"Hypothesis: {patch.hypothesis}")
@@ -168,12 +175,18 @@ C CODEBASE CONTEXT:
                 subprocess.run(["git", "add", filepath])
                 subprocess.run(["git", "commit", "-m", f"autoresearch: {patch.hypothesis} (score: {new_score:.4f})"])
             else:
-                print("<<< REJECTED / CRASHED. Rolling back with git checkout...")
+                print("<<< REJECTED / CRASHED. Rolling back target file...")
+                # Revert ONLY the specific C file edited during this step
                 subprocess.run(["git", "checkout", "HEAD", "--", filepath])
 
         except Exception as e:
             print(f"Error in iteration {i+1}: {e}")
-            subprocess.run(["git", "reset", "--hard", "HEAD"])
+            if filepath and os.path.exists(filepath):
+                # Revert specific file if known
+                subprocess.run(["git", "checkout", "HEAD", "--", filepath])
+            else:
+                # Revert ONLY src/ and include/ directories on general crash—never autoresearch/
+                subprocess.run(["git", "checkout", "HEAD", "--", "src/", "include/"])
             
         time.sleep(1)
 
