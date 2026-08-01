@@ -28,7 +28,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 struct NoiseFloorManager {
   SpectralWhitening* whitening;
   float* whitening_weights;
-  float* prev_gain_spectrum;
   uint32_t real_spectrum_size;
   uint32_t fft_size;
 };
@@ -37,7 +36,7 @@ NoiseFloorManager* noise_floor_manager_initialize(const uint32_t fft_size) {
   if (fft_size == 0U) {
     return NULL;
   }
-  NoiseFloorManager* self = 
+  NoiseFloorManager* self =
       (NoiseFloorManager*)calloc(1U, sizeof(NoiseFloorManager));
   if (!self) {
     return NULL;
@@ -52,25 +51,12 @@ NoiseFloorManager* noise_floor_manager_initialize(const uint32_t fft_size) {
     return NULL;
   }
 
-  self->whitening_weights = 
+  self->whitening_weights =
       (float*)calloc(self->real_spectrum_size, sizeof(float));
   if (!self->whitening_weights) {
     spectral_whitening_free(self->whitening);
     free(self);
     return NULL;
-  }
-
-  self->prev_gain_spectrum = 
-      (float*)calloc(self->real_spectrum_size, sizeof(float));
-  if (!self->prev_gain_spectrum) {
-    free(self->whitening_weights);
-    spectral_whitening_free(self->whitening);
-    free(self);
-    return NULL;
-  }
-
-  for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
-    self->prev_gain_spectrum[k] = 1.0f;
   }
 
   return self;
@@ -85,9 +71,6 @@ void noise_floor_manager_free(NoiseFloorManager* self) {
   }
   if (self->whitening_weights) {
     free(self->whitening_weights);
-  }
-  if (self->prev_gain_spectrum) {
-    free(self->prev_gain_spectrum);
   }
   free(self);
 }
@@ -114,7 +97,6 @@ void noise_floor_manager_apply(NoiseFloorManager* self,
     // we force unity gain to ensure BIT TRANSPARENCY and skip processing.
     for (uint32_t k = 0U; k < real_spectrum_size; k++) {
       gain_spectrum[k] = 1.0f;
-      self->prev_gain_spectrum[k] = 1.0f;
     }
     sb_apply_spectral_symmetry(gain_spectrum, real_spectrum_size, fft_size);
     return;
@@ -171,87 +153,6 @@ void noise_floor_manager_apply(NoiseFloorManager* self,
      * effectively shaving off the spectral shape of the noise residual.
      */
     gain_spectrum[k] = fmaxf(whitened_floor, gain_spectrum[k]);
-  }
-
-  // 3. Stateful Adaptive Spectral-Temporal Gain Smoothing
-  float* temp_smoothed = (float*)malloc(real_spectrum_size * sizeof(float));
-  if (temp_smoothed) {
-    float total_gain_increase = 0.0f;
-    for (uint32_t k = 0U; k < real_spectrum_size; k++) {
-      float diff = gain_spectrum[k] - self->prev_gain_spectrum[k];
-      if (diff > 0.0f) {
-        total_gain_increase += diff;
-      }
-    }
-    float mean_gain_increase = total_gain_increase / (float)real_spectrum_size;
-
-    // If there is a sudden global gain increase, we are likely at a transient onset.
-    // We scale up the attack rate to be almost instantaneous.
-    float transient_boost = mean_gain_increase * 5.0f;
-    if (transient_boost > 0.15f) {
-      transient_boost = 0.15f;
-    }
-
-    float alpha_attack_base = 0.85f + transient_boost;
-    float alpha_release_base = 0.15f;
-
-    for (uint32_t k = 0U; k < real_spectrum_size; k++) {
-      float mask = (tonal_mask) ? tonal_mask[k] : 0.0f;
-      if (mask > 1.0f) {
-        mask = 1.0f;
-      }
-      if (mask < 0.0f) {
-        mask = 0.0f;
-      }
-
-      float current_gain = gain_spectrum[k];
-      float prev_gain = self->prev_gain_spectrum[k];
-      float alpha_k;
-
-      if (current_gain > prev_gain) {
-        // Attack phase
-        alpha_k = alpha_attack_base + (1.0f - alpha_attack_base) * mask;
-      } else {
-        // Release phase
-        alpha_k = alpha_release_base + (0.50f - alpha_release_base) * mask;
-      }
-
-      if (alpha_k > 1.0f) {
-        alpha_k = 1.0f;
-      }
-      if (alpha_k < 0.0f) {
-        alpha_k = 0.0f;
-      }
-
-      temp_smoothed[k] = alpha_k * current_gain + (1.0f - alpha_k) * prev_gain;
-      self->prev_gain_spectrum[k] = temp_smoothed[k];
-    }
-
-    // Tonal-guided spectral smoothing
-    for (uint32_t k = 0U; k < real_spectrum_size; k++) {
-      float mask = (tonal_mask) ? tonal_mask[k] : 0.0f;
-      if (mask > 1.0f) {
-        mask = 1.0f;
-      }
-      if (mask < 0.0f) {
-        mask = 0.0f;
-      }
-
-      float spec_smoothed_gain;
-      if (k == 0U) {
-        spec_smoothed_gain = temp_smoothed[0U];
-      } else if (k == real_spectrum_size - 1U) {
-        spec_smoothed_gain = temp_smoothed[real_spectrum_size - 1U];
-      } else {
-        spec_smoothed_gain = 0.25f * temp_smoothed[k - 1U] +
-                             0.50f * temp_smoothed[k] +
-                             0.25f * temp_smoothed[k + 1U];
-      }
-
-      gain_spectrum[k] = mask * temp_smoothed[k] + (1.0f - mask) * spec_smoothed_gain;
-    }
-
-    free(temp_smoothed);
   }
 
   sb_apply_spectral_symmetry(gain_spectrum, real_spectrum_size, fft_size);
