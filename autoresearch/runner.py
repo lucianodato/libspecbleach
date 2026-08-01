@@ -32,9 +32,16 @@ if not os.environ.get("GEMINI_API_KEY"):
     sys.exit(1)
 
 client = genai.Client()
-MODEL_NAME = "gemini-3.5-flash-lite"
+MODEL_NAME = "gemini-3.6-flash"
 MAX_ITERATIONS = 10
 BEST_SCORE = -999.0
+
+# Priority list of models to rotate through as daily limits get hit
+MODEL_FALLBACK_LIST = [
+    "gemini-3.6-flash", # Best
+    "gemini-3.5-flash",
+    "gemini-3.5-flash-lite"
+]
 
 class CEditProposal(BaseModel):
     filepath: str = Field(description="Relative path to C source file, e.g., 'src/denoiser_core.c'")
@@ -54,6 +61,34 @@ def get_allowed_c_code() -> str:
                     with open(path, "r", encoding="utf-8") as file:
                         code_str += f"\n--- FILE: {path} ---\n" + file.read()
     return code_str
+
+def generate_patch_with_fallback(prompt: str) -> CEditProposal:
+    """Tries generating code with the primary model, automatically failing over if daily quota is reached."""
+    for model_name in MODEL_FALLBACK_LIST:
+        try:
+            print(f"Querying model [{model_name}]...")
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=CEditProposal,
+                    temperature=0.3,
+                    thinking_config=types.ThinkingConfig(thinking_budget=1024)
+                ),
+            )
+            return response.parsed
+        except Exception as e:
+            error_str = str(e)
+            if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
+                print(f"[QUOTA LIMIT] Model '{model_name}' exhausted daily limit. Switching to next model...")
+                time.sleep(2)
+                continue  # Try next model in list
+            else:
+                # Re-raise non-quota errors (e.g., code parse or network issues)
+                raise e
+                
+    raise RuntimeError("All models in MODEL_FALLBACK_LIST have exhausted their daily free quotas!")
 
 def run_evaluator() -> float:
     """Executes evaluator.py in FAST mode (6 cases, 1 preset)."""
@@ -88,22 +123,21 @@ def main():
         print(f"=================== ITERATION {i+1} ===================")
         c_code = get_allowed_c_code()
         
-        prompt = f"""You are an expert Audio DSP C Developer inventing architectural improvements for libspecbleach.
+        prompt = f"""You are an expert Audio DSP C Developer optimizing libspecbleach.
 
-                    Read program.md carefully. Your task is to propose STRUCTURAL algorithmic changes to the C processing logic in `src/`.
+                Read program.md carefully. Your task is to propose STRUCTURAL algorithmic changes to the C processing logic in `src/`.
 
-                    Current Best Composite Score: {BEST_SCORE:.4f}
+                Current Best Composite Score: {BEST_SCORE:.4f}
 
-                    CRITICAL RULES:
-                    1. DO NOT simply tweak constant numbers, threshold multipliers, or existing parameter scales.
-                    2. DO propose structural logic changes (e.g., Multi-Resolution STFT blending, phase-locking, dynamic multi-window masking, or new time-frequency filter topologies).
-                    3. If your proposal only changes scalar numbers or magic constants, IT WILL BE REJECTED.
+                CRITICAL RULES & CONSTRAINTS:
+                1. DO NOT use heavy recursive frame-to-frame smoothing, Decision-Directed SNR tracking with high alpha, or spectral delay loops that cause ECHOES and temporal ghosting!
+                2. DO PREFER 2D Image Processing techniques on the spectrogram (e.g., Bilateral filtering, Guided filtering, Anisotropic diffusion, 2D Morphological filtering) or instantaneous psychoacoustic masking.
+                3. DO NOT simply tweak constant numbers or threshold multipliers.
+                4. Ensure your C code compiles cleanly via CMake and manages memory safely without leaks.
 
-                    Formulate a clear DSP hypothesis, write the complete modified C file, and ensure it builds without warnings or pointer crashes.
-
-                    C CODEBASE CONTEXT:
-                    {c_code[:100000]}
-                    """
+                C CODEBASE CONTEXT:
+                {c_code[:100000]}
+                """
 
 
         try:
@@ -118,7 +152,7 @@ def main():
                 ),
             )
             
-            patch: CEditProposal = response.parsed
+            patch: CEditProposal = generate_patch_with_fallback(prompt)
             filepath = patch.filepath
             
             # Ensure target directory exists

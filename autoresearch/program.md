@@ -35,6 +35,31 @@ You are expected to invent, implement, and integrate structural algorithms into 
 
 ---
 
+## 🚫 STRICTLY FORBIDDEN: Heavy Recursive Frame Feedback & Temporal Echoes
+
+Do NOT implement heavy frame-to-frame recursive feedback or high-order IIR temporal smoothing (e.g., Ephraim-Malah Decision-Directed SNR tracking with high alpha, multi-frame exponential smoothing, or spectral delay loops). 
+
+**Reason:** Recursive temporal smoothing creates temporal ghosting, echoes, and trailing artifacts ("smeared tails") after transients and word endings.
+
+---
+
+## 🎨 PREFERRED ALTERNATIVE DIRECTIONS: Image Processing & Modern ML Masking
+
+Instead of relying on past audio frames, treat the STFT magnitude spectrogram as a **2D Matrix/Image** $S[t, f]$ and apply localized, non-recursive spatial/spectral image processing and zero-latency ML masking concepts:
+
+### 1. Image Processing Techniques (Applied to 2D Spectrograms)
+* **2D Guided Filtering / Bilateral Filtering:** Smooth stationary background noise while strictly preserving sharp spectro-temporal edges (transients and harmonics) without introducing temporal lag or echoes.
+* **Anisotropic Diffusion (Perona-Malik Denoising):** Process the spectrogram as a 2D intensity image. Diffuse energy within uniform time-frequency regions (noise floor) while stopping diffusion across high-gradient spectral edges.
+* **Non-Local Means (NLM) Patch Filtering (`nlm.c`):** Use 2D patch-matching in local time-frequency neighborhoods rather than long-term time-series history.
+* **Morphological 2D Operations:** Apply 2D erosion/dilation or top-hat filtering on the gain matrix to remove isolated "musical noise" points without temporal blurring.
+
+### 2. ML-Inspired & Instantaneous Masking
+* **Instantaneous / Finite Window Masking:** Compute spectral masks using only the current frame (plus maximum 1 adjacent frame for lookahead/lookback FIR windowing).
+* **Psychoacoustic Simultaneous Masking:** Protect weak harmonics based on instantaneous frequency masking thresholds (e.g., Johnston or ISO 5218 masking models) within the *current frame*, rather than relying on past frame history.
+* **Compact FIR-like 2D Kernels:** Replace recursive state accumulators with small, fixed $3 \times 3$ or $5 \times 5$ 2D spatial convolution kernels over the time-frequency plane.
+
+---
+
 ## Code Modification Rules
 - You may rewrite internal helper functions, introduce new structural loops, or modify matrix allocations in `src/`.
 - Ensure all memory allocated for new multi-resolution buffers or state structures is properly freed to prevent memory leaks or segfaults.

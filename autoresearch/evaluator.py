@@ -20,13 +20,13 @@ NOISE_PREFIX_SEC = 2.5
 
 # Standard Presets
 PRESETS_ALL = [
-    {"name": "light",    "args": ["--learn-frames", "200", "--reduction", "12.0", "--whitening", "10.0", "--smoothing", "0.05" ]},
-    {"name": "moderate", "args": ["--learn-frames", "200", "--reduction", "18.0", "--whitening", "20.0", "--smoothing", "0.15" ]},
-    {"name": "heavy",    "args": ["--learn-frames", "200", "--reduction", "24.0", "--whitening", "30.0", "--smoothing", "0.25" ]}
+    {"name": "light",    "args": ["--learn-frames", "200", "--reduction", "12.0", "--whitening", "10.0"]},
+    {"name": "moderate", "args": ["--learn-frames", "200", "--reduction", "18.0", "--whitening", "20.0"]},
+    {"name": "heavy",    "args": ["--learn-frames", "200", "--reduction", "24.0", "--whitening", "30.0"]}
 ]
 
 PRESET_FAST = [
-    {"name": "moderate", "args": ["--learn-frames", "200", "--reduction", "18.0", "--whitening", "20.0", "--smoothing", "0.15" ]}
+    {"name": "moderate", "args": ["--learn-frames", "200", "--reduction", "18.0", "--whitening", "20.0"]}
 ]
 
 def compile_libspecbleach() -> bool:
@@ -54,6 +54,42 @@ def find_denoiser_executable() -> str:
         if os.path.exists(path):
             return path
     return ""
+
+def compute_temporal_echo_penalty(s_clean: np.ndarray, s_proc: np.ndarray, sr: int = 48000) -> float:
+    """
+    Measures post-transient energy leakage (echoes/ghosting).
+    Returns a penalty score >= 0.0 (higher = worse echo/smearing).
+    """
+    # 1. Compute frame energy envelopes
+    hop = 256
+    clean_env = librosa.feature.rms(y=s_clean, frame_length=512, hop_length=hop)[0]
+    proc_env  = librosa.feature.rms(y=s_proc,  frame_length=512, hop_length=hop)[0]
+    
+    # 2. Find frames where clean energy drops rapidly (>15dB decay in 2-3 frames)
+    clean_db = 20 * np.log10(clean_env + 1e-6)
+    proc_db  = 20 * np.log10(proc_env + 1e-6)
+    
+    diff_clean = np.diff(clean_db)
+    
+    # Identify sharp drop-offs (phrase ends / post-transients)
+    drop_indices = np.where(diff_clean < -15.0)[0]
+    
+    if len(drop_indices) == 0:
+        return 0.0
+
+    # 3. Measure if processed audio decays much slower than clean audio
+    echo_leakage = 0.0
+    for idx in drop_indices:
+        if idx + 2 < len(proc_db):
+            clean_decay = clean_db[idx] - clean_db[idx + 2]
+            proc_decay  = proc_db[idx] - proc_db[idx + 2]
+            
+            # If clean decayed 20dB but processed only decayed 5dB -> Echo detected!
+            decay_error = max(0.0, clean_decay - proc_decay)
+            echo_leakage += decay_error
+
+    mean_echo_leakage = echo_leakage / len(drop_indices)
+    return float(mean_echo_leakage)
 
 def compute_lsd(s_clean: np.ndarray, s_proc: np.ndarray, sr: int = 48000) -> float:
     S_clean = np.abs(librosa.stft(s_clean, n_fft=2048, hop_length=512))
@@ -162,6 +198,11 @@ def process_case(case_dir: str, presets: list, skip_perf: bool = False, fast_met
             (0.10 * lsd_val) -
             (0.10 * (mr_stft * 10.0))
         )
+
+        echo_penalty = compute_temporal_echo_penalty(s_clean_m, s_proc_m, sr)
+
+        # Subtract echo penalty from the quality score
+        quality_score = quality_score - (0.05 * echo_penalty)
 
         cpu_penalty = 10.0 * rtf
         latency_penalty = 0.05 * max(0.0, latency_ms - 10.0)
