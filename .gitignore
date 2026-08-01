@@ -73,3 +73,8 @@ tests/test_data/*_denoised.wav
 # Other files
 *.log
 .DS_Store
+
+# Autoresearch
+autoresearch/audio_dataset
+autoresearch/research_data
+autoresearch/.env
