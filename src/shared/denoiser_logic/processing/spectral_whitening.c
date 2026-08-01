@@ -66,7 +66,6 @@ void spectral_whitening_get_weights(SpectralWhitening* self,
     return;
   }
 
-  // 1. Create a smoothed copy of the noise profile for stable weight calculation
   float* smoothed_profile =
       (float*)malloc(self->real_spectrum_size * sizeof(float));
   if (!smoothed_profile) {
@@ -76,12 +75,24 @@ void spectral_whitening_get_weights(SpectralWhitening* self,
          self->real_spectrum_size * sizeof(float));
   smooth_spectrum(smoothed_profile, self->real_spectrum_size, 0.5f);
 
-  // 2. Calculate Localized Band Anchor Magnitudes using Bark-spaced sub-bands
-  // Multi-band localized anchor tracking prevents low-frequency noise rumble
-  // from dominating high-frequency whitening weights or vice-versa.
+  float* spectral_curvature = (float*)malloc(self->real_spectrum_size * sizeof(float));
+  if (!spectral_curvature) {
+    free(smoothed_profile);
+    return;
+  }
+  
+  for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
+    float prev = (k > 0U) ? smoothed_profile[k - 1U] : smoothed_profile[k];
+    float curr = smoothed_profile[k];
+    float next = (k + 1U < self->real_spectrum_size) ? smoothed_profile[k + 1U] : smoothed_profile[k];
+    float laplacian = fabsf(next - 2.0f * curr + prev);
+    spectral_curvature[k] = laplacian / (curr + SPECTRAL_EPSILON);
+  }
+
   float* local_anchors =
       (float*)malloc(self->real_spectrum_size * sizeof(float));
   if (!local_anchors) {
+    free(spectral_curvature);
     free(smoothed_profile);
     return;
   }
@@ -98,16 +109,15 @@ void spectral_whitening_get_weights(SpectralWhitening* self,
       (float*)malloc(self->real_spectrum_size * sizeof(float));
   if (!band_sort_buf) {
     free(local_anchors);
+    free(spectral_curvature);
     free(smoothed_profile);
     return;
   }
 
-  // Define band boundaries logarithmically/quadratically across frequency bins
   for (uint32_t b = 0U; b < num_bands; b++) {
     float frac_start = (float)b / (float)num_bands;
     float frac_end = (float)(b + 1U) / (float)num_bands;
 
-    // Use squared warping for quasi-Bark band spacing
     uint32_t start_bin =
         (uint32_t)(frac_start * frac_start * (float)self->real_spectrum_size);
     uint32_t end_bin =
@@ -135,7 +145,6 @@ void spectral_whitening_get_weights(SpectralWhitening* self,
 
   free(band_sort_buf);
 
-  // Interpolate localized anchor envelope across all frequency bins
   uint32_t current_band = 0U;
   for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
     while (current_band + 1U < num_bands &&
@@ -170,17 +179,19 @@ void spectral_whitening_get_weights(SpectralWhitening* self,
     }
   }
 
-  // 3. Compute power-law whitening weights relative to local band anchors
   float normalized_factor = whitening_factor;
 
   for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
     float weight = 1.0f;
     if (normalized_factor > 0.0f && smoothed_profile[k] > SPECTRAL_EPSILON) {
-      weight = powf(local_anchors[k] / smoothed_profile[k], normalized_factor);
+      float base_weight = powf(local_anchors[k] / smoothed_profile[k], normalized_factor);
+      float protection = 1.0f / (1.0f + 5.0f * spectral_curvature[k]);
+      weight = 1.0f + (base_weight - 1.0f) * protection;
     }
     weights_out[k] = weight;
   }
 
   free(local_anchors);
+  free(spectral_curvature);
   free(smoothed_profile);
 }
