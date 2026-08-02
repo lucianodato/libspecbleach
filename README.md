@@ -53,6 +53,7 @@ In addition to manual noise profile capture, the library supports adaptive noise
 To compile and install `libspecbleach`, you will need:
 - A C compiling toolchain (GCC or Clang supporting C17)
 - [CMake](https://cmake.org/) (3.16 or newer)
+- `pkg-config` (required when `USE_SYSTEM_FFTW=ON`)
 - [FFTW3](http://www.fftw.org/) library (`libfftw3f`, or let CMake fetch it automatically)
 - [OpenMP](https://www.openmp.org/) for parallel processing (optional, recommended for NLM 2D denoising)
 - [libsndfile](https://github.com/libsndfile/libsndfile) (optional, for test suite and demo tools)
