@@ -6,5 +6,7 @@ includedir=@PKG_CONFIG_INCLUDEDIR@
 Name: libspecbleach
 Description: C library for audio noise reduction and spectral processing
 Version: @PKG_CONFIG_VERSION@
+Requires.private: fftw3f
 Libs: -L${libdir} -lspecbleach
+Libs.private: -lm `@PKG_CONFIG_OPENMP_FLAGS`@
 Cflags: -I${includedir}

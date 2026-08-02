@@ -247,6 +247,11 @@ else()
     set(PKG_CONFIG_INCLUDEDIR "\${prefix}/${CMAKE_INSTALL_INCLUDEDIR}")
 endif()
 
+set(PKG_CONFIG_OPENMP_FLAGS "")
+if(OpenMP_C_FOUND)
+    set(PKG_CONFIG_OPENMP_FLAGS "${OpenMP_C_FLAGS}")
+endif()
+
 configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/specbleach.pc.in"
     "${CMAKE_CURRENT_BINARY_DIR}/specbleach.pc"
