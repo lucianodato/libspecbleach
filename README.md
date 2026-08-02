@@ -86,6 +86,7 @@ You can configure the build using `-Doption=VALUE`:
 | `USE_SYSTEM_FFTW` | `ON` | Link against system-installed `libfftw3f`. If set to `OFF`, CMake fetches and compiles static FFTW3 automatically |
 | `ENABLE_AVX` | `ON` | Enable AVX SIMD optimizations on x86_64 architectures |
 | `ENABLE_TESTS` | `OFF` | Build unit, integration, and audio regression test suite |
+| `ENABLE_COVERAGE` | `OFF` | Enable code coverage instrumentation |
 | `ENABLE_EXAMPLES` | `OFF` | Build demo executables (requires `libsndfile`) |
 | `ENABLE_SANITIZERS` | `OFF` | Enable AddressSanitizer and UndefinedBehaviorSanitizer |
 

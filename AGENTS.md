@@ -18,12 +18,6 @@
 - **SIMD Utilities:** `src/shared/utils/simd_utils.h` — Explicit SIMD abstractions.
 - **Memory Management:** Uses a handle-based pattern initialized via `specbleach_initialize`.
 
-## Architectural Notes
-
-- **Dynamic AVX Dispatch:** The NLM filter uses runtime dynamic dispatch (`nlm_filter.c` initializes `process_fn` to check `__builtin_cpu_supports("avx")` and maps to `nlm_filter_process_avx` vs `nlm_filter_process_generic`).
-- **Boundary Safety:** NLM patches (e.g., 8x8 or 4x4) must check frequency and time bounds, falling back to safe clamping paths on frequency boundaries.
-- **Circular Buffering & STFT:** Framing and windowing are standardized across the library (see `configurations.h`).
-
 ## Build & Test Commands
 
 ```bash
