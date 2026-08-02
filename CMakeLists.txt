@@ -117,8 +117,7 @@ set_target_properties(libspecbleach PROPERTIES
     OUTPUT_NAME "specbleach"
     VERSION ${PROJECT_VERSION}
     SOVERSION ${PROJECT_VERSION_MAJOR}
-    C_VISIBILITY_PRESET hidden
-    VISIBILITY_INLINES_HIDDEN YES
+    C_VISIBILITY_PRESET default
 )
 
 target_include_directories(libspecbleach PUBLIC
