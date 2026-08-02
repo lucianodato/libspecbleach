@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-08-02
+
+### Added
+- **`pkg-config` Support**: Added `specbleach.pc.in` template to generate and install `specbleach.pc` into system pkg-config directories for downstream dependency lookup.
+- **System Installation Targets**: Added standard CMake `install()` targets for header files (`${CMAKE_INSTALL_INCLUDEDIR}`), shared/static libraries (`${CMAKE_INSTALL_LIBDIR}`), and CMake export targets.
+- **Configurable FFTW3 Dependency**: Added `USE_SYSTEM_FFTW` option (default `ON`) allowing downstream builders to link system-installed `libfftw3f` or automatically fetch and compile static FFTW3 via `FetchContent`.
+
+### Changed
+- **Default Library Type**: Changed default `BUILD_SHARED_LIBS` setting to `ON` to conform with Linux distribution packaging guidelines.
+- **Standardized Install Paths**: Integrated `GNUInstallDirs` to ensure installation paths adhere to target OS and distribution filesystem standards (e.g., Debian/Arch/Fedora).
+- **Cleaned Dependency Resolution**: Removed OS-specific hardcoded search paths (`/opt/homebrew`, `/usr/local`) from OpenMP and `libsndfile` detection routines to prevent interference with isolated sandbox builds.
+
 ## [0.3.0] - 2026-07-31
 
 ### Changed
