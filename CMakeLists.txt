@@ -26,6 +26,7 @@ if(USE_SYSTEM_FFTW)
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(FFTW3F REQUIRED IMPORTED_TARGET fftw3f)
     set(FFTW_TARGET PkgConfig::FFTW3F)
+    set(PKG_CONFIG_REQUIRES_PRIVATE "fftw3f")
 else()
     include(FetchContent)
     set(BUILD_SHARED_LIBS_SAVED ${BUILD_SHARED_LIBS})
@@ -41,6 +42,7 @@ else()
     FetchContent_MakeAvailable(fftw3)
     set(FFTW_TARGET fftw3f)
     set(BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS_SAVED} CACHE BOOL "Build shared libraries" FORCE)
+    set(PKG_CONFIG_REQUIRES_PRIVATE "")
 endif()
 
 # ==============================================================================
@@ -50,7 +52,6 @@ find_library(MATH_LIB m)
 
 find_package(OpenMP QUIET)
 if(NOT OpenMP_C_FOUND)
-    # Fallback search without hardcoded OS-specific paths
     find_path(OMP_INCLUDE_DIR omp.h)
     find_library(OMP_LIB NAMES omp gomp)
     if(OMP_LIB AND OMP_INCLUDE_DIR)
@@ -130,10 +131,11 @@ target_include_directories(libspecbleach PRIVATE
 )
 
 if(MATH_LIB)
-    target_link_libraries(libspecbleach PUBLIC ${MATH_LIB})
+    target_link_libraries(libspecbleach PRIVATE ${MATH_LIB})
 endif()
 
-target_link_libraries(libspecbleach PUBLIC ${FFTW_TARGET})
+# FFTW is an internal implementation detail (not exposed in public headers) -> PRIVATE
+target_link_libraries(libspecbleach PRIVATE ${FFTW_TARGET})
 
 if(OpenMP_C_FOUND)
     target_link_libraries(libspecbleach PRIVATE OpenMP::OpenMP_C)
@@ -222,8 +224,15 @@ if(ENABLE_TESTS)
 endif()
 
 # ==============================================================================
-# 8. Installation & Packaging Targets (Crucial for Linux Maintainers)
+# 8. Installation & Packaging Targets
 # ==============================================================================
+# Prevent system installation when using vendored FFTW to protect system dependencies
+install(CODE "
+    if(NOT ${USE_SYSTEM_FFTW})
+        message(FATAL_ERROR \"System installation requires USE_SYSTEM_FFTW=ON. Set -DUSE_SYSTEM_FFTW=ON to install system-wide.\")
+    endif()
+")
+
 install(TARGETS libspecbleach
     EXPORT libspecbleachTargets
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
@@ -233,9 +242,14 @@ install(TARGETS libspecbleach
 
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
-# Generate pkg-config file (specbleach.pc) for system-wide lookup
-set(PKG_CONFIG_PREFIX "${CMAKE_INSTALL_PREFIX}")
-set(PKG_CONFIG_EXEC_PREFIX "\${prefix}")
+# Install CMake Target Export
+install(EXPORT libspecbleachTargets
+    FILE libspecbleachTargets.cmake
+    NAMESPACE libspecbleach::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/libspecbleach
+)
+
+# Generate pkg-config file (specbleach.pc)
 if(IS_ABSOLUTE "${CMAKE_INSTALL_LIBDIR}")
     set(PKG_CONFIG_LIBDIR "${CMAKE_INSTALL_LIBDIR}")
 else()
