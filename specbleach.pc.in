@@ -1,0 +1,12 @@
+prefix=@PKG_CONFIG_PREFIX@
+exec_prefix=@PKG_CONFIG_EXEC_PREFIX@
+libdir=@PKG_CONFIG_LIBDIR@
+includedir=@PKG_CONFIG_INCLUDEDIR@
+
+Name: libspecbleach
+Description: C library for audio noise reduction and spectral processing
+Version: @PKG_CONFIG_VERSION@
+Requires.private: @PKG_CONFIG_REQUIRES_PRIVATE@
+Libs: -L${libdir} -lspecbleach
+Libs.private: -lm
+Cflags: -I${includedir}

@@ -13,6 +13,7 @@ C library for audio noise reduction and other spectral effects.
 - [De-noise Algorithms](#de-noise-algorithms)
 - [Build](#build)
 - [Installation](#installation)
+- [Build Options](#build-options)
 - [Usage Examples](#usage-examples)
 - [Development](#development)
 - [Contributing](#contributing)
@@ -52,39 +53,57 @@ In addition to manual noise profile capture, the library supports adaptive noise
 To compile and install `libspecbleach`, you will need:
 - A C compiling toolchain (GCC or Clang supporting C17)
 - [CMake](https://cmake.org/) (3.16 or newer)
-- [FFTW3](http://www.fftw.org/) library (`libfftw3f`)
+- `pkg-config` (required when `USE_SYSTEM_FFTW=ON`)
+- [FFTW3](http://www.fftw.org/) library (`libfftw3f`, or let CMake fetch it automatically)
 - [OpenMP](https://www.openmp.org/) for parallel processing (optional, recommended for NLM 2D denoising)
 - [libsndfile](https://github.com/libsndfile/libsndfile) (optional, for test suite and demo tools)
 
 ## Installation
 
 ```bash
-git clone https://github.com/lucianodato/libspecbleach.git
+git clone [https://github.com/lucianodato/libspecbleach.git](https://github.com/lucianodato/libspecbleach.git)
 cd libspecbleach
+
+# Configure build (defaults to shared library)
 cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release -j4
+
+# Compile
+cmake --build build --config Release --parallel
+
+# Install system-wide (installs libspecbleach.so, headers, and specbleach.pc)
 sudo cmake --install build
 ```
+
+> **Pkg-config Support**: System installation installs `specbleach.pc` into your system's `pkgconfig` directory (e.g., `/usr/lib/pkgconfig`). Downstream applications can discover the library using `pkg-config --modversion specbleach` or CMake's `pkg_check_modules()`.
 
 ## Build Options
 
 You can configure the build using `-Doption=VALUE`:
 
-- `BUILD_SHARED_LIBS`: Build shared library instead of static library (default: `OFF`).
-- `ENABLE_AVX`: Enable AVX SIMD optimizations on x86_64 architecture (default: `ON`).
-- `ENABLE_TESTS`: Build unit, integration, and audio regression test suite (default: `ON`).
-- `ENABLE_EXAMPLES`: Build demo executables (default: `ON`, requires `libsndfile`).
-- `ENABLE_SANITIZERS`: Enable AddressSanitizer and UndefinedBehaviorSanitizer (default: `OFF`).
+| Option | Default | Description |
+| :--- | :--- | :--- |
+| `BUILD_SHARED_LIBS` | `ON` | Build shared library (`.so` / `.dylib` / `.dll`) instead of static library |
+| `USE_SYSTEM_FFTW` | `ON` | Link against system-installed `libfftw3f`. If set to `OFF`, CMake fetches and compiles static FFTW3 automatically |
+| `ENABLE_AVX` | `ON` | Enable AVX SIMD optimizations on x86_64 architectures |
+| `ENABLE_TESTS` | `OFF` | Build unit, integration, and audio regression test suite |
+| `ENABLE_COVERAGE` | `OFF` | Enable code coverage instrumentation |
+| `ENABLE_EXAMPLES` | `OFF` | Build demo executables (requires `libsndfile`) |
+| `ENABLE_SANITIZERS` | `OFF` | Enable AddressSanitizer and UndefinedBehaviorSanitizer |
 
 > [!IMPORTANT]
 > **Critical Performance Note for Packagers**: The advanced "2D Denoising" (NLM) feature is computationally intensive and relies heavily on SIMD vectorization, function inlining, and **multi-core parallelization via OpenMP**. Builds without OpenMP will skip OpenMP-backed NLM parallelization and may run slower.
 >
 > You **MUST** compile with `-DCMAKE_BUILD_TYPE=Release` (or `-O3`) to ensure usability. Debug or unoptimized builds will result in excessive CPU usage and audio dropouts/xruns.
 
-Example for a static build with tests and examples:
+### Example: Building Static Library with Tests and Examples
 ```bash
-cmake -B build -DCMAKE_BUILD_TYPE=Release -DENABLE_TESTS=ON -DENABLE_EXAMPLES=ON
-cmake --build build --config Release
+cmake -B build \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DBUILD_SHARED_LIBS=OFF \
+  -DENABLE_TESTS=ON \
+  -DENABLE_EXAMPLES=ON
+
+cmake --build build --config Release --parallel
 ```
 
 ## Usage Examples
@@ -93,7 +112,7 @@ Console demo applications demonstrate library usage. They require `libsndfile` t
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release -DENABLE_EXAMPLES=ON
-cmake --build build
+cmake --build build --parallel
 ```
 
 ### Manual Noise Profile
@@ -127,11 +146,11 @@ To use the adaptive noise estimator:
 
 ### Building for Development
 
-For development builds with debug symbols:
+For development builds with debug symbols and full test suite:
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Debug -DENABLE_TESTS=ON -DENABLE_EXAMPLES=ON
-cmake --build build
+cmake --build build --parallel
 ```
 
 ### Code Formatting

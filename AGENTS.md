@@ -1,27 +1,33 @@
 # libspecbleach Agent Context
 
-This file contains foundational mandates and architectural context for Gemini CLI when working on `libspecbleach`.
+💡 *Foundational mandates and architectural rules specifically for `libspecbleach`.*
 
 ## Foundational Mandates
 
-1. **DSP Integrity**: Never introduce non-deterministic logic or blocking calls (locks, I/O, malloc) into the processing path (functions like `specbleach_process` or anything called within it).
-2. **Scientific Rigor**: All tuning constants MUST be defined in `src/shared/configurations.h`. Do not use magic numbers in implementation files.
-3. **Regression Testing**: After any change to DSP logic, you MUST run the audio regression suite:
-   - `cd build && ctest -R test_audio_file_regression --output-on-failure` (requires `libsndfile`; skip if unavailable)
-4. **SIMD Awareness & FTZ/DAZ**: The "2D Denoising" (NLM) feature is extremely sensitive to optimization. Always verify that changes don't break SIMD auto-vectorization or explicit vector instructions.
-   - **FTZ/DAZ**: For real-time safety, always enable FTZ (Flush-To-Zero) and DAZ (Denormals-Are-Zero) using `sb_simd_enable_ftz_daz()` and restore with `sb_simd_restore_state(...)` during heavy SIMD processing loops.
-   - **sb_sel8 Mask Contract**: The mask argument for `sb_sel8` must be normalized (any non-zero lane treated as true) to guarantee consistent behavior across SSE, AVX, ARM NEON, and Scalar backends.
-5. **No Reverts**: Do not revert changes unless they break the build or fail tests significantly.
+1. **DSP Integrity:** Maintain complete determinism in the processing path.
+2. **SIMD Awareness & FTZ/DAZ:** 
+   - The 2D Denoising (NLM) filter is sensitive to optimizations. Verify SIMD auto-vectorization or explicit vector instructions on changes.
+   - For real-time safety, always enable FTZ (Flush-To-Zero) and DAZ (Denormals-Are-Zero) using `sb_simd_enable_ftz_daz()` and restore state with `sb_simd_restore_state(...)` during heavy SIMD processing loops.
+3. **`sb_sel8` Mask Contract:** The mask argument for `sb_sel8` must be normalized (any non-zero lane treated as true) to guarantee consistent behavior across SSE, AVX, ARM NEON, and Scalar backends.
+4. **Reference Generation:** Regenerate reference audio files (`./tests/generate_reference_files.sh`) only when algorithm intentional changes occur.
 
-## Project Structure & Workflow
+## Project Structure
 
-- **Core Logic**: Located in `src/shared/`. This is where the math happens.
-- **Processors**: `src/processors/` orchestrates shared modules into the public API.
-- **SIMD Utilities**: Explicit SIMD abstractions are centralized in [simd_utils.h](src/shared/utils/simd_utils.h).
-- **Reference Generation**: If an algorithm change is intentional and the reference audio needs updating, use:
-  - `./tests/generate_reference_files.sh`
-- **Build**: Use `cmake -B build -DCMAKE_BUILD_TYPE=Release` for performance testing. Use `Debug` for development.
+- **Core Logic:** `src/shared/` — Core math operations.
+- **Processors:** `src/processors/` — Orchestrates shared modules into the public API.
+- **SIMD Utilities:** `src/shared/utils/simd_utils.h` — Explicit SIMD abstractions.
+- **Memory Management:** Uses a handle-based pattern initialized via `specbleach_initialize`.
 
+## Build & Test Commands
+
+```bash
+# Build
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release -j4
+
+# Run Audio Regression Tests
+cd build && ctest -R test_audio_file_regression --output-on-failure
+```
 ## Architectural Notes
 
 - **Dynamic AVX Dispatch**: The NLM filter uses runtime dynamic dispatch. `nlm_filter.c` initializes `process_fn` check with `__builtin_cpu_supports("avx")` and maps to `nlm_filter_process_avx` (compiled under the `libspecbleach_avx` target with `-mavx`) or `nlm_filter_process_generic`.
