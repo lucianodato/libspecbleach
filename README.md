@@ -83,12 +83,14 @@ You can configure the build using `-Doption=VALUE`:
 | Option | Default | Description |
 | :--- | :--- | :--- |
 | `BUILD_SHARED_LIBS` | `ON` | Build shared library (`.so` / `.dylib` / `.dll`) instead of static library |
+| `SPECBLEACH_INSTALL` | `ON` | Enable installation rules for library binaries, headers, and package config (`.pc`, `.cmake`) |
 | `USE_SYSTEM_FFTW` | `ON` | Link against system-installed `libfftw3f`. If set to `OFF`, CMake fetches and compiles static FFTW3 automatically |
 | `ENABLE_AVX` | `ON` | Enable AVX SIMD optimizations on x86_64 architectures |
 | `ENABLE_TESTS` | `OFF` | Build unit, integration, and audio regression test suite |
 | `ENABLE_COVERAGE` | `OFF` | Enable code coverage instrumentation |
 | `ENABLE_EXAMPLES` | `OFF` | Build demo executables (requires `libsndfile`) |
 | `ENABLE_SANITIZERS` | `OFF` | Enable AddressSanitizer and UndefinedBehaviorSanitizer |
+
 
 > [!IMPORTANT]
 > **Critical Performance Note for Packagers**: The advanced "2D Denoising" (NLM) feature is computationally intensive and relies heavily on SIMD vectorization, function inlining, and **multi-core parallelization via OpenMP**. Builds without OpenMP will skip OpenMP-backed NLM parallelization and may run slower.
