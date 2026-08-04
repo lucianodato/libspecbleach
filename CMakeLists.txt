@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.31)
 project(libspecbleach VERSION 0.3.1 LANGUAGES C)
 
 include(GNUInstallDirs)
@@ -226,52 +226,73 @@ endif()
 # ==============================================================================
 # 8. Installation & Packaging Targets
 # ==============================================================================
-# Prevent system installation when using vendored FFTW to protect system dependencies
-install(CODE "
-    if(NOT ${USE_SYSTEM_FFTW})
-        message(FATAL_ERROR \"System installation requires USE_SYSTEM_FFTW=ON. Set -DUSE_SYSTEM_FFTW=ON to install system-wide.\")
+option(SPECBLEACH_INSTALL "Install libspecbleach binaries, headers, and package config" ON)
+
+if(SPECBLEACH_INSTALL)
+    install(TARGETS libspecbleach
+        EXPORT libspecbleachTargets
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    )
+
+    install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+
+    # Generate and Install CMake Package Config
+    configure_package_config_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/libspecbleachConfig.cmake.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/libspecbleachConfig.cmake"
+        INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/libspecbleach
+    )
+
+    write_basic_package_version_file(
+        "${CMAKE_CURRENT_BINARY_DIR}/libspecbleachConfigVersion.cmake"
+        VERSION ${PROJECT_VERSION}
+        COMPATIBILITY SameMajorVersion
+    )
+
+    install(EXPORT libspecbleachTargets
+        FILE libspecbleachTargets.cmake
+        NAMESPACE libspecbleach::
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/libspecbleach
+    )
+
+    install(FILES
+        "${CMAKE_CURRENT_BINARY_DIR}/libspecbleachConfig.cmake"
+        "${CMAKE_CURRENT_BINARY_DIR}/libspecbleachConfigVersion.cmake"
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/libspecbleach
+    )
+
+    # Generate pkg-config file (specbleach.pc)
+    set(PKG_CONFIG_PREFIX "\${pcfiledir}/../..")
+    set(PKG_CONFIG_EXEC_PREFIX "\${prefix}")
+    set(PKG_CONFIG_VERSION "${PROJECT_VERSION}")
+
+    if(IS_ABSOLUTE "${CMAKE_INSTALL_LIBDIR}")
+        set(PKG_CONFIG_LIBDIR "${CMAKE_INSTALL_LIBDIR}")
+    else()
+        set(PKG_CONFIG_LIBDIR "\${exec_prefix}/${CMAKE_INSTALL_LIBDIR}")
     endif()
-")
+    if(IS_ABSOLUTE "${CMAKE_INSTALL_INCLUDEDIR}")
+        set(PKG_CONFIG_INCLUDEDIR "${CMAKE_INSTALL_INCLUDEDIR}")
+    else()
+        set(PKG_CONFIG_INCLUDEDIR "\${prefix}/${CMAKE_INSTALL_INCLUDEDIR}")
+    endif()
 
-install(TARGETS libspecbleach
-    EXPORT libspecbleachTargets
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-)
+    set(PKG_CONFIG_OPENMP_FLAGS "")
+    if(OpenMP_C_FOUND)
+        set(PKG_CONFIG_OPENMP_FLAGS "${OpenMP_C_FLAGS}")
+    endif()
 
-install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/specbleach.pc.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/specbleach.pc"
+        @ONLY
+    )
 
-# Install CMake Target Export
-install(EXPORT libspecbleachTargets
-    FILE libspecbleachTargets.cmake
-    NAMESPACE libspecbleach::
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/libspecbleach
-)
-
-# Generate pkg-config file (specbleach.pc)
-if(IS_ABSOLUTE "${CMAKE_INSTALL_LIBDIR}")
-    set(PKG_CONFIG_LIBDIR "${CMAKE_INSTALL_LIBDIR}")
-else()
-    set(PKG_CONFIG_LIBDIR "\${exec_prefix}/${CMAKE_INSTALL_LIBDIR}")
-endif()
-if(IS_ABSOLUTE "${CMAKE_INSTALL_INCLUDEDIR}")
-    set(PKG_CONFIG_INCLUDEDIR "${CMAKE_INSTALL_INCLUDEDIR}")
-else()
-    set(PKG_CONFIG_INCLUDEDIR "\${prefix}/${CMAKE_INSTALL_INCLUDEDIR}")
+    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/specbleach.pc"
+        DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig"
+    )
 endif()
 
-set(PKG_CONFIG_OPENMP_FLAGS "")
-if(OpenMP_C_FOUND)
-    set(PKG_CONFIG_OPENMP_FLAGS "${OpenMP_C_FLAGS}")
-endif()
-
-configure_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/specbleach.pc.in"
-    "${CMAKE_CURRENT_BINARY_DIR}/specbleach.pc"
-    @ONLY
-)
-
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/specbleach.pc"
-    DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig"
-)

@@ -1,0 +1,10 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+# Public dependencies: libspecbleach has no public CMake dependencies.
+# If any public dependencies are added in the future, find_dependency() calls go here.
+
+include("${CMAKE_CURRENT_LIST_DIR}/libspecbleachTargets.cmake")
+
+check_required_components(libspecbleach)
