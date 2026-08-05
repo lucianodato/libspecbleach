@@ -34,6 +34,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #ifdef _OPENMP
 #include <omp.h>
+#define SB_HAS_OPENMP 1
+#else
+#define SB_HAS_OPENMP 0
 #endif
 
 typedef bool (*nlm_process_impl_fn)(NlmFilter* filter, float* smoothed_snr);

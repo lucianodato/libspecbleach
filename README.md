@@ -55,13 +55,16 @@ To compile and install `libspecbleach`, you will need:
 - [CMake](https://cmake.org/) (3.16 or newer)
 - `pkg-config` (required when `USE_SYSTEM_FFTW=ON`)
 - [FFTW3](http://www.fftw.org/) library (`libfftw3f`, or let CMake fetch it automatically)
-- [OpenMP](https://www.openmp.org/) for parallel processing (optional, recommended for NLM 2D denoising)
+- [OpenMP](https://www.openmp.org/) for parallel processing (recommended for multi-threaded NLM 2D denoising):
+  - **macOS**: `brew install libomp`
+  - **Linux**: `sudo apt install libomp-dev` (Clang) or included with GCC
+  - **Windows**: Included natively in MSVC (`/openmp`) and MinGW GCC (`-fopenmp`)
 - [libsndfile](https://github.com/libsndfile/libsndfile) (optional, for test suite and demo tools)
 
 ## Installation
 
 ```bash
-git clone [https://github.com/lucianodato/libspecbleach.git](https://github.com/lucianodato/libspecbleach.git)
+git clone https://github.com/lucianodato/libspecbleach.git
 cd libspecbleach
 
 # Configure build (defaults to shared library)
@@ -93,9 +96,16 @@ You can configure the build using `-Doption=VALUE`:
 
 
 > [!IMPORTANT]
-> **Critical Performance Note for Packagers**: The advanced "2D Denoising" (NLM) feature is computationally intensive and relies heavily on SIMD vectorization, function inlining, and **multi-core parallelization via OpenMP**. Builds without OpenMP will skip OpenMP-backed NLM parallelization and may run slower.
+> **Critical Performance Note for Packagers & Users**: The advanced "2D Denoising" (NLM) feature is computationally intensive and relies heavily on SIMD vectorization and **multi-core parallelization via OpenMP**.
 >
-> You **MUST** compile with `-DCMAKE_BUILD_TYPE=Release` (or `-O3`) to ensure usability. Debug or unoptimized builds will result in excessive CPU usage and audio dropouts/xruns.
+> If OpenMP is missing at build time, NLM will fall back to single-threaded processing, which may cause high CPU utilization and audio dropouts (xruns) in real-time DAW environments.
+>
+> Always ensure OpenMP runtime libraries are installed prior to running CMake:
+> - **macOS**: `brew install libomp`
+> - **Linux (Ubuntu/Debian)**: `sudo apt install libomp-dev`
+> - **Windows**: OpenMP is built into MSVC and MinGW GCC.
+>
+> You **MUST** compile with `-DCMAKE_BUILD_TYPE=Release` (or `-O3`) for real-time performance. Debug or unoptimized builds will result in high CPU load.
 
 ### Example: Building Static Library with Tests and Examples
 ```bash
