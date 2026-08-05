@@ -8,7 +8,7 @@ set -e
 echo "Generating reference denoised audio files..."
 
 # Check if we're in the right directory
-if [ ! -f "meson.build" ]; then
+if [ ! -f "CMakeLists.txt" ]; then
     echo "Error: Run this script from the project root directory"
     exit 1
 fi
@@ -22,16 +22,15 @@ fi
 
 # Build examples to ensure latest changes are included
 echo "Building examples..."
-if [ ! -d "build" ]; then
-    meson setup build -Denable_examples=true
-else
-    meson configure build -Denable_examples=true
-fi
-meson compile -C build
+cmake -B build -DENABLE_EXAMPLES=ON -DENABLE_TESTS=ON -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release -j4
+
+# The executable path for CMake
+DEMO_EXEC="./build/denoiser_demo"
 
 # Generate reference files with explicit parameters to ensure consistency
 echo "Generating spectral denoiser reference..."
-./build/examples/denoiser_demo \
+$DEMO_EXEC \
     --reduction 20.0 \
     --whitening 50.0 \
     --smoothing 0.0 \
@@ -39,7 +38,7 @@ echo "Generating spectral denoiser reference..."
     tests/test_data/Speech.wav tests/test_data/Speech_denoised.wav
 
 echo "Generating adaptive denoiser reference..."
-./build/examples/denoiser_demo \
+$DEMO_EXEC \
     --reduction 20.0 \
     --whitening 50.0 \
     --smoothing 0.0 \

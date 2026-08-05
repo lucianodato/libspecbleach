@@ -102,9 +102,9 @@ void noise_floor_manager_apply(NoiseFloorManager* self,
     return;
   }
 
-  // 1. Calculate whitening weights (including tapering)
-  spectral_whitening_get_weights(self->whitening, whitening_factor,
-                                 noise_profile, self->whitening_weights);
+  // 1. Calculate ideal whitening reduction in dB
+  spectral_whitening_get_ideal_reduction_db(self->whitening, reduction_amount,
+                                            noise_profile, self->whitening_weights);
 
   // 2. Apply biasing + frequency-dependent floor
   for (uint32_t k = 0U; k < real_spectrum_size; k++) {
@@ -112,34 +112,31 @@ void noise_floor_manager_apply(NoiseFloorManager* self,
     if (mask > 0.0f) {
       mask = sqrtf(sqrtf(mask));
     }
-    // Proportional interpolation between regular reduction and tonal reduction
-    // Note: These are already linear gains (0.0 to 1.0) passed from the loading
-    // layer.
+    
+    // Calculate the available reduction budget (in linear amplitude)
     float dual_path_reduction =
         (reduction_amount * (1.0f - mask)) + (tonal_reduction_amount * mask);
+        
+    // Convert budget to dB
+    float r_dp_db = -20.0f * log10f(dual_path_reduction + 1e-12f);
+    if (r_dp_db < 0.0f) {
+      r_dp_db = 0.0f;
+    }
 
-    /*
-     * TONAL HAND-OFF:
-     * As whitening increases, we want to smooth out the "notches" created by
-     * tonal reduction to achieve a truly flat white residual.
-     * We interpolate between the dual-path reduction (with notches) and the
-     * broadband-only reduction level based on the whitening strength.
-     */
-    float target_reduction =
-        dual_path_reduction +
-        (whitening_factor * (reduction_amount - dual_path_reduction));
-
-    /*
-     * DYNAMIC WHITENING DEPTH & BIT TRANSPARENCY:
-     * To achieve bit transparency at 0dB reduction, we damp the whitening
-     * weights toward 1.0 as the target reduction level approaches 1.0 (no
-     * reduction). This also makes the effect feel more natural and dynamic.
-     */
-    float reduction_depth = 1.0f - target_reduction;
-    float effective_whitening_weight =
-        1.0f + (reduction_depth * (self->whitening_weights[k] - 1.0f));
-
-    float whitened_floor = target_reduction * effective_whitening_weight;
+    // Ideal reduction needed to perfectly flatten the profile
+    float ideal_db = self->whitening_weights[k];
+    
+    // Cap the ideal reduction by the available budget to prevent digging holes
+    float flattened_db = ideal_db;
+    if (flattened_db > r_dp_db) {
+      flattened_db = r_dp_db;
+    }
+    
+    // Interpolate between deep notches (0% whitening) and perfectly flat (100% whitening)
+    float target_db = ((1.0f - whitening_factor) * r_dp_db) + (whitening_factor * flattened_db);
+    
+    // Convert back to linear floor
+    float whitened_floor = powf(10.0f, -target_db / 20.0f);
 
     // Safety clamp (Floor cannot exceed Unity Gain)
     if (whitened_floor > 1.0f) {
