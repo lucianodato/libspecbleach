@@ -74,6 +74,10 @@ void test_whitening_get_ideal_reduction_db(void) {
   // Test with reduction_amount >= 1.0f (r_db <= 0.0f)
   spectral_whitening_get_ideal_reduction_db(sw, 1.0f, noise_profile, weights);
 
+  // Test with reduction_amount where r_db <= delta_max (e.g., reduction_amount
+  // = 0.9f -> r_db ~0.91 dB)
+  spectral_whitening_get_ideal_reduction_db(sw, 0.9f, noise_profile, weights);
+
   // Test with zero noise profile (1e-12 floor handling, count == 0 scenario)
   memset(noise_profile, 0, real_size * sizeof(float));
   spectral_whitening_get_ideal_reduction_db(sw, 0.1778f, noise_profile,

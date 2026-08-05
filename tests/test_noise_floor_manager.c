@@ -133,6 +133,13 @@ void test_noise_floor_manager_apply(void) {
   noise_floor_manager_apply(nfm, real_size, fft_size, gain_spectrum,
                             noise_profile, 0.1f, 1.0f, tonal_mask_test, 1.0f);
   TEST_FLOAT_CLOSE(gain_spectrum[0], 1.0f, 0.001f);
+  // Test r_dp_db < 0.0f (dual_path_reduction >= 1.0f with tonal path < 1.0f)
+  for (uint32_t k = 0; k < fft_size; k++) {
+    gain_spectrum[k] = 0.0f;
+  }
+  noise_floor_manager_apply(nfm, real_size, fft_size, gain_spectrum,
+                            noise_profile, 1.0f, 0.1f, NULL, 0.0f);
+
   free(tonal_mask_test);
 
   free(gain_spectrum);
