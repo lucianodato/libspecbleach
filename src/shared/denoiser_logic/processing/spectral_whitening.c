@@ -25,18 +25,16 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdlib.h>
 #include <string.h>
 
-static int float_comparator(const void* a, const void* b) {
-  float x = *(const float*)a;
-  float y = *(const float*)b;
-  return (x > y) - (x < y);
-}
-
 struct SpectralWhitening {
   uint32_t fft_size;
   uint32_t real_spectrum_size;
+  float* smoothed_profile;
 };
 
 SpectralWhitening* spectral_whitening_initialize(const uint32_t fft_size) {
+  if (fft_size == 0U) {
+    return NULL;
+  }
   SpectralWhitening* self =
       (SpectralWhitening*)calloc(1U, sizeof(SpectralWhitening));
   if (!self) {
@@ -46,6 +44,14 @@ SpectralWhitening* spectral_whitening_initialize(const uint32_t fft_size) {
   self->fft_size = fft_size;
   self->real_spectrum_size = (self->fft_size / 2U) + 1U;
 
+  self->smoothed_profile =
+      (float*)calloc(self->real_spectrum_size, sizeof(float));
+
+  if (!self->smoothed_profile) {
+    spectral_whitening_free(self);
+    return NULL;
+  }
+
   return self;
 }
 
@@ -53,59 +59,68 @@ void spectral_whitening_free(SpectralWhitening* self) {
   if (!self) {
     return;
   }
+  if (self->smoothed_profile) {
+    free(self->smoothed_profile);
+  }
   free(self);
 }
 
-void spectral_whitening_get_weights(SpectralWhitening* self,
-                                    float whitening_factor,
-                                    const float* noise_profile,
-                                    float* weights_out) {
-  if (!self || !weights_out || !noise_profile) {
+void spectral_whitening_get_ideal_reduction_db(SpectralWhitening* self,
+                                               float reduction_amount,
+                                               const float* noise_profile,
+                                               float* ideal_reduction_db_out) {
+  if (!self || !ideal_reduction_db_out || !noise_profile) {
     return;
   }
 
-  // 1. Create a smoothed copy of the noise profile for stable weight
-  // calculation
-  float* smoothed_profile =
-      (float*)malloc(self->real_spectrum_size * sizeof(float));
-  if (!smoothed_profile) {
-    return;
+  // Calculate broadband reduction in dB
+  float r_db = -20.0f * log10f(reduction_amount + 1e-12f);
+  if (r_db < 0.0f) {
+    r_db = 0.0f;
   }
-  memcpy(smoothed_profile, noise_profile,
+
+  // 1. Create a smoothed copy of the noise profile in pre-allocated buffer
+  memcpy(self->smoothed_profile, noise_profile,
          self->real_spectrum_size * sizeof(float));
-  smooth_spectrum(smoothed_profile, self->real_spectrum_size, 0.5f);
+  smooth_spectrum(self->smoothed_profile, self->real_spectrum_size, 0.5f);
 
-  // 2. Calculate Broadband Anchor Magnitude (using Median)
-  // This prevents narrow tonal spikes from driving the whitening ceiling,
-  // which causes hum leakage.
-  float* sort_buffer = (float*)malloc(self->real_spectrum_size * sizeof(float));
-  if (!sort_buffer) {
-    free(smoothed_profile);
-    return;
-  }
-  memcpy(sort_buffer, smoothed_profile,
-         self->real_spectrum_size * sizeof(float));
-  qsort(sort_buffer, self->real_spectrum_size, sizeof(float), float_comparator);
-
-  float anchor_magnitude = sort_buffer[self->real_spectrum_size / 2];
-  if (anchor_magnitude < SPECTRAL_EPSILON) {
-    anchor_magnitude = SPECTRAL_EPSILON;
-  }
-
-  free(sort_buffer);
-
-  // Use whitening_factor directly (already normalized 0.0-1.0 by the loader)
-  float normalized_factor = whitening_factor;
-
+  // 2. Compute Peak and Reference in the Logarithmic (dB) Domain
+  float pmax_db = -200.0f;
   for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
-    float weight = 1.0f;
-    if (normalized_factor > 0.0f && smoothed_profile[k] > SPECTRAL_EPSILON) {
-      // Power-law valley filling anchored to Broadband Hiss level
-      // This results in weights >= 1.0 for valleys and <= 1.0 for spikes
-      weight = powf(anchor_magnitude / smoothed_profile[k], normalized_factor);
+    float db = 10.0f * log10f(self->smoothed_profile[k] + SPECTRAL_EPSILON);
+    if (db > pmax_db) {
+      pmax_db = db;
     }
-    weights_out[k] = weight;
   }
 
-  free(smoothed_profile);
+  // To find a stable visual reference line, take the mean dB of the valid
+  // spectrum.
+  float sum_db = 0.0f;
+  uint32_t count = 0U;
+  float threshold_db = pmax_db - 60.0f;
+  for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
+    float db = 10.0f * log10f(self->smoothed_profile[k] + SPECTRAL_EPSILON);
+    if (db > threshold_db) {
+      sum_db += db;
+      count++;
+    }
+  }
+  float pref_db = (count > 0U) ? (sum_db / (float)count) : -120.0f;
+
+  float delta_max = fmaxf(pmax_db - pref_db, 0.0f);
+
+  float excess = 0.0f;
+  if (r_db > delta_max && r_db > 1.0f) {
+    excess = r_db - delta_max;
+  }
+
+  // 3. Compute Ideal Reduction in dB for 100% Whitening
+  for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
+    float db = 10.0f * log10f(self->smoothed_profile[k] + SPECTRAL_EPSILON);
+    float delta = (db > pref_db) ? (db - pref_db) : 0.0f;
+
+    // The ideal reduction perfectly flattens the noise profile and shifts it
+    // down by any excess
+    ideal_reduction_db_out[k] = delta + excess;
+  }
 }

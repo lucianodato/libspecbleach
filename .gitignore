@@ -78,3 +78,7 @@ tests/test_data/*_denoised.wav
 autoresearch/audio_dataset
 autoresearch/research_data
 autoresearch/.env
+
+# Coverage
+.coverage
+*.gcov

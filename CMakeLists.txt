@@ -50,19 +50,40 @@ endif()
 # ==============================================================================
 find_library(MATH_LIB m)
 
+if(APPLE)
+    list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew/opt/libomp" "/usr/local/opt/libomp")
+endif()
+
 find_package(OpenMP QUIET)
 if(NOT OpenMP_C_FOUND)
-    find_path(OMP_INCLUDE_DIR omp.h)
-    find_library(OMP_LIB NAMES omp gomp)
+    message(STATUS "OpenMP not found. Searching Homebrew paths...")
+    find_path(OMP_INCLUDE_DIR omp.h HINTS /opt/homebrew/opt/libomp/include /usr/local/opt/libomp/include)
+    find_library(OMP_LIB NAMES omp gomp HINTS /opt/homebrew/opt/libomp/lib /usr/local/opt/libomp/lib)
     if(OMP_LIB AND OMP_INCLUDE_DIR)
         add_library(OpenMP::OpenMP_C INTERFACE IMPORTED)
-        set_target_properties(OpenMP::OpenMP_C PROPERTIES
-            INTERFACE_COMPILE_OPTIONS "-fopenmp"
-            INTERFACE_INCLUDE_DIRECTORIES "${OMP_INCLUDE_DIR}"
-            INTERFACE_LINK_LIBRARIES "${OMP_LIB}"
-        )
+        if(CMAKE_C_COMPILER_ID MATCHES "Clang" AND APPLE)
+            message(STATUS "OpenMP found: ${OMP_LIB}")
+            set_target_properties(OpenMP::OpenMP_C PROPERTIES
+                INTERFACE_COMPILE_OPTIONS "-Xpreprocessor;-fopenmp"
+                INTERFACE_INCLUDE_DIRECTORIES "${OMP_INCLUDE_DIR}"
+                INTERFACE_LINK_LIBRARIES "${OMP_LIB}"
+            )
+        else()
+
+            set_target_properties(OpenMP::OpenMP_C PROPERTIES
+                INTERFACE_COMPILE_OPTIONS "-fopenmp"
+                INTERFACE_INCLUDE_DIRECTORIES "${OMP_INCLUDE_DIR}"
+                INTERFACE_LINK_LIBRARIES "${OMP_LIB}"
+            )
+        endif()
         set(OpenMP_C_FOUND TRUE)
     endif()
+endif()
+
+if(OpenMP_C_FOUND OR TARGET OpenMP::OpenMP_C)
+    message(STATUS "OpenMP: ENABLED (Multi-threaded NLM 2D filter enabled)")
+else()
+    message(WARNING "OpenMP: NOT FOUND (NLM 2D filter will run single-threaded)")
 endif()
 
 # ==============================================================================
@@ -137,7 +158,7 @@ endif()
 # FFTW is an internal implementation detail (not exposed in public headers) -> PRIVATE
 target_link_libraries(libspecbleach PRIVATE ${FFTW_TARGET})
 
-if(OpenMP_C_FOUND)
+if(OpenMP_C_FOUND OR TARGET OpenMP::OpenMP_C)
     target_link_libraries(libspecbleach PRIVATE OpenMP::OpenMP_C)
 endif()
 
@@ -153,6 +174,9 @@ if(ENABLE_AVX)
         endif()
         target_include_directories(specbleach_avx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/src)
         target_link_libraries(specbleach_avx PRIVATE ${FFTW_TARGET})
+        if(OpenMP_C_FOUND OR TARGET OpenMP::OpenMP_C)
+            target_link_libraries(specbleach_avx PRIVATE OpenMP::OpenMP_C)
+        endif()
         target_link_libraries(libspecbleach PRIVATE specbleach_avx)
     endif()
 endif()

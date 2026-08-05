@@ -24,6 +24,9 @@
 void test_whitening_lifecycle(void) {
   printf("Testing Spectral Whitening lifecycle...\n");
 
+  TEST_ASSERT(spectral_whitening_initialize(0) == NULL,
+              "Initialization with 0 fft_size should fail");
+
   SpectralWhitening* sw = spectral_whitening_initialize(1024);
   TEST_ASSERT(sw != NULL, "Initialization should succeed");
 
@@ -32,8 +35,8 @@ void test_whitening_lifecycle(void) {
   printf("✓ Spectral Whitening lifecycle tests passed\n");
 }
 
-void test_whitening_get_weights(void) {
-  printf("Testing Spectral Whitening get_weights...\n");
+void test_whitening_get_ideal_reduction_db(void) {
+  printf("Testing Spectral Whitening get_ideal_reduction_db...\n");
 
   uint32_t fft_size = 1024;
   uint32_t real_size = (fft_size / 2) + 1;
@@ -48,36 +51,50 @@ void test_whitening_get_weights(void) {
   }
 
   // Coverage: NULL inputs
-  spectral_whitening_get_weights(NULL, 0.5f, noise_profile, weights);
-  spectral_whitening_get_weights(sw, 0.5f, NULL, weights);
-  spectral_whitening_get_weights(sw, 0.5f, noise_profile, NULL);
+  spectral_whitening_get_ideal_reduction_db(NULL, 0.1778f, noise_profile,
+                                            weights);
+  spectral_whitening_get_ideal_reduction_db(sw, 0.1778f, NULL, weights);
+  spectral_whitening_get_ideal_reduction_db(sw, 0.1778f, noise_profile, NULL);
 
-  // Test with whitening factor 0 (should be just tapering window)
-  spectral_whitening_get_weights(sw, 0.0f, noise_profile, weights);
-  TEST_ASSERT(weights[0] > 0.0f, "Weight should be positive");
+  // Test with standard reduction limit (15 dB / 0.1778f)
+  spectral_whitening_get_ideal_reduction_db(sw, 0.1778f, noise_profile,
+                                            weights);
 
-  // Test with whitening factor 1.0 (full whitening)
-  spectral_whitening_get_weights(sw, 1.0f, noise_profile, weights);
+  // Values above reference receive primary reduction depth (delta) + excess
+  // Values below reference receive excess reduction when target reduction >
+  // delta_max
+  TEST_ASSERT(weights[real_size - 1] > 0.0f,
+              "Bins above reference should get reduction weight > 0.0");
+  TEST_ASSERT(
+      weights[0] > 0.0f,
+      "Bins below reference should receive excess reduction weight > 0.0");
 
-  // With Median anchoring, values above median get weights < 1.0, and vice
-  // versa. Profile is a ramp [1..513]. Median is ~257. Weight at k=0 (val=1)
-  // should be 257/1 = 257. Weight at k=512 (val=513) should be 257/513 = 0.5.
-  // crucially, the results are NOT tapered by Hamming.
-  TEST_ASSERT(weights[real_size - 1] < 1.0f,
-              "HF should not be boosted if above median");
-  TEST_ASSERT(weights[0] > 1.0f, "LF should be boosted if below median");
+  // Test with reduction_amount >= 1.0f (r_db <= 0.0f)
+  spectral_whitening_get_ideal_reduction_db(sw, 1.0f, noise_profile, weights);
 
-  // Test with very low whitening factor
-  spectral_whitening_get_weights(sw, 0.01f, noise_profile, weights);
+  // Test with reduction_amount where r_db <= delta_max (e.g., reduction_amount
+  // = 0.9f -> r_db ~0.91 dB)
+  spectral_whitening_get_ideal_reduction_db(sw, 0.9f, noise_profile, weights);
 
-  // Test with zero noise profile (1e-12 floor handling)
+  // Test with reduction_amount > 1.0f (r_db < 0.0f branch in line 79)
+  spectral_whitening_get_ideal_reduction_db(sw, 2.0f, noise_profile, weights);
+
+  // Test with r_db > delta_max but r_db <= 1.0f (e.g. reduction_amount = 0.95f)
+  // for flat profile where delta_max is 0.0f
+  for (uint32_t k = 0; k < real_size; k++) {
+    noise_profile[k] = 1.0f;
+  }
+  spectral_whitening_get_ideal_reduction_db(sw, 0.95f, noise_profile, weights);
+
+  // Test with zero noise profile (1e-12 floor handling, count == 0 scenario)
   memset(noise_profile, 0, real_size * sizeof(float));
-  spectral_whitening_get_weights(sw, 1.0f, noise_profile, weights);
+  spectral_whitening_get_ideal_reduction_db(sw, 0.1778f, noise_profile,
+                                            weights);
 
   free(weights);
   free(noise_profile);
   spectral_whitening_free(sw);
-  printf("✓ Spectral Whitening get_weights tests passed\n");
+  printf("✓ Spectral Whitening get_ideal_reduction_db tests passed\n");
 }
 
 void test_whitening_tonal_peak(void) {
@@ -96,27 +113,20 @@ void test_whitening_tonal_peak(void) {
   }
   noise_profile[100] = 10.0f; // The hum/tonal noise
 
-  // Whitening Factor 1.0 (100% - function uses linear scale)
-  spectral_whitening_get_weights(sw, 1.0f, noise_profile, weights);
+  // Standard Reduction (15 dB / 0.1778f)
+  spectral_whitening_get_ideal_reduction_db(sw, 0.1778f, noise_profile,
+                                            weights);
 
-  // Check floor level at a quiet bin (e.g., 200)
-  // Floor = Profile * Weight
-  // With Median anchoring (0.1), the weight at index 200 (val=0.1) should
-  // be 1.0. With Tapering REMOVED, the weight should be exactly 1.0 even at HF.
-  TEST_ASSERT(weights[200] >= 0.99f && weights[200] <= 1.01f,
-              "Quiet bins at anchor level should have unit weight");
+  // Quiet bins at or under median anchor level (e.g. 200, val=0.1) should have
+  // 0.0 reduction depth weight at whitening=1.0 (left alone)
+  TEST_ASSERT(
+      weights[200] == 0.0f,
+      "Quiet bins at anchor level should have 0 reduction depth weight");
 
-  // Check the Hum spike (index 100, val=10.0)
-  // Weight should be Median/Profile = 0.1 / 10.0 = 0.01 (approx)
-  // This 'shaves' the peak in the floor calculation.
-  float floor_at_hum = noise_profile[100] * weights[100];
-  TEST_ASSERT(floor_at_hum <= 0.2f,
-              "Hum spike should be flattened in the floor");
-
-  // Check the overall flat floor level (should be approx the median = 0.1)
-  TEST_ASSERT(floor_at_hum >= 0.05f,
-              "Hum spike should not be over-suppressed in floor");
-  TEST_FLOAT_CLOSE(noise_profile[200] * weights[200], 0.1f, 0.02f);
+  // The Hum spike (index 100, val=10.0) is far above median anchor level (0.1),
+  // so h = 1 - 0.1/10 = 0.9 Weight should be close to 0.99
+  TEST_ASSERT(weights[100] > 0.9f,
+              "Hum spike should receive high reduction depth weight");
 
   free(weights);
   free(noise_profile);
@@ -124,12 +134,57 @@ void test_whitening_tonal_peak(void) {
   printf("✓ Spectral Whitening tonal peak tests passed\n");
 }
 
+void test_whitening_band_limited(void) {
+  printf("Testing Spectral Whitening with band-limited audio...\n");
+
+  uint32_t fft_size = 1024;
+  uint32_t real_size = (fft_size / 2) + 1;
+  SpectralWhitening* sw = spectral_whitening_initialize(fft_size);
+
+  float* weights = (float*)calloc(real_size, sizeof(float));
+  float* noise_profile = (float*)calloc(real_size, sizeof(float));
+
+  // Band-limited audio: Only bins 0..100 have noise energy (0.1f).
+  // Upper sub-bands (bins 101..512, >80% of spectrum) are zero.
+  for (uint32_t i = 0; i <= 100; i++) {
+    noise_profile[i] = 0.1f;
+  }
+  // Add a hum spike at bin 30 inside the passband
+  noise_profile[30] = 1.0f;
+
+  spectral_whitening_get_ideal_reduction_db(sw, 0.1778f, noise_profile,
+                                            weights);
+
+  // Bins at baseline passband level (0.1f) are at/under reference, so they
+  // receive excess reduction weight > 0.0f
+  TEST_ASSERT(weights[50] > 0.0f,
+              "Active passband bins at reference should have excess reduction "
+              "weight > 0.0");
+
+  // Hum spike in active passband (1.0f vs 0.1f) should receive high reduction
+  // depth weight (h = 0.9)
+  TEST_ASSERT(weights[30] > 0.8f,
+              "Tonal peak in band-limited profile should receive high "
+              "reduction weight");
+
+  // Inactive stopband bins also receive excess reduction to uniformly shift the
+  // floor
+  TEST_ASSERT(weights[300] > 0.0f,
+              "Stopband bins should have excess reduction weight > 0.0");
+
+  free(weights);
+  free(noise_profile);
+  spectral_whitening_free(sw);
+  printf("✓ Spectral Whitening band-limited tests passed\n");
+}
+
 int main(void) {
   printf("Running Spectral Whitening tests...\n\n");
 
   test_whitening_lifecycle();
-  test_whitening_get_weights();
+  test_whitening_get_ideal_reduction_db();
   test_whitening_tonal_peak();
+  test_whitening_band_limited();
 
   printf("\n✅ All Spectral Whitening tests passed!\n");
   return 0;

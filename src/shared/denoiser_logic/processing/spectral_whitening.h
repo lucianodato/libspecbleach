@@ -29,9 +29,9 @@ SpectralWhitening* spectral_whitening_initialize(uint32_t fft_size);
 
 void spectral_whitening_free(SpectralWhitening* self);
 
-void spectral_whitening_get_weights(SpectralWhitening* self,
-                                    float whitening_factor,
-                                    const float* noise_profile,
-                                    float* weights_out);
+void spectral_whitening_get_ideal_reduction_db(SpectralWhitening* self,
+                                               float reduction_amount,
+                                               const float* noise_profile,
+                                               float* ideal_reduction_db_out);
 
 #endif
