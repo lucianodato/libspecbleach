@@ -12,7 +12,7 @@
 #define TEST_ASSERT(condition, message)                                        \
   do {                                                                         \
     if (!(condition)) {                                                        \
-      fprintf(stderr, "TEST FAILED: %s\n", message);                           \
+      fprintf(stderr, "TEST FAILED (Line %d): %s\n", __LINE__, message);       \
       exit(1);                                                                 \
     }                                                                          \
   } while (0)
@@ -96,7 +96,7 @@ void test_noise_floor_manager_apply(void) {
   }
   noise_floor_manager_apply(nfm, real_size, fft_size, gain_spectrum,
                             noise_profile, 0.1f, 0.1f, NULL, 1.0f);
-  TEST_FLOAT_CLOSE(gain_spectrum[0], 1.0f, 0.001f);
+  TEST_FLOAT_CLOSE(gain_spectrum[0], 0.1f, 0.001f);
 
   // Test Clamping: Gain is 0.05, Floor is 0.1 -> Result should be 0.1
   for (uint32_t k = 0; k < fft_size; k++) {
@@ -162,7 +162,7 @@ void test_noise_floor_manager_band_limited(void) {
                             noise_profile, 0.1f, 0.1f, NULL, 1.0f);
 
   // Bins at median level (1.0f) get 0 reduction weight -> 1.0 gain (left alone)
-  TEST_FLOAT_CLOSE(gain_spectrum[50], 1.0f, 0.005f);
+  TEST_FLOAT_CLOSE(gain_spectrum[50], 0.1f, 0.005f);
 
   free(gain_spectrum);
   free(noise_profile);

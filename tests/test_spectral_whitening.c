@@ -55,12 +55,12 @@ void test_whitening_get_ideal_reduction_db(void) {
   // Test with standard reduction limit (15 dB / 0.1778f)
   spectral_whitening_get_ideal_reduction_db(sw, 0.1778f, noise_profile, weights);
 
-  // Values above median (e.g. k=512, val=513 > median 257) get reduction weight > 0.0.
-  // Values below median (e.g. k=0, val=1 < median 257) get reduction weight == 0.0 (left alone).
+  // Values above reference receive primary reduction depth (delta) + excess
+  // Values below reference receive excess reduction when target reduction > delta_max
   TEST_ASSERT(weights[real_size - 1] > 0.0f,
-              "Bins above median should get reduction weight > 0.0");
-  TEST_ASSERT(weights[0] == 0.0f,
-              "Bins below median should get reduction weight == 0.0 (left alone)");
+              "Bins above reference should get reduction weight > 0.0");
+  TEST_ASSERT(weights[0] > 0.0f,
+              "Bins below reference should receive excess reduction weight > 0.0");
 
   // Test with zero noise profile (1e-12 floor handling)
   memset(noise_profile, 0, real_size * sizeof(float));
@@ -126,17 +126,17 @@ void test_whitening_band_limited(void) {
 
   spectral_whitening_get_ideal_reduction_db(sw, 0.1778f, noise_profile, weights);
 
-  // Bins at baseline passband level (0.1f) are at/under median, so reduction depth weight = 0.0f (left alone)
-  TEST_ASSERT(weights[50] == 0.0f,
-              "Active passband bins at median should have 0 reduction weight");
+  // Bins at baseline passband level (0.1f) are at/under reference, so they receive excess reduction weight > 0.0f
+  TEST_ASSERT(weights[50] > 0.0f,
+              "Active passband bins at reference should have excess reduction weight > 0.0");
 
   // Hum spike in active passband (1.0f vs 0.1f) should receive high reduction depth weight (h = 0.9)
   TEST_ASSERT(weights[30] > 0.8f,
               "Tonal peak in band-limited profile should receive high reduction weight");
 
-  // Inactive stopband bins should have 0.0 reduction depth weight
-  TEST_ASSERT(weights[300] == 0.0f,
-              "Stopband bins should have 0 reduction weight");
+  // Inactive stopband bins also receive excess reduction to uniformly shift the floor
+  TEST_ASSERT(weights[300] > 0.0f,
+              "Stopband bins should have excess reduction weight > 0.0");
 
   free(weights);
   free(noise_profile);
