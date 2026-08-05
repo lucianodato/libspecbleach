@@ -24,8 +24,10 @@
 void test_whitening_lifecycle(void) {
   printf("Testing Spectral Whitening lifecycle...\n");
 
-  TEST_ASSERT(spectral_whitening_initialize(0) == NULL || true,
-              "Coverage init");
+  SpectralWhitening* dummy = spectral_whitening_initialize(0);
+  if (dummy) {
+    spectral_whitening_free(dummy);
+  }
 
   SpectralWhitening* sw = spectral_whitening_initialize(1024);
   TEST_ASSERT(sw != NULL, "Initialization should succeed");

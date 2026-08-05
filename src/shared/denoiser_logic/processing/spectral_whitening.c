@@ -107,7 +107,7 @@ void spectral_whitening_get_ideal_reduction_db(SpectralWhitening* self,
       count++;
     }
   }
-  float pref_db = (count > 0U) ? (sum_db / count) : -120.0f;
+  float pref_db = (count > 0U) ? (sum_db / (float)count) : -120.0f;
 
   float delta_max = fmaxf(pmax_db - pref_db, 0.0f);
 
