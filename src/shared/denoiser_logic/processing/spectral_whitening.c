@@ -111,18 +111,15 @@ void spectral_whitening_get_ideal_reduction_db(SpectralWhitening* self,
 
   float delta_max = fmaxf(pmax_db - pref_db, 0.0f);
 
+  float excess = 0.0f;
+  if (r_db > delta_max && r_db > 1.0f) {
+    excess = r_db - delta_max;
+  }
+
   // 3. Compute Ideal Reduction in dB for 100% Whitening
   for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
     float db = 10.0f * log10f(self->smoothed_profile[k] + SPECTRAL_EPSILON);
-    float delta = 0.0f;
-    if (db > pref_db) {
-      delta = db - pref_db;
-    }
-
-    float excess = 0.0f;
-    if (r_db > delta_max && r_db > 1.0f) {
-      excess = r_db - delta_max;
-    }
+    float delta = (db > pref_db) ? (db - pref_db) : 0.0f;
 
     // The ideal reduction perfectly flattens the noise profile and shifts it
     // down by any excess
