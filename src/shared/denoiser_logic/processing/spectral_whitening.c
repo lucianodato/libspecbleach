@@ -32,8 +32,6 @@ struct SpectralWhitening {
   float* sort_buffer;
 };
 
-
-
 SpectralWhitening* spectral_whitening_initialize(const uint32_t fft_size) {
   SpectralWhitening* self =
       (SpectralWhitening*)calloc(1U, sizeof(SpectralWhitening));
@@ -97,7 +95,8 @@ void spectral_whitening_get_ideal_reduction_db(SpectralWhitening* self,
     }
   }
 
-  // To find a stable visual reference line, take the mean dB of the valid spectrum.
+  // To find a stable visual reference line, take the mean dB of the valid
+  // spectrum.
   float sum_db = 0.0f;
   uint32_t count = 0U;
   float threshold_db = pmax_db - 60.0f;
@@ -110,10 +109,7 @@ void spectral_whitening_get_ideal_reduction_db(SpectralWhitening* self,
   }
   float pref_db = (count > 0U) ? (sum_db / count) : -120.0f;
 
-  float delta_max = pmax_db - pref_db;
-  if (delta_max < 1.0f) {
-    delta_max = 1.0f; // Prevent divide by zero if profile is perfectly flat
-  }
+  float delta_max = fmaxf(pmax_db - pref_db, 0.0f);
 
   // 3. Compute Ideal Reduction in dB for 100% Whitening
   for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
@@ -122,13 +118,14 @@ void spectral_whitening_get_ideal_reduction_db(SpectralWhitening* self,
     if (db > pref_db) {
       delta = db - pref_db;
     }
-    
+
     float excess = 0.0f;
     if (r_db > delta_max && r_db > 1.0f) {
       excess = r_db - delta_max;
     }
-    
-    // The ideal reduction perfectly flattens the noise profile and shifts it down by any excess
+
+    // The ideal reduction perfectly flattens the noise profile and shifts it down
+    // by any excess
     ideal_reduction_db_out[k] = delta + excess;
   }
 }

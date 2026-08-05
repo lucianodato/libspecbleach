@@ -105,7 +105,7 @@ You can configure the build using `-Doption=VALUE`:
 > - **Linux (Ubuntu/Debian)**: `sudo apt install libomp-dev`
 > - **Windows**: OpenMP is built into MSVC and MinGW GCC.
 >
-> You **MUST** compile with `-DCMAKE_BUILD_TYPE=Release` (or `-O3`) for real-time performance. Debug or unoptimized builds will result in high CPU load.
+> You **MUST** configure with `-DCMAKE_BUILD_TYPE=Release` (or the compiler's equivalent optimization settings) for real-time performance. Debug or unoptimized builds will result in high CPU load.
 
 ### Example: Building Static Library with Tests and Examples
 ```bash

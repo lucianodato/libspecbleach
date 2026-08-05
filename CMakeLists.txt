@@ -158,7 +158,7 @@ endif()
 # FFTW is an internal implementation detail (not exposed in public headers) -> PRIVATE
 target_link_libraries(libspecbleach PRIVATE ${FFTW_TARGET})
 
-if(OpenMP_C_FOUND)
+if(OpenMP_C_FOUND OR TARGET OpenMP::OpenMP_C)
     target_link_libraries(libspecbleach PRIVATE OpenMP::OpenMP_C)
 endif()
 
@@ -174,7 +174,7 @@ if(ENABLE_AVX)
         endif()
         target_include_directories(specbleach_avx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/src)
         target_link_libraries(specbleach_avx PRIVATE ${FFTW_TARGET})
-        if(OpenMP_C_FOUND)
+        if(OpenMP_C_FOUND OR TARGET OpenMP::OpenMP_C)
             target_link_libraries(specbleach_avx PRIVATE OpenMP::OpenMP_C)
         endif()
         target_link_libraries(libspecbleach PRIVATE specbleach_avx)
