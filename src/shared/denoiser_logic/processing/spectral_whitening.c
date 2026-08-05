@@ -29,10 +29,12 @@ struct SpectralWhitening {
   uint32_t fft_size;
   uint32_t real_spectrum_size;
   float* smoothed_profile;
-  float* sort_buffer;
 };
 
 SpectralWhitening* spectral_whitening_initialize(const uint32_t fft_size) {
+  if (fft_size == 0U) {
+    return NULL;
+  }
   SpectralWhitening* self =
       (SpectralWhitening*)calloc(1U, sizeof(SpectralWhitening));
   if (!self) {
@@ -44,9 +46,8 @@ SpectralWhitening* spectral_whitening_initialize(const uint32_t fft_size) {
 
   self->smoothed_profile =
       (float*)calloc(self->real_spectrum_size, sizeof(float));
-  self->sort_buffer = (float*)calloc(self->real_spectrum_size, sizeof(float));
 
-  if (!self->smoothed_profile || !self->sort_buffer) {
+  if (!self->smoothed_profile) {
     spectral_whitening_free(self);
     return NULL;
   }
@@ -60,9 +61,6 @@ void spectral_whitening_free(SpectralWhitening* self) {
   }
   if (self->smoothed_profile) {
     free(self->smoothed_profile);
-  }
-  if (self->sort_buffer) {
-    free(self->sort_buffer);
   }
   free(self);
 }

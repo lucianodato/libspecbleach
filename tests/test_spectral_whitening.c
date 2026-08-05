@@ -24,10 +24,8 @@
 void test_whitening_lifecycle(void) {
   printf("Testing Spectral Whitening lifecycle...\n");
 
-  SpectralWhitening* dummy = spectral_whitening_initialize(0);
-  if (dummy) {
-    spectral_whitening_free(dummy);
-  }
+  TEST_ASSERT(spectral_whitening_initialize(0) == NULL,
+              "Initialization with 0 fft_size should fail");
 
   SpectralWhitening* sw = spectral_whitening_initialize(1024);
   TEST_ASSERT(sw != NULL, "Initialization should succeed");
@@ -77,6 +75,16 @@ void test_whitening_get_ideal_reduction_db(void) {
   // Test with reduction_amount where r_db <= delta_max (e.g., reduction_amount
   // = 0.9f -> r_db ~0.91 dB)
   spectral_whitening_get_ideal_reduction_db(sw, 0.9f, noise_profile, weights);
+
+  // Test with reduction_amount > 1.0f (r_db < 0.0f branch in line 79)
+  spectral_whitening_get_ideal_reduction_db(sw, 2.0f, noise_profile, weights);
+
+  // Test with r_db > delta_max but r_db <= 1.0f (e.g. reduction_amount = 0.95f)
+  // for flat profile where delta_max is 0.0f
+  for (uint32_t k = 0; k < real_size; k++) {
+    noise_profile[k] = 1.0f;
+  }
+  spectral_whitening_get_ideal_reduction_db(sw, 0.95f, noise_profile, weights);
 
   // Test with zero noise profile (1e-12 floor handling, count == 0 scenario)
   memset(noise_profile, 0, real_size * sizeof(float));
