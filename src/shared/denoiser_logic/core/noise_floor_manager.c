@@ -104,7 +104,8 @@ void noise_floor_manager_apply(NoiseFloorManager* self,
 
   // 1. Calculate ideal whitening reduction in dB
   spectral_whitening_get_ideal_reduction_db(self->whitening, reduction_amount,
-                                            noise_profile, self->whitening_weights);
+                                            noise_profile,
+                                            self->whitening_weights);
 
   // 2. Apply biasing + frequency-dependent floor
   for (uint32_t k = 0U; k < real_spectrum_size; k++) {
@@ -112,11 +113,11 @@ void noise_floor_manager_apply(NoiseFloorManager* self,
     if (mask > 0.0f) {
       mask = sqrtf(sqrtf(mask));
     }
-    
+
     // Calculate the available reduction budget (in linear amplitude)
     float dual_path_reduction =
         (reduction_amount * (1.0f - mask)) + (tonal_reduction_amount * mask);
-        
+
     // Convert budget to dB
     float r_dp_db = -20.0f * log10f(dual_path_reduction + 1e-12f);
     if (r_dp_db < 0.0f) {
@@ -125,16 +126,18 @@ void noise_floor_manager_apply(NoiseFloorManager* self,
 
     // Ideal reduction needed to perfectly flatten the profile
     float ideal_db = self->whitening_weights[k];
-    
+
     // Cap the ideal reduction by the available budget to prevent digging holes
     float flattened_db = ideal_db;
     if (flattened_db > r_dp_db) {
       flattened_db = r_dp_db;
     }
-    
-    // Interpolate between deep notches (0% whitening) and perfectly flat (100% whitening)
-    float target_db = ((1.0f - whitening_factor) * r_dp_db) + (whitening_factor * flattened_db);
-    
+
+    // Interpolate between deep notches (0% whitening) and perfectly flat (100%
+    // whitening)
+    float target_db = ((1.0f - whitening_factor) * r_dp_db) +
+                      (whitening_factor * flattened_db);
+
     // Convert back to linear floor
     float whitened_floor = powf(10.0f, -target_db / 20.0f);
 

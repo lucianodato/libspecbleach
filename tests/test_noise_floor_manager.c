@@ -23,6 +23,9 @@
 void test_noise_floor_manager_lifecycle(void) {
   printf("Testing Noise Floor Manager lifecycle...\n");
 
+  TEST_ASSERT(noise_floor_manager_initialize(0) == NULL,
+              "Initialization with 0 fft_size should fail");
+
   NoiseFloorManager* nfm = noise_floor_manager_initialize(1024);
   TEST_ASSERT(nfm != NULL, "Initialization should succeed");
 
@@ -90,7 +93,8 @@ void test_noise_floor_manager_apply(void) {
   TEST_FLOAT_CLOSE(gain_spectrum[0], 0.1f, 0.001f);
 
   // Test with whitening (Max/Median anchoring)
-  // Profile is all 1.0, so all bins are at/under reference line. Whitening 100% -> weight=0.0 (left alone -> 1.0 floor).
+  // Profile is all 1.0, so all bins are at/under reference line. Whitening 100%
+  // -> weight=0.0 (left alone -> 1.0 floor).
   for (uint32_t k = 0; k < fft_size; k++) {
     gain_spectrum[k] = 0.0f;
   }

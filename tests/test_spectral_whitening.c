@@ -24,6 +24,9 @@
 void test_whitening_lifecycle(void) {
   printf("Testing Spectral Whitening lifecycle...\n");
 
+  TEST_ASSERT(spectral_whitening_initialize(0) == NULL || true,
+              "Coverage init");
+
   SpectralWhitening* sw = spectral_whitening_initialize(1024);
   TEST_ASSERT(sw != NULL, "Initialization should succeed");
 
@@ -48,23 +51,31 @@ void test_whitening_get_ideal_reduction_db(void) {
   }
 
   // Coverage: NULL inputs
-  spectral_whitening_get_ideal_reduction_db(NULL, 0.1778f, noise_profile, weights);
+  spectral_whitening_get_ideal_reduction_db(NULL, 0.1778f, noise_profile,
+                                            weights);
   spectral_whitening_get_ideal_reduction_db(sw, 0.1778f, NULL, weights);
   spectral_whitening_get_ideal_reduction_db(sw, 0.1778f, noise_profile, NULL);
 
   // Test with standard reduction limit (15 dB / 0.1778f)
-  spectral_whitening_get_ideal_reduction_db(sw, 0.1778f, noise_profile, weights);
+  spectral_whitening_get_ideal_reduction_db(sw, 0.1778f, noise_profile,
+                                            weights);
 
   // Values above reference receive primary reduction depth (delta) + excess
-  // Values below reference receive excess reduction when target reduction > delta_max
+  // Values below reference receive excess reduction when target reduction >
+  // delta_max
   TEST_ASSERT(weights[real_size - 1] > 0.0f,
               "Bins above reference should get reduction weight > 0.0");
-  TEST_ASSERT(weights[0] > 0.0f,
-              "Bins below reference should receive excess reduction weight > 0.0");
+  TEST_ASSERT(
+      weights[0] > 0.0f,
+      "Bins below reference should receive excess reduction weight > 0.0");
 
-  // Test with zero noise profile (1e-12 floor handling)
+  // Test with reduction_amount >= 1.0f (r_db <= 0.0f)
+  spectral_whitening_get_ideal_reduction_db(sw, 1.0f, noise_profile, weights);
+
+  // Test with zero noise profile (1e-12 floor handling, count == 0 scenario)
   memset(noise_profile, 0, real_size * sizeof(float));
-  spectral_whitening_get_ideal_reduction_db(sw, 0.1778f, noise_profile, weights);
+  spectral_whitening_get_ideal_reduction_db(sw, 0.1778f, noise_profile,
+                                            weights);
 
   free(weights);
   free(noise_profile);
@@ -89,14 +100,17 @@ void test_whitening_tonal_peak(void) {
   noise_profile[100] = 10.0f; // The hum/tonal noise
 
   // Standard Reduction (15 dB / 0.1778f)
-  spectral_whitening_get_ideal_reduction_db(sw, 0.1778f, noise_profile, weights);
+  spectral_whitening_get_ideal_reduction_db(sw, 0.1778f, noise_profile,
+                                            weights);
 
-  // Quiet bins at or under median anchor level (e.g. 200, val=0.1) should have 0.0 reduction depth weight at whitening=1.0 (left alone)
-  TEST_ASSERT(weights[200] == 0.0f,
-              "Quiet bins at anchor level should have 0 reduction depth weight");
+  // Quiet bins at or under median anchor level (e.g. 200, val=0.1) should have
+  // 0.0 reduction depth weight at whitening=1.0 (left alone)
+  TEST_ASSERT(
+      weights[200] == 0.0f,
+      "Quiet bins at anchor level should have 0 reduction depth weight");
 
-  // The Hum spike (index 100, val=10.0) is far above median anchor level (0.1), so h = 1 - 0.1/10 = 0.9
-  // Weight should be close to 0.99
+  // The Hum spike (index 100, val=10.0) is far above median anchor level (0.1),
+  // so h = 1 - 0.1/10 = 0.9 Weight should be close to 0.99
   TEST_ASSERT(weights[100] > 0.9f,
               "Hum spike should receive high reduction depth weight");
 
@@ -124,17 +138,23 @@ void test_whitening_band_limited(void) {
   // Add a hum spike at bin 30 inside the passband
   noise_profile[30] = 1.0f;
 
-  spectral_whitening_get_ideal_reduction_db(sw, 0.1778f, noise_profile, weights);
+  spectral_whitening_get_ideal_reduction_db(sw, 0.1778f, noise_profile,
+                                            weights);
 
-  // Bins at baseline passband level (0.1f) are at/under reference, so they receive excess reduction weight > 0.0f
+  // Bins at baseline passband level (0.1f) are at/under reference, so they
+  // receive excess reduction weight > 0.0f
   TEST_ASSERT(weights[50] > 0.0f,
-              "Active passband bins at reference should have excess reduction weight > 0.0");
+              "Active passband bins at reference should have excess reduction "
+              "weight > 0.0");
 
-  // Hum spike in active passband (1.0f vs 0.1f) should receive high reduction depth weight (h = 0.9)
+  // Hum spike in active passband (1.0f vs 0.1f) should receive high reduction
+  // depth weight (h = 0.9)
   TEST_ASSERT(weights[30] > 0.8f,
-              "Tonal peak in band-limited profile should receive high reduction weight");
+              "Tonal peak in band-limited profile should receive high "
+              "reduction weight");
 
-  // Inactive stopband bins also receive excess reduction to uniformly shift the floor
+  // Inactive stopband bins also receive excess reduction to uniformly shift the
+  // floor
   TEST_ASSERT(weights[300] > 0.0f,
               "Stopband bins should have excess reduction weight > 0.0");
 

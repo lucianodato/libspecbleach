@@ -124,8 +124,8 @@ void spectral_whitening_get_ideal_reduction_db(SpectralWhitening* self,
       excess = r_db - delta_max;
     }
 
-    // The ideal reduction perfectly flattens the noise profile and shifts it down
-    // by any excess
+    // The ideal reduction perfectly flattens the noise profile and shifts it
+    // down by any excess
     ideal_reduction_db_out[k] = delta + excess;
   }
 }
