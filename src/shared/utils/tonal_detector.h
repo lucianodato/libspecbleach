@@ -17,7 +17,6 @@ libspecbleach - A spectral processing library
  * to local octave maxima.
  *
  * @param profile Noise profile (magnitude or power)
- * @param max_profile Maximum captured profile (for stationarity check)
  * @param median_profile Median captured profile (for stationarity check)
  * @param size Spectrum size (real_spectrum_size = fft_size/2 + 1)
  * @param sample_rate Audio sample rate in Hz

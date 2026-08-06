@@ -67,6 +67,7 @@ void detect_tonal_components(const float* profile,
       global_max_val = detection_profile[k];
     }
   }
+  float global_max_power = global_max_val * global_max_val;
 
   // 2. Perform frequency-domain median filtering to estimate the broadband
   // colored noise floor using boundary-safe windowing (no DC padding
@@ -145,14 +146,17 @@ void detect_tonal_components(const float* profile,
     float octave_max_val =
         (deque_head < deque_tail) ? detection_profile[deque[deque_head]] : 0.0f;
 
+    float peak_power = peak_val * peak_val;
+    float octave_max_power = octave_max_val * octave_max_val;
+
     // Reject candidates more than 20 dB below the max peak in their octave band
-    if (peak_val < octave_max_val * TONAL_PEAK_MIN_OCTAVE_RELATIVE_POWER) {
+    if (peak_power < octave_max_power * TONAL_PEAK_MIN_OCTAVE_RELATIVE_POWER) {
       tonal_mask[k] = 0.0f;
       continue;
     }
 
     // Reject candidates that fall significantly below the global broadband peak energy
-    if (peak_val < global_max_val * TONAL_PEAK_MIN_GLOBAL_RELATIVE_POWER) {
+    if (peak_power < global_max_power * TONAL_PEAK_MIN_GLOBAL_RELATIVE_POWER) {
       tonal_mask[k] = 0.0f;
       continue;
     }
