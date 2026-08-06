@@ -266,6 +266,12 @@ void test_caching_and_adaptive_support(void) {
   max_profile[learned_bin1] = 0.1f;
   max_profile[learned_bin1 - 1] = 0.03f;
   max_profile[learned_bin1 + 1] = 0.03f;
+  median_profile[learned_bin1] = 0.1f;
+  median_profile[learned_bin1 - 1] = 0.03f;
+  median_profile[learned_bin1 + 1] = 0.03f;
+  noise_spectrum[learned_bin1] = 0.1f;
+  noise_spectrum[learned_bin1 - 1] = 0.03f;
+  noise_spectrum[learned_bin1 + 1] = 0.03f;
 
   // Run 4: Initial run in learned mode
   tonal_reducer_run(reducer, noise_spectrum, max_profile, median_profile, alpha,
@@ -296,11 +302,25 @@ void test_caching_and_adaptive_support(void) {
   max_profile[learned_bin2] = 0.1f;
   max_profile[learned_bin2 - 1] = 0.03f;
   max_profile[learned_bin2 + 1] = 0.03f;
-
+  median_profile[learned_bin2] = 0.1f;
+  median_profile[learned_bin2 - 1] = 0.03f;
+  median_profile[learned_bin2 + 1] = 0.03f;
+  noise_spectrum[learned_bin2] = 0.1f;
+  noise_spectrum[learned_bin2 - 1] = 0.03f;
+  noise_spectrum[learned_bin2 + 1] = 0.03f;
+  
+  // Clear the old tone in noise_spectrum and median_profile to match
+  noise_spectrum[learned_bin1] = 0.01f;
+  noise_spectrum[learned_bin1 - 1] = 0.01f;
+  noise_spectrum[learned_bin1 + 1] = 0.01f;
+  median_profile[learned_bin1] = 0.01f;
+  median_profile[learned_bin1 - 1] = 0.01f;
+  median_profile[learned_bin1 + 1] = 0.01f;
+  
   // Change sum slightly to invalidate cache
-  max_profile[5] = 0.02f;
+  median_profile[5] = 0.02f;
 
-  // Run 5: Run again. Since max_profile changed, it should invalidate and
+  // Run 5: Run again. Since median_profile changed, it should invalidate and
   // recompute the mask.
   tonal_reducer_run(reducer, noise_spectrum, max_profile, median_profile, alpha,
                     reduction_gain);
@@ -309,7 +329,7 @@ void test_caching_and_adaptive_support(void) {
   if (mask[learned_bin1] > 0.0f) {
     fprintf(
         stderr,
-        "FAIL: Cache did not invalidate after max_profile changed in learned "
+        "FAIL: Cache did not invalidate after median_profile changed in learned "
         "mode; old tone still present at bin %d\n",
         learned_bin1);
     exit(1);
@@ -317,12 +337,12 @@ void test_caching_and_adaptive_support(void) {
   if (mask[learned_bin2] <= 0.0f) {
     fprintf(stderr,
             "FAIL: Cache invalidation did not detect new tone in learned mode "
-            "after max_profile changed (expected at bin %d)\n",
+            "after median_profile changed (expected at bin %d)\n",
             learned_bin2);
     exit(1);
   }
   printf(
-      "  Run 5: Learned mode cache successfully invalidated on max_profile "
+      "  Run 5: Learned mode cache successfully invalidated on median_profile "
       "change ✓\n");
 
   tonal_reducer_free(reducer);

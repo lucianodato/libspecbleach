@@ -24,10 +24,10 @@ libspecbleach - A spectral processing library
  * @param fft_size FFT size used for analysis
  * @param tonal_mask Output mask (0.0–1.0, higher = more tonal)
  */
-void detect_tonal_components(const float* profile, const float* max_profile,
-                             const float* median_profile, uint32_t size,
-                             uint32_t sample_rate, uint32_t fft_size,
-                             float* tonal_mask, uint32_t* deque_workspace);
+void detect_tonal_components(const float* profile, const float* median_profile,
+                             uint32_t size, uint32_t sample_rate,
+                             uint32_t fft_size, float* tonal_mask,
+                             uint32_t* deque_workspace);
 
 /**
  * Extract distinct peak frequencies in Hz from a tonal mask.

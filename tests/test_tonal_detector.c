@@ -50,25 +50,25 @@ void test_null_inputs(void) {
   memset(tonal_mask, 0, sizeof(tonal_mask));
 
   // NULL profile should not crash
-  detect_tonal_components(NULL, max_profile, median_profile, TEST_SPECTRUM_SIZE,
+  detect_tonal_components(NULL, median_profile, TEST_SPECTRUM_SIZE,
                           TEST_SAMPLE_RATE, TEST_FFT_SIZE, tonal_mask, NULL);
 
   // NULL tonal_mask should not crash
-  detect_tonal_components(profile, max_profile, median_profile,
+  detect_tonal_components(profile, median_profile,
                           TEST_SPECTRUM_SIZE, TEST_SAMPLE_RATE, TEST_FFT_SIZE,
                           NULL, NULL);
 
   // size < 5 should not crash
-  detect_tonal_components(profile, max_profile, median_profile, 3,
-                          TEST_SAMPLE_RATE, TEST_FFT_SIZE, tonal_mask, NULL);
+  detect_tonal_components(profile, median_profile, 3, TEST_SAMPLE_RATE, TEST_FFT_SIZE,
+                          tonal_mask, NULL);
 
   // Zero sample_rate should not crash
-  detect_tonal_components(profile, max_profile, median_profile,
+  detect_tonal_components(profile, median_profile,
                           TEST_SPECTRUM_SIZE, 0, TEST_FFT_SIZE, tonal_mask,
                           NULL);
 
   // Zero fft_size should not crash
-  detect_tonal_components(profile, max_profile, median_profile,
+  detect_tonal_components(profile, median_profile,
                           TEST_SPECTRUM_SIZE, TEST_SAMPLE_RATE, 0, tonal_mask,
                           NULL);
 
@@ -99,7 +99,7 @@ void test_low_frequency_hum_detection(void) {
   create_test_profile(median_profile, TEST_SPECTRUM_SIZE, noise_floor,
                       peak_bins, peak_amps, 2);
 
-  detect_tonal_components(profile, max_profile, median_profile,
+  detect_tonal_components(profile, median_profile,
                           TEST_SPECTRUM_SIZE, TEST_SAMPLE_RATE, TEST_FFT_SIZE,
                           tonal_mask, NULL);
 
@@ -128,7 +128,7 @@ void test_low_frequency_hum_detection(void) {
                       peak_amps, 1);
 
   memset(tonal_mask, 0, TEST_SPECTRUM_SIZE * sizeof(float));
-  detect_tonal_components(profile, max_profile, median_profile,
+  detect_tonal_components(profile, median_profile,
                           TEST_SPECTRUM_SIZE, TEST_SAMPLE_RATE, TEST_FFT_SIZE,
                           tonal_mask, NULL);
 
@@ -169,7 +169,7 @@ void test_high_frequency_detection(void) {
   create_test_profile(median_profile, TEST_SPECTRUM_SIZE, noise_floor,
                       peak_bins, peak_amps, 1);
 
-  detect_tonal_components(profile, max_profile, median_profile,
+  detect_tonal_components(profile, median_profile,
                           TEST_SPECTRUM_SIZE, TEST_SAMPLE_RATE, TEST_FFT_SIZE,
                           tonal_mask, NULL);
 
@@ -195,7 +195,7 @@ void test_adaptive_width(void) {
   float* median_profile = (float*)calloc(TEST_SPECTRUM_SIZE, sizeof(float));
   float* tonal_mask = (float*)calloc(TEST_SPECTRUM_SIZE, sizeof(float));
 
-  float noise_floor = 0.01f;
+  float noise_floor = 0.005f;
   // Initialize backgrounds
   for (uint32_t i = 0; i < TEST_SPECTRUM_SIZE; i++) {
     profile[i] = noise_floor;
@@ -231,7 +231,7 @@ void test_adaptive_width(void) {
   max_profile[center + 3] = 0.02f;
   median_profile[center + 3] = 0.02f;
 
-  detect_tonal_components(profile, max_profile, median_profile,
+  detect_tonal_components(profile, median_profile,
                           TEST_SPECTRUM_SIZE, TEST_SAMPLE_RATE, TEST_FFT_SIZE,
                           tonal_mask, NULL);
 
@@ -283,7 +283,7 @@ void test_flat_noise_no_false_detection(void) {
     median_profile[k] = 0.01f;
   }
 
-  detect_tonal_components(profile, max_profile, median_profile,
+  detect_tonal_components(profile, median_profile,
                           TEST_SPECTRUM_SIZE, TEST_SAMPLE_RATE, TEST_FFT_SIZE,
                           tonal_mask, NULL);
 
@@ -336,7 +336,7 @@ void test_off_center_peak_interpolation(void) {
   median_profile[100] = 0.08f;
   median_profile[101] = 0.06f;
 
-  detect_tonal_components(profile, max_profile, median_profile,
+  detect_tonal_components(profile, median_profile,
                           TEST_SPECTRUM_SIZE, TEST_SAMPLE_RATE, TEST_FFT_SIZE,
                           tonal_mask, NULL);
 
@@ -385,7 +385,7 @@ void test_adaptive_mode_detection(void) {
   profile[bin - 1] = 0.03f;
   profile[bin + 1] = 0.03f;
 
-  detect_tonal_components(profile, max_profile, median_profile,
+  detect_tonal_components(profile, median_profile,
                           TEST_SPECTRUM_SIZE, TEST_SAMPLE_RATE, TEST_FFT_SIZE,
                           tonal_mask, NULL);
 
