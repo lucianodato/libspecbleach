@@ -194,8 +194,12 @@ uint32_t specbleach_get_tonal_peaks_for_profile(SpectralBleachHandle instance,
   }
   uint32_t fft_size = get_stft_fft_size(self->core->stft_processor);
   
+  float* median_profile =
+      sb_processor_core_get_noise_profile_for_mode(self->core, MEDIAN);
+  const float* eval_profile = median_profile ? median_profile : profile;
+  
   return tonal_detector_get_peaks_from_profile(
-      profile, profile_size, self->core->sample_rate, fft_size, peak_freqs_hz,
+      eval_profile, profile_size, self->core->sample_rate, fft_size, peak_freqs_hz,
       max_peaks);
 }
 
