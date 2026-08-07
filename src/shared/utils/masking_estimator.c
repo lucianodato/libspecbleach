@@ -27,12 +27,16 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 // Note: Psychoacoustic constants are now imported from configurations.h
 
-/**
- * compute_spreading_gain: Level-dependent spectral spreading.
- * Uses a modified Schroeder spreading function where the upward slope
- * varies with level reflecting the broadening of masking at high intensities.
- */
-static float compute_spreading_gain(float dz, float level_db);
+typedef struct SpreadingParams {
+  float s_up;
+  float s_total;
+  float s_offset;
+  float norm_factor;
+  float y_shift;
+} SpreadingParams;
+
+static SpreadingParams compute_spreading_params(float level_db);
+static float evaluate_spreading_gain(float dz, const SpreadingParams* params);
 
 /**
  * compute_tonality_factor: SFM-based NMT/TMN classification.
@@ -71,6 +75,7 @@ struct MaskingEstimator {
   float* bark_levels_buf;
   float* spreaded_future_buf;
   float* spreaded_current_buf;
+  SpreadingParams* spreading_params_buf;
 };
 
 MaskingEstimator* masking_estimation_initialize(
@@ -124,6 +129,8 @@ MaskingEstimator* masking_estimation_initialize(
       (float*)calloc(self->number_critical_bands, sizeof(float));
   self->spreaded_current_buf =
       (float*)calloc(self->number_critical_bands, sizeof(float));
+  self->spreading_params_buf = (SpreadingParams*)calloc(
+      self->number_critical_bands, sizeof(SpreadingParams));
 
   self->reference_spectrum = absolute_hearing_thresholds_initialize(
       self->sample_rate, self->fft_size, spectrum_type);
@@ -138,7 +145,8 @@ MaskingEstimator* masking_estimation_initialize(
       !self->future_thresholds || !self->forward_decays ||
       !self->absolute_threshold_cb || !self->future_cb_spectrum_buf ||
       !self->bark_levels_buf || !self->spreaded_future_buf ||
-      !self->spreaded_current_buf || !self->reference_spectrum) {
+      !self->spreaded_current_buf || !self->spreading_params_buf ||
+      !self->reference_spectrum) {
     masking_estimation_free(self);
     return NULL;
   }
@@ -180,6 +188,7 @@ void masking_estimation_free(MaskingEstimator* self) {
   free(self->bark_levels_buf);
   free(self->spreaded_future_buf);
   free(self->spreaded_current_buf);
+  free(self->spreading_params_buf);
 
   free(self);
 }
@@ -206,13 +215,16 @@ bool compute_masking_thresholds(MaskingEstimator* self, const float* spectrum,
       self->bark_levels_buf[j] =
           (10.F * log10f(self->future_cb_spectrum_buf[j] + SPECTRAL_EPSILON)) +
           DB_FS_TO_SPL_REF;
+      self->spreading_params_buf[j] =
+          compute_spreading_params(self->bark_levels_buf[j]);
     }
 
     for (uint32_t i = 0U; i < self->number_critical_bands; i++) {
       float spreaded_p = 0.F;
       for (uint32_t j = 0U; j < self->number_critical_bands; j++) {
         const float dz = (float)i - (float)j;
-        const float gain = compute_spreading_gain(dz, self->bark_levels_buf[j]);
+        const float gain =
+            evaluate_spreading_gain(dz, &self->spreading_params_buf[j]);
         spreaded_p += powf(self->future_cb_spectrum_buf[j] * gain, spectral_p);
       }
       self->spreaded_future_buf[i] = powf(spreaded_p, spectral_inv_p);
@@ -237,13 +249,16 @@ bool compute_masking_thresholds(MaskingEstimator* self, const float* spectrum,
     self->bark_levels_buf[j] =
         (10.F * log10f(self->critical_bands_spectrum[j] + SPECTRAL_EPSILON)) +
         DB_FS_TO_SPL_REF;
+    self->spreading_params_buf[j] =
+        compute_spreading_params(self->bark_levels_buf[j]);
   }
 
   for (uint32_t i = 0U; i < self->number_critical_bands; i++) {
     float spreaded_p = 0.F;
     for (uint32_t j = 0U; j < self->number_critical_bands; j++) {
       const float dz = (float)i - (float)j;
-      const float gain = compute_spreading_gain(dz, self->bark_levels_buf[j]);
+      const float gain =
+          evaluate_spreading_gain(dz, &self->spreading_params_buf[j]);
       spreaded_p += powf(self->critical_bands_spectrum[j] * gain, spectral_p);
     }
     self->spreaded_current_buf[i] = powf(spreaded_p, spectral_inv_p);
@@ -301,26 +316,35 @@ bool compute_masking_thresholds(MaskingEstimator* self, const float* spectrum,
   return true;
 }
 
-static float compute_spreading_gain(float dz, float level_db) {
+static SpreadingParams compute_spreading_params(float level_db) {
   const float s_up =
       fminf(fmaxf(S_MAX_UPWARD - ((level_db - S_LEVEL_REF_DB) * S_SLOPE_FACTOR),
                   S_MIN_UPWARD),
             S_MAX_UPWARD);
-  const float s_total = (S_DOWNWARD + s_up) / 2.F;
-  const float s_offset = (S_DOWNWARD - s_up) / 2.F;
+  const float s_total = (S_DOWNWARD + s_up) * 0.5F;
+  const float s_offset = (S_DOWNWARD - s_up) * 0.5F;
 
-  // Dynamically calculate the peak offset and normalization factor
-  // Peak occurs at y = s_offset / sqrt(s_total^2 - s_offset^2)
-  // Normalization factor is sqrt(s_total^2 - s_offset^2)
-  const float denominator = sqrtf((s_total * s_total) - (s_offset * s_offset));
-  const float y_shift = s_offset / denominator;
-  const float norm_factor = denominator;
+  // norm_factor = sqrtf(s_total^2 - s_offset^2) = sqrtf(S_DOWNWARD * s_up)
+  const float norm_factor = sqrtf(S_DOWNWARD * s_up);
+  const float inv_norm_factor = 1.0F / norm_factor;
+  const float y_shift = s_offset * inv_norm_factor;
 
-  const float y = dz + y_shift;
-  const float sf_db =
-      norm_factor + (s_offset * y) - (s_total * sqrtf(1.F + (y * y)));
+  SpreadingParams params = {
+      .s_up = s_up,
+      .s_total = s_total,
+      .s_offset = s_offset,
+      .norm_factor = norm_factor,
+      .y_shift = y_shift,
+  };
+  return params;
+}
 
-  return powf(10.F, sf_db / 10.F);
+static float evaluate_spreading_gain(float dz, const SpreadingParams* params) {
+  const float y = dz + params->y_shift;
+  const float sf_db = params->norm_factor + (params->s_offset * y) -
+                      (params->s_total * sqrtf(1.0F + (y * y)));
+
+  return powf(10.0F, sf_db * 0.1F);
 }
 
 static float compute_tonality_factor(MaskingEstimator* self,
