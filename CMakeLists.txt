@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.31)
+cmake_minimum_required(VERSION 3.22)
 project(libspecbleach VERSION 0.3.1 LANGUAGES C)
 
 include(GNUInstallDirs)
@@ -55,7 +55,11 @@ if(APPLE)
 endif()
 
 find_package(OpenMP QUIET)
-if(NOT OpenMP_C_FOUND)
+if(MSVC AND OpenMP_C_FOUND)
+    set_target_properties(OpenMP::OpenMP_C PROPERTIES
+        INTERFACE_COMPILE_OPTIONS "/openmp:llvm"
+    )
+elseif(NOT OpenMP_C_FOUND)
     message(STATUS "OpenMP not found. Searching Homebrew paths...")
     find_path(OMP_INCLUDE_DIR omp.h HINTS /opt/homebrew/opt/libomp/include /usr/local/opt/libomp/include)
     find_library(OMP_LIB NAMES omp gomp HINTS /opt/homebrew/opt/libomp/lib /usr/local/opt/libomp/lib)
