@@ -38,7 +38,6 @@ _Static_assert(sizeof(double) >= 8, "double must be at least 64 bits");
 
 SB_WARN_UNUSED float sanitize_denormal(float value);
 SB_WARN_UNUSED float from_db_to_coefficient(float value_db);
-SB_WARN_UNUSED float remap_percentage_log_like_unity(float value);
 SB_WARN_UNUSED int get_next_divisible_two(int number);
 SB_WARN_UNUSED int get_next_power_two(int number);
 

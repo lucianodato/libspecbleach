@@ -138,23 +138,6 @@ void test_get_next_power_two(void) {
   printf("✓ get_next_power_two tests passed\n");
 }
 
-void test_remap_percentage_log_like_unity(void) {
-  printf("Testing remap_percentage_log_like_unity...\n");
-
-  // Test edge cases
-  TEST_FLOAT_CLOSE(remap_percentage_log_like_unity(0.0f), 0.0f, 1e-6f);
-  TEST_FLOAT_CLOSE(remap_percentage_log_like_unity(1.0f), 0.9502f, 0.001f);
-
-  // Test monotonicity - function should be increasing
-  float val1 = remap_percentage_log_like_unity(0.1f);
-  float val2 = remap_percentage_log_like_unity(0.5f);
-  float val3 = remap_percentage_log_like_unity(0.9f);
-  TEST_ASSERT(val1 < val2 && val2 < val3,
-              "Function should be monotonically increasing");
-
-  printf("✓ remap_percentage_log_like_unity tests passed\n");
-}
-
 int main(void) {
   printf("Running utility function tests...\n\n");
 
@@ -162,7 +145,6 @@ int main(void) {
   test_from_db_to_coefficient();
   test_get_next_divisible_two();
   test_get_next_power_two();
-  test_remap_percentage_log_like_unity();
 
   test_spectral_features();
 
