@@ -419,19 +419,28 @@ SB_SIMD_INLINE sb_vec8_t sb_sqrt8(sb_vec8_t a) {
   r.v2 = vsqrtq_f32(a.v2);
   return r;
 #else
-  float ta1[4];
-  float ta2[4];
-  float tr1[4];
-  float tr2[4];
-  vst1q_f32(ta1, a.v1);
-  vst1q_f32(ta2, a.v2);
-  for (int i = 0; i < 4; i++) {
-    tr1[i] = sqrtf(ta1[i]);
-    tr2[i] = sqrtf(ta2[i]);
-  }
   sb_vec8_t r;
-  r.v1 = vld1q_f32(tr1);
-  r.v2 = vld1q_f32(tr2);
+  float32x4_t zero = vdupq_n_f32(0.0f);
+  float32x4_t nan_val = vdupq_n_f32(0.0f / 0.0f);
+
+  // Process a.v1
+  float32x4_t e1 = vrsqrteq_f32(a.v1);
+  e1 = vmulq_f32(e1, vrsqrtsq_f32(vmulq_f32(a.v1, e1), e1));
+  e1 = vmulq_f32(e1, vrsqrtsq_f32(vmulq_f32(a.v1, e1), e1));
+  float32x4_t s1 = vmulq_f32(a.v1, e1);
+  s1 = vbslq_f32(vceqq_f32(a.v1, zero), zero, s1);
+  r.v1 = vbslq_f32(vcltq_f32(a.v1, zero), nan_val,
+                   vbslq_f32(vcgtq_f32(a.v1, zero), s1, a.v1));
+
+  // Process a.v2
+  float32x4_t e2 = vrsqrteq_f32(a.v2);
+  e2 = vmulq_f32(e2, vrsqrtsq_f32(vmulq_f32(a.v2, e2), e2));
+  e2 = vmulq_f32(e2, vrsqrtsq_f32(vmulq_f32(a.v2, e2), e2));
+  float32x4_t s2 = vmulq_f32(a.v2, e2);
+  s2 = vbslq_f32(vceqq_f32(a.v2, zero), zero, s2);
+  r.v2 = vbslq_f32(vcltq_f32(a.v2, zero), nan_val,
+                   vbslq_f32(vcgtq_f32(a.v2, zero), s2, a.v2));
+
   return r;
 #endif
 #else

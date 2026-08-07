@@ -318,12 +318,16 @@ void test_process_loop(void) {
 void test_2d_smoothing_factor_responsiveness(void) {
   printf("Testing 2D smoothing factor responsiveness (0%% vs 100%%)...\n");
 
-  SpectralBleachHandle h = specbleach_2d_initialize(SAMPLE_RATE, FRAME_SIZE);
-  TEST_ASSERT(h != NULL, "Initialization should succeed");
+  SpectralBleachHandle h0 = specbleach_2d_initialize(SAMPLE_RATE, FRAME_SIZE);
+  TEST_ASSERT(h0 != NULL, "Initialization of h0 should succeed");
+
+  SpectralBleachHandle h100 = specbleach_2d_initialize(SAMPLE_RATE, FRAME_SIZE);
+  TEST_ASSERT(h100 != NULL, "Initialization of h100 should succeed");
 
   // Create noisy input signal
   const int n_samples = 44100;
   float* noise_input = calloc(n_samples, sizeof(float));
+  float* temp_out = calloc(n_samples, sizeof(float));
   float* out_smooth_0 = calloc(n_samples, sizeof(float));
   float* out_smooth_100 = calloc(n_samples, sizeof(float));
 
@@ -331,26 +335,50 @@ void test_2d_smoothing_factor_responsiveness(void) {
     noise_input[i] = 0.1f * ((float)(i % 100) / 100.0f - 0.5f);
   }
 
-  // 1. Learn noise profile
-  SpectralBleach2DDenoiserParameters params = {
+  // 1. Learn noise profile for both handles
+  SpectralBleach2DDenoiserParameters params_learn = {
       .learn_noise = 1,
       .reduction_amount = 20.0f,
       .smoothing_factor = 0.0f,
   };
-  specbleach_2d_load_parameters(h, params);
-  specbleach_2d_process(h, n_samples, noise_input, out_smooth_0);
 
-  // 2. Process with 0% smoothing
-  params.learn_noise = 0;
-  params.reduction_amount = 20.0f;
-  params.smoothing_factor = 0.0f;
-  specbleach_2d_load_parameters(h, params);
-  specbleach_2d_process(h, n_samples, noise_input, out_smooth_0);
+  TEST_ASSERT(specbleach_2d_load_parameters(h0, params_learn),
+              "Loading learn params for h0 should succeed");
+  TEST_ASSERT(specbleach_2d_process(h0, n_samples, noise_input, temp_out),
+              "Processing learn mode for h0 should succeed");
+  TEST_ASSERT(specbleach_2d_noise_profile_available_for_mode(h0, ROLLING_MEAN),
+              "Profile for h0 should be available after learning");
 
-  // 3. Process with 100% smoothing
-  params.smoothing_factor = 100.0f;
-  specbleach_2d_load_parameters(h, params);
-  specbleach_2d_process(h, n_samples, noise_input, out_smooth_100);
+  TEST_ASSERT(specbleach_2d_load_parameters(h100, params_learn),
+              "Loading learn params for h100 should succeed");
+  TEST_ASSERT(specbleach_2d_process(h100, n_samples, noise_input, temp_out),
+              "Processing learn mode for h100 should succeed");
+  TEST_ASSERT(
+      specbleach_2d_noise_profile_available_for_mode(h100, ROLLING_MEAN),
+      "Profile for h100 should be available after learning");
+
+  // 2. Process with 0% smoothing on h0
+  SpectralBleach2DDenoiserParameters params_0 = {
+      .learn_noise = 0,
+      .reduction_amount = 20.0f,
+      .smoothing_factor = 0.0f,
+  };
+  TEST_ASSERT(specbleach_2d_load_parameters(h0, params_0),
+              "Loading 0% smoothing params for h0 should succeed");
+  TEST_ASSERT(specbleach_2d_process(h0, n_samples, noise_input, out_smooth_0),
+              "Processing 0% smoothing for h0 should succeed");
+
+  // 3. Process with 100% smoothing on h100
+  SpectralBleach2DDenoiserParameters params_100 = {
+      .learn_noise = 0,
+      .reduction_amount = 20.0f,
+      .smoothing_factor = 100.0f,
+  };
+  TEST_ASSERT(specbleach_2d_load_parameters(h100, params_100),
+              "Loading 100% smoothing params for h100 should succeed");
+  TEST_ASSERT(
+      specbleach_2d_process(h100, n_samples, noise_input, out_smooth_100),
+      "Processing 100% smoothing for h100 should succeed");
 
   // Compare output buffers: 0% vs 100% smoothing should produce different
   // results
@@ -362,9 +390,11 @@ void test_2d_smoothing_factor_responsiveness(void) {
               "0% and 100% smoothing factor should produce different output");
 
   free(noise_input);
+  free(temp_out);
   free(out_smooth_0);
   free(out_smooth_100);
-  specbleach_2d_free(h);
+  specbleach_2d_free(h0);
+  specbleach_2d_free(h100);
   printf("✓ 2D smoothing factor responsiveness tests passed\n");
 }
 

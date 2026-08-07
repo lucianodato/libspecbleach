@@ -55,6 +55,8 @@ NlmFilter* nlm_filter_initialize(NlmFilterConfig config) {
   }
   if (self->config.h_parameter <= 0.0F) {
     self->config.h_parameter = NLM_DEFAULT_H_PARAMETER;
+  } else if (self->config.h_parameter > NLM_MAX_H_PARAMETER) {
+    self->config.h_parameter = NLM_MAX_H_PARAMETER;
   }
 
   if (self->config.time_buffer_size == 0) {

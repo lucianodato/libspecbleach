@@ -49,10 +49,10 @@ typedef struct SpectralBleach2DDenoiserParameters {
   float reduction_amount;
 
   /**
-   * Percentage of 2D time-frequency gain mask smoothing (0 to 100 percent).
-   * Controls 2D artifact smoothing applied to suppression gain masks across
-   * time and frequency. Higher values = smoother gain transitions and stronger
-   * musical noise elimination.
+   * Percentage of 2D smoothing (0 to 100 percent).
+   * Controls 2D time-frequency gain-mask artifact smoothing across time and
+   * frequency. Also controls the NLM h parameter: non-zero values activate and
+   * scale NLM patch similarity smoothing up to NLM_MAX_H_PARAMETER.
    */
   float smoothing_factor;
 
