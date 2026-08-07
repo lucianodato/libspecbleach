@@ -94,8 +94,10 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 // Veto Parameters
 #define MASKING_VETO_SMOOTHING 0.5F  // Stabilization alpha for clean signal
 #define MASKING_VETO_NMR_RANGE 20.0F // NMR range for protection mapping (dB)
+#define MASKING_VETO_NOISE_GATE                                                \
+  1.5F // Noise floor multiplier for clean signal estimation (gates noise variance)
 #define MASKING_VETO_SNR_THRESHOLD                                             \
-  1.0F // 0dB SNR local bin-level threshold for full protection
+  3.0F // ~5dB SNR local bin-level threshold for full protection
 
 // Gain Estimators
 #define GSS_EXPONENT                                                           \

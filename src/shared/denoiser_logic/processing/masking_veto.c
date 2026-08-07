@@ -133,7 +133,7 @@ void masking_veto_apply(MaskingVeto* self, const float* smoothed_spectrum,
   // 1. Estimate clean signal magnitude from SMOOTHED signal
   for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
     const float current_clean =
-        fmaxf(smoothed_spectrum[k] - noise_spectrum[k], 0.0F);
+        fmaxf(smoothed_spectrum[k] - (MASKING_VETO_NOISE_GATE * noise_spectrum[k]), 0.0F);
 
     // Stabilize the clean signal estimation (prevents gargle in spreading
     // skirts)
@@ -148,7 +148,7 @@ void masking_veto_apply(MaskingVeto* self, const float* smoothed_spectrum,
   if (future_spectrum) {
     for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
       self->future_clean_estimation_buf[k] =
-          fmaxf(future_spectrum[k] - noise_spectrum[k], 0.0F);
+          fmaxf(future_spectrum[k] - (MASKING_VETO_NOISE_GATE * noise_spectrum[k]), 0.0F);
     }
     future_clean_estimation = self->future_clean_estimation_buf;
   }
@@ -255,10 +255,10 @@ void masking_veto_apply(MaskingVeto* self, const float* smoothed_spectrum,
     const float bin_snr_scale =
         fminf(bin_snr / MASKING_VETO_SNR_THRESHOLD, 1.0F);
 
-    // Lerp alpha toward 1.0 (no extra subtraction) based on protection and bin
-    // SNR. At full protection (depth=1.0, protection=1.0): alpha -> 1.0 At zero
-    // protection: alpha unchanged
+    // Scale alpha down toward 0.0 (unity gain) based on protection and bin SNR.
+    // At full protection (depth=1.0, protection=1.0): alpha -> 0.0 (full energy preservation)
+    // At zero protection (protection=0.0): alpha is unchanged (full noise suppression)
     const float veto_amount = bin_protection * bin_snr_scale * depth;
-    alpha[k] = alpha[k] + ((1.0F - alpha[k]) * veto_amount);
+    alpha[k] = alpha[k] * (1.0F - veto_amount);
   }
 }
