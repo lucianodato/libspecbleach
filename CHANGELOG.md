@@ -5,16 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.1] - 2026-08-02
+## [0.3.1] - 2026-08-07
 
 ### Added
 - **`pkg-config` Support**: Added `specbleach.pc.in` template to generate and install `specbleach.pc` into system pkg-config directories for downstream dependency lookup.
 - **System Installation Targets**: Added standard CMake `install()` targets for header files (`${CMAKE_INSTALL_INCLUDEDIR}`), shared/static libraries (`${CMAKE_INSTALL_LIBDIR}`), and CMake export targets.
 - **Configurable FFTW3 Dependency**: Added `USE_SYSTEM_FFTW` option (default `ON`) allowing downstream builders to link system-installed `libfftw3f` or automatically fetch and compile static FFTW3 via `FetchContent`.
+- **Autoresearch Framework**: Integrated automated optimization & research loop scripts (`autoresearch/`).
+
+### Improved & Refactored
+- **NLM 2D Denoising**: Resolved index bounds and array access inconsistencies in the Non-Local Means time-frequency smoothing algorithm.
+- **Masking Veto**: Refined psychoacoustic masking veto model for improved transient preservation and noise estimation thresholding.
+- **Tonal Masking & Detector**: Enhanced tonal component calculation and peak detection accuracy.
+- **Parameter Mappings**: Simplified parameter scaling by replacing `remap_percentage_log_like_unity` with linear scaling for smoothing factors.
+- **Spectral Whitening & OpenMP**: Optimized spectral whitening inner loops and updated OpenMP target detection.
 
 ### Changed
 - **Default Library Type**: Changed default `BUILD_SHARED_LIBS` setting to `ON` to conform with Linux distribution packaging guidelines.
-- **Standardized Install Paths**: Integrated `GNUInstallDirs` to ensure installation paths adhere to target OS and distribution filesystem standards (e.g., Debian/Arch/Fedora).
+- **Standardized Install Paths**: Integrated `GNUInstallDirs` to ensure installation paths adhere to target OS and distribution filesystem standards.
 - **Cleaned Dependency Resolution**: Removed OS-specific hardcoded search paths (`/opt/homebrew`, `/usr/local`) from OpenMP and `libsndfile` detection routines to prevent interference with isolated sandbox builds.
 
 ## [0.3.0] - 2026-07-31
