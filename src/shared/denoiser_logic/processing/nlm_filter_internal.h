@@ -206,10 +206,11 @@ static inline SB_UNUSED bool nlm_filter_process_core(NlmFilter* filter,
   float* weight_sum = filter->weight_accum;
   memset(weight_sum, 0, spectrum_size * sizeof(float));
 
+  uint32_t block_start = 0;
 #if SB_HAS_OPENMP
 #pragma omp parallel for schedule(dynamic) num_threads(filter->num_threads)
 #endif
-  for (uint32_t block_start = 0; block_start < spectrum_size;
+  for (block_start = 0; block_start < spectrum_size;
        block_start += paste_size) {
 
     uint32_t block_center = block_start + (paste_size / 2);

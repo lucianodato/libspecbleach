@@ -40,7 +40,10 @@ cd build && ctest -R test_audio_file_regression --output-on-failure
 
 When editing any source file (`.c` or `.h`) in `libspecbleach` or `noise-repellent`, follow these standards:
 
-### 1. Clean Unused Includes
+### 1. Portable OpenMP Loop Variable Declarations
+- **Loop Counters Outside For Statements**: Always declare OpenMP loop counter variables **before** the `#pragma omp parallel for` directive (e.g., `uint32_t i = 0; #pragma omp parallel for ... for (i = 0; ...)`). Never declare loop variables directly inside the `for` statement (`for (uint32_t i = 0; ...)`). MSVC's OpenMP parser enforces C89/C90 variable scoping rules and will fail with `error C3015: initialization in OpenMP 'for' statement has improper form`.
+
+### 2. Clean Unused Includes
 - Review the `#include` block at the top of the file.
 - Verify if any symbol (function, struct, define, typedef) from that header is actually used.
 - **If unused, REMOVE the `#include` statement.**
