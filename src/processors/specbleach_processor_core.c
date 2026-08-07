@@ -49,7 +49,8 @@ Denoiser2DParameters sb_denoiser_2d_params_sanitize(
       .residual_listen = parameters.residual_listen,
       .reduction_amount =
           from_db_to_coefficient(parameters.reduction_amount * -1.F),
-      .smoothing_factor = parameters.smoothing_factor,
+      .smoothing_factor =
+          remap_percentage_log_like_unity(parameters.smoothing_factor / 100.F),
       .whitening_factor = parameters.whitening_factor / 100.F,
       .adaptive_noise = parameters.adaptive_noise,
       .noise_estimation_method = parameters.noise_estimation_method,

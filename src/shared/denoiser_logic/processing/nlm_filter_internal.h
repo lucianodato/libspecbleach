@@ -195,6 +195,12 @@ static inline SB_UNUSED bool nlm_filter_process_core(NlmFilter* filter,
 
   float* target_frame = cached_get_frame(filter, 0);
 
+  if (filter->config.h_parameter <= 0.0F || filter->h_squared <= 0.0F) {
+    memcpy(smoothed_snr, target_frame, spectrum_size * sizeof(float));
+    sb_simd_restore_state(old_simd_state);
+    return true;
+  }
+
   memset(smoothed_snr, 0, spectrum_size * sizeof(float));
 
   float* weight_sum = filter->weight_accum;
@@ -226,24 +232,6 @@ static inline SB_UNUSED bool nlm_filter_process_core(NlmFilter* filter,
 
     float current_inv_h2 = filter->inv_h_squared;
     float current_dist_threshold = filter->distance_threshold_actual;
-
-    if (spectrum_size > 1) {
-      float normalized_freq = (float)block_center / (float)(spectrum_size - 1);
-      float freq_scale = 1.0F + NLM_FREQ_DEPENDENT_SMOOTHING_SCALE *
-                                    normalized_freq * normalized_freq;
-      float base_h = filter->config.h_parameter > 0.0F
-                         ? filter->config.h_parameter
-                         : NLM_DEFAULT_H_PARAMETER;
-      float h_val = base_h * freq_scale;
-      float h_squared = h_val * h_val;
-      current_inv_h2 = 1.0F / h_squared;
-      if (filter->config.distance_threshold <= 0.0F) {
-        current_dist_threshold = NLM_DISTANCE_THRESHOLD_MULTIPLIER * h_squared;
-      } else {
-        current_dist_threshold =
-            filter->config.distance_threshold * freq_scale * freq_scale;
-      }
-    }
 
     sb_vec8_t target_vecs[8];
     const uint32_t patch_size = filter->config.patch_size;

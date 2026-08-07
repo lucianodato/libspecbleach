@@ -33,7 +33,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "shared/denoiser_logic/processing/tonal_reducer.h"
 #include "shared/utils/spectral_circular_buffer.h"
 #include "shared/utils/spectral_utils.h"
-#include <float.h>
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
@@ -334,9 +333,13 @@ bool load_2d_reduction_parameters(SpectralProcessorHandle instance,
   self->parameters = parameters;
   self->aggressiveness = parameters.aggressiveness;
 
-  // Update NLM h parameter based on smoothing factor
-  if (self->nlm_filter && parameters.smoothing_factor > 0.0F) {
-    nlm_filter_set_h_parameter(self->nlm_filter, parameters.smoothing_factor);
+  // Update NLM h parameter based on smoothing factor (scales h up to 5.0F for
+  // strong NLM patch smoothing)
+  if (self->nlm_filter) {
+    nlm_filter_set_h_parameter(self->nlm_filter,
+                               (parameters.smoothing_factor > 0.0F)
+                                   ? (0.5F + parameters.smoothing_factor * 4.5F)
+                                   : 0.0F);
   }
 
   return true;

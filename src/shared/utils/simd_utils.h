@@ -21,6 +21,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #ifndef SHARED_UTILS_SIMD_UTILS_H
 #define SHARED_UTILS_SIMD_UTILS_H
 
+#include <math.h>
 #include <stdint.h>
 #include <string.h>
 
@@ -399,6 +400,53 @@ SB_SIMD_INLINE sb_vec8_t sb_div8(sb_vec8_t a, sb_vec8_t b) {
   sb_vec8_t r;
   for (int i = 0; i < 8; i++)
     r.v[i] = a.v[i] / b.v[i];
+  return r;
+#endif
+}
+
+SB_SIMD_INLINE sb_vec8_t sb_sqrt8(sb_vec8_t a) {
+#ifdef __AVX__
+  return _mm256_sqrt_ps(a);
+#elif defined(__SSE__)
+  sb_vec8_t r;
+  r.v1 = _mm_sqrt_ps(a.v1);
+  r.v2 = _mm_sqrt_ps(a.v2);
+  return r;
+#elif defined(__ARM_NEON)
+#ifdef __aarch64__
+  sb_vec8_t r;
+  r.v1 = vsqrtq_f32(a.v1);
+  r.v2 = vsqrtq_f32(a.v2);
+  return r;
+#else
+  sb_vec8_t r;
+  float32x4_t zero = vdupq_n_f32(0.0f);
+  float32x4_t nan_val = vdupq_n_f32(0.0f / 0.0f);
+
+  // Process a.v1
+  float32x4_t e1 = vrsqrteq_f32(a.v1);
+  e1 = vmulq_f32(e1, vrsqrtsq_f32(vmulq_f32(a.v1, e1), e1));
+  e1 = vmulq_f32(e1, vrsqrtsq_f32(vmulq_f32(a.v1, e1), e1));
+  float32x4_t s1 = vmulq_f32(a.v1, e1);
+  s1 = vbslq_f32(vceqq_f32(a.v1, zero), zero, s1);
+  r.v1 = vbslq_f32(vcltq_f32(a.v1, zero), nan_val,
+                   vbslq_f32(vcgtq_f32(a.v1, zero), s1, a.v1));
+
+  // Process a.v2
+  float32x4_t e2 = vrsqrteq_f32(a.v2);
+  e2 = vmulq_f32(e2, vrsqrtsq_f32(vmulq_f32(a.v2, e2), e2));
+  e2 = vmulq_f32(e2, vrsqrtsq_f32(vmulq_f32(a.v2, e2), e2));
+  float32x4_t s2 = vmulq_f32(a.v2, e2);
+  s2 = vbslq_f32(vceqq_f32(a.v2, zero), zero, s2);
+  r.v2 = vbslq_f32(vcltq_f32(a.v2, zero), nan_val,
+                   vbslq_f32(vcgtq_f32(a.v2, zero), s2, a.v2));
+
+  return r;
+#endif
+#else
+  sb_vec8_t r;
+  for (int i = 0; i < 8; i++)
+    r.v[i] = sqrtf(a.v[i]);
   return r;
 #endif
 }

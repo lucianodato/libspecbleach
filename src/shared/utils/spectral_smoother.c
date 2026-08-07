@@ -163,11 +163,9 @@ static void spectrum_transient_aware_time_smoothing(SpectralSmoother* self,
     const float effective_smoothing = smoothing * (1.0F - weight);
 
     for (uint32_t k = indexes.start_position; k < indexes.end_position; k++) {
-      if (self->smoothed_spectrum[k] > self->smoothed_spectrum_previous[k]) {
-        self->smoothed_spectrum[k] =
-            (effective_smoothing * self->smoothed_spectrum_previous[k]) +
-            ((1.F - effective_smoothing) * self->smoothed_spectrum[k]);
-      }
+      self->smoothed_spectrum[k] =
+          (effective_smoothing * self->smoothed_spectrum_previous[k]) +
+          ((1.F - effective_smoothing) * self->smoothed_spectrum[k]);
     }
   }
 }
@@ -175,11 +173,9 @@ static void spectrum_transient_aware_time_smoothing(SpectralSmoother* self,
 static void spectrum_time_smoothing(SpectralSmoother* self,
                                     const float smoothing) {
   for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
-    if (self->smoothed_spectrum[k] > self->smoothed_spectrum_previous[k]) {
-      self->smoothed_spectrum[k] =
-          (smoothing * self->smoothed_spectrum_previous[k]) +
-          ((1.F - smoothing) * self->smoothed_spectrum[k]);
-    }
+    self->smoothed_spectrum[k] =
+        (smoothing * self->smoothed_spectrum_previous[k]) +
+        ((1.F - smoothing) * self->smoothed_spectrum[k]);
   }
 }
 
