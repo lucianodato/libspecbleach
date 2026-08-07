@@ -308,7 +308,7 @@ void test_caching_and_adaptive_support(void) {
   noise_spectrum[learned_bin2] = 0.1f;
   noise_spectrum[learned_bin2 - 1] = 0.03f;
   noise_spectrum[learned_bin2 + 1] = 0.03f;
-  
+
   // Clear the old tone in noise_spectrum and median_profile to match
   noise_spectrum[learned_bin1] = 0.01f;
   noise_spectrum[learned_bin1 - 1] = 0.01f;
@@ -316,7 +316,7 @@ void test_caching_and_adaptive_support(void) {
   median_profile[learned_bin1] = 0.01f;
   median_profile[learned_bin1 - 1] = 0.01f;
   median_profile[learned_bin1 + 1] = 0.01f;
-  
+
   // Change sum slightly to invalidate cache
   median_profile[5] = 0.02f;
 
@@ -327,11 +327,11 @@ void test_caching_and_adaptive_support(void) {
   mask = tonal_reducer_get_mask(reducer);
 
   if (mask[learned_bin1] > 0.0f) {
-    fprintf(
-        stderr,
-        "FAIL: Cache did not invalidate after median_profile changed in learned "
-        "mode; old tone still present at bin %d\n",
-        learned_bin1);
+    fprintf(stderr,
+            "FAIL: Cache did not invalidate after median_profile changed in "
+            "learned "
+            "mode; old tone still present at bin %d\n",
+            learned_bin1);
     exit(1);
   }
   if (mask[learned_bin2] <= 0.0f) {

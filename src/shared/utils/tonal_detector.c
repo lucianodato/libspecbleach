@@ -36,10 +36,10 @@ static void insertion_sort(float* arr, int n) {
   }
 }
 
-void detect_tonal_components(const float* profile,
-                             const float* median_profile, uint32_t size,
-                             uint32_t sample_rate, uint32_t fft_size,
-                             float* tonal_mask, uint32_t* deque_workspace) {
+void detect_tonal_components(const float* profile, const float* median_profile,
+                             uint32_t size, uint32_t sample_rate,
+                             uint32_t fft_size, float* tonal_mask,
+                             uint32_t* deque_workspace) {
   if (!profile || !tonal_mask || size < 5 || !median_profile ||
       sample_rate == 0 || fft_size == 0 ||
       (!deque_workspace && size > TONAL_DETECTOR_DEQUE_CAPACITY)) {
@@ -155,7 +155,8 @@ void detect_tonal_components(const float* profile,
       continue;
     }
 
-    // Reject candidates that fall significantly below the global broadband peak energy
+    // Reject candidates that fall significantly below the global broadband peak
+    // energy
     if (peak_power < global_max_power * TONAL_PEAK_MIN_GLOBAL_RELATIVE_POWER) {
       tonal_mask[k] = 0.0f;
       continue;
@@ -163,8 +164,9 @@ void detect_tonal_components(const float* profile,
 
     float ratio = peak_val / (floor_val + 1e-20f);
 
-    // Since we are detecting directly on the median_profile (the most stable version),
-    // we don't need a separate stationarity cross-check or dynamic scaling.
+    // Since we are detecting directly on the median_profile (the most stable
+    // version), we don't need a separate stationarity cross-check or dynamic
+    // scaling.
 
     if (ratio > base_threshold) {
       // In learned mode, the profile is captured from a noise-only segment, so
@@ -213,7 +215,8 @@ uint32_t tonal_detector_get_peaks(const float* tonal_mask, uint32_t size,
 
     float approx_freq_hz = (float)k * bin_width_hz;
 
-    // Scale wider prominence requirement for low frequencies where resolution is poor
+    // Scale wider prominence requirement for low frequencies where resolution
+    // is poor
     float required_wider_prominence = TONAL_PEAK_MIN_WIDER_PROMINENCE;
     if (approx_freq_hz < 500.0f) {
       required_wider_prominence *= (approx_freq_hz / 500.0f);
@@ -312,8 +315,8 @@ uint32_t tonal_detector_get_peaks_from_profile(
     return 0;
   }
 
-  detect_tonal_components(profile, profile, size, sample_rate,
-                          fft_size, temp_mask, NULL);
+  detect_tonal_components(profile, profile, size, sample_rate, fft_size,
+                          temp_mask, NULL);
 
   uint32_t count = tonal_detector_get_peaks(temp_mask, size, sample_rate,
                                             fft_size, peak_freqs_hz, max_peaks);
