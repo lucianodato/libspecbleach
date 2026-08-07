@@ -36,11 +36,11 @@ static void insertion_sort(float* arr, int n) {
   }
 }
 
-void detect_tonal_components(const float* profile, const float* max_profile,
-                             const float* median_profile, uint32_t size,
-                             uint32_t sample_rate, uint32_t fft_size,
-                             float* tonal_mask, uint32_t* deque_workspace) {
-  if (!profile || !tonal_mask || size < 5 || !max_profile || !median_profile ||
+void detect_tonal_components(const float* profile, const float* median_profile,
+                             uint32_t size, uint32_t sample_rate,
+                             uint32_t fft_size, float* tonal_mask,
+                             uint32_t* deque_workspace) {
+  if (!profile || !tonal_mask || size < 5 || !median_profile ||
       sample_rate == 0 || fft_size == 0 ||
       (!deque_workspace && size > TONAL_DETECTOR_DEQUE_CAPACITY)) {
     return;
@@ -55,9 +55,21 @@ void detect_tonal_components(const float* profile, const float* max_profile,
     }
   }
 
-  const float* detection_profile = profile_learned ? max_profile : profile;
+  // The median profile is the most stable version of the noise profile.
+  // We use it exclusively to find peaks, discarding max_profile completely.
+  const float* detection_profile = profile_learned ? median_profile : profile;
+  float base_threshold = PEAK_THRESHOLD;
 
-  // 1. Perform frequency-domain median filtering to estimate the broadband
+  // 1. Calculate the absolute global maximum of the reference profile
+  float global_max_val = 0.0f;
+  for (uint32_t k = 0U; k < size; k++) {
+    if (detection_profile[k] > global_max_val) {
+      global_max_val = detection_profile[k];
+    }
+  }
+  float global_max_power = global_max_val * global_max_val;
+
+  // 2. Perform frequency-domain median filtering to estimate the broadband
   // colored noise floor using boundary-safe windowing (no DC padding
   // duplication).
   uint32_t half_win = TONAL_MEDIAN_FILTER_WINDOW / 2U;
@@ -134,14 +146,29 @@ void detect_tonal_components(const float* profile, const float* max_profile,
     float octave_max_val =
         (deque_head < deque_tail) ? detection_profile[deque[deque_head]] : 0.0f;
 
+    float peak_power = peak_val * peak_val;
+    float octave_max_power = octave_max_val * octave_max_val;
+
     // Reject candidates more than 20 dB below the max peak in their octave band
-    if (peak_val < octave_max_val * TONAL_PEAK_MIN_OCTAVE_RELATIVE_POWER) {
+    if (peak_power < octave_max_power * TONAL_PEAK_MIN_OCTAVE_RELATIVE_POWER) {
+      tonal_mask[k] = 0.0f;
+      continue;
+    }
+
+    // Reject candidates that fall significantly below the global broadband peak
+    // energy
+    if (peak_power < global_max_power * TONAL_PEAK_MIN_GLOBAL_RELATIVE_POWER) {
       tonal_mask[k] = 0.0f;
       continue;
     }
 
     float ratio = peak_val / (floor_val + 1e-20f);
-    if (ratio > PEAK_THRESHOLD) {
+
+    // Since we are detecting directly on the median_profile (the most stable
+    // version), we don't need a separate stationarity cross-check or dynamic
+    // scaling.
+
+    if (ratio > base_threshold) {
       // In learned mode, the profile is captured from a noise-only segment, so
       // any peak is guaranteed to be a hum component. We do not need a
       // stationarity check.
@@ -177,17 +204,30 @@ uint32_t tonal_detector_get_peaks(const float* tonal_mask, uint32_t size,
 
   const float bin_width_hz = (float)sample_rate / (float)fft_size;
 
-  for (uint32_t k = 1U; k < size - 1U; k++) {
+  for (uint32_t k = 2U; k < size - 2U; k++) {
     float mask_val = tonal_mask[k];
 
     float neighbor_avg = 0.5f * (tonal_mask[k - 1] + tonal_mask[k + 1]);
     float local_prominence = mask_val - neighbor_avg;
 
+    float wider_neighbor_avg = 0.5f * (tonal_mask[k - 2] + tonal_mask[k + 2]);
+    float wider_prominence = mask_val - wider_neighbor_avg;
+
+    float approx_freq_hz = (float)k * bin_width_hz;
+
+    // Scale wider prominence requirement for low frequencies where resolution
+    // is poor
+    float required_wider_prominence = TONAL_PEAK_MIN_WIDER_PROMINENCE;
+    if (approx_freq_hz < 500.0f) {
+      required_wider_prominence *= (approx_freq_hz / 500.0f);
+    }
+
     // Peak center must be a local maximum above the significance threshold and
-    // stand out sharply from immediate neighbors
+    // stand out sharply from immediate neighbors and wider neighbors
     if (mask_val >= TONAL_PEAK_MIN_SIGNIFICANCE &&
         mask_val > tonal_mask[k - 1] && mask_val > tonal_mask[k + 1] &&
-        local_prominence >= TONAL_PEAK_MIN_LOCAL_PROMINENCE) {
+        local_prominence >= TONAL_PEAK_MIN_LOCAL_PROMINENCE &&
+        wider_prominence >= required_wider_prominence) {
 
       // Parabolic interpolation for sub-bin frequency accuracy
       float left = tonal_mask[k - 1];
@@ -275,8 +315,8 @@ uint32_t tonal_detector_get_peaks_from_profile(
     return 0;
   }
 
-  detect_tonal_components(profile, profile, profile, size, sample_rate,
-                          fft_size, temp_mask, NULL);
+  detect_tonal_components(profile, profile, size, sample_rate, fft_size,
+                          temp_mask, NULL);
 
   uint32_t count = tonal_detector_get_peaks(temp_mask, size, sample_rate,
                                             fft_size, peak_freqs_hz, max_peaks);

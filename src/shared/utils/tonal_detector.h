@@ -17,17 +17,16 @@ libspecbleach - A spectral processing library
  * to local octave maxima.
  *
  * @param profile Noise profile (magnitude or power)
- * @param max_profile Maximum captured profile (for stationarity check)
  * @param median_profile Median captured profile (for stationarity check)
  * @param size Spectrum size (real_spectrum_size = fft_size/2 + 1)
  * @param sample_rate Audio sample rate in Hz
  * @param fft_size FFT size used for analysis
  * @param tonal_mask Output mask (0.0–1.0, higher = more tonal)
  */
-void detect_tonal_components(const float* profile, const float* max_profile,
-                             const float* median_profile, uint32_t size,
-                             uint32_t sample_rate, uint32_t fft_size,
-                             float* tonal_mask, uint32_t* deque_workspace);
+void detect_tonal_components(const float* profile, const float* median_profile,
+                             uint32_t size, uint32_t sample_rate,
+                             uint32_t fft_size, float* tonal_mask,
+                             uint32_t* deque_workspace);
 
 /**
  * Extract distinct peak frequencies in Hz from a tonal mask.

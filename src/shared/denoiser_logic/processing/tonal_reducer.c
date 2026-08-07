@@ -92,7 +92,7 @@ void tonal_reducer_run(TonalReducer* self, const float* noise_spectrum,
     }
   }
   const float* detection_profile =
-      profile_learned ? max_profile : noise_spectrum;
+      profile_learned ? median_profile : noise_spectrum;
 
   // Compute profile checksum
   float current_sum = 0.0f;
@@ -103,7 +103,7 @@ void tonal_reducer_run(TonalReducer* self, const float* noise_spectrum,
   // 2. Run detection only if the profile has changed
   if (!self->has_cached_mask || current_sum != self->last_profile_sum ||
       detection_profile != self->last_detection_profile) {
-    detect_tonal_components(noise_spectrum, max_profile, median_profile,
+    detect_tonal_components(noise_spectrum, median_profile,
                             self->real_spectrum_size, self->sample_rate,
                             self->fft_size, self->tonal_mask,
                             self->deque_workspace);

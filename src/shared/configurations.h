@@ -143,7 +143,7 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define BRANDT_ESTIMATOR_STATS_UPDATE_INTERVAL_FRAMES 4U
 
 // Tonal Detector Constants
-#define PEAK_THRESHOLD 1.75f // ~2.4dB above local median background
+#define PEAK_THRESHOLD 2.5f
 #define MIN_PEAK_PROMINENCE                                                    \
   1e-7f // Minimum absolute prominence above background
 #define TONAL_MEDIAN_FILTER_WINDOW                                             \
@@ -152,10 +152,16 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
   0.25f // Minimum tonal mask value to report as peak
 #define TONAL_PEAK_MIN_LOCAL_PROMINENCE                                        \
   0.04f // Minimum sharpness over immediate neighbors
+#define TONAL_PEAK_MIN_WIDER_PROMINENCE                                        \
+  0.15f // Minimum sharpness over wider neighborhood (k-2, k+2)
 #define TONAL_PEAK_OCTAVE_DYNAMIC_RANGE_DB                                     \
   20.0f // Max dB below strongest peak within same octave band
 #define TONAL_PEAK_MIN_OCTAVE_RELATIVE_POWER                                   \
-  0.01f                              // Power ratio within octave (10^(-20/10))
+  0.01f // Power ratio within octave (10^(-20/10))
+#define TONAL_PEAK_GLOBAL_DYNAMIC_RANGE_DB                                     \
+  40.0f // Max dB below global broadband peak energy
+#define TONAL_PEAK_MIN_GLOBAL_RELATIVE_POWER                                   \
+  1e-4f                              // Power ratio globally (10^(-40/10))
 #define MAX_TONAL_PEAKS_REPORTED 32U // Maximum candidate peaks returned
 #define TONAL_OCTAVE_LOWER_RATIO 0.7071f
 #define TONAL_OCTAVE_UPPER_RATIO 1.4142f
