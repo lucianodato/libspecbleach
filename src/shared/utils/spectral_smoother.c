@@ -191,7 +191,7 @@ void spectral_smoothing_apply_spatial(float* data, uint32_t size) {
   // Simple 3-point moving average (0.25, 0.5, 0.25)
   // Forward pass with history to avoid allocation
   float prev = data[0];
-  for (uint32_t i = 1; i < size; i++) {
+  for (uint32_t i = 0; i < size; i++) {
     const float current = data[i];
     const float next = (i < size - 1) ? data[i + 1] : current;
 

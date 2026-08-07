@@ -310,9 +310,16 @@ static float compute_spreading_gain(float dz, float level_db) {
   const float s_total = (S_DOWNWARD + s_up) / 2.F;
   const float s_offset = (S_DOWNWARD - s_up) / 2.F;
 
-  const float y = dz + 0.474F;
+  // Dynamically calculate the peak offset and normalization factor
+  // Peak occurs at y = s_offset / sqrt(s_total^2 - s_offset^2)
+  // Normalization factor is sqrt(s_total^2 - s_offset^2)
+  const float denominator = sqrtf((s_total * s_total) - (s_offset * s_offset));
+  const float y_shift = s_offset / denominator;
+  const float norm_factor = denominator;
+
+  const float y = dz + y_shift;
   const float sf_db =
-      15.81F + (s_offset * y) - (s_total * sqrtf(1.F + (y * y)));
+      norm_factor + (s_offset * y) - (s_total * sqrtf(1.F + (y * y)));
 
   return powf(10.F, sf_db / 10.F);
 }
