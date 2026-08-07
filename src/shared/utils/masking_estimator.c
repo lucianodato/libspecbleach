@@ -24,7 +24,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "shared/utils/critical_bands.h"
 #include <math.h>
 #include <stdlib.h>
-#include <string.h>
 
 // Note: Psychoacoustic constants are now imported from configurations.h
 

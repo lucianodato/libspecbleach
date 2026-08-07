@@ -23,11 +23,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "shared/utils/critical_bands.h"
 #include "shared/utils/masking_estimator.h"
 #include "shared/utils/spectral_smoother.h"
-#include <float.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdlib.h>
-#include <string.h>
 
 struct MaskingVeto {
   uint32_t real_spectrum_size;
@@ -132,8 +130,9 @@ void masking_veto_apply(MaskingVeto* self, const float* smoothed_spectrum,
 
   // 1. Estimate clean signal magnitude from SMOOTHED signal
   for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
-    const float current_clean =
-        fmaxf(smoothed_spectrum[k] - (MASKING_VETO_NOISE_GATE * noise_spectrum[k]), 0.0F);
+    const float current_clean = fmaxf(
+        smoothed_spectrum[k] - (MASKING_VETO_NOISE_GATE * noise_spectrum[k]),
+        0.0F);
 
     // Stabilize the clean signal estimation (prevents gargle in spreading
     // skirts)
@@ -147,8 +146,9 @@ void masking_veto_apply(MaskingVeto* self, const float* smoothed_spectrum,
   float* future_clean_estimation = NULL;
   if (future_spectrum) {
     for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
-      self->future_clean_estimation_buf[k] =
-          fmaxf(future_spectrum[k] - (MASKING_VETO_NOISE_GATE * noise_spectrum[k]), 0.0F);
+      self->future_clean_estimation_buf[k] = fmaxf(
+          future_spectrum[k] - (MASKING_VETO_NOISE_GATE * noise_spectrum[k]),
+          0.0F);
     }
     future_clean_estimation = self->future_clean_estimation_buf;
   }
@@ -256,8 +256,9 @@ void masking_veto_apply(MaskingVeto* self, const float* smoothed_spectrum,
         fminf(bin_snr / MASKING_VETO_SNR_THRESHOLD, 1.0F);
 
     // Scale alpha down toward 0.0 (unity gain) based on protection and bin SNR.
-    // At full protection (depth=1.0, protection=1.0): alpha -> 0.0 (full energy preservation)
-    // At zero protection (protection=0.0): alpha is unchanged (full noise suppression)
+    // At full protection (depth=1.0, protection=1.0): alpha -> 0.0 (full energy
+    // preservation) At zero protection (protection=0.0): alpha is unchanged
+    // (full noise suppression)
     const float veto_amount = bin_protection * bin_snr_scale * depth;
     alpha[k] = alpha[k] * (1.0F - veto_amount);
   }
