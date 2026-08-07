@@ -257,7 +257,7 @@ void test_nlm_filter_reset(void) {
 }
 
 void test_nlm_filter_h_parameter(void) {
-  printf("Testing NLM filter h parameter update...\n");
+  printf("Testing NLM filter h parameter update and bypass...\n");
 
   NlmFilterConfig config = {
       .spectrum_size = 32,
@@ -268,10 +268,14 @@ void test_nlm_filter_h_parameter(void) {
   NlmFilter* filter = nlm_filter_initialize(config);
   TEST_ASSERT(filter != NULL, "NLM filter initialization should succeed");
 
-  // Update h parameter
+  // Update h parameter to 2.5
   nlm_filter_set_h_parameter(filter, 2.5f);
 
-  float input[32] = {0.0f};
+  float input[32];
+  for (int i = 0; i < 32; i++) {
+    input[i] = (float)(i + 1);
+  }
+
   // Push enough frames to fill the buffer
   for (int i = 0; i < 3; i++) {
     nlm_filter_push_frame(filter, input);
@@ -280,6 +284,14 @@ void test_nlm_filter_h_parameter(void) {
   float output[32];
   TEST_ASSERT(nlm_filter_process(filter, output),
               "Process should succeed after h parameter update");
+
+  // Update h parameter to 0.0 (bypass mode)
+  nlm_filter_set_h_parameter(filter, 0.0f);
+  TEST_ASSERT(nlm_filter_process(filter, output),
+              "Process should succeed with h=0.0f bypass");
+  for (int i = 0; i < 32; i++) {
+    TEST_FLOAT_CLOSE(output[i], input[i], 1e-6f);
+  }
 
   nlm_filter_free(filter);
   printf("✓ NLM filter h parameter tests passed\n");
@@ -465,21 +477,21 @@ void test_nlm_filter_snr_and_reconstruct(void) {
 
   nlm_filter_calculate_snr(filter, reference, noise, snr);
 
-  TEST_FLOAT_CLOSE(snr[0], 5.0f, 1e-4f);
-  TEST_FLOAT_CLOSE(snr[1], 2.0f, 1e-4f);
+  TEST_FLOAT_CLOSE(snr[0], sqrtf(5.0f), 1e-4f);
+  TEST_FLOAT_CLOSE(snr[1], sqrtf(2.0f), 1e-4f);
   TEST_ASSERT(snr[2] == 0.0f, "Zero reference with zero noise should be 0 SNR");
-  TEST_ASSERT(snr[3] > 1000.0f,
+  TEST_ASSERT(snr[3] > 30.0f,
               "High reference with zero noise should produce large SNR");
 
   float reconstructed[4] = {0.0f};
-  float smoothed_snr[4] = {5.0f, 2.0f, 1.0f, 10.0f};
+  float smoothed_snr[4] = {sqrtf(5.0f), sqrtf(2.0f), 1.0f, 10.0f};
 
   nlm_filter_reconstruct_magnitude(filter, smoothed_snr, noise, reconstructed);
 
-  TEST_FLOAT_CLOSE(reconstructed[0], 10.0f, 1e-4f); // 5 * 2
-  TEST_FLOAT_CLOSE(reconstructed[1], 20.0f, 1e-4f); // 2 * 10
-  TEST_FLOAT_CLOSE(reconstructed[2], 0.0f, 1e-4f);  // 1 * epsilon ~ 0
-  TEST_FLOAT_CLOSE(reconstructed[3], 0.0f, 1e-4f);  // 10 * epsilon ~ 0
+  TEST_FLOAT_CLOSE(reconstructed[0], 10.0f, 1e-4f); // (sqrt(5))^2 * 2
+  TEST_FLOAT_CLOSE(reconstructed[1], 20.0f, 1e-4f); // (sqrt(2))^2 * 10
+  TEST_FLOAT_CLOSE(reconstructed[2], 0.0f, 1e-4f);  // 1^2 * epsilon ~ 0
+  TEST_FLOAT_CLOSE(reconstructed[3], 0.0f, 1e-4f);  // 10^2 * epsilon ~ 0
 
   // Null testing
   nlm_filter_calculate_snr(NULL, reference, noise, snr);

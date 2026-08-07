@@ -21,6 +21,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #ifndef SHARED_UTILS_SIMD_UTILS_H
 #define SHARED_UTILS_SIMD_UTILS_H
 
+#include <math.h>
 #include <stdint.h>
 #include <string.h>
 
@@ -399,6 +400,44 @@ SB_SIMD_INLINE sb_vec8_t sb_div8(sb_vec8_t a, sb_vec8_t b) {
   sb_vec8_t r;
   for (int i = 0; i < 8; i++)
     r.v[i] = a.v[i] / b.v[i];
+  return r;
+#endif
+}
+
+SB_SIMD_INLINE sb_vec8_t sb_sqrt8(sb_vec8_t a) {
+#ifdef __AVX__
+  return _mm256_sqrt_ps(a);
+#elif defined(__SSE__)
+  sb_vec8_t r;
+  r.v1 = _mm_sqrt_ps(a.v1);
+  r.v2 = _mm_sqrt_ps(a.v2);
+  return r;
+#elif defined(__ARM_NEON)
+#ifdef __aarch64__
+  sb_vec8_t r;
+  r.v1 = vsqrtq_f32(a.v1);
+  r.v2 = vsqrtq_f32(a.v2);
+  return r;
+#else
+  float ta1[4];
+  float ta2[4];
+  float tr1[4];
+  float tr2[4];
+  vst1q_f32(ta1, a.v1);
+  vst1q_f32(ta2, a.v2);
+  for (int i = 0; i < 4; i++) {
+    tr1[i] = sqrtf(ta1[i]);
+    tr2[i] = sqrtf(ta2[i]);
+  }
+  sb_vec8_t r;
+  r.v1 = vld1q_f32(tr1);
+  r.v2 = vld1q_f32(tr2);
+  return r;
+#endif
+#else
+  sb_vec8_t r;
+  for (int i = 0; i < 8; i++)
+    r.v[i] = sqrtf(a.v[i]);
   return r;
 #endif
 }

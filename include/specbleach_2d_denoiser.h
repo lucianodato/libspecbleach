@@ -49,10 +49,10 @@ typedef struct SpectralBleach2DDenoiserParameters {
   float reduction_amount;
 
   /**
-   * NLM smoothing strength parameter (h).
-   * Controls how aggressively similar patches are averaged.
-   * Higher values = more smoothing but may blur transients.
-   * Typical range: 0.5 to 3.0
+   * Percentage of 2D time-frequency gain mask smoothing (0 to 100 percent).
+   * Controls 2D artifact smoothing applied to suppression gain masks across
+   * time and frequency. Higher values = smoother gain transitions and stronger
+   * musical noise elimination.
    */
   float smoothing_factor;
 

@@ -154,16 +154,30 @@ void nlm_filter_free(NlmFilter* filter) {
 }
 
 void nlm_filter_set_h_parameter(NlmFilter* filter, float h) {
-  if (!filter || h <= 0.0F) {
+  if (!filter) {
     return;
   }
 
-  filter->config.h_parameter = h;
-  filter->h_squared = h * h;
-  filter->inv_h_squared = 1.0f / filter->h_squared;
+  if (h <= 0.0F) {
+    filter->config.h_parameter = 0.0F;
+    filter->h_squared = 0.0F;
+    filter->inv_h_squared = 0.0F;
+    filter->distance_threshold_actual = 0.0F;
+    return;
+  }
+
+  float target_h = h;
+  if (target_h > NLM_MAX_H_PARAMETER) {
+    target_h = NLM_MAX_H_PARAMETER;
+  }
+  filter->config.h_parameter = target_h;
+  filter->h_squared = target_h * target_h;
+  filter->inv_h_squared = 1.0F / filter->h_squared;
 
   if (filter->config.distance_threshold <= 0.0F) {
     filter->distance_threshold_actual = 4.0F * filter->h_squared;
+  } else {
+    filter->distance_threshold_actual = filter->config.distance_threshold;
   }
 }
 
@@ -243,7 +257,8 @@ void nlm_filter_calculate_snr(NlmFilter* filter,
     sb_vec8_t noise = sb_load8(noise_spectrum + k);
     sb_vec8_t mask = sb_gt8(noise, noise_floor_min);
     sb_vec8_t denom = sb_sel8(mask, noise, noise_floor_min);
-    sb_vec8_t snr = sb_div8(sb_load8(reference_spectrum + k), denom);
+    sb_vec8_t power_snr = sb_div8(sb_load8(reference_spectrum + k), denom);
+    sb_vec8_t snr = sb_sqrt8(power_snr);
     sb_store8(snr_frame + k, snr);
   }
 
@@ -251,7 +266,7 @@ void nlm_filter_calculate_snr(NlmFilter* filter,
     float denom = noise_spectrum[k] > NLM_SNR_NOISE_FLOOR_MIN
                       ? noise_spectrum[k]
                       : NLM_SNR_NOISE_FLOOR_MIN;
-    snr_frame[k] = reference_spectrum[k] / denom;
+    snr_frame[k] = sqrtf(reference_spectrum[k] / denom);
   }
 }
 
@@ -272,7 +287,9 @@ void nlm_filter_reconstruct_magnitude(NlmFilter* filter,
     sb_vec8_t noise = sb_load8(noise_spectrum + k);
     sb_vec8_t mask = sb_gt8(noise, noise_floor_min);
     sb_vec8_t denom = sb_sel8(mask, noise, noise_floor_min);
-    sb_vec8_t mag = sb_mul8(sb_load8(smoothed_snr + k), denom);
+    sb_vec8_t smoothed = sb_load8(smoothed_snr + k);
+    sb_vec8_t smoothed_sq = sb_mul8(smoothed, smoothed);
+    sb_vec8_t mag = sb_mul8(smoothed_sq, denom);
     sb_store8(magnitude_spectrum + k, mag);
   }
 
@@ -280,6 +297,7 @@ void nlm_filter_reconstruct_magnitude(NlmFilter* filter,
     float denom = noise_spectrum[k] > NLM_SNR_NOISE_FLOOR_MIN
                       ? noise_spectrum[k]
                       : NLM_SNR_NOISE_FLOOR_MIN;
-    magnitude_spectrum[k] = smoothed_snr[k] * denom;
+    float smoothed = smoothed_snr[k];
+    magnitude_spectrum[k] = smoothed * smoothed * denom;
   }
 }

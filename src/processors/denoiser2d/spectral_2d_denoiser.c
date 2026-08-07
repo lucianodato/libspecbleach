@@ -32,8 +32,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "shared/denoiser_logic/processing/suppression_engine.h"
 #include "shared/denoiser_logic/processing/tonal_reducer.h"
 #include "shared/utils/spectral_circular_buffer.h"
+#include "shared/utils/spectral_smoother.h"
 #include "shared/utils/spectral_utils.h"
-#include <float.h>
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
@@ -58,6 +58,7 @@ typedef struct Spectral2DDenoiser {
   float* beta;          // Undersubtraction factors
   float* manual_noise_floor; // Manual profile floor
   TonalReducer* tonal_reducer;
+  SpectralSmoother* gain_smoother;
 
   // Reusable circular buffer for aligned temporal analysis
   SbSpectralCircularBuffer* circular_buffer;
@@ -246,6 +247,14 @@ SpectralProcessorHandle spectral_2d_denoiser_initialize(
     return NULL;
   }
 
+  self->gain_smoother = spectral_smoothing_initialize(
+      self->fft_size, self->sample_rate, TRANSIENT_AWARE);
+
+  if (!self->gain_smoother) {
+    spectral_2d_denoiser_free(self);
+    return NULL;
+  }
+
   return self;
 }
 
@@ -276,6 +285,9 @@ void spectral_2d_denoiser_free(SpectralProcessorHandle instance) {
   }
   if (self->noise_floor_manager) {
     noise_floor_manager_free(self->noise_floor_manager);
+  }
+  if (self->gain_smoother) {
+    spectral_smoothing_free(self->gain_smoother);
   }
 
   free(self->snr_frame);
@@ -334,9 +346,13 @@ bool load_2d_reduction_parameters(SpectralProcessorHandle instance,
   self->parameters = parameters;
   self->aggressiveness = parameters.aggressiveness;
 
-  // Update NLM h parameter based on smoothing factor
-  if (self->nlm_filter && parameters.smoothing_factor > 0.0F) {
-    nlm_filter_set_h_parameter(self->nlm_filter, parameters.smoothing_factor);
+  // Update NLM h parameter based on smoothing factor (scales h up to 5.0F for
+  // strong NLM patch smoothing)
+  if (self->nlm_filter) {
+    nlm_filter_set_h_parameter(self->nlm_filter,
+                               (parameters.smoothing_factor > 0.0F)
+                                   ? (0.5F + parameters.smoothing_factor * 4.5F)
+                                   : 0.0F);
   }
 
   return true;
@@ -441,6 +457,26 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
     calculate_gains(self->real_spectrum_size, self->fft_size,
                     smoothed_magnitude, delayed_noise, self->gain_spectrum,
                     self->alpha, self->beta, self->gain_calculation_type);
+
+    // 3.3.6 2D Time-Frequency Gain Mask Smoothing (iZotope RX "Artifact
+    // Smoothing")
+    if (self->gain_smoother && self->parameters.smoothing_factor > 0.0F) {
+      TimeSmoothingParameters smooth_params = {
+          .smoothing = self->parameters.smoothing_factor,
+      };
+      (void)spectral_smoothing_run(self->gain_smoother, smooth_params,
+                                   self->gain_spectrum);
+
+      const uint32_t spatial_passes =
+          (uint32_t)(1.0F + self->parameters.smoothing_factor * 3.0F);
+      for (uint32_t p = 0; p < spatial_passes; p++) {
+        spectral_smoothing_apply_spatial(self->gain_spectrum,
+                                         self->real_spectrum_size);
+      }
+
+      sb_apply_spectral_symmetry(self->gain_spectrum, self->real_spectrum_size,
+                                 self->fft_size);
+    }
 
     // 4. Post-Processing: Final gain management and mixing
     DenoiserPostProcessParams post_params = {

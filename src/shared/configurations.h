@@ -195,9 +195,9 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define NLM_SEARCH_RANGE_TIME_PAST 16U
 #define NLM_SEARCH_RANGE_TIME_FUTURE 4U
 #define NLM_DEFAULT_H_PARAMETER 1.0F
+#define NLM_MAX_H_PARAMETER 5.0F
 #define NLM_MIN_WEIGHT 1e-10F
 #define NLM_SNR_NOISE_FLOOR_MIN 1e-9F
-#define NLM_FREQ_DEPENDENT_SMOOTHING_SCALE 3.0F
 #define NLM_DISTANCE_THRESHOLD_MULTIPLIER 4.0F
 
 // Must be >= search_time_past + search_time_future + patch_size for NLM caching

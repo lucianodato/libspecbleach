@@ -1,7 +1,24 @@
 /*
- * Unit tests for the 2D Denoiser Wrapper (specbleach_2d_denoiser)
- */
+libspecbleach - A spectral processing library
 
+Copyright 2022 Luciano Dato <lucianodato@gmail.com>
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 2.1 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+*/
+
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -298,6 +315,59 @@ void test_process_loop(void) {
   specbleach_2d_free(h);
 }
 
+void test_2d_smoothing_factor_responsiveness(void) {
+  printf("Testing 2D smoothing factor responsiveness (0%% vs 100%%)...\n");
+
+  SpectralBleachHandle h = specbleach_2d_initialize(SAMPLE_RATE, FRAME_SIZE);
+  TEST_ASSERT(h != NULL, "Initialization should succeed");
+
+  // Create noisy input signal
+  const int n_samples = 44100;
+  float* noise_input = calloc(n_samples, sizeof(float));
+  float* out_smooth_0 = calloc(n_samples, sizeof(float));
+  float* out_smooth_100 = calloc(n_samples, sizeof(float));
+
+  for (int i = 0; i < n_samples; i++) {
+    noise_input[i] = 0.1f * ((float)(i % 100) / 100.0f - 0.5f);
+  }
+
+  // 1. Learn noise profile
+  SpectralBleach2DDenoiserParameters params = {
+      .learn_noise = 1,
+      .reduction_amount = 20.0f,
+      .smoothing_factor = 0.0f,
+  };
+  specbleach_2d_load_parameters(h, params);
+  specbleach_2d_process(h, n_samples, noise_input, out_smooth_0);
+
+  // 2. Process with 0% smoothing
+  params.learn_noise = 0;
+  params.reduction_amount = 20.0f;
+  params.smoothing_factor = 0.0f;
+  specbleach_2d_load_parameters(h, params);
+  specbleach_2d_process(h, n_samples, noise_input, out_smooth_0);
+
+  // 3. Process with 100% smoothing
+  params.smoothing_factor = 100.0f;
+  specbleach_2d_load_parameters(h, params);
+  specbleach_2d_process(h, n_samples, noise_input, out_smooth_100);
+
+  // Compare output buffers: 0% vs 100% smoothing should produce different
+  // results
+  float diff_sum = 0.0f;
+  for (int i = 2000; i < n_samples; i++) {
+    diff_sum += fabsf(out_smooth_0[i] - out_smooth_100[i]);
+  }
+  TEST_ASSERT(diff_sum > 1e-4f,
+              "0% and 100% smoothing factor should produce different output");
+
+  free(noise_input);
+  free(out_smooth_0);
+  free(out_smooth_100);
+  specbleach_2d_free(h);
+  printf("✓ 2D smoothing factor responsiveness tests passed\n");
+}
+
 int main(void) {
   printf("Running specbleach_2d_denoiser wrapper tests...\n");
 
@@ -306,6 +376,7 @@ int main(void) {
   test_noise_profile_api();
   test_2d_parameter_switching();
   test_process_loop();
+  test_2d_smoothing_factor_responsiveness();
 
   printf("✅ All specbleach_2d_denoiser tests passed!\n");
   return 0;
