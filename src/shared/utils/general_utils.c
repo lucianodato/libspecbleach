@@ -34,10 +34,6 @@ float from_db_to_coefficient(const float value_db) {
   return powf(10.0F, value_db / 20.0F);
 }
 
-float remap_percentage_log_like_unity(const float value) {
-  return 1.F - expf(-3.F * (value));
-}
-
 int get_next_divisible_two(int number) {
   return number + (number & 1);
 }
