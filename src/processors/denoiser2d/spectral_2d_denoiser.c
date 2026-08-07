@@ -458,8 +458,7 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
                     smoothed_magnitude, delayed_noise, self->gain_spectrum,
                     self->alpha, self->beta, self->gain_calculation_type);
 
-    // 3.3.6 2D Time-Frequency Gain Mask Smoothing (iZotope RX "Artifact
-    // Smoothing")
+    // 3.3.6 2D Time-Frequency Gain Mask Smoothing
     if (self->gain_smoother && self->parameters.smoothing_factor > 0.0F) {
       TimeSmoothingParameters smooth_params = {
           .smoothing = self->parameters.smoothing_factor,
