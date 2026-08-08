@@ -26,44 +26,109 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define TEST_ASSERT(condition, message)                                        \
   do {                                                                         \
     if (!(condition)) {                                                        \
-      fprintf(stderr, "TEST FAILED: %s\n", message);                           \
+      fprintf(stderr, "TEST FAILED: %s (%s:%d)\n", message, __FILE__,          \
+              __LINE__);                                                       \
       exit(1);                                                                 \
     }                                                                          \
   } while (0)
 
+#define TEST_FLOAT_CLOSE(a, b, tolerance)                                      \
+  TEST_ASSERT(fabsf((a) - (b)) < (tolerance), "Float values not close enough")
+
 void test_spectral_smoother(void) {
   printf("Testing Spectral Smoother...\n");
 
-  uint32_t fft_size = 1024;
+  // 1. Invalid Initialization (fft_size == 0)
+  SpectralSmoother* invalid_ss = spectral_smoothing_initialize(0, 44100, FIXED);
+  TEST_ASSERT(invalid_ss == NULL, "Initialization with fft_size=0 should fail");
 
+  // 2. Free NULL instance (safety check)
+  spectral_smoothing_free(NULL);
+
+  uint32_t fft_size = 1024;
+  uint32_t num_bins = (fft_size / 2U) + 1U;
+
+  // 3. Test initialization and run across smoothing types
   for (int type = FIXED; type <= TRANSIENT_AWARE; type++) {
     SpectralSmoother* ss =
         spectral_smoothing_initialize(fft_size, 44100, (TimeSmoothingType)type);
     TEST_ASSERT(ss != NULL, "Spectral smoother initialization should succeed");
 
-    float spectrum[513] = {0.0f};
-    for (int i = 0; i < 513; i++) {
-      spectrum[i] = 1.0f + (0.5f * sinf((float)i * 0.1f));
+    float gains[513] = {0.0f};
+    for (uint32_t i = 0; i < num_bins; i++) {
+      gains[i] = 1.0f + (0.5f * sinf((float)i * 0.1f));
     }
 
+    // Test NULL safety in spectral_smoothing_run
     TimeSmoothingParameters params = {.smoothing = 0.8f};
-    TEST_ASSERT(spectral_smoothing_run(ss, params, spectrum),
-                "Spectral smoothing should succeed");
+    TEST_ASSERT(!spectral_smoothing_run(NULL, params, gains),
+                "Run with NULL self should return false");
+    TEST_ASSERT(!spectral_smoothing_run(ss, params, NULL),
+                "Run with NULL gains should return false");
 
-    // Run again to test previous spectrum logic
-    TEST_ASSERT(spectral_smoothing_run(ss, params, spectrum),
-                "Spectral smoothing should succeed on second run");
+    // First run (uninitialized -> initializes history with gains)
+    TEST_ASSERT(spectral_smoothing_run(ss, params, gains),
+                "First run should succeed and initialize state");
 
-    // Check that output is reasonable
-    for (int i = 0; i < 513; i++) {
-      TEST_ASSERT(spectrum[i] >= 0.0f,
-                  "Smoothed spectrum should be non-negative");
+    // Second run with active smoothing
+    float new_gains[513];
+    for (uint32_t i = 0; i < num_bins; i++) {
+      new_gains[i] = 0.0f;
+    }
+    TEST_ASSERT(spectral_smoothing_run(ss, params, new_gains),
+                "Second run should succeed");
+
+    // Verify smoothing calculation: new_gains[i] = 0.8 * prev + 0.2 * 0.0 = 0.8
+    // * prev
+    for (uint32_t i = 0; i < num_bins; i++) {
+      float expected = 0.8f * (1.0f + (0.5f * sinf((float)i * 0.1f)));
+      TEST_FLOAT_CLOSE(new_gains[i], expected, 0.001f);
+    }
+
+    // Third run with bypass smoothing <= 0.0f
+    TimeSmoothingParameters zero_params = {.smoothing = 0.0f};
+    float bypass_gains[513];
+    for (uint32_t i = 0; i < num_bins; i++) {
+      bypass_gains[i] = 0.5f;
+    }
+    TEST_ASSERT(spectral_smoothing_run(ss, zero_params, bypass_gains),
+                "Run with smoothing=0.0 should succeed");
+    for (uint32_t i = 0; i < num_bins; i++) {
+      TEST_FLOAT_CLOSE(bypass_gains[i], 0.5f, 0.001f);
     }
 
     spectral_smoothing_free(ss);
   }
 
-  printf("✓ Spectral Smoother tests passed\n");
+  // 4. Test spectral_smoothing_apply_spatial
+  // Edge cases: NULL data, size < 2
+  spectral_smoothing_apply_spatial(NULL, 10);
+  float single_data[1] = {1.0f};
+  spectral_smoothing_apply_spatial(single_data, 1);
+  TEST_FLOAT_CLOSE(single_data[0], 1.0f, 0.001f);
+
+  // Normal case: size = 5
+  float spatial_data[5] = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f};
+  spectral_smoothing_apply_spatial(spatial_data, 5);
+  TEST_FLOAT_CLOSE(spatial_data[1], 2.0f, 0.001f);
+  TEST_FLOAT_CLOSE(spatial_data[4], 4.75f, 0.001f);
+
+  // 5. Test spectral_smoothing_apply_simple_temporal
+  // Edge cases: NULL parameters, size 0
+  float current_buf[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+  float memory_buf[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+  spectral_smoothing_apply_simple_temporal(NULL, memory_buf, 4, 0.5f);
+  spectral_smoothing_apply_simple_temporal(current_buf, NULL, 4, 0.5f);
+  spectral_smoothing_apply_simple_temporal(current_buf, memory_buf, 0, 0.5f);
+
+  // Normal case
+  spectral_smoothing_apply_simple_temporal(current_buf, memory_buf, 4, 0.5f);
+  for (int i = 0; i < 4; i++) {
+    TEST_FLOAT_CLOSE(current_buf[i], 0.5f, 0.001f);
+    TEST_FLOAT_CLOSE(memory_buf[i], 0.5f, 0.001f);
+  }
+
+  printf("✓ Spectral Smoother full coverage tests passed\n");
 }
 
 int main(void) {
