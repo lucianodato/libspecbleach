@@ -10,6 +10,7 @@
 #include "shared/denoiser_logic/processing/masking_veto.h"
 #include "shared/denoiser_logic/processing/suppression_engine.h"
 #include "shared/denoiser_logic/processing/tonal_reducer.h"
+#include "shared/stft/stft_processor.h"
 #include "shared/utils/critical_bands.h"
 #include "shared/utils/spectral_features.h"
 #include "shared/utils/spectral_smoother.h"
@@ -301,23 +302,23 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
                     get_noise_profile(self->noise_profile, MEDIAN), self->alpha,
                     self->denoise_parameters.tonal_reduction);
 
-  // 3.3. Apply temporal smoothing to the input spectrum
+  // 3.3. Apply Structural Veto to rescue transients and moderate artifacts
+  masking_veto_apply(self->masking_veto, reference_spectrum,
+                     self->noise_spectrum, NULL, self->alpha,
+                     self->denoise_parameters.masking_depth);
+
+  // 3.4. Final Gain Calculation
+  calculate_gains(self->real_spectrum_size, self->fft_size, reference_spectrum,
+                  self->noise_spectrum, self->gain_spectrum, self->alpha,
+                  self->beta, self->gain_calculation_type);
+
+  // 3.5. Apply temporal smoothing to calculated suppression gains
   TimeSmoothingParameters spectral_smoothing_parameters =
       (TimeSmoothingParameters){
           .smoothing = self->denoise_parameters.smoothing_factor,
       };
   spectral_smoothing_run(self->spectrum_smoothing,
-                         spectral_smoothing_parameters, reference_spectrum);
-
-  // 3.4. Apply Structural Veto to rescue transients and moderate artifacts
-  masking_veto_apply(self->masking_veto, reference_spectrum,
-                     self->noise_spectrum, NULL, self->alpha,
-                     self->denoise_parameters.masking_depth);
-
-  // 3.5. Final Gain Calculation
-  calculate_gains(self->real_spectrum_size, self->fft_size, reference_spectrum,
-                  self->noise_spectrum, self->gain_spectrum, self->alpha,
-                  self->beta, self->gain_calculation_type);
+                         spectral_smoothing_parameters, self->gain_spectrum);
 
   // 4. Post-Processing: Final gain management and mixing
   DenoiserPostProcessParams post_params = {

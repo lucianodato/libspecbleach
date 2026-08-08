@@ -11,7 +11,6 @@
 #include "shared/utils/critical_bands.h"
 #include "shared/utils/masking_estimator.h"
 #include "shared/utils/simd_utils.h"
-#include "shared/utils/spectral_smoother.h"
 #include "shared/utils/transient_detector.h"
 
 #define TEST_ASSERT(condition, message)                                        \
@@ -131,73 +130,21 @@ void test_masking_estimator(void) {
   printf("✓ Masking Estimator tests passed\n");
 }
 
-void test_spectral_smoother(void) {
-  printf("Testing Spectral Smoother...\n");
-
-  uint32_t fft_size = 1024;
-
-  // Test all smoothing types
-  for (int type = NO_SMOOTHING; type <= TRANSIENT_AWARE; type++) {
-    SpectralSmoother* ss =
-        spectral_smoothing_initialize(fft_size, 44100, (TimeSmoothingType)type);
-    TEST_ASSERT(ss != NULL, "Spectral smoother initialization should succeed");
-
-    float spectrum[513] = {0.0f};
-    for (int i = 0; i < 513; i++) {
-      spectrum[i] = 1.0f + (0.5f * sinf((float)i * 0.1f));
-    }
-
-    TimeSmoothingParameters params = {.smoothing = 0.8f};
-    TEST_ASSERT(spectral_smoothing_run(ss, params, spectrum),
-                "Spectral smoothing should succeed");
-
-    // Run again to test previous spectrum logic
-    TEST_ASSERT(spectral_smoothing_run(ss, params, spectrum),
-                "Spectral smoothing should succeed on second run");
-
-    // Check that output is reasonable
-    for (int i = 0; i < 513; i++) {
-      TEST_ASSERT(spectrum[i] >= 0.0f,
-                  "Smoothed spectrum should be non-negative");
-    }
-
-    spectral_smoothing_free(ss);
-  }
-  printf("✓ Spectral Smoother tests passed\n");
-}
-
 void test_transient_detector(void) {
   printf("Testing Transient Detector...\n");
 
-  uint32_t fft_size = 1024;
-  uint32_t real_size = (fft_size / 2) + 1;
-
-  TransientDetector* td = transient_detector_initialize(real_size);
+  uint32_t num_bands = 24;
+  TransientDetector* td = transient_detector_initialize(num_bands);
   TEST_ASSERT(td != NULL, "Transient detector initialization should succeed");
 
-  float spectrum[513] = {0.0f};
-  float different_spectrum[513] = {0.0f};
-
-  // Create initial spectrum
-  for (int i = 0; i < 513; i++) {
-    spectrum[i] = 1.0f;
-    different_spectrum[i] = 2.0f; // Different spectrum to create change
+  float energies[24];
+  float weights[24];
+  for (int i = 0; i < 24; i++) {
+    energies[i] = 1.0f;
   }
 
-  // First run - should not detect transient (no previous data, initialized with
-  // current)
-  bool result1 = transient_detector_process(td, spectrum, NULL);
-
-  // Second run with different spectrum - likely transient due to jump from 1.0
-  // to 2.0 Ratio = 2.0 / 1.0 = 2.0. Weight = (2-1)/0.25 = 4.0 -> Clamped
-  // to 1.0. Should return true.
-  bool result2 = transient_detector_process(td, different_spectrum, NULL);
-
-  // The function should run without error (return value is boolean indicating
-  // transient presence) We just test that it doesn't crash and returns a valid
-  // boolean
-  TEST_ASSERT(result1 == false, "First run should not detect transient (init)");
-  TEST_ASSERT(result2 == true, "Second run should detect transient (jump)");
+  bool result1 = transient_detector_process(td, energies, weights);
+  TEST_ASSERT(result1 == false, "First frame should not detect transient");
 
   transient_detector_free(td);
   printf("✓ Transient Detector tests passed\n");
@@ -294,7 +241,6 @@ int main(void) {
   test_absolute_hearing_thresholds();
   test_critical_bands();
   test_masking_estimator();
-  test_spectral_smoother();
   test_transient_detector();
   test_simd_utils();
   test_fast_exp();

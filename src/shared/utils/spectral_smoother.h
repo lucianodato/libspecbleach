@@ -22,13 +22,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define SPECTRAL_SMOOTHER_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
-typedef enum TimeSmoothingType {
-  NO_SMOOTHING = 0,
-  FIXED = 1,
-  TRANSIENT_AWARE = 2,
-} TimeSmoothingType;
+typedef enum TimeSmoothingType { FIXED, TRANSIENT_AWARE } TimeSmoothingType;
 
 typedef struct TimeSmoothingParameters {
   float smoothing;
@@ -40,12 +37,12 @@ SpectralSmoother* spectral_smoothing_initialize(uint32_t fft_size,
                                                 uint32_t sample_rate,
                                                 TimeSmoothingType type);
 void spectral_smoothing_free(SpectralSmoother* self);
+
 bool spectral_smoothing_run(SpectralSmoother* self,
-                            TimeSmoothingParameters parameters,
-                            float* signal_spectrum);
+                            TimeSmoothingParameters parameters, float* gains);
 
 void spectral_smoothing_apply_spatial(float* data, uint32_t size);
 void spectral_smoothing_apply_simple_temporal(float* current, float* memory,
                                               uint32_t size, float smoothing);
 
-#endif
+#endif /* SPECTRAL_SMOOTHER_H */
