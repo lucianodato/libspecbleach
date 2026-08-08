@@ -19,69 +19,46 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 #include "spectral_smoother.h"
-#include "critical_bands.h"
-#include "transient_detector.h"
 #include <stdlib.h>
 #include <string.h>
 
-static void spectrum_time_smoothing(SpectralSmoother* self, float smoothing);
-static void spectrum_transient_aware_time_smoothing(SpectralSmoother* self,
-                                                    float smoothing,
-                                                    const float* spectrum);
-
 struct SpectralSmoother {
   uint32_t fft_size;
+  uint32_t sample_rate;
   uint32_t real_spectrum_size;
   TimeSmoothingType type;
 
-  float* smoothed_spectrum;
   float* smoothed_spectrum_previous;
-
-  CriticalBands* critical_bands;
-  float* band_energies;
-  float* onset_weights;
-  TransientDetector* transient_detection;
+  bool initialized;
 };
 
-SpectralSmoother* spectral_smoothing_initialize(const uint32_t fft_size,
-                                                const uint32_t sample_rate,
+SpectralSmoother* spectral_smoothing_initialize(uint32_t fft_size,
+                                                uint32_t sample_rate,
                                                 TimeSmoothingType type) {
+  if (fft_size == 0U) {
+    return NULL;
+  }
+
   SpectralSmoother* self =
       (SpectralSmoother*)calloc(1U, sizeof(SpectralSmoother));
-
   if (!self) {
     return NULL;
   }
 
   self->fft_size = fft_size;
-  self->real_spectrum_size = (self->fft_size / 2U) + 1U;
+  self->sample_rate = sample_rate;
+  self->real_spectrum_size = (fft_size / 2U) + 1U;
   self->type = type;
 
-  self->smoothed_spectrum =
-      (float*)calloc(self->real_spectrum_size, sizeof(float));
   self->smoothed_spectrum_previous =
       (float*)calloc(self->real_spectrum_size, sizeof(float));
 
-  self->critical_bands =
-      critical_bands_initialize(sample_rate, self->fft_size, BARK_SCALE);
-  if (!self->critical_bands) {
+  if (!self->smoothed_spectrum_previous) {
     spectral_smoothing_free(self);
     return NULL;
   }
 
-  const uint32_t num_bands = get_number_of_critical_bands(self->critical_bands);
-  self->band_energies = (float*)calloc(num_bands, sizeof(float));
-  self->onset_weights = (float*)calloc(num_bands, sizeof(float));
-
-  self->transient_detection = transient_detector_initialize(num_bands);
-
-  if (!self->smoothed_spectrum || !self->smoothed_spectrum_previous ||
-      !self->band_energies || !self->onset_weights ||
-      !self->transient_detection) {
-    spectral_smoothing_free(self);
-    return NULL;
-  }
-
+  self->initialized = false;
   return self;
 }
 
@@ -89,123 +66,64 @@ void spectral_smoothing_free(SpectralSmoother* self) {
   if (!self) {
     return;
   }
-  critical_bands_free(self->critical_bands);
-  transient_detector_free(self->transient_detection);
-
-  free(self->smoothed_spectrum);
-  free(self->smoothed_spectrum_previous);
-  free(self->band_energies);
-  free(self->onset_weights);
-
+  if (self->smoothed_spectrum_previous) {
+    free(self->smoothed_spectrum_previous);
+  }
   free(self);
 }
 
 bool spectral_smoothing_run(SpectralSmoother* self,
-                            TimeSmoothingParameters parameters,
-                            float* signal_spectrum) {
-  if (!self || !signal_spectrum) {
+                            TimeSmoothingParameters parameters, float* gains) {
+  if (!self || !gains) {
     return false;
   }
 
-  memcpy(self->smoothed_spectrum, signal_spectrum,
-         sizeof(float) * self->real_spectrum_size);
-
-  switch (self->type) {
-    case FIXED:
-      spectrum_time_smoothing(self, parameters.smoothing);
-      break;
-    case TRANSIENT_AWARE:
-      spectrum_transient_aware_time_smoothing(self, parameters.smoothing,
-                                              signal_spectrum);
-      break;
-    default:
-      break;
+  float smoothing = parameters.smoothing;
+  if (smoothing <= 0.0F) {
+    return true;
   }
 
-  memcpy(self->smoothed_spectrum_previous, self->smoothed_spectrum,
-         sizeof(float) * self->real_spectrum_size);
-  memcpy(signal_spectrum, self->smoothed_spectrum,
-         sizeof(float) * self->real_spectrum_size);
+  if (!self->initialized) {
+    memcpy(self->smoothed_spectrum_previous, gains,
+           sizeof(float) * self->real_spectrum_size);
+    self->initialized = true;
+    return true;
+  }
+
+  uint32_t k = 0U;
+  for (k = 0U; k < self->real_spectrum_size; k++) {
+    gains[k] = (smoothing * self->smoothed_spectrum_previous[k]) +
+               ((1.0F - smoothing) * gains[k]);
+    self->smoothed_spectrum_previous[k] = gains[k];
+  }
 
   return true;
 }
 
-static void spectrum_transient_aware_time_smoothing(SpectralSmoother* self,
-                                                    const float smoothing,
-                                                    const float* spectrum) {
-  // Calculate band energies for the transient detector
-  const uint32_t num_bands = get_number_of_critical_bands(self->critical_bands);
-  for (uint32_t j = 0U; j < num_bands; j++) {
-    const CriticalBandIndexes indexes =
-        get_band_indexes(self->critical_bands, j);
-    float energy = 0.0F;
-    for (uint32_t k = indexes.start_position; k < indexes.end_position; k++) {
-      energy += spectrum[k];
-    }
-    self->band_energies[j] = energy;
-  }
-
-  // Retrieve onset weights (transient detection)
-  // Note: We ignore the return value (global transient bool) because we process
-  // per-band
-  transient_detector_process(self->transient_detection, self->band_energies,
-                             self->onset_weights);
-
-  // Apply smoothing with per-band transient awareness
-  for (uint32_t j = 0U; j < num_bands; j++) {
-    const CriticalBandIndexes indexes =
-        get_band_indexes(self->critical_bands, j);
-
-    // If a transient is detected in this band (weight > 0), we reduce smoothing
-    // weight 0.0 -> full smoothing
-    // weight 1.0 -> no smoothing (track signal instantly)
-    const float weight = self->onset_weights[j];
-    const float effective_smoothing = smoothing * (1.0F - weight);
-
-    for (uint32_t k = indexes.start_position; k < indexes.end_position; k++) {
-      self->smoothed_spectrum[k] =
-          (effective_smoothing * self->smoothed_spectrum_previous[k]) +
-          ((1.F - effective_smoothing) * self->smoothed_spectrum[k]);
-    }
-  }
-}
-
-static void spectrum_time_smoothing(SpectralSmoother* self,
-                                    const float smoothing) {
-  for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
-    self->smoothed_spectrum[k] =
-        (smoothing * self->smoothed_spectrum_previous[k]) +
-        ((1.F - smoothing) * self->smoothed_spectrum[k]);
-  }
-}
-
 void spectral_smoothing_apply_spatial(float* data, uint32_t size) {
-  if (!data || size < 2) {
+  if (!data || size < 2U) {
     return;
   }
 
-  // Simple 3-point moving average (0.25, 0.5, 0.25)
-  // Forward pass with history to avoid allocation
   float prev = data[0];
-  for (uint32_t i = 0; i < size; i++) {
-    const float current = data[i];
-    const float next = (i < size - 1) ? data[i + 1] : current;
-
-    // Smooth current based on prev, current, next
-    data[i] = (0.25F * prev) + (0.5F * current) + (0.25F * next);
-
-    prev = current; // Save original current for next iteration's 'prev'
+  uint32_t i = 0U;
+  for (i = 1U; i < size; i++) {
+    float curr = data[i];
+    data[i] = 0.25F * prev + 0.5F * curr +
+              0.25F * (i + 1 < size ? data[i + 1] : curr);
+    prev = curr;
   }
 }
 
 void spectral_smoothing_apply_simple_temporal(float* current, float* memory,
                                               uint32_t size, float smoothing) {
-  if (!current || !memory || size == 0) {
+  if (!current || !memory || size == 0U) {
     return;
   }
 
-  for (uint32_t i = 0; i < size; i++) {
-    memory[i] = (smoothing * current[i]) + ((1.0F - smoothing) * memory[i]);
-    current[i] = memory[i];
+  uint32_t i = 0U;
+  for (i = 0U; i < size; i++) {
+    current[i] = smoothing * memory[i] + (1.0F - smoothing) * current[i];
+    memory[i] = current[i];
   }
 }

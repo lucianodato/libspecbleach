@@ -21,11 +21,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "transient_detector.h"
 #include "../configurations.h"
 #include <math.h>
-#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
-
-// Note: Transient detection constants are now imported from configurations.h
 
 struct TransientDetector {
   uint32_t num_items;
@@ -60,6 +57,7 @@ void transient_detector_free(TransientDetector* self) {
   if (!self) {
     return;
   }
+
   free(self->smoothed_items);
 
   free(self);
@@ -101,10 +99,9 @@ bool transient_detector_process(TransientDetector* self,
       transient_detected = true;
     }
 
-    // Update smoothing reference
-    float adapt_alpha = (weight > 0.0F) ? (self->alpha * 0.5F) : self->alpha;
+    // Update background energy tracking (exponential filter)
     self->smoothed_items[j] =
-        (current * (1.0F - adapt_alpha)) + (smoothed * adapt_alpha);
+        self->alpha * smoothed + (1.0F - self->alpha) * current;
   }
 
   return transient_detected;
