@@ -42,7 +42,8 @@ int main(void) {
   }
 
   // First frame initializes background energy
-  bool is_transient = transient_detector_process(td, steady_energies, onset_weights);
+  bool is_transient =
+      transient_detector_process(td, steady_energies, onset_weights);
   TEST_ASSERT(!is_transient, "First frame should not trigger transient");
 
   // Sudden energy burst in band 5
