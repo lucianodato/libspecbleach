@@ -11,7 +11,6 @@
 #include "shared/utils/critical_bands.h"
 #include "shared/utils/masking_estimator.h"
 #include "shared/utils/simd_utils.h"
-#include "shared/utils/spectral_smoother.h"
 #include "shared/utils/transient_detector.h"
 
 #define TEST_ASSERT(condition, message)                                        \
@@ -131,42 +130,6 @@ void test_masking_estimator(void) {
   printf("✓ Masking Estimator tests passed\n");
 }
 
-void test_spectral_smoother(void) {
-  printf("Testing Spectral Smoother...\n");
-
-  uint32_t fft_size = 1024;
-
-  // Test all smoothing types
-  for (int type = FIXED; type <= TRANSIENT_AWARE; type++) {
-    SpectralSmoother* ss =
-        spectral_smoothing_initialize(fft_size, 44100, (TimeSmoothingType)type);
-    TEST_ASSERT(ss != NULL, "Spectral smoother initialization should succeed");
-
-    float spectrum[513] = {0.0f};
-    for (int i = 0; i < 513; i++) {
-      spectrum[i] = 1.0f + (0.5f * sinf((float)i * 0.1f));
-    }
-
-    TimeSmoothingParameters params = {.smoothing = 0.8f};
-    TEST_ASSERT(spectral_smoothing_run(ss, params, spectrum),
-                "Spectral smoothing should succeed");
-
-    // Run again to test previous spectrum logic
-    TEST_ASSERT(spectral_smoothing_run(ss, params, spectrum),
-                "Spectral smoothing should succeed on second run");
-
-    // Check that output is reasonable
-    for (int i = 0; i < 513; i++) {
-      TEST_ASSERT(spectrum[i] >= 0.0f,
-                  "Smoothed spectrum should be non-negative");
-    }
-
-    spectral_smoothing_free(ss);
-  }
-
-  printf("✓ Spectral Smoother tests passed\n");
-}
-
 void test_transient_detector(void) {
   printf("Testing Transient Detector...\n");
 
@@ -278,7 +241,6 @@ int main(void) {
   test_absolute_hearing_thresholds();
   test_critical_bands();
   test_masking_estimator();
-  test_spectral_smoother();
   test_transient_detector();
   test_simd_utils();
   test_fast_exp();

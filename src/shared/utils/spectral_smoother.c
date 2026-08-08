@@ -80,6 +80,9 @@ bool spectral_smoothing_run(SpectralSmoother* self,
 
   float smoothing = parameters.smoothing;
   if (smoothing <= 0.0F) {
+    memcpy(self->smoothed_spectrum_previous, gains,
+           sizeof(float) * self->real_spectrum_size);
+    self->initialized = true;
     return true;
   }
 
