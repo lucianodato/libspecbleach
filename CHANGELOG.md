@@ -1,15 +1,28 @@
-# Changelog
+#Changelog
 
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] - Unreleased
+
+### Added
+
+### Improved & Refactored
+- **Adaptive Profile Persistence**: Updated standalone adaptive noise estimation to persist learned noise profiles to the noise profile manager so estimated spectral curves remain available when switching to manual mode.
+- **Manual Baseline Re-seeding**: Fixed standalone adaptive mode state tracking to reset hybrid initialization state when no manual profile exists, ensuring manual noise profiles captured while adaptive mode is active immediately morph and seed the baseline floor.
+
+### Fixed
+
+
 ## [0.3.1] - 2026-08-07
 
 ### Added
 - **`pkg-config` Support**: Added `specbleach.pc.in` template to generate and install `specbleach.pc` into system pkg-config directories for downstream dependency lookup.
-- **System Installation Targets**: Added standard CMake `install()` targets for header files (`${CMAKE_INSTALL_INCLUDEDIR}`), shared/static libraries (`${CMAKE_INSTALL_LIBDIR}`), and CMake export targets.
+- **System Installation Targets**: Added standard CMake `install()` targets for header files (`${
+  CMAKE_INSTALL_INCLUDEDIR}`), shared/static libraries (`${
+  CMAKE_INSTALL_LIBDIR}`), and CMake export targets.
 - **Configurable FFTW3 Dependency**: Added `USE_SYSTEM_FFTW` option (default `ON`) allowing downstream builders to link system-installed `libfftw3f` or automatically fetch and compile static FFTW3 via `FetchContent`.
 - **Autoresearch Framework**: Integrated automated optimization & research loop scripts (`autoresearch/`).
 

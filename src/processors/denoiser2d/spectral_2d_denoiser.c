@@ -375,6 +375,7 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
       .noise_profile = self->noise_profile,
       .manual_noise_floor = self->manual_noise_floor,
       .noise_spectrum = self->noise_spectrum,
+      .noise_estimator = self->noise_estimator,
   };
   denoiser_profile_core_update(profile_params, reference_spectrum);
 

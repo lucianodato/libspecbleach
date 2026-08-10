@@ -217,6 +217,54 @@ void test_noise_profile_multiple_modes(void) {
   printf("✓ Noise Profile multiple modes tests passed\n");
 }
 
+void test_noise_profile_multi_section_accumulation(void) {
+  printf("Testing Noise Profile multi-section accumulation...\n");
+
+  uint32_t profile_size = 513;
+  NoiseProfile* np = noise_profile_initialize(profile_size);
+  TEST_ASSERT(np != NULL, "Noise profile initialization should succeed");
+
+  float profile_section1[513];
+  for (int i = 0; i < 513; i++) {
+    profile_section1[i] = 0.05f;
+  }
+
+  // Section 1 capture: 50 blocks
+  TEST_ASSERT(
+      set_noise_profile(np, 1, profile_section1, profile_size, 50) == true,
+      "Setting section 1 profile should succeed");
+  TEST_ASSERT(get_noise_profile_block_count(np, 1) == 50,
+              "Block count should be 50 after section 1");
+
+  // Section 2 capture: accumulation of 50 more blocks (total 100 blocks)
+  float profile_section2[513];
+  for (int i = 0; i < 513; i++) {
+    profile_section2[i] = 0.08f;
+  }
+
+  TEST_ASSERT(
+      set_noise_profile(np, 1, profile_section2, profile_size, 100) == true,
+      "Accumulating section 2 profile should succeed");
+  TEST_ASSERT(get_noise_profile_block_count(np, 1) == 100,
+              "Block count should accumulate to 100 after section 2");
+
+  float* read_profile = get_noise_profile(np, 1);
+  TEST_ASSERT(read_profile != NULL, "Profile in mode 1 should exist");
+  for (int i = 0; i < 513; i++) {
+    TEST_FLOAT_CLOSE(read_profile[i], 0.08f, 0.001f);
+  }
+
+  // Verify explicit reset clears accumulation
+  TEST_ASSERT(reset_noise_profile(np) == true, "Reset should succeed");
+  TEST_ASSERT(get_noise_profile_block_count(np, 1) == 0,
+              "Block count should be 0 after reset");
+  TEST_ASSERT(is_noise_estimation_available(np, 1) == false,
+              "Profile should not be available after reset");
+
+  noise_profile_free(np);
+  printf("✓ Noise Profile multi-section accumulation tests passed\n");
+}
+
 int main(void) {
   printf("Running noise profile tests...\n");
 
@@ -226,6 +274,7 @@ int main(void) {
   test_noise_profile_increment_blocks();
   test_noise_profile_reset();
   test_noise_profile_multiple_modes();
+  test_noise_profile_multi_section_accumulation();
 
   printf("✅ All noise profile tests passed!\n");
   return 0;
