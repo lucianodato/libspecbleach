@@ -24,6 +24,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "shared/denoiser_logic/estimators/noise_estimator.h"
 #include "shared/utils/spectral_utils.h"
 #include <math.h>
+#include <string.h>
 
 bool denoiser_profile_core_handle_learning_mode(NoiseEstimator* noise_estimator,
                                                 float* reference_spectrum,
@@ -53,40 +54,56 @@ bool denoiser_profile_core_handle_learning_mode(NoiseEstimator* noise_estimator,
 void denoiser_profile_core_update(DenoiserProfileCoreParams params,
                                   const float* reference_spectrum) {
   if (params.adaptive_enabled && params.adaptive_estimator) {
-    // Adaptive Denoising Mode
-    int state_changed = *params.last_adaptive_state == 0;
-    bool mode_changed =
-        fabsf(*params.aggressiveness - params.param_aggressiveness) > 0.01f;
+    // Check if user has captured a manual noise profile
+    bool has_manual_profile =
+        is_noise_estimation_available(params.noise_profile, 1);
 
-    if (state_changed || mode_changed) {
-      // Calculate morphed base profile
-      get_morphed_profile(params.manual_noise_floor,
-                          get_noise_profile(params.noise_profile, ROLLING_MEAN),
-                          get_noise_profile(params.noise_profile, MEDIAN),
-                          get_noise_profile(params.noise_profile, MAX),
-                          get_noise_profile(params.noise_profile, MINIMUM),
-                          params.spectrum_size, params.param_aggressiveness);
+    if (has_manual_profile) {
+      // Hybrid Mode: Manual baseline profile exists
+      int state_changed = *params.last_adaptive_state == 0;
+      bool mode_changed =
+          fabsf(*params.aggressiveness - params.param_aggressiveness) > 0.01f;
 
-      adaptive_estimator_update_seed(params.adaptive_estimator,
-                                     params.manual_noise_floor);
+      if (state_changed || mode_changed) {
+        // Calculate morphed base profile from manual profile
+        get_morphed_profile(
+            params.manual_noise_floor,
+            get_noise_profile(params.noise_profile, ROLLING_MEAN),
+            get_noise_profile(params.noise_profile, MEDIAN),
+            get_noise_profile(params.noise_profile, MAX),
+            get_noise_profile(params.noise_profile, MINIMUM),
+            params.spectrum_size, params.param_aggressiveness);
 
-      *params.last_adaptive_state = 1;
-    }
+        adaptive_estimator_update_seed(params.adaptive_estimator,
+                                       params.manual_noise_floor);
 
-    // Run adaptive estimator (handles smoothing and aggressiveness tracking)
-    adaptive_estimator_run(params.adaptive_estimator, reference_spectrum,
-                           params.noise_spectrum, params.aggressiveness,
-                           params.param_aggressiveness);
-
-    // Apply morphed profile as a floor
-    adaptive_estimator_apply_floor(params.adaptive_estimator,
-                                   params.manual_noise_floor);
-    for (uint32_t k = 0U; k < params.spectrum_size; k++) {
-      if (params.noise_spectrum[k] < params.manual_noise_floor[k]) {
-        params.noise_spectrum[k] = params.manual_noise_floor[k];
+        *params.last_adaptive_state = 1;
       }
-    }
 
+      // Run adaptive estimator
+      adaptive_estimator_run(params.adaptive_estimator, reference_spectrum,
+                             params.noise_spectrum, params.aggressiveness,
+                             params.param_aggressiveness);
+
+      // Apply morphed manual profile as baseline floor
+      adaptive_estimator_apply_floor(params.adaptive_estimator,
+                                     params.manual_noise_floor);
+      for (uint32_t k = 0U; k < params.spectrum_size; k++) {
+        if (params.noise_spectrum[k] < params.manual_noise_floor[k]) {
+          params.noise_spectrum[k] = params.manual_noise_floor[k];
+        }
+      }
+    } else {
+      // Standalone Adaptive Mode: No manual profile exists
+      *params.last_adaptive_state = 1;
+      memset(params.manual_noise_floor, 0,
+             params.spectrum_size * sizeof(float));
+
+      // Run adaptive estimator directly to track background noise
+      adaptive_estimator_run(params.adaptive_estimator, reference_spectrum,
+                             params.noise_spectrum, params.aggressiveness,
+                             params.param_aggressiveness);
+    }
   } else {
     // Manual Denoising Mode
     *params.last_adaptive_state = 0;

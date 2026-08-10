@@ -452,6 +452,48 @@ int main(void) {
 
   specbleach_free(h);
 
+  // Test adaptive noise profile persistence when deactivating adaptive mode
+  printf("Testing adaptive profile persistence across mode toggles...\n");
+  SpectralBleachHandle h_adapt = specbleach_initialize(44100, 20.0f);
+  TEST_ASSERT(h_adapt != NULL, "Initialization should succeed");
+
+  TEST_ASSERT(specbleach_noise_profile_available_for_mode(h_adapt, 1) == false,
+              "Profile should not be available initially");
+
+  SpectralBleachDenoiserParameters adapt_params = {
+      .adaptive_noise = 1,
+      .noise_estimation_method = 0,
+      .reduction_amount = 12.0f,
+  };
+  specbleach_load_parameters(h_adapt, adapt_params);
+
+  float adapt_in[1024];
+  float adapt_out[1024];
+  for (int i = 0; i < 1024; i++)
+    adapt_in[i] = 0.1f;
+
+  for (int b = 0; b < 10; b++) {
+    specbleach_process(h_adapt, 1024, adapt_in, adapt_out);
+  }
+
+  TEST_ASSERT(specbleach_noise_profile_available_for_mode(h_adapt, 1) == true,
+              "Profile should become available during adaptive mode");
+
+  // Deactivate adaptive mode
+  adapt_params.adaptive_noise = 0;
+  specbleach_load_parameters(h_adapt, adapt_params);
+  specbleach_process(h_adapt, 1024, adapt_in, adapt_out);
+
+  TEST_ASSERT(
+      specbleach_noise_profile_available_for_mode(h_adapt, 1) == true,
+      "Profile should remain available after turning off adaptive mode");
+
+  const float* active_prof = specbleach_get_active_noise_profile(h_adapt);
+  TEST_ASSERT(active_prof != NULL,
+              "Active profile should exist after adaptive mode");
+
+  specbleach_free(h_adapt);
+
   printf("✅ All specbleach denoiser tests passed!\n");
   return 0;
 }
