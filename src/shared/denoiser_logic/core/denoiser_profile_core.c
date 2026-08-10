@@ -103,13 +103,6 @@ void denoiser_profile_core_update(DenoiserProfileCoreParams params,
       adaptive_estimator_run(params.adaptive_estimator, reference_spectrum,
                              params.noise_spectrum, params.aggressiveness,
                              params.param_aggressiveness);
-
-      if (params.noise_profile) {
-        for (int mode = ROLLING_MEAN; mode <= MINIMUM; mode++) {
-          set_noise_profile(params.noise_profile, mode, params.noise_spectrum,
-                            params.spectrum_size, 1U);
-        }
-      }
     }
   } else {
     // Manual Denoising Mode

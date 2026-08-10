@@ -476,21 +476,15 @@ int main(void) {
     specbleach_process(h_adapt, 1024, adapt_in, adapt_out);
   }
 
-  TEST_ASSERT(specbleach_noise_profile_available_for_mode(h_adapt, 1) == true,
-              "Profile should become available during adaptive mode");
+  TEST_ASSERT(specbleach_get_active_noise_profile(h_adapt) != NULL,
+              "Active profile should exist during adaptive mode");
+  TEST_ASSERT(specbleach_noise_profile_available_for_mode(h_adapt, 1) == false,
+              "Manual profile should remain unavailable in standalone adaptive mode");
 
   // Deactivate adaptive mode
   adapt_params.adaptive_noise = 0;
   specbleach_load_parameters(h_adapt, adapt_params);
   specbleach_process(h_adapt, 1024, adapt_in, adapt_out);
-
-  TEST_ASSERT(
-      specbleach_noise_profile_available_for_mode(h_adapt, 1) == true,
-      "Profile should remain available after turning off adaptive mode");
-
-  const float* active_prof = specbleach_get_active_noise_profile(h_adapt);
-  TEST_ASSERT(active_prof != NULL,
-              "Active profile should exist after adaptive mode");
 
   specbleach_free(h_adapt);
 
