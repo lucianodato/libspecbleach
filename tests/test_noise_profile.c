@@ -248,6 +248,12 @@ void test_noise_profile_multi_section_accumulation(void) {
   TEST_ASSERT(get_noise_profile_block_count(np, 1) == 100,
               "Block count should accumulate to 100 after section 2");
 
+  float* read_profile = get_noise_profile(np, 1);
+  TEST_ASSERT(read_profile != NULL, "Profile in mode 1 should exist");
+  for (int i = 0; i < 513; i++) {
+    TEST_FLOAT_CLOSE(read_profile[i], 0.08f, 0.001f);
+  }
+
   // Verify explicit reset clears accumulation
   TEST_ASSERT(reset_noise_profile(np) == true, "Reset should succeed");
   TEST_ASSERT(get_noise_profile_block_count(np, 1) == 0,
