@@ -478,8 +478,9 @@ int main(void) {
 
   TEST_ASSERT(specbleach_get_active_noise_profile(h_adapt) != NULL,
               "Active profile should exist during adaptive mode");
-  TEST_ASSERT(specbleach_noise_profile_available_for_mode(h_adapt, 1) == false,
-              "Manual profile should remain unavailable in standalone adaptive mode");
+  TEST_ASSERT(
+      specbleach_noise_profile_available_for_mode(h_adapt, 1) == false,
+      "Manual profile should remain unavailable in standalone adaptive mode");
 
   // Deactivate adaptive mode
   adapt_params.adaptive_noise = 0;
