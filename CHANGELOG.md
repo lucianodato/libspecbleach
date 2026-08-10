@@ -10,8 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 ### Improved & Refactored
+- **Adaptive Profile Persistence**: Updated standalone adaptive noise estimation to persist learned noise profiles to the noise profile manager so estimated spectral curves remain available when switching to manual mode.
+- **Manual Baseline Re-seeding**: Fixed standalone adaptive mode state tracking to reset hybrid initialization state when no manual profile exists, ensuring manual noise profiles captured while adaptive mode is active immediately morph and seed the baseline floor.
 
 ### Fixed
+
 
 ## [0.3.1] - 2026-08-07
 
