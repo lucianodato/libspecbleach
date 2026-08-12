@@ -113,8 +113,6 @@ bool spectral_smoothing_run(SpectralSmoother* self,
     self->smoothed_spectrum_previous[k] = gains[k];
   }
 
-  sb_apply_spectral_symmetry(gains, self->real_spectrum_size, self->fft_size);
-
   return true;
 }
 
