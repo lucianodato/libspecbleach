@@ -107,6 +107,11 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 
 // Oversubtraction criteria
 #define ALPHA_MAX (4.F)
+
+// Noise Profile Offset
+#define NOISE_PROFILE_OFFSET_DEFAULT_DB 0.0f
+#define NOISE_PROFILE_OFFSET_MIN_DB (-6.0F)
+#define NOISE_PROFILE_OFFSET_MAX_DB (6.0F)
 #define ALPHA_MAX_TONAL (10.F)
 #define ALPHA_MIN (1.F)
 #define DEFAULT_OVERSUBTRACTION (ALPHA_MIN)

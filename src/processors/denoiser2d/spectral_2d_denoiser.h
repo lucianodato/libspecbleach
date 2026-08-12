@@ -42,6 +42,9 @@ typedef struct Denoiser2DParameters {
   float suppression_strength;   /**< Suppression aggressiveness (0.0 to 1.0) */
   float aggressiveness;  /**< -1.0 (Median/Min) to 1.0 (Max), 0.0 (Mean) */
   float tonal_reduction; /**< 0.0 to 1.0 (Phase 3) */
+  float noise_profile_offset_linear; /**< Linear scalar for noise profile */
+  const float* reduction_curve_bias; /**< Per-bin dB bias, NULL = disabled */
+  bool reduction_curve_enabled;
 } Denoiser2DParameters;
 
 /**

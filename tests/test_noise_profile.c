@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "shared/denoiser_logic/core/denoiser_profile_core.h"
 #include "shared/denoiser_logic/core/noise_profile.h"
 
 #define TEST_ASSERT(condition, message)                                        \
@@ -265,6 +266,52 @@ void test_noise_profile_multi_section_accumulation(void) {
   printf("✓ Noise Profile multi-section accumulation tests passed\n");
 }
 
+void test_denoiser_profile_core_offset(void) {
+  printf("Testing Denoiser Profile Core noise offset...\n");
+
+  uint32_t profile_size = 513;
+  NoiseProfile* np = noise_profile_initialize(profile_size);
+  float test_profile[513];
+  float noise_spectrum[513];
+  float ref_spectrum[513];
+  float manual_noise_floor[513];
+  int last_adaptive_state = 0;
+  float aggressiveness = 1.0f;
+
+  for (int i = 0; i < 513; i++) {
+    test_profile[i] = 1.0f;
+    noise_spectrum[i] = 1.0f;
+    ref_spectrum[i] = 1.0f;
+  }
+  set_noise_profile(np, 1, test_profile, profile_size, 10);
+  set_noise_profile(np, 2, test_profile, profile_size, 10);
+  set_noise_profile(np, 3, test_profile, profile_size, 10);
+  set_noise_profile(np, 4, test_profile, profile_size, 10);
+
+  DenoiserProfileCoreParams params = {
+      .spectrum_size = profile_size,
+      .noise_profile = np,
+      .adaptive_estimator = NULL,
+      .manual_noise_floor = manual_noise_floor,
+      .noise_spectrum = noise_spectrum,
+      .last_adaptive_state = &last_adaptive_state,
+      .aggressiveness = &aggressiveness,
+      .param_aggressiveness = 1.0f,
+      .adaptive_enabled = false,
+      .noise_profile_offset_linear = 2.0f,
+  };
+
+  denoiser_profile_core_update(params, ref_spectrum);
+
+  // Offset linear is 2.0f, so 1.0 * 2.0 = 2.0
+  for (int i = 0; i < 513; i++) {
+    TEST_FLOAT_CLOSE(noise_spectrum[i], 2.0f, 0.001f);
+  }
+
+  noise_profile_free(np);
+  printf("✓ Denoiser Profile Core noise offset tests passed\n");
+}
+
 int main(void) {
   printf("Running noise profile tests...\n");
 
@@ -275,6 +322,7 @@ int main(void) {
   test_noise_profile_reset();
   test_noise_profile_multiple_modes();
   test_noise_profile_multi_section_accumulation();
+  test_denoiser_profile_core_offset();
 
   printf("✅ All noise profile tests passed!\n");
   return 0;

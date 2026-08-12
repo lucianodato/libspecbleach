@@ -19,7 +19,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 #include "specbleach_processor_core.h"
+#include "shared/configurations.h"
 #include "shared/utils/general_utils.h"
+#include <math.h>
 #include <stdlib.h>
 
 DenoiserParameters sb_denoiser_params_sanitize(
@@ -38,6 +40,15 @@ DenoiserParameters sb_denoiser_params_sanitize(
       .aggressiveness = parameters.aggressiveness,
       .tonal_reduction =
           from_db_to_coefficient(parameters.tonal_reduction * -1.F),
+      .noise_profile_offset_linear =
+          powf(10.0f, fmaxf(NOISE_PROFILE_OFFSET_MIN_DB,
+                            fminf(NOISE_PROFILE_OFFSET_MAX_DB,
+                                  parameters.noise_profile_offset_db)) /
+                          20.0f),
+      .reduction_curve_bias = parameters.reduction_curve_enabled
+                                  ? parameters.reduction_curve_bias
+                                  : NULL,
+      .reduction_curve_enabled = parameters.reduction_curve_enabled,
   };
 }
 
@@ -57,6 +68,15 @@ Denoiser2DParameters sb_denoiser_2d_params_sanitize(
       .aggressiveness = parameters.aggressiveness,
       .tonal_reduction =
           from_db_to_coefficient(parameters.tonal_reduction * -1.F),
+      .noise_profile_offset_linear =
+          powf(10.0f, fmaxf(NOISE_PROFILE_OFFSET_MIN_DB,
+                            fminf(NOISE_PROFILE_OFFSET_MAX_DB,
+                                  parameters.noise_profile_offset_db)) /
+                          20.0f),
+      .reduction_curve_bias = parameters.reduction_curve_enabled
+                                  ? parameters.reduction_curve_bias
+                                  : NULL,
+      .reduction_curve_enabled = parameters.reduction_curve_enabled,
   };
 }
 

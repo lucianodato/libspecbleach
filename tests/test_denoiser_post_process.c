@@ -160,11 +160,49 @@ void test_post_process_mixing(void) {
   printf("✓ Mixing modes tests passed\n");
 }
 
+void test_post_process_with_reduction_curve(void) {
+  printf("Testing denoiser post process with reduction curve bias...\n");
+
+  uint32_t fft_size = 4;
+  uint32_t real_size = (fft_size / 2) + 1;
+
+  float gain_spectrum[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+  float noise_spectrum[3] = {1.0f, 1.0f, 1.0f};
+  float fft_spectrum[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+  float curve_bias[3] = {6.0f, 0.0f, 6.0f};
+
+  NoiseFloorManager* nfm = noise_floor_manager_initialize(fft_size);
+
+  DenoiserPostProcessParams params = {
+      .fft_size = fft_size,
+      .real_spectrum_size = real_size,
+      .reduction_amount = 0.5f,
+      .tonal_reduction = 0.5f,
+      .whitening_factor = 0.0f,
+      .residual_listen = false,
+      .noise_floor_manager = nfm,
+      .tonal_reducer = NULL,
+      .gain_spectrum = gain_spectrum,
+      .noise_spectrum = noise_spectrum,
+      .fft_spectrum = fft_spectrum,
+      .reduction_curve_bias = curve_bias,
+  };
+
+  denoiser_post_process_apply(params);
+
+  TEST_ASSERT(gain_spectrum[0] > 0.0f,
+              "Gain spectrum should be updated by noise floor manager");
+
+  noise_floor_manager_free(nfm);
+  printf("✓ Post process with reduction curve bias tests passed\n");
+}
+
 int main(void) {
   printf("=== Denoiser Post Process Tests ===\n\n");
 
   test_post_process_null_guards();
   test_post_process_mixing();
+  test_post_process_with_reduction_curve();
 
   printf("\n=== All denoiser post process tests passed ===\n");
   return 0;

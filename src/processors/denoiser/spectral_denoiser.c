@@ -283,6 +283,8 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
       .manual_noise_floor = self->manual_noise_floor,
       .noise_spectrum = self->noise_spectrum,
       .noise_estimator = self->noise_estimator,
+      .noise_profile_offset_linear =
+          self->denoise_parameters.noise_profile_offset_linear,
   };
   denoiser_profile_core_update(profile_params, reference_spectrum);
 
@@ -334,6 +336,7 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
       .gain_spectrum = self->gain_spectrum,
       .noise_spectrum = self->noise_spectrum,
       .fft_spectrum = fft_spectrum,
+      .reduction_curve_bias = self->denoise_parameters.reduction_curve_bias,
   };
   denoiser_post_process_apply(post_params);
 

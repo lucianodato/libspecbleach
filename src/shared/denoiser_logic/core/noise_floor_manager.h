@@ -35,6 +35,7 @@ void noise_floor_manager_apply(NoiseFloorManager* self,
                                float* gain_spectrum, const float* noise_profile,
                                float reduction_amount,
                                float tonal_reduction_amount,
-                               const float* tonal_mask, float whitening_factor);
+                               const float* tonal_mask, float whitening_factor,
+                               const float* reduction_curve_bias);
 
 #endif

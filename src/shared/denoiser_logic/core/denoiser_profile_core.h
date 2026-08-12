@@ -41,6 +41,7 @@ typedef struct DenoiserProfileCoreParams {
   float* manual_noise_floor;
   float* noise_spectrum; // Output buffer
   NoiseEstimator* noise_estimator;
+  float noise_profile_offset_linear; // Linear scalar shift for noise threshold
 } DenoiserProfileCoreParams;
 
 /**

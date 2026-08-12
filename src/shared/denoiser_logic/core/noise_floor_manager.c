@@ -80,8 +80,8 @@ void noise_floor_manager_apply(NoiseFloorManager* self,
                                float* gain_spectrum, const float* noise_profile,
                                float reduction_amount,
                                float tonal_reduction_amount,
-                               const float* tonal_mask,
-                               float whitening_factor) {
+                               const float* tonal_mask, float whitening_factor,
+                               const float* reduction_curve_bias) {
   if (!self || !gain_spectrum || !noise_profile) {
     return;
   }
@@ -122,6 +122,14 @@ void noise_floor_manager_apply(NoiseFloorManager* self,
     float r_dp_db = -20.0f * log10f(dual_path_reduction + 1e-12f);
     if (r_dp_db < 0.0f) {
       r_dp_db = 0.0f;
+    }
+
+    // Apply per-frequency reduction curve bias
+    if (reduction_curve_bias) {
+      r_dp_db += reduction_curve_bias[k];
+      if (r_dp_db < 0.0f) {
+        r_dp_db = 0.0f;
+      }
     }
 
     // Ideal reduction needed to perfectly flatten the profile
