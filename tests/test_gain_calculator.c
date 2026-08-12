@@ -43,9 +43,9 @@ void test_gain_estimation_wiener(void) {
   calculate_gains(real_spectrum_size, fft_size, spectrum, noise_spectrum,
                   gain_spectrum, alpha, beta, WIENER);
 
-  // Wiener: gain = (spectrum - noise) / spectrum = 0.5
+  // Wiener: gain = sqrt((spectrum - noise) / spectrum) = sqrt(0.5) ≈ 0.7071
   for (uint32_t i = 0; i < real_spectrum_size; i++) {
-    TEST_FLOAT_CLOSE(gain_spectrum[i], 0.5f, 0.01f);
+    TEST_FLOAT_CLOSE(gain_spectrum[i], sqrtf(0.5f), 0.01f);
   }
 
   printf("✓ Wiener gain calculation tests passed\n");
@@ -106,9 +106,9 @@ void test_gain_estimation_spectral_subtraction(void) {
   calculate_gains(real_spectrum_size, fft_size, spectrum, noise_spectrum,
                   gain_spectrum, alpha, beta, GENERALIZED_SPECTRALSUBTRACTION);
 
-  // gain = sqrt(max(0, (spectrum^2 - alpha*noise^2) / spectrum^2))
-  // gain = sqrt((100 - 4) / 100) = sqrt(0.96) ≈ 0.9798
-  TEST_FLOAT_CLOSE(gain_spectrum[0], 0.9798f, 0.01f);
+  // gain = sqrt(max(0, 1.0 - alpha * (noise_spectrum / spectrum)))
+  // gain = sqrt(1.0 - 0.2) = sqrt(0.8) ≈ 0.8944
+  TEST_FLOAT_CLOSE(gain_spectrum[0], 0.8944f, 0.01f);
 
   // Test Wiener-like fallback (large noise)
   for (int i = 0; i < 32; i++) {
@@ -117,6 +117,8 @@ void test_gain_estimation_spectral_subtraction(void) {
   }
   calculate_gains(real_spectrum_size, fft_size, spectrum, noise_spectrum,
                   gain_spectrum, alpha, beta, GENERALIZED_SPECTRALSUBTRACTION);
+
+  TEST_FLOAT_CLOSE(gain_spectrum[0], sqrtf(10.0f), 0.01f);
 
   // gain = sqrt(max(0, beta*noise^2 / spectrum^2)) -> Wait, fallback in lib is
   // beta*ratio_sq? spectrum[k] = 1.0, noise[k] = 10.0 -> ratio = 10.0, ratio_sq

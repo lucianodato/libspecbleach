@@ -137,8 +137,9 @@ SpectralProcessorHandle spectral_denoiser_initialize(
     return NULL;
   }
 
-  self->spectrum_smoothing = spectral_smoothing_initialize(
-      self->fft_size, self->sample_rate, self->time_smoothing_type);
+  self->spectrum_smoothing =
+      spectral_smoothing_initialize(self->fft_size, self->sample_rate,
+                                    overlap_factor, self->time_smoothing_type);
   if (!self->spectrum_smoothing) {
     spectral_denoiser_free(self);
     return NULL;
@@ -152,7 +153,7 @@ SpectralProcessorHandle spectral_denoiser_initialize(
 
   self->masking_veto = masking_veto_initialize(
       self->fft_size, self->sample_rate, CRITICAL_BANDS_TYPE_1D,
-      self->spectrum_type, true, USE_TEMPORAL_MASKING_1D_DEFAULT);
+      self->spectrum_type, false, USE_TEMPORAL_MASKING_1D_DEFAULT);
   self->suppression_engine = suppression_engine_initialize(
       self->real_spectrum_size, self->sample_rate, self->band_type,
       self->spectrum_type, true, USE_TEMPORAL_MASKING_1D_DEFAULT);

@@ -44,8 +44,8 @@ int main(void) {
 
   // Spectral Smoother
   spectral_smoothing_free(NULL);
-  SpectralSmoother* ss =
-      spectral_smoothing_initialize(fft_size, sample_rate, FIXED);
+  SpectralSmoother* ss = spectral_smoothing_initialize(fft_size, sample_rate,
+                                                       overlap_factor, FIXED);
   spectral_smoothing_free(ss);
 
   // Transient Detector

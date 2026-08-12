@@ -35,6 +35,7 @@ typedef struct SpectralSmoother SpectralSmoother;
 
 SpectralSmoother* spectral_smoothing_initialize(uint32_t fft_size,
                                                 uint32_t sample_rate,
+                                                uint32_t overlap_factor,
                                                 TimeSmoothingType type);
 void spectral_smoothing_free(SpectralSmoother* self);
 

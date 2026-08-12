@@ -211,7 +211,8 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 
 /* --------------------------------------------------------------- */
 /* ------------------- 1D Denoiser configurations ---------------- */
-/* --------------------------------------------------------------- */
+#define GAIN_SMOOTHING_MIN_RELEASE_SEC (0.010F)
+#define GAIN_SMOOTHING_MAX_RELEASE_SEC (0.150F)
 
 // STFT configurations
 #define OVERLAP_FACTOR_1D 4

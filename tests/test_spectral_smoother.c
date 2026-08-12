@@ -18,7 +18,9 @@ License along with this library; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
+#include "shared/configurations.h"
 #include "shared/utils/spectral_smoother.h"
+#include "shared/utils/spectral_utils.h"
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -39,25 +41,41 @@ void test_spectral_smoother(void) {
   printf("Testing Spectral Smoother...\n");
 
   // 1. Invalid Initialization (fft_size == 0)
-  SpectralSmoother* invalid_ss = spectral_smoothing_initialize(0, 44100, FIXED);
+  SpectralSmoother* invalid_ss =
+      spectral_smoothing_initialize(0, 44100, OVERLAP_FACTOR_1D, FIXED);
   TEST_ASSERT(invalid_ss == NULL, "Initialization with fft_size=0 should fail");
 
   // 2. Free NULL instance (safety check)
   spectral_smoothing_free(NULL);
 
+  // Test initialization with default fallbacks (sample_rate=0,
+  // overlap_factor=0)
+  SpectralSmoother* default_ss =
+      spectral_smoothing_initialize(1024, 0, 0, FIXED);
+  TEST_ASSERT(
+      default_ss != NULL,
+      "Initialization with sample_rate=0 and overlap_factor=0 should succeed");
+  float default_gains[513] = {0.5f};
+  TimeSmoothingParameters default_params = {.smoothing = 0.5f};
+  TEST_ASSERT(spectral_smoothing_run(default_ss, default_params, default_gains),
+              "Run with default smoother should succeed");
+  spectral_smoothing_free(default_ss);
+
   uint32_t fft_size = 1024;
   uint32_t num_bins = (fft_size / 2U) + 1U;
+  uint32_t custom_overlap = 8U;
 
   // 3. Test initialization and run across smoothing types
   for (int type = FIXED; type <= TRANSIENT_AWARE; type++) {
-    SpectralSmoother* ss =
-        spectral_smoothing_initialize(fft_size, 44100, (TimeSmoothingType)type);
+    SpectralSmoother* ss = spectral_smoothing_initialize(
+        fft_size, 44100, custom_overlap, (TimeSmoothingType)type);
     TEST_ASSERT(ss != NULL, "Spectral smoother initialization should succeed");
 
-    float gains[513] = {0.0f};
+    float gains[1024] = {0.0f};
     for (uint32_t i = 0; i < num_bins; i++) {
       gains[i] = 1.0f + (0.5f * sinf((float)i * 0.1f));
     }
+    sb_apply_spectral_symmetry(gains, num_bins, fft_size);
 
     // Test NULL safety in spectral_smoothing_run
     TimeSmoothingParameters params = {.smoothing = 0.8f};
@@ -71,23 +89,40 @@ void test_spectral_smoother(void) {
                 "First run should succeed and initialize state");
 
     // Second run with active smoothing
-    float new_gains[513];
-    for (uint32_t i = 0; i < num_bins; i++) {
-      new_gains[i] = 0.0f;
-    }
+    float new_gains[1024] = {0.0f};
     TEST_ASSERT(spectral_smoothing_run(ss, params, new_gains),
                 "Second run should succeed");
 
-    // Verify smoothing calculation: new_gains[i] = 0.8 * prev + 0.2 * 0.0 = 0.8
-    // * prev
+    // Verify release time smoothing calculation (0.8 factor with custom
+    // overlap)
+    float test_tau = GAIN_SMOOTHING_MIN_RELEASE_SEC +
+                     (0.8f * (GAIN_SMOOTHING_MAX_RELEASE_SEC -
+                              GAIN_SMOOTHING_MIN_RELEASE_SEC));
+    float test_dt = ((float)fft_size / (float)custom_overlap) / 44100.0f;
+    float test_alpha = expf(-test_dt / test_tau);
     for (uint32_t i = 0; i < num_bins; i++) {
-      float expected = 0.8f * (1.0f + (0.5f * sinf((float)i * 0.1f)));
+      float expected = test_alpha * (1.0f + (0.5f * sinf((float)i * 0.1f)));
       TEST_FLOAT_CLOSE(new_gains[i], expected, 0.001f);
     }
 
+    // Verify mirrored bins produced by sb_apply_spectral_symmetry
+    sb_apply_spectral_symmetry(new_gains, num_bins, fft_size);
+    for (uint32_t i = 1; i < num_bins - 1; i++) {
+      TEST_FLOAT_CLOSE(new_gains[fft_size - i], new_gains[i], 0.001f);
+    }
+
+    // Test 100% smoothing factor does not lock memory (alpha < 1.0)
+    TimeSmoothingParameters max_params = {.smoothing = 1.0f};
+    float max_gains[1024] = {0.0f};
+    TEST_ASSERT(spectral_smoothing_run(ss, max_params, max_gains),
+                "Run with smoothing=1.0 should succeed");
+    // Ensure gains updated (decayed towards 0.0, not frozen)
+    TEST_ASSERT(max_gains[0] < new_gains[0],
+                "100% smoothing must update gains rather than freeze");
+
     // Third run with bypass smoothing <= 0.0f
     TimeSmoothingParameters zero_params = {.smoothing = 0.0f};
-    float bypass_gains[513];
+    float bypass_gains[1024] = {0.0f};
     for (uint32_t i = 0; i < num_bins; i++) {
       bypass_gains[i] = 0.5f;
     }

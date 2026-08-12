@@ -172,40 +172,56 @@ void masking_veto_apply(MaskingVeto* self, const float* smoothed_spectrum,
   const uint32_t num_bands =
       get_number_of_critical_bands(self->critical_bands_helper);
 
+  bool band_valid[256];
+  const uint32_t valid_count = (num_bands < 256U) ? num_bands : 256U;
+
   for (uint32_t j = 0U; j < num_bands; j++) {
     const CriticalBandIndexes indexes =
         get_band_indexes(self->critical_bands_helper, j);
 
-    const uint32_t bins_in_band = indexes.end_position - indexes.start_position;
-    if (bins_in_band > 0) {
+    bool is_valid = false;
+    float protection = 0.0F;
+
+    if (indexes.end_position > indexes.start_position) {
       float band_noise_energy = 0.0F;
       float band_threshold = 0.0F;
+      float band_clean_energy = 0.0F;
 
       for (uint32_t k = indexes.start_position; k < indexes.end_position; k++) {
         band_noise_energy += noise_spectrum[k];
         band_threshold += self->masking_thresholds[k];
+        band_clean_energy += self->clean_signal_estimation[k];
       }
 
-      const float nmr_db =
-          10.0F * log10f((band_noise_energy + SPECTRAL_EPSILON) /
-                         (band_threshold + SPECTRAL_EPSILON));
+      // Protection requires signal energy to generate psychoacoustic masking.
+      // In noise-only bands, no signal is present to mask noise.
+      if (band_clean_energy > SPECTRAL_EPSILON &&
+          band_threshold > SPECTRAL_EPSILON) {
+        is_valid = true;
+        const float nmr_db =
+            10.0F * log10f((band_noise_energy + SPECTRAL_EPSILON) /
+                           (band_threshold + SPECTRAL_EPSILON));
 
-      // Map NMR to protection (inverse of audibility):
-      //   NMR <= 0dB -> protection = 1.0 (noise masked, preserve energy)
-      //   NMR >= NMR_RANGE -> protection = 0.0 (noise audible, allow
-      //   suppression)
-      float protection;
-      if (nmr_db <= 0.0F) {
-        protection = 1.0F;
-      } else if (nmr_db >= MASKING_VETO_NMR_RANGE) {
-        protection = 0.0F;
-      } else {
-        protection = 1.0F - (nmr_db / MASKING_VETO_NMR_RANGE);
+        // Map NMR to protection (inverse of audibility):
+        //   NMR <= 0dB -> protection = 1.0 (noise masked, preserve energy)
+        //   NMR >= NMR_RANGE -> protection = 0.0 (noise audible, allow
+        //   suppression)
+        if (nmr_db <= 0.0F) {
+          protection = 1.0F;
+        } else if (nmr_db >= MASKING_VETO_NMR_RANGE) {
+          protection = 0.0F;
+        } else {
+          protection = 1.0F - (nmr_db / MASKING_VETO_NMR_RANGE);
+        }
       }
+    }
 
-      self->band_audibility[j] = protection;
-    } else {
-      self->band_audibility[j] = 0.0F;
+    self->band_audibility[j] = protection;
+    if (!is_valid) {
+      self->band_audibility_memory[j] = 0.0F;
+    }
+    if (j < valid_count) {
+      band_valid[j] = is_valid;
     }
   }
 
@@ -218,6 +234,15 @@ void masking_veto_apply(MaskingVeto* self, const float* smoothed_spectrum,
   // Spectral Stabilization:
   // Smooth protection ACROSS bands to prevent sharp spectral edges.
   spectral_smoothing_apply_spatial(self->band_audibility, num_bands);
+
+  // Reapply clean-signal validity mask before interpolation so invalid bands
+  // remain unprotected
+  for (uint32_t j = 0U; j < valid_count; j++) {
+    if (!band_valid[j]) {
+      self->band_audibility[j] = 0.0F;
+      self->band_audibility_memory[j] = 0.0F;
+    }
+  }
 
   /**
    * 4. Apply Interpolated Veto
