@@ -180,30 +180,39 @@ void masking_veto_apply(MaskingVeto* self, const float* smoothed_spectrum,
     if (bins_in_band > 0) {
       float band_noise_energy = 0.0F;
       float band_threshold = 0.0F;
+      float band_clean_energy = 0.0F;
 
       for (uint32_t k = indexes.start_position; k < indexes.end_position; k++) {
         band_noise_energy += noise_spectrum[k];
         band_threshold += self->masking_thresholds[k];
+        band_clean_energy += self->clean_signal_estimation[k];
       }
 
-      const float nmr_db =
-          10.0F * log10f((band_noise_energy + SPECTRAL_EPSILON) /
-                         (band_threshold + SPECTRAL_EPSILON));
-
-      // Map NMR to protection (inverse of audibility):
-      //   NMR <= 0dB -> protection = 1.0 (noise masked, preserve energy)
-      //   NMR >= NMR_RANGE -> protection = 0.0 (noise audible, allow
-      //   suppression)
-      float protection;
-      if (nmr_db <= 0.0F) {
-        protection = 1.0F;
-      } else if (nmr_db >= MASKING_VETO_NMR_RANGE) {
-        protection = 0.0F;
+      // Protection requires signal energy to generate psychoacoustic masking.
+      // In noise-only bands, no signal is present to mask noise.
+      if (band_clean_energy <= SPECTRAL_EPSILON ||
+          band_threshold <= SPECTRAL_EPSILON) {
+        self->band_audibility[j] = 0.0F;
       } else {
-        protection = 1.0F - (nmr_db / MASKING_VETO_NMR_RANGE);
-      }
+        const float nmr_db =
+            10.0F * log10f((band_noise_energy + SPECTRAL_EPSILON) /
+                           (band_threshold + SPECTRAL_EPSILON));
 
-      self->band_audibility[j] = protection;
+        // Map NMR to protection (inverse of audibility):
+        //   NMR <= 0dB -> protection = 1.0 (noise masked, preserve energy)
+        //   NMR >= NMR_RANGE -> protection = 0.0 (noise audible, allow
+        //   suppression)
+        float protection;
+        if (nmr_db <= 0.0F) {
+          protection = 1.0F;
+        } else if (nmr_db >= MASKING_VETO_NMR_RANGE) {
+          protection = 0.0F;
+        } else {
+          protection = 1.0F - (nmr_db / MASKING_VETO_NMR_RANGE);
+        }
+
+        self->band_audibility[j] = protection;
+      }
     } else {
       self->band_audibility[j] = 0.0F;
     }
