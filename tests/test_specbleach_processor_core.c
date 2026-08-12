@@ -213,6 +213,27 @@ void test_params_sanitize_functions(void) {
   TEST_ASSERT(sp2.reduction_curve_bias == (const float*)0x1234,
               "Sanitize enabled curve bias ptr");
 
+  // Bounds clamping checks for noise_profile_offset_db (-6dB to +6dB)
+  SpectralBleachDenoiserParameters p_min = p1;
+  p_min.noise_profile_offset_db = -20.0f;
+  DenoiserParameters sp_min = sb_denoiser_params_sanitize(p_min);
+  TEST_FLOAT_CLOSE(sp_min.noise_profile_offset_linear, 0.5012f, 1e-3f);
+
+  SpectralBleachDenoiserParameters p_max = p1;
+  p_max.noise_profile_offset_db = 20.0f;
+  DenoiserParameters sp_max = sb_denoiser_params_sanitize(p_max);
+  TEST_FLOAT_CLOSE(sp_max.noise_profile_offset_linear, 1.9953f, 1e-3f);
+
+  SpectralBleach2DDenoiserParameters p2_min = p2;
+  p2_min.noise_profile_offset_db = -20.0f;
+  Denoiser2DParameters sp2_min = sb_denoiser_2d_params_sanitize(p2_min);
+  TEST_FLOAT_CLOSE(sp2_min.noise_profile_offset_linear, 0.5012f, 1e-3f);
+
+  SpectralBleach2DDenoiserParameters p2_max = p2;
+  p2_max.noise_profile_offset_db = 20.0f;
+  Denoiser2DParameters sp2_max = sb_denoiser_2d_params_sanitize(p2_max);
+  TEST_FLOAT_CLOSE(sp2_max.noise_profile_offset_linear, 1.9953f, 1e-3f);
+
   printf("✓ Params sanitize functions tests passed\n");
 }
 

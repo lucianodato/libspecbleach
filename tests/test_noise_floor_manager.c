@@ -199,9 +199,10 @@ void test_noise_floor_manager_reduction_curve(void) {
   }
 
   // Base reduction: 0.5 (approx 6 dB reduction)
-  // Curve bias: +6 dB on bin 10, -6 dB on bin 20
-  curve_bias[10] = 6.0f;  // Total reduction ~ 12 dB -> floor ~ 0.25
-  curve_bias[20] = -6.0f; // Total reduction ~ 0 dB -> floor ~ 1.0
+  // Curve bias: +6 dB on bin 10, -20 dB on bin 20 (forces r_dp_db < 0 ->
+  // clamped to 0)
+  curve_bias[10] = 6.0f;   // Total reduction ~ 12 dB -> floor ~ 0.25
+  curve_bias[20] = -20.0f; // Total reduction ~ 0 dB (clamped) -> floor ~ 1.0
 
   for (uint32_t k = 0; k < fft_size; k++) {
     gain_spectrum[k] = 0.0f;
