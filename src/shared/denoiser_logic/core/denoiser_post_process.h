@@ -43,6 +43,7 @@ typedef struct DenoiserPostProcessParams {
   float* gain_spectrum;
   const float* noise_spectrum;
   float* fft_spectrum; // Input/Output spectrum (modified in place)
+  const float* reduction_curve_bias; // Per-bin dB bias, NULL = disabled
 } DenoiserPostProcessParams;
 
 /**

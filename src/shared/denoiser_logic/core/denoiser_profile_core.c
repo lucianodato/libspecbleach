@@ -116,4 +116,11 @@ void denoiser_profile_core_update(DenoiserProfileCoreParams params,
                         get_noise_profile(params.noise_profile, MINIMUM),
                         params.spectrum_size, params.param_aggressiveness);
   }
+
+  // Apply noise profile offset (threshold scalar shift)
+  if (params.noise_profile_offset_linear != 1.0f) {
+    for (uint32_t k = 0U; k < params.spectrum_size; k++) {
+      params.noise_spectrum[k] *= params.noise_profile_offset_linear;
+    }
+  }
 }

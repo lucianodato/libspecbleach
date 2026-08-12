@@ -94,6 +94,21 @@ typedef struct SpectralBleach2DDenoiserParameters {
 
   /* Tonal Separation */
   float tonal_reduction; // 0.0 to 1.0: Independent reduction for tones
+
+  /* Noise Profile Offset — shifts the noise threshold up/down in dB.
+   * Positive values make detection more aggressive (more noise removed).
+   * Default: 2.0, Range: [-6.0, +6.0] */
+  float noise_profile_offset_db;
+
+  /* Frequency-dependent reduction bias curve.
+   * Array of dB offsets per frequency bin, or NULL if disabled.
+   * Positive values = more reduction at that frequency.
+   * Array length must match specbleach_2d_get_noise_profile_size(). */
+  const float* reduction_curve_bias;
+
+  /* Enables the reduction curve bias. When false, reduction_curve_bias
+   * is ignored even if non-NULL. */
+  bool reduction_curve_enabled;
 } SpectralBleach2DDenoiserParameters;
 
 /**

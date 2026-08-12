@@ -176,12 +176,17 @@ void test_params_sanitize_functions(void) {
       .suppression_strength = 80.0f,
       .aggressiveness = 1.0f,
       .tonal_reduction = -6.0f,
+      .noise_profile_offset_db = 2.0f,
+      .reduction_curve_bias = NULL,
+      .reduction_curve_enabled = false,
   };
 
   DenoiserParameters sp1 = sb_denoiser_params_sanitize(p1);
   TEST_ASSERT(sp1.learn_noise == true, "Sanitize learn_noise");
   TEST_FLOAT_CLOSE(sp1.whitening_factor, 1.0f, 1e-4f);
   TEST_FLOAT_CLOSE(sp1.suppression_strength, 0.8f, 1e-4f);
+  TEST_FLOAT_CLOSE(sp1.noise_profile_offset_linear, 1.2589f, 1e-3f);
+  TEST_ASSERT(sp1.reduction_curve_bias == NULL, "Sanitize disabled curve bias");
 
   SpectralBleach2DDenoiserParameters p2 = {
       .learn_noise = false,
@@ -195,12 +200,17 @@ void test_params_sanitize_functions(void) {
       .suppression_strength = 100.0f,
       .aggressiveness = 2.0f,
       .tonal_reduction = -3.0f,
+      .noise_profile_offset_db = -6.0f,
+      .reduction_curve_bias = (const float*)0x1234,
+      .reduction_curve_enabled = true,
   };
 
   Denoiser2DParameters sp2 = sb_denoiser_2d_params_sanitize(p2);
   TEST_ASSERT(sp2.residual_listen == true, "Sanitize 2d residual_listen");
   TEST_FLOAT_CLOSE(sp2.whitening_factor, 0.5f, 1e-4f);
   TEST_FLOAT_CLOSE(sp2.suppression_strength, 1.0f, 1e-4f);
+  TEST_FLOAT_CLOSE(sp2.noise_profile_offset_linear, 0.5011f, 1e-3f);
+  TEST_ASSERT(sp2.reduction_curve_bias == (const float*)0x1234, "Sanitize enabled curve bias ptr");
 
   printf("✓ Params sanitize functions tests passed\n");
 }

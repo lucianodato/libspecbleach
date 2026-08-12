@@ -30,7 +30,8 @@ void denoiser_post_process_apply(DenoiserPostProcessParams params) {
     noise_floor_manager_apply(
         params.noise_floor_manager, params.real_spectrum_size, params.fft_size,
         params.gain_spectrum, params.noise_spectrum, params.reduction_amount,
-        params.tonal_reduction, tonal_mask, params.whitening_factor);
+        params.tonal_reduction, tonal_mask, params.whitening_factor,
+        params.reduction_curve_bias);
   }
 
   // 2. Mixing Logic (formerly denoise_mixer)
