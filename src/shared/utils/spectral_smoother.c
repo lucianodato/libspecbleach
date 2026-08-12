@@ -19,7 +19,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 #include "spectral_smoother.h"
+#include "shared/configurations.h"
 #include "shared/utils/spectral_utils.h"
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -94,10 +96,20 @@ bool spectral_smoothing_run(SpectralSmoother* self,
     return true;
   }
 
+  // Map smoothing factor (0.0 to 1.0) to release time (10ms to 150ms)
+  float p = fmaxf(0.0f, fminf(1.0f, smoothing));
+  float tau_sec =
+      GAIN_SMOOTHING_MIN_RELEASE_SEC +
+      (p * (GAIN_SMOOTHING_MAX_RELEASE_SEC - GAIN_SMOOTHING_MIN_RELEASE_SEC));
+  uint32_t sr = (self->sample_rate > 0U) ? self->sample_rate : 44100U;
+  uint32_t fft = (self->fft_size > 0U) ? self->fft_size : 2048U;
+  float dt = ((float)fft / (float)OVERLAP_FACTOR_1D) / (float)sr;
+  float alpha = expf(-dt / tau_sec);
+
   uint32_t k = 0U;
   for (k = 0U; k < self->real_spectrum_size; k++) {
-    gains[k] = (smoothing * self->smoothed_spectrum_previous[k]) +
-               ((1.0F - smoothing) * gains[k]);
+    gains[k] = (alpha * self->smoothed_spectrum_previous[k]) +
+               ((1.0F - alpha) * gains[k]);
     self->smoothed_spectrum_previous[k] = gains[k];
   }
 

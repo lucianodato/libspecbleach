@@ -18,6 +18,7 @@ License along with this library; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
+#include "shared/configurations.h"
 #include "shared/utils/spectral_smoother.h"
 #include <math.h>
 #include <stdio.h>
@@ -78,12 +79,29 @@ void test_spectral_smoother(void) {
     TEST_ASSERT(spectral_smoothing_run(ss, params, new_gains),
                 "Second run should succeed");
 
-    // Verify smoothing calculation: new_gains[i] = 0.8 * prev + 0.2 * 0.0 = 0.8
-    // * prev
+    // Verify release time smoothing calculation (0.8 factor)
+    float test_tau =
+        GAIN_SMOOTHING_MIN_RELEASE_SEC +
+        (0.8f *
+         (GAIN_SMOOTHING_MAX_RELEASE_SEC - GAIN_SMOOTHING_MIN_RELEASE_SEC));
+    float test_dt = ((float)fft_size / (float)OVERLAP_FACTOR_1D) / 44100.0f;
+    float test_alpha = expf(-test_dt / test_tau);
     for (uint32_t i = 0; i < num_bins; i++) {
-      float expected = 0.8f * (1.0f + (0.5f * sinf((float)i * 0.1f)));
+      float expected = test_alpha * (1.0f + (0.5f * sinf((float)i * 0.1f)));
       TEST_FLOAT_CLOSE(new_gains[i], expected, 0.001f);
     }
+
+    // Test 100% smoothing factor does not lock memory (alpha < 1.0)
+    TimeSmoothingParameters max_params = {.smoothing = 1.0f};
+    float max_gains[513];
+    for (uint32_t i = 0; i < num_bins; i++) {
+      max_gains[i] = 0.0f;
+    }
+    TEST_ASSERT(spectral_smoothing_run(ss, max_params, max_gains),
+                "Run with smoothing=1.0 should succeed");
+    // Ensure gains updated (decayed towards 0.0, not frozen)
+    TEST_ASSERT(max_gains[0] < new_gains[0],
+                "100% smoothing must update gains rather than freeze");
 
     // Third run with bypass smoothing <= 0.0f
     TimeSmoothingParameters zero_params = {.smoothing = 0.0f};
