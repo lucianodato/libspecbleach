@@ -76,8 +76,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 - **Unit Tests**: Maintain a 1:1 mapping between source modules and unit test files (e.g., `my_module.c` -> `test_my_module.c`).
 - **Integration Tests**: Ensure the filename contains the keyword `integration` (e.g., `test_integration_audio_flow.c`).
 
-### 4. Code Formatting & Quality
-- Ensure `clang-format` is applied.
+### 4. Code Formatting & Quality (Mandatory)
+- **Always Lint Files Before Finishing**: Run `rtk clang-format -i <modified_files>` on every modified or newly created `.c` and `.h` file before completing tasks so CI lint checks pass.
 - Run `clang-tidy` to check for static analysis warnings or style violations.
 
 ### 5. CMake Build Standards
