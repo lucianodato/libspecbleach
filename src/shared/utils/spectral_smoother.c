@@ -28,6 +28,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 struct SpectralSmoother {
   uint32_t fft_size;
   uint32_t sample_rate;
+  uint32_t overlap_factor;
   uint32_t real_spectrum_size;
   TimeSmoothingType type;
 
@@ -37,6 +38,7 @@ struct SpectralSmoother {
 
 SpectralSmoother* spectral_smoothing_initialize(uint32_t fft_size,
                                                 uint32_t sample_rate,
+                                                uint32_t overlap_factor,
                                                 TimeSmoothingType type) {
   if (fft_size == 0U) {
     return NULL;
@@ -50,6 +52,8 @@ SpectralSmoother* spectral_smoothing_initialize(uint32_t fft_size,
 
   self->fft_size = fft_size;
   self->sample_rate = sample_rate;
+  self->overlap_factor =
+      (overlap_factor > 0U) ? overlap_factor : OVERLAP_FACTOR_1D;
   self->real_spectrum_size = (fft_size / 2U) + 1U;
   self->type = type;
 
@@ -103,7 +107,9 @@ bool spectral_smoothing_run(SpectralSmoother* self,
       (p * (GAIN_SMOOTHING_MAX_RELEASE_SEC - GAIN_SMOOTHING_MIN_RELEASE_SEC));
   uint32_t sr = (self->sample_rate > 0U) ? self->sample_rate : 44100U;
   uint32_t fft = (self->fft_size > 0U) ? self->fft_size : 2048U;
-  float dt = ((float)fft / (float)OVERLAP_FACTOR_1D) / (float)sr;
+  uint32_t overlap =
+      (self->overlap_factor > 0U) ? self->overlap_factor : OVERLAP_FACTOR_1D;
+  float dt = ((float)fft / (float)overlap) / (float)sr;
   float alpha = expf(-dt / tau_sec);
 
   uint32_t k = 0U;

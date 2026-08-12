@@ -137,8 +137,9 @@ SpectralProcessorHandle spectral_denoiser_initialize(
     return NULL;
   }
 
-  self->spectrum_smoothing = spectral_smoothing_initialize(
-      self->fft_size, self->sample_rate, self->time_smoothing_type);
+  self->spectrum_smoothing =
+      spectral_smoothing_initialize(self->fft_size, self->sample_rate,
+                                    overlap_factor, self->time_smoothing_type);
   if (!self->spectrum_smoothing) {
     spectral_denoiser_free(self);
     return NULL;

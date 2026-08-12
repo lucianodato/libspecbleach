@@ -187,11 +187,55 @@ void test_temporal_masking(void) {
   printf("✓ Temporal masking tests passed\n");
 }
 
+void test_protected_band_becomes_noise_only(void) {
+  printf(
+      "Testing regression: previously protected band becomes noise-only...\n");
+
+  uint32_t fft_size = 1024;
+  MaskingVeto* mv = masking_veto_initialize(fft_size, 44100, OPUS_SCALE,
+                                            POWER_SPECTRUM, false, true);
+  TEST_ASSERT(mv != NULL, "Init failed");
+
+  uint32_t real_size = (fft_size / 2) + 1;
+  float* smoothed = (float*)calloc(real_size, sizeof(float));
+  float* noise = (float*)calloc(real_size, sizeof(float));
+  float* alpha = (float*)calloc(real_size, sizeof(float));
+
+  // Frame 1: Strong signal -> protected
+  for (uint32_t i = 0; i < real_size; i++) {
+    smoothed[i] = 1000.0F;
+    noise[i] = 1.0F;
+    alpha[i] = 4.0F;
+  }
+  masking_veto_apply(mv, smoothed, noise, NULL, alpha, 1.0F);
+  TEST_ASSERT(alpha[100] < 4.0F, "Protected band should reduce alpha");
+
+  // Frame 2: Signal becomes 0.0F (noise-only). Run frames until clean-signal
+  // gate fails.
+  for (int frame = 0; frame < 15; frame++) {
+    for (uint32_t i = 0; i < real_size; i++) {
+      smoothed[i] = 0.0F;
+      noise[i] = 100.0F;
+      alpha[i] = 4.0F;
+    }
+    masking_veto_apply(mv, smoothed, noise, NULL, alpha, 1.0F);
+  }
+  TEST_FLOAT_CLOSE(alpha[100], 4.0F, 0.001F);
+
+  free(smoothed);
+  free(noise);
+  free(alpha);
+  masking_veto_free(mv);
+
+  printf("✓ Protected band becomes noise-only regression test passed\n");
+}
+
 int main(void) {
   printf("Running Masking Veto tests...\n");
   test_masking_veto_logic();
   test_nmr_protection();
   test_temporal_masking();
+  test_protected_band_becomes_noise_only();
   printf("✅ All Masking Veto tests passed!\n");
   return 0;
 }

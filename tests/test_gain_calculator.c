@@ -118,6 +118,8 @@ void test_gain_estimation_spectral_subtraction(void) {
   calculate_gains(real_spectrum_size, fft_size, spectrum, noise_spectrum,
                   gain_spectrum, alpha, beta, GENERALIZED_SPECTRALSUBTRACTION);
 
+  TEST_FLOAT_CLOSE(gain_spectrum[0], sqrtf(10.0f), 0.01f);
+
   // gain = sqrt(max(0, beta*noise^2 / spectrum^2)) -> Wait, fallback in lib is
   // beta*ratio_sq? spectrum[k] = 1.0, noise[k] = 10.0 -> ratio = 10.0, ratio_sq
   // = 100.0 beta = 1.0. gain = sqrt(beta * ratio_sq) = sqrt(100) = 10.0? Wait,

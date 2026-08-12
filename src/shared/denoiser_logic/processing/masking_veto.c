@@ -172,6 +172,9 @@ void masking_veto_apply(MaskingVeto* self, const float* smoothed_spectrum,
   const uint32_t num_bands =
       get_number_of_critical_bands(self->critical_bands_helper);
 
+  bool band_valid[256];
+  const uint32_t valid_count = (num_bands < 256U) ? num_bands : 256U;
+
   for (uint32_t j = 0U; j < num_bands; j++) {
     const CriticalBandIndexes indexes =
         get_band_indexes(self->critical_bands_helper, j);
@@ -193,6 +196,10 @@ void masking_veto_apply(MaskingVeto* self, const float* smoothed_spectrum,
       if (band_clean_energy <= SPECTRAL_EPSILON ||
           band_threshold <= SPECTRAL_EPSILON) {
         self->band_audibility[j] = 0.0F;
+        self->band_audibility_memory[j] = 0.0F;
+        if (j < valid_count) {
+          band_valid[j] = false;
+        }
       } else {
         const float nmr_db =
             10.0F * log10f((band_noise_energy + SPECTRAL_EPSILON) /
@@ -212,9 +219,16 @@ void masking_veto_apply(MaskingVeto* self, const float* smoothed_spectrum,
         }
 
         self->band_audibility[j] = protection;
+        if (j < valid_count) {
+          band_valid[j] = true;
+        }
       }
     } else {
       self->band_audibility[j] = 0.0F;
+      self->band_audibility_memory[j] = 0.0F;
+      if (j < valid_count) {
+        band_valid[j] = false;
+      }
     }
   }
 
@@ -227,6 +241,15 @@ void masking_veto_apply(MaskingVeto* self, const float* smoothed_spectrum,
   // Spectral Stabilization:
   // Smooth protection ACROSS bands to prevent sharp spectral edges.
   spectral_smoothing_apply_spatial(self->band_audibility, num_bands);
+
+  // Reapply clean-signal validity mask before interpolation so invalid bands
+  // remain unprotected
+  for (uint32_t j = 0U; j < valid_count; j++) {
+    if (!band_valid[j]) {
+      self->band_audibility[j] = 0.0F;
+      self->band_audibility_memory[j] = 0.0F;
+    }
+  }
 
   /**
    * 4. Apply Interpolated Veto

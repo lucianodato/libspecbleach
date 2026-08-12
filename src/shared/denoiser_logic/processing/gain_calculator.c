@@ -43,8 +43,10 @@ static void wiener_subtraction(const uint32_t real_spectrum_size,
     sb_vec8_t mask_noise = sb_gt8(scaled_noise, flt_min);
     sb_vec8_t mask_gain = sb_gt8(s, scaled_noise);
 
-    sb_vec8_t gain = sb_div8(sb_sub8(s, scaled_noise), s);
-    gain = sb_sqrt8(gain);
+    sb_vec8_t safe_s = sb_sel8(mask_gain, s, one);
+    sb_vec8_t diff = sb_sel8(mask_gain, sb_sub8(s, scaled_noise), zero);
+    sb_vec8_t power_gain = sb_div8(diff, safe_s);
+    sb_vec8_t gain = sb_sqrt8(power_gain);
     gain = sb_sel8(mask_gain, gain, zero);
     gain = sb_sel8(mask_noise, gain, one);
 
