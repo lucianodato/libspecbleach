@@ -80,10 +80,9 @@ void test_spectral_smoother(void) {
                 "Second run should succeed");
 
     // Verify release time smoothing calculation (0.8 factor)
-    float test_tau =
-        GAIN_SMOOTHING_MIN_RELEASE_SEC +
-        (0.8f *
-         (GAIN_SMOOTHING_MAX_RELEASE_SEC - GAIN_SMOOTHING_MIN_RELEASE_SEC));
+    float test_tau = GAIN_SMOOTHING_MIN_RELEASE_SEC +
+                     (0.8f * (GAIN_SMOOTHING_MAX_RELEASE_SEC -
+                              GAIN_SMOOTHING_MIN_RELEASE_SEC));
     float test_dt = ((float)fft_size / (float)OVERLAP_FACTOR_1D) / 44100.0f;
     float test_alpha = expf(-test_dt / test_tau);
     for (uint32_t i = 0; i < num_bins; i++) {
