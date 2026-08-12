@@ -41,11 +41,10 @@ DenoiserParameters sb_denoiser_params_sanitize(
       .tonal_reduction =
           from_db_to_coefficient(parameters.tonal_reduction * -1.F),
       .noise_profile_offset_linear =
-          powf(10.0f,
-               fmaxf(NOISE_PROFILE_OFFSET_MIN_DB,
-                     fminf(NOISE_PROFILE_OFFSET_MAX_DB,
-                           parameters.noise_profile_offset_db)) /
-                   20.0f),
+          powf(10.0f, fmaxf(NOISE_PROFILE_OFFSET_MIN_DB,
+                            fminf(NOISE_PROFILE_OFFSET_MAX_DB,
+                                  parameters.noise_profile_offset_db)) /
+                          20.0f),
       .reduction_curve_bias = parameters.reduction_curve_enabled
                                   ? parameters.reduction_curve_bias
                                   : NULL,
@@ -70,11 +69,10 @@ Denoiser2DParameters sb_denoiser_2d_params_sanitize(
       .tonal_reduction =
           from_db_to_coefficient(parameters.tonal_reduction * -1.F),
       .noise_profile_offset_linear =
-          powf(10.0f,
-               fmaxf(NOISE_PROFILE_OFFSET_MIN_DB,
-                     fminf(NOISE_PROFILE_OFFSET_MAX_DB,
-                           parameters.noise_profile_offset_db)) /
-                   20.0f),
+          powf(10.0f, fmaxf(NOISE_PROFILE_OFFSET_MIN_DB,
+                            fminf(NOISE_PROFILE_OFFSET_MAX_DB,
+                                  parameters.noise_profile_offset_db)) /
+                          20.0f),
       .reduction_curve_bias = parameters.reduction_curve_enabled
                                   ? parameters.reduction_curve_bias
                                   : NULL,

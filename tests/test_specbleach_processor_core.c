@@ -210,7 +210,8 @@ void test_params_sanitize_functions(void) {
   TEST_FLOAT_CLOSE(sp2.whitening_factor, 0.5f, 1e-4f);
   TEST_FLOAT_CLOSE(sp2.suppression_strength, 1.0f, 1e-4f);
   TEST_FLOAT_CLOSE(sp2.noise_profile_offset_linear, 0.5011f, 1e-3f);
-  TEST_ASSERT(sp2.reduction_curve_bias == (const float*)0x1234, "Sanitize enabled curve bias ptr");
+  TEST_ASSERT(sp2.reduction_curve_bias == (const float*)0x1234,
+              "Sanitize enabled curve bias ptr");
 
   printf("✓ Params sanitize functions tests passed\n");
 }

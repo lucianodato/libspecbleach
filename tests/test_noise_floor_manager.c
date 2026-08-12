@@ -131,7 +131,8 @@ void test_noise_floor_manager_apply(void) {
     gain_spectrum[k] = 0.0f;
   }
   noise_floor_manager_apply(nfm, real_size, fft_size, gain_spectrum,
-                            noise_profile, 0.1f, 1.0f, tonal_mask_test, 1.0f, NULL);
+                            noise_profile, 0.1f, 1.0f, tonal_mask_test, 1.0f,
+                            NULL);
   TEST_FLOAT_CLOSE(gain_spectrum[0], 1.0f, 0.001f);
   // Test r_dp_db < 0.0f (dual_path_reduction >= 1.0f with tonal path < 1.0f)
   for (uint32_t k = 0; k < fft_size; k++) {
@@ -210,9 +211,11 @@ void test_noise_floor_manager_reduction_curve(void) {
                             noise_profile, 0.5f, 0.5f, NULL, 0.0f, curve_bias);
 
   // Bin 10 should have deeper reduction (lower floor ~ 0.25)
-  TEST_ASSERT(gain_spectrum[10] < gain_spectrum[0], "Bin 10 floor should be lower with positive bias");
+  TEST_ASSERT(gain_spectrum[10] < gain_spectrum[0],
+              "Bin 10 floor should be lower with positive bias");
   // Bin 20 should have less reduction (higher floor ~ 1.0)
-  TEST_ASSERT(gain_spectrum[20] > gain_spectrum[0], "Bin 20 floor should be higher with negative bias");
+  TEST_ASSERT(gain_spectrum[20] > gain_spectrum[0],
+              "Bin 20 floor should be higher with negative bias");
 
   free(gain_spectrum);
   free(noise_profile);
