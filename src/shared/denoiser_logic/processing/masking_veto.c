@@ -179,8 +179,10 @@ void masking_veto_apply(MaskingVeto* self, const float* smoothed_spectrum,
     const CriticalBandIndexes indexes =
         get_band_indexes(self->critical_bands_helper, j);
 
-    const uint32_t bins_in_band = indexes.end_position - indexes.start_position;
-    if (bins_in_band > 0) {
+    bool is_valid = false;
+    float protection = 0.0F;
+
+    if (indexes.end_position > indexes.start_position) {
       float band_noise_energy = 0.0F;
       float band_threshold = 0.0F;
       float band_clean_energy = 0.0F;
@@ -193,14 +195,9 @@ void masking_veto_apply(MaskingVeto* self, const float* smoothed_spectrum,
 
       // Protection requires signal energy to generate psychoacoustic masking.
       // In noise-only bands, no signal is present to mask noise.
-      if (band_clean_energy <= SPECTRAL_EPSILON ||
-          band_threshold <= SPECTRAL_EPSILON) {
-        self->band_audibility[j] = 0.0F;
-        self->band_audibility_memory[j] = 0.0F;
-        if (j < valid_count) {
-          band_valid[j] = false;
-        }
-      } else {
+      if (band_clean_energy > SPECTRAL_EPSILON &&
+          band_threshold > SPECTRAL_EPSILON) {
+        is_valid = true;
         const float nmr_db =
             10.0F * log10f((band_noise_energy + SPECTRAL_EPSILON) /
                            (band_threshold + SPECTRAL_EPSILON));
@@ -209,7 +206,6 @@ void masking_veto_apply(MaskingVeto* self, const float* smoothed_spectrum,
         //   NMR <= 0dB -> protection = 1.0 (noise masked, preserve energy)
         //   NMR >= NMR_RANGE -> protection = 0.0 (noise audible, allow
         //   suppression)
-        float protection;
         if (nmr_db <= 0.0F) {
           protection = 1.0F;
         } else if (nmr_db >= MASKING_VETO_NMR_RANGE) {
@@ -217,18 +213,15 @@ void masking_veto_apply(MaskingVeto* self, const float* smoothed_spectrum,
         } else {
           protection = 1.0F - (nmr_db / MASKING_VETO_NMR_RANGE);
         }
+      }
+    }
 
-        self->band_audibility[j] = protection;
-        if (j < valid_count) {
-          band_valid[j] = true;
-        }
-      }
-    } else {
-      self->band_audibility[j] = 0.0F;
+    self->band_audibility[j] = protection;
+    if (!is_valid) {
       self->band_audibility_memory[j] = 0.0F;
-      if (j < valid_count) {
-        band_valid[j] = false;
-      }
+    }
+    if (j < valid_count) {
+      band_valid[j] = is_valid;
     }
   }
 

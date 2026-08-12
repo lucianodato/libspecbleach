@@ -125,6 +125,30 @@ void test_nmr_protection(void) {
   free(alpha);
   masking_veto_free(mv);
 
+  // Scenario 3: Intermediate NMR protection (signal present, moderate noise)
+  mv = masking_veto_initialize(fft_size, 44100, OPUS_SCALE, POWER_SPECTRUM,
+                               false, true);
+  TEST_ASSERT(mv != NULL, "Init failed for intermediate scenario");
+
+  smoothed = (float*)calloc(real_size, sizeof(float));
+  noise = (float*)calloc(real_size, sizeof(float));
+  alpha = (float*)calloc(real_size, sizeof(float));
+
+  for (uint32_t i = 0; i < real_size; i++) {
+    smoothed[i] = 100.0F; // Signal present
+    noise[i] = 10.0F;     // Moderate noise -> partial protection
+    alpha[i] = 4.0F;
+  }
+
+  masking_veto_apply(mv, smoothed, noise, NULL, alpha, 1.0F);
+  TEST_ASSERT(alpha[100] > 1.0F && alpha[100] < 4.0F,
+              "Partial NMR protection should partially reduce alpha");
+
+  free(smoothed);
+  free(noise);
+  free(alpha);
+  masking_veto_free(mv);
+
   printf("✓ NMR protection tests passed\n");
 }
 

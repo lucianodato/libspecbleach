@@ -48,6 +48,17 @@ void test_spectral_smoother(void) {
   // 2. Free NULL instance (safety check)
   spectral_smoothing_free(NULL);
 
+  // Test initialization with default fallbacks (sample_rate=0, overlap_factor=0)
+  SpectralSmoother* default_ss =
+      spectral_smoothing_initialize(1024, 0, 0, FIXED);
+  TEST_ASSERT(default_ss != NULL,
+              "Initialization with sample_rate=0 and overlap_factor=0 should succeed");
+  float default_gains[513] = {0.5f};
+  TimeSmoothingParameters default_params = {.smoothing = 0.5f};
+  TEST_ASSERT(spectral_smoothing_run(default_ss, default_params, default_gains),
+              "Run with default smoother should succeed");
+  spectral_smoothing_free(default_ss);
+
   uint32_t fft_size = 1024;
   uint32_t num_bins = (fft_size / 2U) + 1U;
   uint32_t custom_overlap = 8U;

@@ -51,7 +51,7 @@ SpectralSmoother* spectral_smoothing_initialize(uint32_t fft_size,
   }
 
   self->fft_size = fft_size;
-  self->sample_rate = sample_rate;
+  self->sample_rate = (sample_rate > 0U) ? sample_rate : 44100U;
   self->overlap_factor =
       (overlap_factor > 0U) ? overlap_factor : OVERLAP_FACTOR_1D;
   self->real_spectrum_size = (fft_size / 2U) + 1U;
@@ -105,11 +105,8 @@ bool spectral_smoothing_run(SpectralSmoother* self,
   float tau_sec =
       GAIN_SMOOTHING_MIN_RELEASE_SEC +
       (p * (GAIN_SMOOTHING_MAX_RELEASE_SEC - GAIN_SMOOTHING_MIN_RELEASE_SEC));
-  uint32_t sr = (self->sample_rate > 0U) ? self->sample_rate : 44100U;
-  uint32_t fft = (self->fft_size > 0U) ? self->fft_size : 2048U;
-  uint32_t overlap =
-      (self->overlap_factor > 0U) ? self->overlap_factor : OVERLAP_FACTOR_1D;
-  float dt = ((float)fft / (float)overlap) / (float)sr;
+  float dt = ((float)self->fft_size / (float)self->overlap_factor) /
+             (float)self->sample_rate;
   float alpha = expf(-dt / tau_sec);
 
   uint32_t k = 0U;
