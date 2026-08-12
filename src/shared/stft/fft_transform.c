@@ -172,6 +172,9 @@ bool fft_load_input_samples(FftTransform* self, const float* input) {
     return false;
   }
 
+  // Clear residual IFFT data from zero-padding regions
+  memset(self->input_fft_buffer, 0, self->fft_size * sizeof(float));
+
   // Copy centered values only
   for (uint32_t i = self->copy_position;
        i < (self->frame_size + self->copy_position); i++) {

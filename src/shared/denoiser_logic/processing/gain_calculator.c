@@ -44,6 +44,7 @@ static void wiener_subtraction(const uint32_t real_spectrum_size,
     sb_vec8_t mask_gain = sb_gt8(s, scaled_noise);
 
     sb_vec8_t gain = sb_div8(sb_sub8(s, scaled_noise), s);
+    gain = sb_sqrt8(gain);
     gain = sb_sel8(mask_gain, gain, zero);
     gain = sb_sel8(mask_noise, gain, one);
 
@@ -54,7 +55,8 @@ static void wiener_subtraction(const uint32_t real_spectrum_size,
     float scaled_noise = noise_spectrum[k] * alpha[k];
     if (scaled_noise > FLT_MIN) {
       if (spectrum[k] > scaled_noise) {
-        gain_spectrum[k] = (spectrum[k] - (scaled_noise)) / spectrum[k];
+        float power_gain = (spectrum[k] - scaled_noise) / spectrum[k];
+        gain_spectrum[k] = sqrtf(power_gain);
       } else {
         gain_spectrum[k] = 0.F;
       }
@@ -112,9 +114,7 @@ static void generalized_spectral_subtraction(
     const float* alpha, const float* beta) {
   for (uint32_t k = 0U; k < real_spectrum_size; k++) {
     if (spectrum[k] > FLT_MIN) {
-      // Use multiplications instead of powf for exponent 2.0
-      float ratio = noise_spectrum[k] / spectrum[k];
-      float ratio_sq = ratio * ratio;
+      float ratio_sq = noise_spectrum[k] / spectrum[k];
       if (ratio_sq < (1.F / (alpha[k] + beta[k]))) {
         float val = fmaxf(1.F - (alpha[k] * ratio_sq), 0.0f);
         gain_spectrum[k] = fmaxf(sqrtf(val), 0.F);

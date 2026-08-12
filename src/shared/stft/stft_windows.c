@@ -107,7 +107,7 @@ static float get_windows_scale_factor(StftWindows* self) {
 
   float sum = 0.0f;
   for (uint32_t k = 0U; k < self->stft_frame_size; k++) {
-    sum += (self->analysis_output_window[k] * self->analysis_output_window[k]);
+    sum += (self->analysis_input_window[k] * self->analysis_output_window[k]);
   }
 
   if (sum < FLT_EPSILON) {

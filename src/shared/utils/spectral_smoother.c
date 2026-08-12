@@ -19,6 +19,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 #include "spectral_smoother.h"
+#include "shared/utils/spectral_utils.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -99,6 +100,8 @@ bool spectral_smoothing_run(SpectralSmoother* self,
                ((1.0F - smoothing) * gains[k]);
     self->smoothed_spectrum_previous[k] = gains[k];
   }
+
+  sb_apply_spectral_symmetry(gains, self->real_spectrum_size, self->fft_size);
 
   return true;
 }
