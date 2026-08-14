@@ -243,19 +243,6 @@ void hpss_filter_set_quality_mode(HpssFilter* self, HpssQualityMode mode) {
   self->config.time_window_size = new_time_win;
   self->config.freq_window_size = new_freq_win;
   self->latency_frames = (new_time_win > 0U) ? ((new_time_win - 1U) / 2U) : 0U;
-
-  if (self->circular_buffer) {
-    spectral_circular_buffer_clear(self->circular_buffer);
-  }
-  if (self->onset_boost_buffer) {
-    memset(self->onset_boost_buffer, 0, HPSS_TIME_WINDOW_MAX * sizeof(float));
-  }
-  if (self->onset_ratio_buffer) {
-    memset(self->onset_ratio_buffer, 0, HPSS_TIME_WINDOW_MAX * sizeof(float));
-  }
-  self->write_pos = 0U;
-  self->delayed_onset_ratio = 0.0f;
-  self->is_initialized_flux = false;
 }
 
 uint32_t hpss_filter_get_latency_frames(const HpssFilter* self) {
@@ -275,22 +262,6 @@ bool hpss_filter_process(HpssFilter* self, const float* current_magnitude,
   }
 
   const uint32_t K = self->config.real_spectrum_size;
-
-  if (self->config.time_window_size == 0U || self->latency_frames == 0U) {
-    if (delayed_magnitude_out) {
-      memcpy(delayed_magnitude_out, current_magnitude, K * sizeof(float));
-    }
-    if (mask_harmonic_out) {
-      for (uint32_t k = 0U; k < K; ++k) {
-        mask_harmonic_out[k] = 1.0f;
-      }
-    }
-    if (mask_percussive_out) {
-      memset(mask_percussive_out, 0, K * sizeof(float));
-    }
-    self->delayed_onset_ratio = 0.0f;
-    return true;
-  }
 
   const uint32_t time_win = self->config.time_window_size;
   const uint32_t freq_win = self->config.freq_window_size;
@@ -346,6 +317,24 @@ bool hpss_filter_process(HpssFilter* self, const float* current_magnitude,
   // 2. Push magnitude frames into circular buffer
   spectral_circular_buffer_push(self->circular_buffer, self->mag_layer_id,
                                 current_magnitude);
+
+  if (self->config.time_window_size == 0U || self->latency_frames == 0U) {
+    if (delayed_magnitude_out) {
+      memcpy(delayed_magnitude_out, current_magnitude, K * sizeof(float));
+    }
+    if (mask_harmonic_out) {
+      for (uint32_t k = 0U; k < K; ++k) {
+        mask_harmonic_out[k] = 1.0f;
+      }
+    }
+    if (mask_percussive_out) {
+      memset(mask_percussive_out, 0, K * sizeof(float));
+    }
+    self->delayed_onset_ratio = 0.0f;
+    self->write_pos = (self->write_pos + 1U) % HPSS_TIME_WINDOW_MAX;
+    spectral_circular_buffer_advance(self->circular_buffer);
+    return true;
+  }
 
   // 3. Retrieve delayed frame
   const float* delayed_mag = spectral_circular_buffer_retrieve(
