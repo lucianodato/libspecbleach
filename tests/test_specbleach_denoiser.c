@@ -453,21 +453,33 @@ int main(void) {
   specbleach_load_parameters(h, t_params);
   specbleach_process(h, 1024, transient_buf, out_buf);
 
-  // Switch HPSS modes
+  // Switch HPSS modes and verify latency
   t_params.residual_listen = 0;
   t_params.reduction_curve_enabled = false;
   t_params.reduction_curve_bias = NULL;
-  t_params.hpss_quality_mode = 1;
-  specbleach_load_parameters(h, t_params);
-  specbleach_process(h, 1024, in_buf, out_buf);
-
-  t_params.hpss_quality_mode = 3;
-  specbleach_load_parameters(h, t_params);
-  specbleach_process(h, 1024, in_buf, out_buf);
 
   t_params.hpss_quality_mode = 0;
   specbleach_load_parameters(h, t_params);
   specbleach_process(h, 1024, in_buf, out_buf);
+  uint32_t lat0 = specbleach_get_latency(h);
+
+  t_params.hpss_quality_mode = 1;
+  specbleach_load_parameters(h, t_params);
+  specbleach_process(h, 1024, in_buf, out_buf);
+  uint32_t lat1 = specbleach_get_latency(h);
+  TEST_ASSERT(lat1 > lat0, "Low quality latency > Off");
+
+  t_params.hpss_quality_mode = 2;
+  specbleach_load_parameters(h, t_params);
+  specbleach_process(h, 1024, in_buf, out_buf);
+  uint32_t lat2 = specbleach_get_latency(h);
+  TEST_ASSERT(lat2 > lat1, "Medium quality latency > Low");
+
+  t_params.hpss_quality_mode = 3;
+  specbleach_load_parameters(h, t_params);
+  specbleach_process(h, 1024, in_buf, out_buf);
+  uint32_t lat3 = specbleach_get_latency(h);
+  TEST_ASSERT(lat3 > lat2, "High quality latency > Medium");
 
   // Verify NULL handle protections
   TEST_ASSERT(specbleach_get_latency(NULL) == 0, "NULL latency");

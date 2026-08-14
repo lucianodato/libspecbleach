@@ -326,21 +326,33 @@ void test_process_loop(void) {
   specbleach_2d_load_parameters(h, params);
   specbleach_2d_process(h, 1024, transient_buf, out_buf);
 
-  // Switch HPSS modes
+  // Switch HPSS modes and verify latency
   params.residual_listen = 0;
   params.reduction_curve_enabled = false;
   params.reduction_curve_bias = NULL;
-  params.hpss_quality_mode = 1;
-  specbleach_2d_load_parameters(h, params);
-  specbleach_2d_process(h, 1024, in_buf, out_buf);
-
-  params.hpss_quality_mode = 3;
-  specbleach_2d_load_parameters(h, params);
-  specbleach_2d_process(h, 1024, in_buf, out_buf);
 
   params.hpss_quality_mode = 0;
   specbleach_2d_load_parameters(h, params);
   specbleach_2d_process(h, 1024, in_buf, out_buf);
+  uint32_t lat0 = specbleach_2d_get_latency(h);
+
+  params.hpss_quality_mode = 1;
+  specbleach_2d_load_parameters(h, params);
+  specbleach_2d_process(h, 1024, in_buf, out_buf);
+  uint32_t lat1 = specbleach_2d_get_latency(h);
+  TEST_ASSERT(lat1 >= lat0, "Low quality 2D latency >= Off");
+
+  params.hpss_quality_mode = 2;
+  specbleach_2d_load_parameters(h, params);
+  specbleach_2d_process(h, 1024, in_buf, out_buf);
+  uint32_t lat2 = specbleach_2d_get_latency(h);
+  TEST_ASSERT(lat2 > lat1, "Medium quality 2D latency > Low");
+
+  params.hpss_quality_mode = 3;
+  specbleach_2d_load_parameters(h, params);
+  specbleach_2d_process(h, 1024, in_buf, out_buf);
+  uint32_t lat3 = specbleach_2d_get_latency(h);
+  TEST_ASSERT(lat3 > lat2, "High quality 2D latency > Medium");
 
   // NULL checks
   TEST_ASSERT(specbleach_2d_get_tonal_mask(NULL) == NULL, "NULL 2D tonal mask");
