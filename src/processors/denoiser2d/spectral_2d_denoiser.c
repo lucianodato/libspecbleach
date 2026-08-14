@@ -27,6 +27,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "shared/denoiser_logic/estimators/adaptive_noise_estimator.h"
 #include "shared/denoiser_logic/estimators/noise_estimator.h"
 #include "shared/denoiser_logic/processing/gain_calculator.h"
+#include "shared/denoiser_logic/processing/hpss_filter.h"
 #include "shared/denoiser_logic/processing/masking_veto.h"
 #include "shared/denoiser_logic/processing/nlm_filter.h"
 #include "shared/denoiser_logic/processing/suppression_engine.h"
@@ -62,6 +63,7 @@ typedef struct Spectral2DDenoiser {
   SbSpectralCircularBuffer* circular_buffer;
   uint32_t layer_fft;
   uint32_t layer_noise;
+  uint32_t layer_nlm_smoothed;
 
   SpectrumType spectrum_type;
   GainCalculationType gain_calculation_type;
@@ -74,6 +76,13 @@ typedef struct Spectral2DDenoiser {
   MaskingVeto* masking_veto;
   SuppressionEngine* suppression_engine;
   NoiseFloorManager* noise_floor_manager;
+  HpssFilter* hpss_filter;
+
+  float* delayed_magnitude;
+  float* mask_harmonic;
+  float* mask_percussive;
+  float* g_h;
+  float* g_p;
 
   int last_adaptive_state;
   int last_noise_estimation_method;
@@ -182,8 +191,11 @@ SpectralProcessorHandle spectral_2d_denoiser_initialize(
       spectral_circular_buffer_add_layer(self->circular_buffer, self->fft_size);
   self->layer_noise = spectral_circular_buffer_add_layer(
       self->circular_buffer, self->real_spectrum_size);
+  self->layer_nlm_smoothed = spectral_circular_buffer_add_layer(
+      self->circular_buffer, self->real_spectrum_size);
 
-  if (self->layer_fft == 0xFFFFFFFF || self->layer_noise == 0xFFFFFFFF) {
+  if (self->layer_fft == 0xFFFFFFFFU || self->layer_noise == 0xFFFFFFFFU ||
+      self->layer_nlm_smoothed == 0xFFFFFFFFU) {
     spectral_2d_denoiser_free(self);
     return NULL;
   }
@@ -240,7 +252,25 @@ SpectralProcessorHandle spectral_2d_denoiser_initialize(
 
   self->noise_floor_manager = noise_floor_manager_initialize(fft_size);
 
-  if (!self->noise_floor_manager) {
+  HpssConfig hpss_cfg = {
+      .real_spectrum_size = self->real_spectrum_size,
+      .time_window_size = HPSS_TIME_WINDOW_2D_DEFAULT,
+      .freq_window_size = HPSS_FREQ_WINDOW_2D_DEFAULT,
+      .noise_oversubtraction = HPSS_NOISE_OVERSUBTRACTION_2D_DEFAULT,
+  };
+  self->hpss_filter = hpss_filter_initialize(hpss_cfg);
+  self->delayed_magnitude =
+      (float*)calloc(self->real_spectrum_size, sizeof(float));
+  self->mask_harmonic =
+      (float*)calloc(self->real_spectrum_size, sizeof(float));
+  self->mask_percussive =
+      (float*)calloc(self->real_spectrum_size, sizeof(float));
+  self->g_h = (float*)calloc(self->fft_size, sizeof(float));
+  self->g_p = (float*)calloc(self->fft_size, sizeof(float));
+
+  if (!self->noise_floor_manager || !self->hpss_filter ||
+      !self->delayed_magnitude || !self->mask_harmonic ||
+      !self->mask_percussive || !self->g_h || !self->g_p) {
     spectral_2d_denoiser_free(self);
     return NULL;
   }
@@ -301,6 +331,25 @@ void spectral_2d_denoiser_free(SpectralProcessorHandle instance) {
     tonal_reducer_free(self->tonal_reducer);
   }
 
+  if (self->hpss_filter) {
+    hpss_filter_free(self->hpss_filter);
+  }
+  if (self->delayed_magnitude) {
+    free(self->delayed_magnitude);
+  }
+  if (self->mask_harmonic) {
+    free(self->mask_harmonic);
+  }
+  if (self->mask_percussive) {
+    free(self->mask_percussive);
+  }
+  if (self->g_h) {
+    free(self->g_h);
+  }
+  if (self->g_p) {
+    free(self->g_p);
+  }
+
   free(self);
 }
 
@@ -345,6 +394,32 @@ bool load_2d_reduction_parameters(SpectralProcessorHandle instance,
   return true;
 }
 
+static void apply_onset_alpha_ducking(float* alpha, int num_bins,
+                                      float onset_ratio, uint32_t sample_rate,
+                                      uint32_t fft_size) {
+  if (!alpha || onset_ratio <= 0.01f || sample_rate == 0 || fft_size == 0) {
+    return;
+  }
+
+  // Cutoff bin corresponding to ~500 Hz
+  uint32_t bass_cutoff_bin =
+      (uint32_t)((500.0f * (float)fft_size) / (float)sample_rate);
+  if (bass_cutoff_bin > (uint32_t)num_bins) {
+    bass_cutoff_bin = (uint32_t)num_bins;
+  }
+
+  for (int k = 0; k < num_bins; k++) {
+    float low_bias = ((uint32_t)k < bass_cutoff_bin) ? 1.5f : 1.0f;
+    float reduction = onset_ratio * low_bias;
+    if (reduction > 1.0f) {
+      reduction = 1.0f;
+    }
+
+    // Duck alpha down toward 1.0 (no over-subtraction) on attack frame
+    alpha[k] = 1.0f + (alpha[k] - 1.0f) * (1.0f - reduction);
+  }
+}
+
 bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
                               float* fft_spectrum) {
   if (!fft_spectrum || !instance) {
@@ -383,89 +458,133 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
 
   // 2.1 Align internal state and output to the delayed frame (temporal
   // plumbing)
-  float* delayed_noise = NULL;
-
   // 2.1.1 Push current spectra to circular buffer
   spectral_circular_buffer_push(self->circular_buffer, self->layer_fft,
                                 fft_spectrum);
   spectral_circular_buffer_push(self->circular_buffer, self->layer_noise,
                                 self->noise_spectrum);
 
-  // 2.1.2 Retrieve aligned (delayed) frames
-  const uint32_t delay_frames = nlm_filter_get_latency_frames(self->nlm_filter);
+  // 2.1.2 HPSS Process (operates on current reference_spectrum, outputs delayed_magnitude and masks at delay L_hpss)
+  if (!hpss_filter_process(self->hpss_filter, reference_spectrum,
+                           self->noise_spectrum, self->delayed_magnitude,
+                           self->mask_harmonic, self->mask_percussive)) {
+    memcpy(self->delayed_magnitude, reference_spectrum,
+           self->real_spectrum_size * sizeof(float));
+    for (uint32_t k = 0U; k < self->real_spectrum_size; ++k) {
+      self->mask_harmonic[k] = 1.0f;
+      self->mask_percussive[k] = 0.0f;
+    }
+  }
 
+  // 2.1.3 Compute SNR for NLM using CURRENT noise and push frame
+  nlm_filter_calculate_snr(self->nlm_filter, reference_spectrum,
+                           self->noise_spectrum, self->snr_frame);
+  nlm_filter_push_frame(self->nlm_filter, self->snr_frame);
+
+  const uint32_t nlm_delay = nlm_filter_get_latency_frames(self->nlm_filter);
+  const uint32_t hpss_delay =
+      hpss_filter_get_latency_frames(self->hpss_filter);
+  const uint32_t total_delay =
+      (hpss_delay > nlm_delay) ? hpss_delay : nlm_delay;
+
+  float* nlm_intermediate_noise = spectral_circular_buffer_retrieve(
+      self->circular_buffer, self->layer_noise, nlm_delay);
+  if (!nlm_intermediate_noise) {
+    nlm_intermediate_noise = self->noise_spectrum;
+  }
+
+  // Process NLM filter (outputs smoothed SNR at nlm_delay)
+  if (nlm_filter_process(self->nlm_filter, self->smoothed_snr)) {
+    nlm_filter_reconstruct_magnitude(self->nlm_filter, self->smoothed_snr,
+                                     nlm_intermediate_noise, self->snr_frame);
+    spectral_circular_buffer_push(
+        self->circular_buffer, self->layer_nlm_smoothed, self->snr_frame);
+  } else {
+    // If NLM not ready yet, push current reference_spectrum
+    spectral_circular_buffer_push(
+        self->circular_buffer, self->layer_nlm_smoothed, reference_spectrum);
+  }
+
+  // 2.1.4 Retrieve unified aligned frames at total_delay
   float* delayed_spectrum = spectral_circular_buffer_retrieve(
-      self->circular_buffer, self->layer_fft, delay_frames);
+      self->circular_buffer, self->layer_fft, total_delay);
+  float* delayed_noise = spectral_circular_buffer_retrieve(
+      self->circular_buffer, self->layer_noise, total_delay);
+  float* smoothed_magnitude = spectral_circular_buffer_retrieve(
+      self->circular_buffer, self->layer_nlm_smoothed, total_delay - nlm_delay);
 
-  delayed_noise = spectral_circular_buffer_retrieve(
-      self->circular_buffer, self->layer_noise, delay_frames);
+  if (!delayed_spectrum) {
+    delayed_spectrum = fft_spectrum;
+  }
+  if (!delayed_noise) {
+    delayed_noise = self->noise_spectrum;
+  }
+  if (!smoothed_magnitude) {
+    smoothed_magnitude = self->delayed_magnitude;
+  }
 
-  // 2.1.3 Align output to the delayed frame by default (Passthrough)
+  // Align output to delayed frame for post-processing
   memcpy(fft_spectrum, delayed_spectrum, self->fft_size * sizeof(float));
 
   // 3. Denoising Stage: Calculate gains and apply psychoacoustic constraints
+  // 3.1 Calculate SNR-dependent oversubtraction factors (Alpha/Beta)
+  SuppressionParameters suppression_params = {
+      .type = SUPPRESSION_BEROUTI_PER_BIN,
+      .strength = self->parameters.suppression_strength,
+      .undersubtraction = 0.0F};
+  suppression_engine_calculate(self->suppression_engine, smoothed_magnitude,
+                               delayed_noise, suppression_params, self->alpha,
+                               self->beta);
 
-  // 3.1 Compute SNR for NLM using the CURRENT noise
-  nlm_filter_calculate_snr(self->nlm_filter, reference_spectrum,
-                           self->noise_spectrum, self->snr_frame);
+  float onset_ratio = hpss_filter_get_onset_ratio(self->hpss_filter);
+  apply_onset_alpha_ducking(self->alpha, (int)self->real_spectrum_size,
+                            onset_ratio, self->sample_rate, self->fft_size);
 
-  // 3.2 Push frame to NLM filter
-  nlm_filter_push_frame(self->nlm_filter, self->snr_frame);
+  // 3.2 Detect tonal components and boost alpha at tonal bins
+  tonal_reducer_run(self->tonal_reducer, delayed_noise,
+                    get_noise_profile(self->noise_profile, MAX),
+                    get_noise_profile(self->noise_profile, MEDIAN),
+                    self->alpha, self->parameters.tonal_reduction);
 
-  // 3.3. Process NLM filter (internally handles buffering readiness)
-  if (nlm_filter_process(self->nlm_filter, self->smoothed_snr)) {
-    // 3.3.1 Convert smoothed SNR back to spectral domain
-    // We reuse self->snr_frame as a temp buffer for smoothed_magnitude
-    float* smoothed_magnitude = self->snr_frame;
-    nlm_filter_reconstruct_magnitude(self->nlm_filter, self->smoothed_snr,
-                                     delayed_noise, smoothed_magnitude);
+  // 3.3 Apply psychoacoustic veto to preserve transients and moderate artifacts
+  masking_veto_apply(self->masking_veto, smoothed_magnitude, delayed_noise,
+                     fft_spectrum, self->alpha,
+                     self->parameters.nlm_masking_protection);
 
-    // 3.3.2 Calculate SNR-dependent oversubtraction factors (Alpha/Beta)
-    SuppressionParameters suppression_params = {
-        .type = SUPPRESSION_BEROUTI_PER_BIN,
-        .strength = self->parameters.suppression_strength,
-        .undersubtraction = 0.0F};
-    suppression_engine_calculate(self->suppression_engine, smoothed_magnitude,
-                                 delayed_noise, suppression_params, self->alpha,
-                                 self->beta);
+  // 3.4 Dual-Path Gain Engine
+  // Calculate Harmonic Gain G_H from smoothed harmonic path (NLM smoothed magnitude)
+  calculate_gains(self->real_spectrum_size, self->fft_size, smoothed_magnitude,
+                  delayed_noise, self->g_h, self->alpha, self->beta,
+                  self->gain_calculation_type);
 
-    // 3.3.3 Detect tonal components and boost alpha at tonal bins
-    tonal_reducer_run(self->tonal_reducer, delayed_noise,
-                      get_noise_profile(self->noise_profile, MAX),
-                      get_noise_profile(self->noise_profile, MEDIAN),
-                      self->alpha, self->parameters.tonal_reduction);
+  // Calculate Percussive Gain G_P from raw delayed magnitude (bypassing NLM smoothing)
+  calculate_gains(self->real_spectrum_size, self->fft_size,
+                  self->delayed_magnitude, delayed_noise, self->g_p,
+                  self->alpha, self->beta, self->gain_calculation_type);
 
-    // 3.3.4 Apply psychoacoustic veto to preserve transients and moderate
-    // artifacts
-    // We pass the CURRENT spectrum (fft_spectrum) as the lookahead for the
-    // DELAYED frame being processed.
-    masking_veto_apply(self->masking_veto, smoothed_magnitude, delayed_noise,
-                       fft_spectrum, self->alpha,
-                       self->parameters.nlm_masking_protection);
-
-    // 3.3.5 Final Gain Calculation
-    calculate_gains(self->real_spectrum_size, self->fft_size,
-                    smoothed_magnitude, delayed_noise, self->gain_spectrum,
-                    self->alpha, self->beta, self->gain_calculation_type);
-
-    // 4. Post-Processing: Final gain management and mixing
-    DenoiserPostProcessParams post_params = {
-        .fft_size = self->fft_size,
-        .real_spectrum_size = self->real_spectrum_size,
-        .reduction_amount = self->parameters.reduction_amount,
-        .tonal_reduction = self->parameters.tonal_reduction,
-        .whitening_factor = self->parameters.whitening_factor,
-        .residual_listen = self->parameters.residual_listen,
-        .noise_floor_manager = self->noise_floor_manager,
-        .tonal_reducer = self->tonal_reducer,
-        .gain_spectrum = self->gain_spectrum,
-        .noise_spectrum = delayed_noise,
-        .fft_spectrum = fft_spectrum,
-        .reduction_curve_bias = self->parameters.reduction_curve_bias,
-    };
-
-    denoiser_post_process_apply(post_params);
+  // Recombine gains: G_final = W_H * G_H + W_P * G_P
+  for (uint32_t k = 0U; k < self->real_spectrum_size; ++k) {
+    self->gain_spectrum[k] = self->mask_harmonic[k] * self->g_h[k] +
+                             self->mask_percussive[k] * self->g_p[k];
   }
+
+  // 4. Post-Processing: Final gain management and mixing
+  DenoiserPostProcessParams post_params = {
+      .fft_size = self->fft_size,
+      .real_spectrum_size = self->real_spectrum_size,
+      .reduction_amount = self->parameters.reduction_amount,
+      .tonal_reduction = self->parameters.tonal_reduction,
+      .whitening_factor = self->parameters.whitening_factor,
+      .residual_listen = self->parameters.residual_listen,
+      .noise_floor_manager = self->noise_floor_manager,
+      .tonal_reducer = self->tonal_reducer,
+      .gain_spectrum = self->gain_spectrum,
+      .noise_spectrum = delayed_noise,
+      .fft_spectrum = fft_spectrum,
+      .reduction_curve_bias = self->parameters.reduction_curve_bias,
+  };
+
+  denoiser_post_process_apply(post_params);
 
   // Finalize: Advance circular buffer write index
   spectral_circular_buffer_advance(self->circular_buffer);
@@ -487,11 +606,13 @@ uint32_t spectral_2d_denoiser_get_latency_frames(
     SpectralProcessorHandle instance) {
   Spectral2DDenoiser* self = (Spectral2DDenoiser*)instance;
 
-  if (!self || !self->nlm_filter) {
+  if (!self) {
     return 0;
   }
 
-  return nlm_filter_get_latency_frames(self->nlm_filter);
+  uint32_t nlm_latency = nlm_filter_get_latency_frames(self->nlm_filter);
+  uint32_t hpss_latency = hpss_filter_get_latency_frames(self->hpss_filter);
+  return (hpss_latency > nlm_latency) ? hpss_latency : nlm_latency;
 }
 
 const float* spectral_2d_denoiser_get_tonal_mask(

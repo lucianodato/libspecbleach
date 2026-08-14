@@ -2,9 +2,9 @@
  * Audio file regression tests - compare library output against reference files
  */
 
+#include "shared/denoiser_logic/processing/hpss_filter.h"
 #include <math.h>
 #include <sndfile.h>
-
 #include <specbleach_denoiser.h>
 #include <stdio.h>
 #include <stdlib.h>

@@ -31,6 +31,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <string.h>
 
 typedef struct SbSpectralDenoiser {
+  uint32_t hop;
   SbProcessorCore* core;
   SpectralProcessorHandle spectral_denoiser;
 } SbSpectralDenoiser;
@@ -53,6 +54,7 @@ SpectralBleachHandle specbleach_initialize(const uint32_t sample_rate,
   }
 
   const uint32_t fft_size = get_stft_fft_size(self->core->stft_processor);
+  self->hop = get_stft_hop_size(self->core->stft_processor);
 
   self->spectral_denoiser = spectral_denoiser_initialize(
       self->core->sample_rate, fft_size, OVERLAP_FACTOR_1D,
@@ -90,7 +92,12 @@ uint32_t specbleach_get_latency(SpectralBleachHandle instance) {
     return 0;
   }
 
-  return get_stft_latency(self->core->stft_processor);
+  uint32_t stft_latency = get_stft_latency(self->core->stft_processor);
+  uint32_t denoiser_latency_frames =
+      spectral_denoiser_get_latency_frames(self->spectral_denoiser);
+  uint32_t denoiser_latency_samples = denoiser_latency_frames * self->hop;
+
+  return stft_latency + denoiser_latency_samples;
 }
 
 bool specbleach_process(SpectralBleachHandle instance,

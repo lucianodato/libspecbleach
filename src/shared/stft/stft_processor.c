@@ -168,6 +168,13 @@ uint32_t get_stft_latency(StftProcessor* self) {
   return self->input_latency;
 }
 
+uint32_t get_stft_hop_size(StftProcessor* self) {
+  if (!self) {
+    return 0;
+  }
+  return self->hop;
+}
+
 uint32_t get_stft_fft_size(StftProcessor* self) {
   if (!self) {
     return 0;

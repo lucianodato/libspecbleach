@@ -35,6 +35,7 @@ StftProcessor* stft_processor_initialize(
     WindowTypes input_window, WindowTypes output_window);
 void stft_processor_free(StftProcessor* self);
 uint32_t get_stft_latency(StftProcessor* self);
+uint32_t get_stft_hop_size(StftProcessor* self);
 uint32_t get_stft_fft_size(StftProcessor* self);
 uint32_t get_stft_real_spectrum_size(StftProcessor* self);
 

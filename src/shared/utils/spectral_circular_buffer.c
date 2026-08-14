@@ -105,6 +105,20 @@ void spectral_circular_buffer_advance(SbSpectralCircularBuffer* self) {
   self->write_index = (self->write_index + 1) % self->num_frames;
 }
 
+void spectral_circular_buffer_clear(SbSpectralCircularBuffer* self) {
+  if (!self) {
+    return;
+  }
+
+  for (uint32_t i = 0; i < self->num_layers; i++) {
+    if (self->layers[i].buffer) {
+      memset(self->layers[i].buffer, 0,
+             (size_t)self->num_frames * self->layers[i].size * sizeof(float));
+    }
+  }
+  self->write_index = 0;
+}
+
 void spectral_circular_buffer_free(SbSpectralCircularBuffer* self) {
   if (!self) {
     return;

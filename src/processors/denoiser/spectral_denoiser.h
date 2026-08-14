@@ -56,5 +56,7 @@ uint32_t spectral_denoiser_get_peaks(SpectralProcessorHandle instance,
                                      float* peak_freqs_hz, uint32_t max_peaks);
 const float* spectral_denoiser_get_active_noise_profile(
     SpectralProcessorHandle instance);
+uint32_t spectral_denoiser_get_latency_frames(
+    SpectralProcessorHandle instance);
 
 #endif

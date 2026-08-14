@@ -107,12 +107,19 @@ bool spectral_smoothing_run(SpectralSmoother* self,
       (p * (GAIN_SMOOTHING_MAX_RELEASE_SEC - GAIN_SMOOTHING_MIN_RELEASE_SEC));
   float dt = ((float)self->fft_size / (float)self->overlap_factor) /
              (float)self->sample_rate;
-  float alpha = expf(-dt / tau_sec);
+  float alpha_release = expf(-dt / tau_sec);
 
   uint32_t k = 0U;
   for (k = 0U; k < self->real_spectrum_size; k++) {
-    gains[k] = (alpha * self->smoothed_spectrum_previous[k]) +
-               ((1.0F - alpha) * gains[k]);
+    float target = gains[k];
+    float prev = self->smoothed_spectrum_previous[k];
+    if (target >= prev) {
+      // Instant attack: gain opens immediately so onsets and attacks are never eaten
+      gains[k] = target;
+    } else {
+      // Smooth release: gain decays slowly to eliminate musical noise
+      gains[k] = (alpha_release * prev) + ((1.0F - alpha_release) * target);
+    }
     self->smoothed_spectrum_previous[k] = gains[k];
   }
 
