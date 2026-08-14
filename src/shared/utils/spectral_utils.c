@@ -307,6 +307,6 @@ void apply_onset_alpha_ducking(float* alpha, uint32_t num_bins,
   for (uint32_t k = 0U; k < num_bins; k++) {
     // Duck alpha down toward 1.0 (no over-subtraction) on attack frame across
     // full spectrum
-    alpha[k] = 1.0f + (alpha[k] - 1.0f) * (1.0f - reduction);
+    alpha[k] = 1.0f + ((alpha[k] - 1.0f) * (1.0f - reduction));
   }
 }
