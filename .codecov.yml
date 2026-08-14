@@ -6,6 +6,12 @@ coverage:
         threshold: 1%
         paths:
           - "src/**"
+    patch:
+      default:
+        target: auto
+        threshold: 20%
+        paths:
+          - "src/**"
 
 ignore:
   - "tests/**"
