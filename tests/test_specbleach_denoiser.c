@@ -442,8 +442,21 @@ int main(void) {
     specbleach_process(h, 1024, in_buf, out_buf);
   }
 
+  // Feed a sharp transient/onset to trigger onset ducking
+  float transient_buf[1024];
+  for (int i = 0; i < 1024; ++i) {
+    transient_buf[i] = (i % 2 == 0) ? 0.9f : -0.9f;
+  }
+  float curve_bias[1024] = {0};
+  t_params.reduction_curve_enabled = true;
+  t_params.reduction_curve_bias = curve_bias;
+  specbleach_load_parameters(h, t_params);
+  specbleach_process(h, 1024, transient_buf, out_buf);
+
   // Switch HPSS modes
   t_params.residual_listen = 0;
+  t_params.reduction_curve_enabled = false;
+  t_params.reduction_curve_bias = NULL;
   t_params.hpss_quality_mode = 1;
   specbleach_load_parameters(h, t_params);
   specbleach_process(h, 1024, in_buf, out_buf);
