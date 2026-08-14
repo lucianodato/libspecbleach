@@ -275,8 +275,8 @@ bool hpss_filter_process(HpssFilter* self, const float* current_magnitude,
   float boost_add = 0.0f;
   if (self->is_initialized_flux) {
     // Subband flux across 4 frequency regions (Low, Mid-Low, Mid-High, High)
-    uint32_t bounds[5] = {0U, spectrum_size / 8U, spectrum_size / 4U,
-                          spectrum_size / 2U, spectrum_size};
+    const uint32_t bounds[5] = {0U, spectrum_size / 8U, spectrum_size / 4U,
+                                spectrum_size / 2U, spectrum_size};
     float max_subband_ratio = 0.0f;
 
     for (int b = 0; b < 4; ++b) {
