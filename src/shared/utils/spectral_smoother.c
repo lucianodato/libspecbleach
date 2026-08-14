@@ -114,7 +114,8 @@ bool spectral_smoothing_run(SpectralSmoother* self,
     float target = gains[k];
     float prev = self->smoothed_spectrum_previous[k];
     if (target >= prev) {
-      // Instant attack: gain opens immediately so onsets and attacks are never eaten
+      // Instant attack: gain opens immediately so onsets and attacks are never
+      // eaten
       gains[k] = target;
     } else {
       // Smooth release: gain decays slowly to eliminate musical noise
@@ -135,8 +136,8 @@ void spectral_smoothing_apply_spatial(float* data, uint32_t size) {
   uint32_t i = 0U;
   for (i = 1U; i < size; i++) {
     float curr = data[i];
-    data[i] = 0.25F * prev + 0.5F * curr +
-              0.25F * (i + 1 < size ? data[i + 1] : curr);
+    data[i] = (0.25F * prev) + (0.5F * curr) +
+              (0.25F * (i + 1 < size ? data[i + 1] : curr));
     prev = curr;
   }
 }
@@ -149,7 +150,7 @@ void spectral_smoothing_apply_simple_temporal(float* current, float* memory,
 
   uint32_t i = 0U;
   for (i = 0U; i < size; i++) {
-    current[i] = smoothing * memory[i] + (1.0F - smoothing) * current[i];
+    current[i] = (smoothing * memory[i]) + ((1.0F - smoothing) * current[i]);
     memory[i] = current[i];
   }
 }

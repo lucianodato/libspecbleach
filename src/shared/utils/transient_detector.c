@@ -101,7 +101,7 @@ bool transient_detector_process(TransientDetector* self,
 
     // Update background energy tracking (exponential filter)
     self->smoothed_items[j] =
-        self->alpha * smoothed + (1.0F - self->alpha) * current;
+        (self->alpha * smoothed) + ((1.0F - self->alpha) * current);
   }
 
   return transient_detected;
