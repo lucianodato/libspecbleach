@@ -28,9 +28,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #ifndef HPSS_QUALITY_MODE_DEFINED
 #define HPSS_QUALITY_MODE_DEFINED
 typedef enum HpssQualityMode {
-  HPSS_QUALITY_LOW = 0,    // L_time = 9 frames (Lookahead: 4)
-  HPSS_QUALITY_MEDIUM = 1, // L_time = 17 frames (Lookahead: 8)
-  HPSS_QUALITY_HIGH = 2    // L_time = 33 frames (Lookahead: 16)
+  HPSS_QUALITY_OFF = 0,    // Bypassed (Lookahead: 0)
+  HPSS_QUALITY_LOW = 1,    // L_time = 9 frames (Lookahead: 4)
+  HPSS_QUALITY_MEDIUM = 2, // L_time = 17 frames (Lookahead: 8)
+  HPSS_QUALITY_HIGH = 3    // L_time = 33 frames (Lookahead: 16)
 } HpssQualityMode;
 #endif
 
@@ -38,9 +39,9 @@ typedef struct HpssFilter HpssFilter;
 
 typedef struct HpssConfig {
   uint32_t real_spectrum_size;
-  uint32_t time_window_size;    // Default: 17 frames
-  uint32_t freq_window_size;    // Default: 17 bins
-  float noise_oversubtraction;  // Default: 1.1f
+  uint32_t time_window_size;   // Default: 17 frames
+  uint32_t freq_window_size;   // Default: 17 bins
+  float noise_oversubtraction; // Default: 1.1f
 } HpssConfig;
 
 // Pre-allocates ring buffers to HPSS_TIME_WINDOW_MAX
@@ -54,11 +55,9 @@ void hpss_filter_set_quality_mode(HpssFilter* self, HpssQualityMode mode);
 uint32_t hpss_filter_get_latency_frames(const HpssFilter* self);
 float hpss_filter_get_onset_ratio(const HpssFilter* self);
 
-bool hpss_filter_process(HpssFilter* self,
-                         const float* current_magnitude,
+bool hpss_filter_process(HpssFilter* self, const float* current_magnitude,
                          const float* noise_profile,
-                         float* delayed_magnitude_out,
-                         float* mask_harmonic_out,
+                         float* delayed_magnitude_out, float* mask_harmonic_out,
                          float* mask_percussive_out);
 
 #endif // SHARED_DENOISER_LOGIC_HPSS_FILTER_H

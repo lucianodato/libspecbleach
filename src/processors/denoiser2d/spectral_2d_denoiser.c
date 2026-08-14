@@ -261,8 +261,7 @@ SpectralProcessorHandle spectral_2d_denoiser_initialize(
   self->hpss_filter = hpss_filter_initialize(hpss_cfg);
   self->delayed_magnitude =
       (float*)calloc(self->real_spectrum_size, sizeof(float));
-  self->mask_harmonic =
-      (float*)calloc(self->real_spectrum_size, sizeof(float));
+  self->mask_harmonic = (float*)calloc(self->real_spectrum_size, sizeof(float));
   self->mask_percussive =
       (float*)calloc(self->real_spectrum_size, sizeof(float));
   self->g_h = (float*)calloc(self->fft_size, sizeof(float));
@@ -382,6 +381,11 @@ bool load_2d_reduction_parameters(SpectralProcessorHandle instance,
   self->parameters = parameters;
   self->aggressiveness = parameters.aggressiveness;
 
+  if (self->hpss_filter) {
+    hpss_filter_set_quality_mode(self->hpss_filter,
+                                 (HpssQualityMode)parameters.hpss_quality_mode);
+  }
+
   // Update NLM h parameter based on smoothing factor (scales h up to 5.0F for
   // strong NLM patch smoothing)
   if (self->nlm_filter) {
@@ -401,21 +405,17 @@ static void apply_onset_alpha_ducking(float* alpha, int num_bins,
     return;
   }
 
-  // Cutoff bin corresponding to ~500 Hz
-  uint32_t bass_cutoff_bin =
-      (uint32_t)((500.0f * (float)fft_size) / (float)sample_rate);
-  if (bass_cutoff_bin > (uint32_t)num_bins) {
-    bass_cutoff_bin = (uint32_t)num_bins;
+  (void)sample_rate;
+  (void)fft_size;
+
+  float reduction = onset_ratio * 2.0f;
+  if (reduction > 1.0f) {
+    reduction = 1.0f;
   }
 
   for (int k = 0; k < num_bins; k++) {
-    float low_bias = ((uint32_t)k < bass_cutoff_bin) ? 1.5f : 1.0f;
-    float reduction = onset_ratio * low_bias;
-    if (reduction > 1.0f) {
-      reduction = 1.0f;
-    }
-
-    // Duck alpha down toward 1.0 (no over-subtraction) on attack frame
+    // Duck alpha down toward 1.0 (no over-subtraction) on attack frame across
+    // full spectrum
     alpha[k] = 1.0f + (alpha[k] - 1.0f) * (1.0f - reduction);
   }
 }
@@ -464,7 +464,8 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
   spectral_circular_buffer_push(self->circular_buffer, self->layer_noise,
                                 self->noise_spectrum);
 
-  // 2.1.2 HPSS Process (operates on current reference_spectrum, outputs delayed_magnitude and masks at delay L_hpss)
+  // 2.1.2 HPSS Process (operates on current reference_spectrum, outputs
+  // delayed_magnitude and masks at delay L_hpss)
   if (!hpss_filter_process(self->hpss_filter, reference_spectrum,
                            self->noise_spectrum, self->delayed_magnitude,
                            self->mask_harmonic, self->mask_percussive)) {
@@ -482,8 +483,7 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
   nlm_filter_push_frame(self->nlm_filter, self->snr_frame);
 
   const uint32_t nlm_delay = nlm_filter_get_latency_frames(self->nlm_filter);
-  const uint32_t hpss_delay =
-      hpss_filter_get_latency_frames(self->hpss_filter);
+  const uint32_t hpss_delay = hpss_filter_get_latency_frames(self->hpss_filter);
   const uint32_t total_delay =
       (hpss_delay > nlm_delay) ? hpss_delay : nlm_delay;
 
@@ -497,12 +497,12 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
   if (nlm_filter_process(self->nlm_filter, self->smoothed_snr)) {
     nlm_filter_reconstruct_magnitude(self->nlm_filter, self->smoothed_snr,
                                      nlm_intermediate_noise, self->snr_frame);
-    spectral_circular_buffer_push(
-        self->circular_buffer, self->layer_nlm_smoothed, self->snr_frame);
+    spectral_circular_buffer_push(self->circular_buffer,
+                                  self->layer_nlm_smoothed, self->snr_frame);
   } else {
     // If NLM not ready yet, push current reference_spectrum
-    spectral_circular_buffer_push(
-        self->circular_buffer, self->layer_nlm_smoothed, reference_spectrum);
+    spectral_circular_buffer_push(self->circular_buffer,
+                                  self->layer_nlm_smoothed, reference_spectrum);
   }
 
   // 2.1.4 Retrieve unified aligned frames at total_delay
@@ -543,8 +543,8 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
   // 3.2 Detect tonal components and boost alpha at tonal bins
   tonal_reducer_run(self->tonal_reducer, delayed_noise,
                     get_noise_profile(self->noise_profile, MAX),
-                    get_noise_profile(self->noise_profile, MEDIAN),
-                    self->alpha, self->parameters.tonal_reduction);
+                    get_noise_profile(self->noise_profile, MEDIAN), self->alpha,
+                    self->parameters.tonal_reduction);
 
   // 3.3 Apply psychoacoustic veto to preserve transients and moderate artifacts
   masking_veto_apply(self->masking_veto, smoothed_magnitude, delayed_noise,
@@ -552,12 +552,14 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
                      self->parameters.nlm_masking_protection);
 
   // 3.4 Dual-Path Gain Engine
-  // Calculate Harmonic Gain G_H from smoothed harmonic path (NLM smoothed magnitude)
+  // Calculate Harmonic Gain G_H from smoothed harmonic path (NLM smoothed
+  // magnitude)
   calculate_gains(self->real_spectrum_size, self->fft_size, smoothed_magnitude,
                   delayed_noise, self->g_h, self->alpha, self->beta,
                   self->gain_calculation_type);
 
-  // Calculate Percussive Gain G_P from raw delayed magnitude (bypassing NLM smoothing)
+  // Calculate Percussive Gain G_P from raw delayed magnitude (bypassing NLM
+  // smoothing)
   calculate_gains(self->real_spectrum_size, self->fft_size,
                   self->delayed_magnitude, delayed_noise, self->g_p,
                   self->alpha, self->beta, self->gain_calculation_type);

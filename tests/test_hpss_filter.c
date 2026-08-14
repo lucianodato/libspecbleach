@@ -111,7 +111,8 @@ void test_hpss_filter(void) {
   (void)hpss_filter_process(filter, current_mag, noise_profile, delayed_mag,
                             mask_h, mask_p);
 
-  // Feed quiet frames until the transient reaches center frame (latency frames later)
+  // Feed quiet frames until the transient reaches center frame (latency frames
+  // later)
   for (uint32_t i = 0; i < 257; ++i) {
     current_mag[i] = 0.01f;
   }
@@ -120,42 +121,64 @@ void test_hpss_filter(void) {
                               mask_h, mask_p);
   }
 
-  // When the transient is in the center frame, mask_p should dominate (high percussive weight)
+  // When the transient is in the center frame, mask_p should dominate (high
+  // percussive weight)
   float avg_p = 0.0f;
   for (uint32_t k = 0; k < 257; ++k) {
     avg_p += mask_p[k];
   }
   avg_p /= 257.0f;
-  TEST_ASSERT(avg_p > 0.5f, "Percussive mask should dominate on transient frame");
+  TEST_ASSERT(avg_p > 0.5f,
+              "Percussive mask should dominate on transient frame");
 
   hpss_filter_free(filter);
 
   // 6. Test Dynamic Quality Mode Reconfiguration
   filter = hpss_filter_initialize(config);
   TEST_ASSERT(filter != NULL, "HPSS filter initialization should succeed");
-  TEST_ASSERT(hpss_filter_get_latency_frames(filter) == 8U, "Default latency is 8");
+  TEST_ASSERT(hpss_filter_get_latency_frames(filter) == 8U,
+              "Default latency is 8");
 
   // Switch to Low
   hpss_filter_set_quality_mode(filter, HPSS_QUALITY_LOW);
-  TEST_ASSERT(hpss_filter_get_latency_frames(filter) == 4U, "Low quality latency should be 4 frames");
+  TEST_ASSERT(hpss_filter_get_latency_frames(filter) == 4U,
+              "Low quality latency should be 4 frames");
   for (uint32_t frame = 0; frame < 10; ++frame) {
-    bool ok = hpss_filter_process(filter, current_mag, noise_profile, delayed_mag, mask_h, mask_p);
+    bool ok = hpss_filter_process(filter, current_mag, noise_profile,
+                                  delayed_mag, mask_h, mask_p);
     TEST_ASSERT(ok, "Process on Low quality mode should succeed");
   }
 
   // Switch to High
   hpss_filter_set_quality_mode(filter, HPSS_QUALITY_HIGH);
-  TEST_ASSERT(hpss_filter_get_latency_frames(filter) == 16U, "High quality latency should be 16 frames");
+  TEST_ASSERT(hpss_filter_get_latency_frames(filter) == 16U,
+              "High quality latency should be 16 frames");
   for (uint32_t frame = 0; frame < 10; ++frame) {
-    bool ok = hpss_filter_process(filter, current_mag, noise_profile, delayed_mag, mask_h, mask_p);
+    bool ok = hpss_filter_process(filter, current_mag, noise_profile,
+                                  delayed_mag, mask_h, mask_p);
     TEST_ASSERT(ok, "Process on High quality mode should succeed");
+  }
+
+  // Switch to Off
+  hpss_filter_set_quality_mode(filter, HPSS_QUALITY_OFF);
+  TEST_ASSERT(hpss_filter_get_latency_frames(filter) == 0U,
+              "Off quality latency should be 0 frames");
+  for (uint32_t frame = 0; frame < 10; ++frame) {
+    bool ok = hpss_filter_process(filter, current_mag, noise_profile,
+                                  delayed_mag, mask_h, mask_p);
+    TEST_ASSERT(ok, "Process on Off quality mode should succeed");
+    TEST_ASSERT(delayed_mag[10] == current_mag[10],
+                "Delayed magnitude should match current magnitude in Off mode");
+    TEST_ASSERT(mask_h[10] == 1.0f, "Harmonic mask should be 1.0 in Off mode");
   }
 
   // Switch back to Medium
   hpss_filter_set_quality_mode(filter, HPSS_QUALITY_MEDIUM);
-  TEST_ASSERT(hpss_filter_get_latency_frames(filter) == 8U, "Medium quality latency should be 8 frames");
+  TEST_ASSERT(hpss_filter_get_latency_frames(filter) == 8U,
+              "Medium quality latency should be 8 frames");
   for (uint32_t frame = 0; frame < 10; ++frame) {
-    bool ok = hpss_filter_process(filter, current_mag, noise_profile, delayed_mag, mask_h, mask_p);
+    bool ok = hpss_filter_process(filter, current_mag, noise_profile,
+                                  delayed_mag, mask_h, mask_p);
     TEST_ASSERT(ok, "Process on Medium quality mode should succeed");
   }
 

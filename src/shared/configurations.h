@@ -226,8 +226,8 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define GAIN_SMOOTHING_MIN_RELEASE_SEC (0.010F)
 #define GAIN_SMOOTHING_MAX_RELEASE_SEC (0.150F)
 
-// HPSS configurations (1D Denoiser defaults to Low quality / low latency)
-#define HPSS_QUALITY_MODE_1D_DEFAULT HPSS_QUALITY_LOW
+// HPSS configurations (Defaults to Off / zero latency)
+#define HPSS_QUALITY_MODE_1D_DEFAULT HPSS_QUALITY_OFF
 #define HPSS_TIME_WINDOW_1D_DEFAULT HPSS_TIME_WINDOW_LOW
 #define HPSS_FREQ_WINDOW_1D_DEFAULT HPSS_FREQ_WINDOW_LOW
 #define HPSS_NOISE_OVERSUBTRACTION_1D_DEFAULT HPSS_NOISE_OVERSUBTRACTION_DEFAULT
@@ -255,8 +255,8 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 /* ------------------- 2D Denoiser configurations ------------------- */
 /* ------------------------------------------------------------------ */
 
-// HPSS configurations (2D Denoiser defaults to High quality / maximum accuracy)
-#define HPSS_QUALITY_MODE_2D_DEFAULT HPSS_QUALITY_HIGH
+// HPSS configurations (Defaults to Off / zero latency)
+#define HPSS_QUALITY_MODE_2D_DEFAULT HPSS_QUALITY_OFF
 #define HPSS_TIME_WINDOW_2D_DEFAULT HPSS_TIME_WINDOW_HIGH
 #define HPSS_FREQ_WINDOW_2D_DEFAULT HPSS_FREQ_WINDOW_HIGH
 #define HPSS_NOISE_OVERSUBTRACTION_2D_DEFAULT HPSS_NOISE_OVERSUBTRACTION_DEFAULT

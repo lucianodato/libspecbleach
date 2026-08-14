@@ -196,8 +196,7 @@ SpectralProcessorHandle spectral_denoiser_initialize(
   self->hpss_filter = hpss_filter_initialize(hpss_cfg);
   self->delayed_magnitude =
       (float*)calloc(self->real_spectrum_size, sizeof(float));
-  self->mask_harmonic =
-      (float*)calloc(self->real_spectrum_size, sizeof(float));
+  self->mask_harmonic = (float*)calloc(self->real_spectrum_size, sizeof(float));
   self->mask_percussive =
       (float*)calloc(self->real_spectrum_size, sizeof(float));
   self->g_h = (float*)calloc(self->fft_size, sizeof(float));
@@ -319,6 +318,11 @@ bool load_reduction_parameters(SpectralProcessorHandle instance,
   self->denoise_parameters = parameters;
   self->aggressiveness = parameters.aggressiveness;
 
+  if (self->hpss_filter) {
+    hpss_filter_set_quality_mode(self->hpss_filter,
+                                 (HpssQualityMode)parameters.hpss_quality_mode);
+  }
+
   return true;
 }
 
@@ -329,21 +333,17 @@ static void apply_onset_alpha_ducking(float* alpha, int num_bins,
     return;
   }
 
-  // Cutoff bin corresponding to ~500 Hz
-  uint32_t bass_cutoff_bin =
-      (uint32_t)((500.0f * (float)fft_size) / (float)sample_rate);
-  if (bass_cutoff_bin > (uint32_t)num_bins) {
-    bass_cutoff_bin = (uint32_t)num_bins;
+  (void)sample_rate;
+  (void)fft_size;
+
+  float reduction = onset_ratio * 2.0f;
+  if (reduction > 1.0f) {
+    reduction = 1.0f;
   }
 
   for (int k = 0; k < num_bins; k++) {
-    float low_bias = ((uint32_t)k < bass_cutoff_bin) ? 1.5f : 1.0f;
-    float reduction = onset_ratio * low_bias;
-    if (reduction > 1.0f) {
-      reduction = 1.0f;
-    }
-
-    // Duck alpha down toward 1.0 (no over-subtraction) on attack frame
+    // Duck alpha down toward 1.0 (no over-subtraction) on attack frame across
+    // full spectrum
     alpha[k] = 1.0f + (alpha[k] - 1.0f) * (1.0f - reduction);
   }
 }
@@ -384,7 +384,8 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
   };
   denoiser_profile_core_update(profile_params, reference_spectrum);
 
-  // 2.1 Align internal state and output to the delayed frame (temporal plumbing)
+  // 2.1 Align internal state and output to the delayed frame (temporal
+  // plumbing)
   spectral_circular_buffer_push(self->circular_buffer, self->layer_fft,
                                 fft_spectrum);
   spectral_circular_buffer_push(self->circular_buffer, self->layer_noise,
@@ -408,7 +409,8 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
   // Align output to delayed frame for post-processing
   memcpy(fft_spectrum, delayed_spectrum, self->fft_size * sizeof(float));
 
-  // 3. Denoising Stage: HPSS dual-path gain calculation and psychoacoustic constraints
+  // 3. Denoising Stage: HPSS dual-path gain calculation and psychoacoustic
+  // constraints
   if (!hpss_filter_process(self->hpss_filter, reference_spectrum,
                            self->noise_spectrum, self->delayed_magnitude,
                            self->mask_harmonic, self->mask_percussive)) {
@@ -428,8 +430,8 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
       .strength = self->denoise_parameters.suppression_strength,
       .undersubtraction = 0.0F};
   suppression_engine_calculate(self->suppression_engine, input_magnitude,
-                               delayed_noise, suppression_params,
-                               self->alpha, self->beta);
+                               delayed_noise, suppression_params, self->alpha,
+                               self->beta);
 
   float onset_ratio = hpss_filter_get_onset_ratio(self->hpss_filter);
   apply_onset_alpha_ducking(self->alpha, (int)self->real_spectrum_size,
@@ -442,15 +444,15 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
                     self->denoise_parameters.tonal_reduction);
 
   // 3.3. Apply Structural Veto to rescue transients and moderate artifacts
-  masking_veto_apply(self->masking_veto, input_magnitude,
-                     delayed_noise, NULL, self->alpha,
-                     self->denoise_parameters.masking_depth);
+  masking_veto_apply(self->masking_veto, input_magnitude, delayed_noise, NULL,
+                     self->alpha, self->denoise_parameters.masking_depth);
 
   // 3.4. Dual-Path Gain Engine
-  // 3.4a. Calculate Raw Harmonic Gain G_H and apply temporal & spatial gain smoothing
+  // 3.4a. Calculate Raw Harmonic Gain G_H and apply temporal & spatial gain
+  // smoothing
   calculate_gains(self->real_spectrum_size, self->fft_size, input_magnitude,
-                  delayed_noise, self->g_h, self->alpha,
-                  self->beta, self->gain_calculation_type);
+                  delayed_noise, self->g_h, self->alpha, self->beta,
+                  self->gain_calculation_type);
 
   TimeSmoothingParameters spectral_smoothing_parameters =
       (TimeSmoothingParameters){
@@ -465,10 +467,11 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
     }
   }
 
-  // 3.4b. Calculate Raw Percussive Gain G_P (Bypass temporal smoothing completely)
+  // 3.4b. Calculate Raw Percussive Gain G_P (Bypass temporal smoothing
+  // completely)
   calculate_gains(self->real_spectrum_size, self->fft_size, input_magnitude,
-                  delayed_noise, self->g_p, self->alpha,
-                  self->beta, self->gain_calculation_type);
+                  delayed_noise, self->g_p, self->alpha, self->beta,
+                  self->gain_calculation_type);
 
   // 3.4c. Recombine gains: G_final = W_H * G_H + W_P * G_P
   for (uint32_t k = 0U; k < self->real_spectrum_size; ++k) {
