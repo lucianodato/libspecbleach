@@ -141,6 +141,8 @@ void test_circular_buffer_edge_cases(void) {
   spectral_circular_buffer_push(NULL, layer0, NULL);
   TEST_ASSERT(spectral_circular_buffer_retrieve(NULL, layer0, 0) == NULL,
               "NULL handle retrieve");
+  TEST_ASSERT(spectral_circular_buffer_retrieve(cb, 999, 0) == NULL,
+              "Out of bounds layer retrieve");
   spectral_circular_buffer_advance(NULL);
 
   spectral_circular_buffer_free(cb);
@@ -156,6 +158,7 @@ void test_circular_buffer_clear(void) {
   float data[2] = {10.0f, 20.0f};
 
   spectral_circular_buffer_push(cb, layer0, data);
+  spectral_circular_buffer_advance(cb);
   spectral_circular_buffer_clear(cb);
 
   float* retrieved = spectral_circular_buffer_retrieve(cb, layer0, 0);

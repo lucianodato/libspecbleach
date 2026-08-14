@@ -66,6 +66,7 @@ int main(void) {
          old_incorrect_latency);
 
   // Test getters and NULL safety
+  assert(get_stft_hop_size(processor) == expected_hop);
   assert(get_stft_real_spectrum_size(processor) > 0);
   assert(get_stft_real_spectrum_size(NULL) == 0);
   assert(get_stft_latency(NULL) == 0);

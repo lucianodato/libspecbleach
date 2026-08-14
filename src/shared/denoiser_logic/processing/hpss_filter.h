@@ -39,9 +39,8 @@ typedef struct HpssFilter HpssFilter;
 
 typedef struct HpssConfig {
   uint32_t real_spectrum_size;
-  uint32_t time_window_size;   // Default: 17 frames
-  uint32_t freq_window_size;   // Default: 17 bins
-  float noise_oversubtraction; // Default: 1.1f
+  uint32_t time_window_size; // Default: 17 frames
+  uint32_t freq_window_size; // Default: 17 bins
 } HpssConfig;
 
 // Pre-allocates ring buffers to HPSS_TIME_WINDOW_MAX
@@ -56,7 +55,6 @@ uint32_t hpss_filter_get_latency_frames(const HpssFilter* self);
 float hpss_filter_get_onset_ratio(const HpssFilter* self);
 
 bool hpss_filter_process(HpssFilter* self, const float* current_magnitude,
-                         const float* noise_profile,
                          float* delayed_magnitude_out, float* mask_harmonic_out,
                          float* mask_percussive_out);
 

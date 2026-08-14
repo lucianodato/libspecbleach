@@ -161,28 +161,28 @@ bool stft_processor_run(StftProcessor* self, const uint32_t number_of_samples,
   return true;
 }
 
-uint32_t get_stft_latency(StftProcessor* self) {
+uint32_t get_stft_latency(const StftProcessor* self) {
   if (!self) {
     return 0;
   }
   return self->input_latency;
 }
 
-uint32_t get_stft_hop_size(StftProcessor* self) {
+uint32_t get_stft_hop_size(const StftProcessor* self) {
   if (!self) {
     return 0;
   }
   return self->hop;
 }
 
-uint32_t get_stft_fft_size(StftProcessor* self) {
+uint32_t get_stft_fft_size(const StftProcessor* self) {
   if (!self) {
     return 0;
   }
   return self->fft_size;
 }
 
-uint32_t get_stft_real_spectrum_size(StftProcessor* self) {
+uint32_t get_stft_real_spectrum_size(const StftProcessor* self) {
   if (!self) {
     return 0;
   }

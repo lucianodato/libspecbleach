@@ -70,7 +70,7 @@ static void compute_adaptive_freq_median(const float* src, float* dst,
   for (int k = 0; k < num_bins; k++) {
     // Scale half-window size: 1 bin at bass, scaling up to max_half at high
     // frequencies
-    int half_win = k / 12;
+    int half_win = k / ((int)HPSS_BASS_CUTOFF_BINS / 2);
     if (half_win < 1) {
       half_win = 1; // 3-bin window for bass (k-1, k, k+1)
     }
@@ -119,12 +119,11 @@ HpssFilter* hpss_filter_initialize(HpssConfig config) {
   if (config.time_window_size % 2U == 0U) {
     config.time_window_size += 1U;
   }
+  if (config.time_window_size > HPSS_TIME_WINDOW_MAX) {
+    config.time_window_size = HPSS_TIME_WINDOW_MAX;
+  }
   if (config.freq_window_size % 2U == 0U) {
     config.freq_window_size += 1U;
-  }
-
-  if (config.noise_oversubtraction <= 0.0f) {
-    config.noise_oversubtraction = HPSS_NOISE_OVERSUBTRACTION_DEFAULT;
   }
 
   HpssFilter* self = (HpssFilter*)calloc(1U, sizeof(HpssFilter));
@@ -240,6 +239,11 @@ void hpss_filter_set_quality_mode(HpssFilter* self, HpssQualityMode mode) {
     return;
   }
 
+  if (new_time_win > self->config.time_window_size) {
+    spectral_circular_buffer_clear(self->circular_buffer);
+    self->is_initialized_flux = false;
+  }
+
   self->config.time_window_size = new_time_win;
   self->config.freq_window_size = new_freq_win;
   self->latency_frames = (new_time_win > 0U) ? ((new_time_win - 1U) / 2U) : 0U;
@@ -254,7 +258,6 @@ float hpss_filter_get_onset_ratio(const HpssFilter* self) {
 }
 
 bool hpss_filter_process(HpssFilter* self, const float* current_magnitude,
-                         const float* noise_profile,
                          float* delayed_magnitude_out, float* mask_harmonic_out,
                          float* mask_percussive_out) {
   if (!self || !current_magnitude) {
@@ -272,18 +275,13 @@ bool hpss_filter_process(HpssFilter* self, const float* current_magnitude,
   float boost_add = 0.0f;
   if (self->is_initialized_flux) {
     // Subband flux across 4 frequency regions (Low, Mid-Low, Mid-High, High)
-    uint32_t b0 = 0U;
-    uint32_t b1 = spectrum_size / 8U;
-    uint32_t b2 = spectrum_size / 4U;
-    uint32_t b3 = spectrum_size / 2U;
-    uint32_t b4 = spectrum_size;
-
-    float bounds[5] = {(float)b0, (float)b1, (float)b2, (float)b3, (float)b4};
+    uint32_t bounds[5] = {0U, spectrum_size / 8U, spectrum_size / 4U,
+                          spectrum_size / 2U, spectrum_size};
     float max_subband_ratio = 0.0f;
 
     for (int b = 0; b < 4; ++b) {
-      uint32_t start_k = (uint32_t)bounds[b];
-      uint32_t end_k = (uint32_t)bounds[b + 1];
+      uint32_t start_k = bounds[b];
+      uint32_t end_k = bounds[b + 1];
       float sub_flux = 0.0f;
       float sub_prev_sum = 0.0f;
 
@@ -357,11 +355,15 @@ bool hpss_filter_process(HpssFilter* self, const float* current_magnitude,
 
   // 4. Median Filtering
   // 4a. Harmonic median (M_H) along time axis for each frequency bin
+  const float* frames[HPSS_TIME_WINDOW_MAX];
+  for (uint32_t t = 0U; t < time_win; ++t) {
+    frames[t] = spectral_circular_buffer_retrieve(self->circular_buffer,
+                                                  self->mag_layer_id, t);
+  }
+
   for (uint32_t k = 0U; k < spectrum_size; ++k) {
     for (uint32_t t = 0U; t < time_win; ++t) {
-      const float* frame_t = spectral_circular_buffer_retrieve(
-          self->circular_buffer, self->mag_layer_id, t);
-      self->time_sort_buffer[t] = frame_t ? frame_t[k] : 0.0f;
+      self->time_sort_buffer[t] = frames[t] ? frames[t][k] : 0.0f;
     }
     self->m_h[k] = fast_median(self->time_sort_buffer, time_win);
   }
@@ -387,7 +389,8 @@ bool hpss_filter_process(HpssFilter* self, const float* current_magnitude,
     float w_p = 0.0f;
     float w_h = 1.0f;
     if (sum_sq > SPECTRAL_EPSILON) {
-      w_p = p_excess_sq / sum_sq;
+      float inv_sum_sq = 1.0f / sum_sq;
+      w_p = p_excess_sq * inv_sum_sq;
       w_h = 1.0f - w_p;
     }
 

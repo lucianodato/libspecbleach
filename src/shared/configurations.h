@@ -218,7 +218,6 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define HPSS_FREQ_WINDOW_MEDIUM 17U
 #define HPSS_FREQ_WINDOW_HIGH 33U
 
-#define HPSS_NOISE_OVERSUBTRACTION_DEFAULT 1.1F
 #define HPSS_BASS_CUTOFF_BINS 24.0F
 
 /* --------------------------------------------------------------- */
@@ -226,11 +225,10 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define GAIN_SMOOTHING_MIN_RELEASE_SEC (0.010F)
 #define GAIN_SMOOTHING_MAX_RELEASE_SEC (0.150F)
 
-// HPSS configurations (Defaults to Off / zero latency)
-#define HPSS_QUALITY_MODE_1D_DEFAULT HPSS_QUALITY_OFF
+// HPSS configurations (Defaults to 0 = HPSS_QUALITY_OFF / zero latency)
+#define HPSS_QUALITY_MODE_1D_DEFAULT 0
 #define HPSS_TIME_WINDOW_1D_DEFAULT HPSS_TIME_WINDOW_LOW
 #define HPSS_FREQ_WINDOW_1D_DEFAULT HPSS_FREQ_WINDOW_LOW
-#define HPSS_NOISE_OVERSUBTRACTION_1D_DEFAULT HPSS_NOISE_OVERSUBTRACTION_DEFAULT
 
 // STFT configurations
 #define OVERLAP_FACTOR_1D 4
@@ -255,11 +253,10 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 /* ------------------- 2D Denoiser configurations ------------------- */
 /* ------------------------------------------------------------------ */
 
-// HPSS configurations (Defaults to Off / zero latency)
-#define HPSS_QUALITY_MODE_2D_DEFAULT HPSS_QUALITY_OFF
+// HPSS configurations (Defaults to 0 = HPSS_QUALITY_OFF / zero latency)
+#define HPSS_QUALITY_MODE_2D_DEFAULT 0
 #define HPSS_TIME_WINDOW_2D_DEFAULT HPSS_TIME_WINDOW_HIGH
 #define HPSS_FREQ_WINDOW_2D_DEFAULT HPSS_FREQ_WINDOW_HIGH
-#define HPSS_NOISE_OVERSUBTRACTION_2D_DEFAULT HPSS_NOISE_OVERSUBTRACTION_DEFAULT
 
 // STFT configurations
 #define OVERLAP_FACTOR_2D 4

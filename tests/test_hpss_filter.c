@@ -41,7 +41,11 @@ void test_hpss_filter(void) {
   printf("Testing HPSS Filter...\n");
 
   // 1. Invalid Initialization
-  HpssConfig invalid_cfg = {0, 17, 17, 1.1f};
+  HpssConfig invalid_cfg = {
+      .real_spectrum_size = 0U,
+      .time_window_size = 17U,
+      .freq_window_size = 17U,
+  };
   HpssFilter* invalid_f = hpss_filter_initialize(invalid_cfg);
   TEST_ASSERT(invalid_f == NULL, "Initialization with size 0 should fail");
 
@@ -53,7 +57,6 @@ void test_hpss_filter(void) {
       .real_spectrum_size = 257U,
       .time_window_size = HPSS_TIME_WINDOW_MEDIUM,
       .freq_window_size = HPSS_FREQ_WINDOW_MEDIUM,
-      .noise_oversubtraction = HPSS_NOISE_OVERSUBTRACTION_DEFAULT,
   };
   HpssFilter* filter = hpss_filter_initialize(config);
   TEST_ASSERT(filter != NULL, "HPSS filter initialization should succeed");
@@ -63,20 +66,18 @@ void test_hpss_filter(void) {
   TEST_ASSERT(latency == 8U, "Latency should be 8 frames for 17-frame window");
 
   float current_mag[257];
-  float noise_profile[257];
   float delayed_mag[257];
   float mask_h[257];
   float mask_p[257];
 
   for (uint32_t i = 0; i < 257; ++i) {
     current_mag[i] = 1.0f;
-    noise_profile[i] = 0.2f;
   }
 
   // 4. Process multiple frames with constant spectrum
   for (uint32_t frame = 0; frame < 20; ++frame) {
-    bool ok = hpss_filter_process(filter, current_mag, noise_profile,
-                                  delayed_mag, mask_h, mask_p);
+    bool ok =
+        hpss_filter_process(filter, current_mag, delayed_mag, mask_h, mask_p);
     TEST_ASSERT(ok, "hpss_filter_process should succeed");
   }
 
@@ -97,19 +98,16 @@ void test_hpss_filter(void) {
   // Feed baseline quiet frames
   for (uint32_t i = 0; i < 257; ++i) {
     current_mag[i] = 0.01f;
-    noise_profile[i] = 0.005f;
   }
   for (uint32_t frame = 0; frame < 20; ++frame) {
-    (void)hpss_filter_process(filter, current_mag, noise_profile, delayed_mag,
-                              mask_h, mask_p);
+    (void)hpss_filter_process(filter, current_mag, delayed_mag, mask_h, mask_p);
   }
 
   // Feed sharp transient frame (huge broadband jump)
   for (uint32_t i = 0; i < 257; ++i) {
     current_mag[i] = 5.0f;
   }
-  (void)hpss_filter_process(filter, current_mag, noise_profile, delayed_mag,
-                            mask_h, mask_p);
+  (void)hpss_filter_process(filter, current_mag, delayed_mag, mask_h, mask_p);
 
   // Feed quiet frames until the transient reaches center frame (latency frames
   // later)
@@ -117,8 +115,7 @@ void test_hpss_filter(void) {
     current_mag[i] = 0.01f;
   }
   for (uint32_t frame = 0; frame < latency; ++frame) {
-    (void)hpss_filter_process(filter, current_mag, noise_profile, delayed_mag,
-                              mask_h, mask_p);
+    (void)hpss_filter_process(filter, current_mag, delayed_mag, mask_h, mask_p);
   }
 
   // When the transient is in the center frame, mask_p should dominate (high
@@ -144,8 +141,8 @@ void test_hpss_filter(void) {
   TEST_ASSERT(hpss_filter_get_latency_frames(filter) == 4U,
               "Low quality latency should be 4 frames");
   for (uint32_t frame = 0; frame < 10; ++frame) {
-    bool ok = hpss_filter_process(filter, current_mag, noise_profile,
-                                  delayed_mag, mask_h, mask_p);
+    bool ok =
+        hpss_filter_process(filter, current_mag, delayed_mag, mask_h, mask_p);
     TEST_ASSERT(ok, "Process on Low quality mode should succeed");
   }
 
@@ -154,8 +151,8 @@ void test_hpss_filter(void) {
   TEST_ASSERT(hpss_filter_get_latency_frames(filter) == 16U,
               "High quality latency should be 16 frames");
   for (uint32_t frame = 0; frame < 10; ++frame) {
-    bool ok = hpss_filter_process(filter, current_mag, noise_profile,
-                                  delayed_mag, mask_h, mask_p);
+    bool ok =
+        hpss_filter_process(filter, current_mag, delayed_mag, mask_h, mask_p);
     TEST_ASSERT(ok, "Process on High quality mode should succeed");
   }
 
@@ -164,8 +161,8 @@ void test_hpss_filter(void) {
   TEST_ASSERT(hpss_filter_get_latency_frames(filter) == 0U,
               "Off quality latency should be 0 frames");
   for (uint32_t frame = 0; frame < 10; ++frame) {
-    bool ok = hpss_filter_process(filter, current_mag, noise_profile,
-                                  delayed_mag, mask_h, mask_p);
+    bool ok =
+        hpss_filter_process(filter, current_mag, delayed_mag, mask_h, mask_p);
     TEST_ASSERT(ok, "Process on Off quality mode should succeed");
     TEST_ASSERT(delayed_mag[10] == current_mag[10],
                 "Delayed magnitude should match current magnitude in Off mode");
@@ -182,8 +179,8 @@ void test_hpss_filter(void) {
               "Medium quality latency should remain 8 frames");
 
   for (uint32_t frame = 0; frame < 10; ++frame) {
-    bool ok = hpss_filter_process(filter, current_mag, noise_profile,
-                                  delayed_mag, mask_h, mask_p);
+    bool ok =
+        hpss_filter_process(filter, current_mag, delayed_mag, mask_h, mask_p);
     TEST_ASSERT(ok, "Process on Medium quality mode should succeed");
   }
 
@@ -194,12 +191,11 @@ void test_hpss_filter(void) {
 
   hpss_filter_free(filter);
 
-  // 7. Test even window configuration and default noise oversubtraction
+  // 7. Test even window configuration
   HpssConfig even_cfg = {
       .real_spectrum_size = 257U,
       .time_window_size = 16U,
       .freq_window_size = 16U,
-      .noise_oversubtraction = -1.0f,
   };
   HpssFilter* even_filter = hpss_filter_initialize(even_cfg);
   TEST_ASSERT(even_filter != NULL, "Even config should be normalized to odd");
@@ -207,17 +203,35 @@ void test_hpss_filter(void) {
               "16 window size rounds to 17, latency 8");
   hpss_filter_free(even_filter);
 
-  // 8. Test NULL safety
+  // 8. Test oversized window configuration (clamping to HPSS_TIME_WINDOW_MAX)
+  HpssConfig oversized_cfg = {
+      .real_spectrum_size = 257U,
+      .time_window_size = 101U,
+      .freq_window_size = 17U,
+  };
+  HpssFilter* oversized_filter = hpss_filter_initialize(oversized_cfg);
+  TEST_ASSERT(oversized_filter != NULL, "Oversized config should initialize");
+  TEST_ASSERT(hpss_filter_get_latency_frames(oversized_filter) ==
+                  (HPSS_TIME_WINDOW_MAX - 1U) / 2U,
+              "Oversized window clamped to MAX");
+  for (int i = 0; i < (int)HPSS_TIME_WINDOW_MAX + 5; ++i) {
+    bool ok = hpss_filter_process(oversized_filter, current_mag, delayed_mag,
+                                  mask_h, mask_p);
+    TEST_ASSERT(ok, "Oversized filter processing should succeed");
+  }
+  hpss_filter_free(oversized_filter);
+
+  // 9. Test NULL safety
   hpss_filter_set_quality_mode(NULL, HPSS_QUALITY_LOW);
   TEST_ASSERT(hpss_filter_get_latency_frames(NULL) == 0U, "NULL latency is 0");
   TEST_ASSERT(hpss_filter_get_onset_ratio(NULL) == 0.0f, "NULL onset ratio 0");
-  TEST_ASSERT(hpss_filter_process(NULL, current_mag, noise_profile, delayed_mag,
-                                  mask_h, mask_p) == false,
+  TEST_ASSERT(hpss_filter_process(NULL, current_mag, delayed_mag, mask_h,
+                                  mask_p) == false,
               "NULL filter process fails");
   filter = hpss_filter_initialize(config);
-  TEST_ASSERT(hpss_filter_process(filter, NULL, noise_profile, delayed_mag,
-                                  mask_h, mask_p) == false,
-              "NULL magnitude process fails");
+  TEST_ASSERT(
+      hpss_filter_process(filter, NULL, delayed_mag, mask_h, mask_p) == false,
+      "NULL magnitude process fails");
   hpss_filter_free(filter);
 
   printf("✓ HPSS Filter tests passed\n");

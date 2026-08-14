@@ -191,7 +191,6 @@ SpectralProcessorHandle spectral_denoiser_initialize(
       .real_spectrum_size = self->real_spectrum_size,
       .time_window_size = HPSS_TIME_WINDOW_1D_DEFAULT,
       .freq_window_size = HPSS_FREQ_WINDOW_1D_DEFAULT,
-      .noise_oversubtraction = HPSS_NOISE_OVERSUBTRACTION_1D_DEFAULT,
   };
   self->hpss_filter = hpss_filter_initialize(hpss_cfg);
   self->delayed_magnitude =
@@ -326,28 +325,6 @@ bool load_reduction_parameters(SpectralProcessorHandle instance,
   return true;
 }
 
-static void apply_onset_alpha_ducking(float* alpha, int num_bins,
-                                      float onset_ratio, uint32_t sample_rate,
-                                      uint32_t fft_size) {
-  if (!alpha || onset_ratio <= 0.01f || sample_rate == 0 || fft_size == 0) {
-    return;
-  }
-
-  (void)sample_rate;
-  (void)fft_size;
-
-  float reduction = onset_ratio * 2.0f;
-  if (reduction > 1.0f) {
-    reduction = 1.0f;
-  }
-
-  for (int k = 0; k < num_bins; k++) {
-    // Duck alpha down toward 1.0 (no over-subtraction) on attack frame across
-    // full spectrum
-    alpha[k] = 1.0f + (alpha[k] - 1.0f) * (1.0f - reduction);
-  }
-}
-
 bool spectral_denoiser_run(SpectralProcessorHandle instance,
                            float* fft_spectrum) {
   if (!fft_spectrum || !instance) {
@@ -407,13 +384,15 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
   }
 
   // Align output to delayed frame for post-processing
-  memcpy(fft_spectrum, delayed_spectrum, self->fft_size * sizeof(float));
+  if (delayed_spectrum != fft_spectrum) {
+    memcpy(fft_spectrum, delayed_spectrum, self->fft_size * sizeof(float));
+  }
 
   // 3. Denoising Stage: HPSS dual-path gain calculation and psychoacoustic
   // constraints
   if (!hpss_filter_process(self->hpss_filter, reference_spectrum,
-                           self->noise_spectrum, self->delayed_magnitude,
-                           self->mask_harmonic, self->mask_percussive)) {
+                           self->delayed_magnitude, self->mask_harmonic,
+                           self->mask_percussive)) {
     memcpy(self->delayed_magnitude, reference_spectrum,
            self->real_spectrum_size * sizeof(float));
     for (uint32_t k = 0U; k < self->real_spectrum_size; ++k) {
@@ -434,8 +413,7 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
                                self->beta);
 
   float onset_ratio = hpss_filter_get_onset_ratio(self->hpss_filter);
-  apply_onset_alpha_ducking(self->alpha, (int)self->real_spectrum_size,
-                            onset_ratio, self->sample_rate, self->fft_size);
+  apply_onset_alpha_ducking(self->alpha, self->real_spectrum_size, onset_ratio);
 
   // 3.2. Detect tonal components and boost alpha at tonal bins
   tonal_reducer_run(self->tonal_reducer, delayed_noise,

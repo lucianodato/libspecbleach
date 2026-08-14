@@ -23,6 +23,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdlib.h>
 #include <string.h>
 
+#include "shared/denoiser_logic/processing/hpss_filter.h"
 #include "specbleach_2d_denoiser.h"
 
 #define ROLLING_MEAN 1
@@ -297,9 +298,12 @@ void test_process_loop(void) {
   params.learn_noise = 0;
   params.tonal_reduction = 0.5f;
   params.reduction_amount = 20.0f;
-  params.hpss_quality_mode = 2;
+  params.hpss_quality_mode = HPSS_QUALITY_MEDIUM;
   specbleach_2d_load_parameters(h, params);
   specbleach_2d_process(h, 1024, in_buf, out_buf);
+  for (int i = 0; i < 1024; ++i) {
+    TEST_ASSERT(isfinite(out_buf[i]), "Output samples must be finite");
+  }
   specbleach_2d_get_tonal_mask(h);
   // Feed non-zero audio with active 2D processing
   for (int i = 0; i < 1024; ++i) {
@@ -313,6 +317,9 @@ void test_process_loop(void) {
   specbleach_2d_load_parameters(h, params);
   for (int f = 0; f < 10; ++f) {
     specbleach_2d_process(h, 1024, in_buf, out_buf);
+    for (int i = 0; i < 1024; ++i) {
+      TEST_ASSERT(isfinite(out_buf[i]), "Output samples must be finite");
+    }
   }
 
   // Feed a sharp transient/onset to trigger onset ducking in 2D
@@ -325,30 +332,33 @@ void test_process_loop(void) {
   params.reduction_curve_bias = curve_bias;
   specbleach_2d_load_parameters(h, params);
   specbleach_2d_process(h, 1024, transient_buf, out_buf);
+  for (int i = 0; i < 1024; ++i) {
+    TEST_ASSERT(isfinite(out_buf[i]), "Output samples must be finite");
+  }
 
   // Switch HPSS modes and verify latency
   params.residual_listen = 0;
   params.reduction_curve_enabled = false;
   params.reduction_curve_bias = NULL;
 
-  params.hpss_quality_mode = 0;
+  params.hpss_quality_mode = HPSS_QUALITY_OFF;
   specbleach_2d_load_parameters(h, params);
   specbleach_2d_process(h, 1024, in_buf, out_buf);
   uint32_t lat0 = specbleach_2d_get_latency(h);
 
-  params.hpss_quality_mode = 1;
+  params.hpss_quality_mode = HPSS_QUALITY_LOW;
   specbleach_2d_load_parameters(h, params);
   specbleach_2d_process(h, 1024, in_buf, out_buf);
   uint32_t lat1 = specbleach_2d_get_latency(h);
   TEST_ASSERT(lat1 >= lat0, "Low quality 2D latency >= Off");
 
-  params.hpss_quality_mode = 2;
+  params.hpss_quality_mode = HPSS_QUALITY_MEDIUM;
   specbleach_2d_load_parameters(h, params);
   specbleach_2d_process(h, 1024, in_buf, out_buf);
   uint32_t lat2 = specbleach_2d_get_latency(h);
   TEST_ASSERT(lat2 > lat1, "Medium quality 2D latency > Low");
 
-  params.hpss_quality_mode = 3;
+  params.hpss_quality_mode = HPSS_QUALITY_HIGH;
   specbleach_2d_load_parameters(h, params);
   specbleach_2d_process(h, 1024, in_buf, out_buf);
   uint32_t lat3 = specbleach_2d_get_latency(h);

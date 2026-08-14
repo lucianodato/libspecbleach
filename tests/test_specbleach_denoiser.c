@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "shared/denoiser_logic/processing/hpss_filter.h"
 #include "specbleach_denoiser.h"
 
 #define ROLLING_MEAN 1
@@ -458,24 +459,24 @@ int main(void) {
   t_params.reduction_curve_enabled = false;
   t_params.reduction_curve_bias = NULL;
 
-  t_params.hpss_quality_mode = 0;
+  t_params.hpss_quality_mode = HPSS_QUALITY_OFF;
   specbleach_load_parameters(h, t_params);
   specbleach_process(h, 1024, in_buf, out_buf);
   uint32_t lat0 = specbleach_get_latency(h);
 
-  t_params.hpss_quality_mode = 1;
+  t_params.hpss_quality_mode = HPSS_QUALITY_LOW;
   specbleach_load_parameters(h, t_params);
   specbleach_process(h, 1024, in_buf, out_buf);
   uint32_t lat1 = specbleach_get_latency(h);
   TEST_ASSERT(lat1 > lat0, "Low quality latency > Off");
 
-  t_params.hpss_quality_mode = 2;
+  t_params.hpss_quality_mode = HPSS_QUALITY_MEDIUM;
   specbleach_load_parameters(h, t_params);
   specbleach_process(h, 1024, in_buf, out_buf);
   uint32_t lat2 = specbleach_get_latency(h);
   TEST_ASSERT(lat2 > lat1, "Medium quality latency > Low");
 
-  t_params.hpss_quality_mode = 3;
+  t_params.hpss_quality_mode = HPSS_QUALITY_HIGH;
   specbleach_load_parameters(h, t_params);
   specbleach_process(h, 1024, in_buf, out_buf);
   uint32_t lat3 = specbleach_get_latency(h);
