@@ -176,13 +176,50 @@ void test_hpss_filter(void) {
   hpss_filter_set_quality_mode(filter, HPSS_QUALITY_MEDIUM);
   TEST_ASSERT(hpss_filter_get_latency_frames(filter) == 8U,
               "Medium quality latency should be 8 frames");
+  // Test redundant mode set
+  hpss_filter_set_quality_mode(filter, HPSS_QUALITY_MEDIUM);
+  TEST_ASSERT(hpss_filter_get_latency_frames(filter) == 8U,
+              "Medium quality latency should remain 8 frames");
+
   for (uint32_t frame = 0; frame < 10; ++frame) {
     bool ok = hpss_filter_process(filter, current_mag, noise_profile,
                                   delayed_mag, mask_h, mask_p);
     TEST_ASSERT(ok, "Process on Medium quality mode should succeed");
   }
 
+  // Switch to invalid/default mode
+  hpss_filter_set_quality_mode(filter, (HpssQualityMode)999);
+  TEST_ASSERT(hpss_filter_get_latency_frames(filter) == 8U,
+              "Default quality latency should be 8 frames");
+
   hpss_filter_free(filter);
+
+  // 7. Test even window configuration and default noise oversubtraction
+  HpssConfig even_cfg = {
+      .real_spectrum_size = 257U,
+      .time_window_size = 16U,
+      .freq_window_size = 16U,
+      .noise_oversubtraction = -1.0f,
+  };
+  HpssFilter* even_filter = hpss_filter_initialize(even_cfg);
+  TEST_ASSERT(even_filter != NULL, "Even config should be normalized to odd");
+  TEST_ASSERT(hpss_filter_get_latency_frames(even_filter) == 8U,
+              "16 window size rounds to 17, latency 8");
+  hpss_filter_free(even_filter);
+
+  // 8. Test NULL safety
+  hpss_filter_set_quality_mode(NULL, HPSS_QUALITY_LOW);
+  TEST_ASSERT(hpss_filter_get_latency_frames(NULL) == 0U, "NULL latency is 0");
+  TEST_ASSERT(hpss_filter_get_onset_ratio(NULL) == 0.0f, "NULL onset ratio 0");
+  TEST_ASSERT(hpss_filter_process(NULL, current_mag, noise_profile, delayed_mag,
+                                  mask_h, mask_p) == false,
+              "NULL filter process fails");
+  filter = hpss_filter_initialize(config);
+  TEST_ASSERT(hpss_filter_process(filter, NULL, noise_profile, delayed_mag,
+                                  mask_h, mask_p) == false,
+              "NULL magnitude process fails");
+  hpss_filter_free(filter);
+
   printf("✓ HPSS Filter tests passed\n");
 }
 

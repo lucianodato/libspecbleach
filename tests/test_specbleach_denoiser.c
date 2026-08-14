@@ -416,18 +416,32 @@ int main(void) {
                                          10);
   free(dummy_prof);
 
-  // Process with tonal reduction enabled
+  // Process with tonal reduction and HPSS enabled
   float in_buf[1024] = {0};
   float out_buf[1024] = {0};
   SpectralBleachDenoiserParameters t_params = {
       .learn_noise = false,
       .tonal_reduction = 0.5f,
       .reduction_amount = 20.0f,
+      .hpss_quality_mode = 2,
   };
   specbleach_load_parameters(h, t_params);
   specbleach_process(h, 1024, in_buf, out_buf);
   specbleach_get_tonal_mask(h);
   specbleach_get_tonal_peaks(h, peak_freqs, 10);
+
+  // Switch HPSS modes
+  t_params.hpss_quality_mode = 1;
+  specbleach_load_parameters(h, t_params);
+  specbleach_process(h, 1024, in_buf, out_buf);
+
+  t_params.hpss_quality_mode = 3;
+  specbleach_load_parameters(h, t_params);
+  specbleach_process(h, 1024, in_buf, out_buf);
+
+  t_params.hpss_quality_mode = 0;
+  specbleach_load_parameters(h, t_params);
+  specbleach_process(h, 1024, in_buf, out_buf);
 
   // Verify NULL handle protections
   TEST_ASSERT(specbleach_get_latency(NULL) == 0, "NULL latency");

@@ -65,6 +65,13 @@ int main(void) {
   printf("  (Previously was incorrectly: frame_size - hop = %u samples)\n",
          old_incorrect_latency);
 
+  // Test getters and NULL safety
+  assert(get_stft_real_spectrum_size(processor) > 0);
+  assert(get_stft_real_spectrum_size(NULL) == 0);
+  assert(get_stft_latency(NULL) == 0);
+  assert(get_stft_hop_size(NULL) == 0);
+  assert(get_stft_fft_size(NULL) == 0);
+
   stft_processor_free(processor);
 
   return 0;

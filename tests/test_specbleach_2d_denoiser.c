@@ -291,16 +291,30 @@ void test_process_loop(void) {
                                             peak_freqs, 10);
   free(dummy_prof);
 
-  // Process with tonal reduction
+  // Process with tonal reduction and HPSS
   float in_buf[1024] = {0};
   float out_buf[1024] = {0};
   params.learn_noise = 0;
   params.tonal_reduction = 0.5f;
   params.reduction_amount = 20.0f;
+  params.hpss_quality_mode = 2;
   specbleach_2d_load_parameters(h, params);
   specbleach_2d_process(h, 1024, in_buf, out_buf);
   specbleach_2d_get_tonal_mask(h);
   specbleach_2d_get_tonal_peaks(h, peak_freqs, 10);
+
+  // Switch HPSS modes
+  params.hpss_quality_mode = 1;
+  specbleach_2d_load_parameters(h, params);
+  specbleach_2d_process(h, 1024, in_buf, out_buf);
+
+  params.hpss_quality_mode = 3;
+  specbleach_2d_load_parameters(h, params);
+  specbleach_2d_process(h, 1024, in_buf, out_buf);
+
+  params.hpss_quality_mode = 0;
+  specbleach_2d_load_parameters(h, params);
+  specbleach_2d_process(h, 1024, in_buf, out_buf);
 
   // NULL checks
   TEST_ASSERT(specbleach_2d_get_tonal_mask(NULL) == NULL, "NULL 2D tonal mask");
