@@ -34,9 +34,10 @@ StftProcessor* stft_processor_initialize(
     ZeroPaddingType padding_type, uint32_t zeropadding_amount,
     WindowTypes input_window, WindowTypes output_window);
 void stft_processor_free(StftProcessor* self);
-uint32_t get_stft_latency(StftProcessor* self);
-uint32_t get_stft_fft_size(StftProcessor* self);
-uint32_t get_stft_real_spectrum_size(StftProcessor* self);
+uint32_t get_stft_latency(const StftProcessor* self);
+uint32_t get_stft_hop_size(const StftProcessor* self);
+uint32_t get_stft_fft_size(const StftProcessor* self);
+uint32_t get_stft_real_spectrum_size(const StftProcessor* self);
 
 // Receives an input and output buffer with a a number_of_samples and does the
 // STFT transform applying any spectral_processing. It works similar to qsort,

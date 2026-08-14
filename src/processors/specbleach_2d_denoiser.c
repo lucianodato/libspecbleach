@@ -58,7 +58,7 @@ SpectralBleachHandle specbleach_2d_initialize(const uint32_t sample_rate,
   }
 
   const uint32_t fft_size = get_stft_fft_size(self->core->stft_processor);
-  self->hop = fft_size / OVERLAP_FACTOR_2D;
+  self->hop = get_stft_hop_size(self->core->stft_processor);
 
   self->spectral_2d_denoiser = spectral_2d_denoiser_initialize(
       sample_rate, fft_size, OVERLAP_FACTOR_2D, self->core->noise_profile);

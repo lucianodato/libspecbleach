@@ -244,6 +244,7 @@ if(ENABLE_TESTS)
     add_specbleach_test(test_spp_mmse "test_spp_mmse_noise_estimator.c")
     add_specbleach_test(test_tonal_detector "test_tonal_detector.c")
     add_specbleach_test(test_tonal_reducer "test_tonal_reducer.c")
+    add_specbleach_test(test_hpss_filter "test_hpss_filter.c")
     add_specbleach_test(test_denoiser_post_process "test_denoiser_post_process.c")
 
     if(TARGET PkgConfig::SNDFILE)

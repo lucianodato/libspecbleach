@@ -85,6 +85,13 @@ float* spectral_circular_buffer_retrieve(SbSpectralCircularBuffer* self,
 void spectral_circular_buffer_advance(SbSpectralCircularBuffer* self);
 
 /**
+ * @brief Clear all layers and reset write index in the circular buffer.
+ *
+ * @param self The circular buffer instance.
+ */
+void spectral_circular_buffer_clear(SbSpectralCircularBuffer* self);
+
+/**
  * @brief Destroy the circular buffer and free all associated memory.
  *
  * @param self The circular buffer instance.

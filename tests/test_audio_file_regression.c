@@ -2,9 +2,9 @@
  * Audio file regression tests - compare library output against reference files
  */
 
+#include "shared/denoiser_logic/processing/hpss_filter.h"
 #include <math.h>
 #include <sndfile.h>
-
 #include <specbleach_denoiser.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -32,7 +32,8 @@ static const SpectralBleachDenoiserParameters canonical_denoiser_params = {
     .reduction_amount = 20.0f,
     .smoothing_factor = 0.0f,
     .whitening_factor = 50.0f,
-    .masking_depth = 0.5f};
+    .masking_depth = 0.5f,
+    .hpss_quality_mode = HPSS_QUALITY_LOW};
 
 static const SpectralBleachDenoiserParameters canonical_adenoiser_params = {
     .residual_listen = false,
@@ -40,6 +41,7 @@ static const SpectralBleachDenoiserParameters canonical_adenoiser_params = {
     .smoothing_factor = 0.0f,
     .whitening_factor = 50.0f,
     .masking_depth = 0.5f,
+    .hpss_quality_mode = HPSS_QUALITY_LOW,
 
     .adaptive_noise = 1,
     .noise_estimation_method = 0};

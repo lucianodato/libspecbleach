@@ -38,6 +38,7 @@ typedef struct DenoiserParameters {
   float suppression_strength;
   float aggressiveness;  /**< -1.0 (Median/Min) to 1.0 (Max), 0.0 (Mean) */
   float tonal_reduction; /**< 0.0 to 1.0 (Phase 3) */
+  int hpss_quality_mode; /**< 0=Off, 1=Low, 2=Medium, 3=High */
   float noise_profile_offset_linear; /**< Linear scalar for noise profile */
   const float* reduction_curve_bias; /**< Per-bin dB bias, NULL = disabled */
   bool reduction_curve_enabled;
@@ -56,5 +57,6 @@ uint32_t spectral_denoiser_get_peaks(SpectralProcessorHandle instance,
                                      float* peak_freqs_hz, uint32_t max_peaks);
 const float* spectral_denoiser_get_active_noise_profile(
     SpectralProcessorHandle instance);
+uint32_t spectral_denoiser_get_latency_frames(SpectralProcessorHandle instance);
 
 #endif

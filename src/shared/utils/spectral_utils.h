@@ -71,6 +71,8 @@ bool get_morphed_profile(float* output_profile, const float* mean_profile,
                          const float* median_profile, const float* max_profile,
                          const float* min_profile, uint32_t size,
                          float aggressiveness);
+void apply_onset_alpha_ducking(float* alpha, uint32_t num_bins,
+                               float onset_ratio);
 
 #include "shared/utils/general_utils.h"
 

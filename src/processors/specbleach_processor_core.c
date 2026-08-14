@@ -40,6 +40,7 @@ DenoiserParameters sb_denoiser_params_sanitize(
       .aggressiveness = parameters.aggressiveness,
       .tonal_reduction =
           from_db_to_coefficient(parameters.tonal_reduction * -1.F),
+      .hpss_quality_mode = parameters.hpss_quality_mode,
       .noise_profile_offset_linear =
           powf(10.0f, fmaxf(NOISE_PROFILE_OFFSET_MIN_DB,
                             fminf(NOISE_PROFILE_OFFSET_MAX_DB,
@@ -68,6 +69,7 @@ Denoiser2DParameters sb_denoiser_2d_params_sanitize(
       .aggressiveness = parameters.aggressiveness,
       .tonal_reduction =
           from_db_to_coefficient(parameters.tonal_reduction * -1.F),
+      .hpss_quality_mode = parameters.hpss_quality_mode,
       .noise_profile_offset_linear =
           powf(10.0f, fmaxf(NOISE_PROFILE_OFFSET_MIN_DB,
                             fminf(NOISE_PROFILE_OFFSET_MAX_DB,

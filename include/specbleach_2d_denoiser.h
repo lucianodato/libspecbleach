@@ -95,6 +95,10 @@ typedef struct SpectralBleach2DDenoiserParameters {
   /* Tonal Separation */
   float tonal_reduction; // 0.0 to 1.0: Independent reduction for tones
 
+  /* HPSS quality mode (0 = Off, 1 = Low, 2 = Mid, 3 = High). Default: 0 (Off)
+   */
+  int hpss_quality_mode;
+
   /* Noise Profile Offset — shifts the noise threshold up/down in dB.
    * Positive values make detection more aggressive (more noise removed).
    * Default: 2.0, Range: [-6.0, +6.0] */

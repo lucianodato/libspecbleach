@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "shared/denoiser_logic/processing/hpss_filter.h"
 #include "specbleach_denoiser.h"
 
 #define ROLLING_MEAN 1
@@ -416,18 +417,70 @@ int main(void) {
                                          10);
   free(dummy_prof);
 
-  // Process with tonal reduction enabled
+  // Process with tonal reduction and HPSS enabled
   float in_buf[1024] = {0};
   float out_buf[1024] = {0};
   SpectralBleachDenoiserParameters t_params = {
       .learn_noise = false,
       .tonal_reduction = 0.5f,
       .reduction_amount = 20.0f,
+      .hpss_quality_mode = 2,
   };
   specbleach_load_parameters(h, t_params);
   specbleach_process(h, 1024, in_buf, out_buf);
   specbleach_get_tonal_mask(h);
-  specbleach_get_tonal_peaks(h, peak_freqs, 10);
+  // Feed non-zero audio with active processing
+  for (int i = 0; i < 1024; ++i) {
+    in_buf[i] = ((float)(i % 100) / 100.0f) * 0.5f;
+  }
+  t_params.smoothing_factor = 0.5f;
+  t_params.whitening_factor = 0.5f;
+  t_params.residual_listen = 1;
+  t_params.masking_depth = 5.0f;
+  t_params.suppression_strength = 2.0f;
+  specbleach_load_parameters(h, t_params);
+  for (int f = 0; f < 10; ++f) {
+    specbleach_process(h, 1024, in_buf, out_buf);
+  }
+
+  // Feed a sharp transient/onset to trigger onset ducking
+  float transient_buf[1024];
+  for (int i = 0; i < 1024; ++i) {
+    transient_buf[i] = (i % 2 == 0) ? 0.9f : -0.9f;
+  }
+  float curve_bias[1024] = {0};
+  t_params.reduction_curve_enabled = true;
+  t_params.reduction_curve_bias = curve_bias;
+  specbleach_load_parameters(h, t_params);
+  specbleach_process(h, 1024, transient_buf, out_buf);
+
+  // Switch HPSS modes and verify latency
+  t_params.residual_listen = 0;
+  t_params.reduction_curve_enabled = false;
+  t_params.reduction_curve_bias = NULL;
+
+  t_params.hpss_quality_mode = HPSS_QUALITY_OFF;
+  specbleach_load_parameters(h, t_params);
+  specbleach_process(h, 1024, in_buf, out_buf);
+  uint32_t lat0 = specbleach_get_latency(h);
+
+  t_params.hpss_quality_mode = HPSS_QUALITY_LOW;
+  specbleach_load_parameters(h, t_params);
+  specbleach_process(h, 1024, in_buf, out_buf);
+  uint32_t lat1 = specbleach_get_latency(h);
+  TEST_ASSERT(lat1 > lat0, "Low quality latency > Off");
+
+  t_params.hpss_quality_mode = HPSS_QUALITY_MEDIUM;
+  specbleach_load_parameters(h, t_params);
+  specbleach_process(h, 1024, in_buf, out_buf);
+  uint32_t lat2 = specbleach_get_latency(h);
+  TEST_ASSERT(lat2 > lat1, "Medium quality latency > Low");
+
+  t_params.hpss_quality_mode = HPSS_QUALITY_HIGH;
+  specbleach_load_parameters(h, t_params);
+  specbleach_process(h, 1024, in_buf, out_buf);
+  uint32_t lat3 = specbleach_get_latency(h);
+  TEST_ASSERT(lat3 > lat2, "High quality latency > Medium");
 
   // Verify NULL handle protections
   TEST_ASSERT(specbleach_get_latency(NULL) == 0, "NULL latency");

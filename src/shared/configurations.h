@@ -110,8 +110,8 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 
 // Noise Profile Offset
 #define NOISE_PROFILE_OFFSET_DEFAULT_DB 0.0f
-#define NOISE_PROFILE_OFFSET_MIN_DB (-6.0F)
-#define NOISE_PROFILE_OFFSET_MAX_DB (6.0F)
+#define NOISE_PROFILE_OFFSET_MIN_DB (-12.0F)
+#define NOISE_PROFILE_OFFSET_MAX_DB (12.0F)
 #define ALPHA_MAX_TONAL (10.F)
 #define ALPHA_MIN (1.F)
 #define DEFAULT_OVERSUBTRACTION (ALPHA_MIN)
@@ -206,13 +206,29 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define NLM_DISTANCE_THRESHOLD_MULTIPLIER 4.0F
 
 // Must be >= search_time_past + search_time_future + patch_size for NLM caching
-// Using power-of-two (32U) for efficient modulo wrap-around and future headroom
-#define DELAY_BUFFER_FRAMES 32U
+// Using power-of-two (64U) for efficient modulo wrap-around and future headroom
+#define DELAY_BUFFER_FRAMES 64U
+
+#define HPSS_TIME_WINDOW_LOW 9U
+#define HPSS_TIME_WINDOW_MEDIUM 17U
+#define HPSS_TIME_WINDOW_HIGH 33U
+#define HPSS_TIME_WINDOW_MAX HPSS_TIME_WINDOW_HIGH
+
+#define HPSS_FREQ_WINDOW_LOW 9U
+#define HPSS_FREQ_WINDOW_MEDIUM 17U
+#define HPSS_FREQ_WINDOW_HIGH 33U
+
+#define HPSS_BASS_CUTOFF_BINS 24.0F
 
 /* --------------------------------------------------------------- */
 /* ------------------- 1D Denoiser configurations ---------------- */
 #define GAIN_SMOOTHING_MIN_RELEASE_SEC (0.010F)
 #define GAIN_SMOOTHING_MAX_RELEASE_SEC (0.150F)
+
+// HPSS configurations (Defaults to 0 = HPSS_QUALITY_OFF / zero latency)
+#define HPSS_QUALITY_MODE_1D_DEFAULT 0
+#define HPSS_TIME_WINDOW_1D_DEFAULT HPSS_TIME_WINDOW_LOW
+#define HPSS_FREQ_WINDOW_1D_DEFAULT HPSS_FREQ_WINDOW_LOW
 
 // STFT configurations
 #define OVERLAP_FACTOR_1D 4
@@ -236,6 +252,11 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 /* ------------------------------------------------------------------ */
 /* ------------------- 2D Denoiser configurations ------------------- */
 /* ------------------------------------------------------------------ */
+
+// HPSS configurations (Defaults to 0 = HPSS_QUALITY_OFF / zero latency)
+#define HPSS_QUALITY_MODE_2D_DEFAULT 0
+#define HPSS_TIME_WINDOW_2D_DEFAULT HPSS_TIME_WINDOW_HIGH
+#define HPSS_FREQ_WINDOW_2D_DEFAULT HPSS_FREQ_WINDOW_HIGH
 
 // STFT configurations
 #define OVERLAP_FACTOR_2D 4

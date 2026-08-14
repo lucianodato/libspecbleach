@@ -107,12 +107,20 @@ bool spectral_smoothing_run(SpectralSmoother* self,
       (p * (GAIN_SMOOTHING_MAX_RELEASE_SEC - GAIN_SMOOTHING_MIN_RELEASE_SEC));
   float dt = ((float)self->fft_size / (float)self->overlap_factor) /
              (float)self->sample_rate;
-  float alpha = expf(-dt / tau_sec);
+  float alpha_release = expf(-dt / tau_sec);
 
   uint32_t k = 0U;
   for (k = 0U; k < self->real_spectrum_size; k++) {
-    gains[k] = (alpha * self->smoothed_spectrum_previous[k]) +
-               ((1.0F - alpha) * gains[k]);
+    float target = gains[k];
+    float prev = self->smoothed_spectrum_previous[k];
+    if (target >= prev) {
+      // Instant attack: gain opens immediately so onsets and attacks are never
+      // eaten
+      gains[k] = target;
+    } else {
+      // Smooth release: gain decays slowly to eliminate musical noise
+      gains[k] = (alpha_release * prev) + ((1.0F - alpha_release) * target);
+    }
     self->smoothed_spectrum_previous[k] = gains[k];
   }
 
@@ -128,8 +136,8 @@ void spectral_smoothing_apply_spatial(float* data, uint32_t size) {
   uint32_t i = 0U;
   for (i = 1U; i < size; i++) {
     float curr = data[i];
-    data[i] = 0.25F * prev + 0.5F * curr +
-              0.25F * (i + 1 < size ? data[i + 1] : curr);
+    data[i] = (0.25F * prev) + (0.5F * curr) +
+              (0.25F * (i + 1 < size ? data[i + 1] : curr));
     prev = curr;
   }
 }
@@ -142,7 +150,7 @@ void spectral_smoothing_apply_simple_temporal(float* current, float* memory,
 
   uint32_t i = 0U;
   for (i = 0U; i < size; i++) {
-    current[i] = smoothing * memory[i] + (1.0F - smoothing) * current[i];
+    current[i] = (smoothing * memory[i]) + ((1.0F - smoothing) * current[i]);
     memory[i] = current[i];
   }
 }
