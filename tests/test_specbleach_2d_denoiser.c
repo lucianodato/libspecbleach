@@ -301,9 +301,22 @@ void test_process_loop(void) {
   specbleach_2d_load_parameters(h, params);
   specbleach_2d_process(h, 1024, in_buf, out_buf);
   specbleach_2d_get_tonal_mask(h);
-  specbleach_2d_get_tonal_peaks(h, peak_freqs, 10);
+  // Feed non-zero audio with active 2D processing
+  for (int i = 0; i < 1024; ++i) {
+    in_buf[i] = ((float)(i % 100) / 100.0f) * 0.5f;
+  }
+  params.smoothing_factor = 0.5f;
+  params.whitening_factor = 0.5f;
+  params.residual_listen = 1;
+  params.nlm_masking_protection = 5.0f;
+  params.suppression_strength = 2.0f;
+  specbleach_2d_load_parameters(h, params);
+  for (int f = 0; f < 10; ++f) {
+    specbleach_2d_process(h, 1024, in_buf, out_buf);
+  }
 
   // Switch HPSS modes
+  params.residual_listen = 0;
   params.hpss_quality_mode = 1;
   specbleach_2d_load_parameters(h, params);
   specbleach_2d_process(h, 1024, in_buf, out_buf);
