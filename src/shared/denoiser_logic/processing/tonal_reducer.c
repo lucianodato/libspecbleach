@@ -89,24 +89,13 @@ void tonal_reducer_reset(TonalReducer* self) {
 }
 
 void tonal_reducer_run(TonalReducer* self, const float* noise_spectrum,
-                       const float* cv_mask_profile, float* alpha,
-                       float tonal_reduction_gain) {
+                       const float* cv_mask_profile, bool cv_mask_available,
+                       float* alpha, float tonal_reduction_gain) {
   if (!self || !noise_spectrum || !alpha) {
     return;
   }
 
-  // 1. Check if cv_mask_profile contains data across real_spectrum_size
-  bool has_cv_mask = false;
-  if (cv_mask_profile) {
-    for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
-      if (cv_mask_profile[k] > 0.0f) {
-        has_cv_mask = true;
-        break;
-      }
-    }
-  }
-
-  if (has_cv_mask) {
+  if (cv_mask_available && cv_mask_profile) {
     // Manual Profile: copy CV mask directly
     memcpy(self->tonal_mask, cv_mask_profile,
            self->real_spectrum_size * sizeof(float));

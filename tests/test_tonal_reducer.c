@@ -55,7 +55,7 @@ void test_flat_noise_no_boost(void) {
   }
 
   // Run with no reduction requested (gain 1.0)
-  tonal_reducer_run(reducer, noise_spectrum, cv_mask, alpha, 1.0f);
+  tonal_reducer_run(reducer, noise_spectrum, cv_mask, false, alpha, 1.0f);
 
   const float* mask = tonal_reducer_get_mask(reducer);
   for (int i = 0; i < TEST_SPECTRUM_SIZE; i++) {
@@ -99,7 +99,8 @@ void test_tonal_boost(void) {
 
   float reduction_gain = 0.00398f; // ~48dB reduction (gain close to 0)
 
-  tonal_reducer_run(reducer, noise_spectrum, cv_mask, alpha, reduction_gain);
+  tonal_reducer_run(reducer, noise_spectrum, cv_mask, true, alpha,
+                    reduction_gain);
 
   const float* mask = tonal_reducer_get_mask(reducer);
 
@@ -146,7 +147,8 @@ void test_caching_and_adaptive_support(void) {
   float reduction_gain = 0.0f; // max reduction strength
 
   // Run 1: Should detect the tone at bin1 in adaptive mode
-  tonal_reducer_run(reducer, noise_spectrum, NULL, alpha, reduction_gain);
+  tonal_reducer_run(reducer, noise_spectrum, NULL, false, alpha,
+                    reduction_gain);
 
   const float* mask = tonal_reducer_get_mask(reducer);
   if (mask[bin1] <= 0.0f) {
@@ -176,7 +178,8 @@ void test_caching_and_adaptive_support(void) {
 
   // Run 2: When noise spectrum is updated with moved tone, detection refreshes.
   // The mask should now detect tone at bin2 and clear bin1.
-  tonal_reducer_run(reducer, noise_spectrum, NULL, alpha, reduction_gain);
+  tonal_reducer_run(reducer, noise_spectrum, NULL, false, alpha,
+                    reduction_gain);
   mask = tonal_reducer_get_mask(reducer);
 
   if (mask[bin1] > 0.0f) {
@@ -206,7 +209,8 @@ void test_caching_and_adaptive_support(void) {
   noise_spectrum[49] = 0.03f;
   noise_spectrum[51] = 0.03f;
 
-  tonal_reducer_run(reducer, noise_spectrum, NULL, alpha, reduction_gain);
+  tonal_reducer_run(reducer, noise_spectrum, NULL, false, alpha,
+                    reduction_gain);
   mask = tonal_reducer_get_mask(reducer);
 
   if (mask[50] <= 0.0f) {
@@ -229,8 +233,10 @@ void test_caching_and_adaptive_support(void) {
   }
   int cv_bin = 150; // Above index 99 to ensure full spectrum scanning
   manual_cv_mask[cv_bin] = 1.0f;
+  int cv_bin2 = 180; // Second high-frequency bin above index 99
+  manual_cv_mask[cv_bin2] = 0.5f;
 
-  tonal_reducer_run(reducer, noise_spectrum, manual_cv_mask, alpha,
+  tonal_reducer_run(reducer, noise_spectrum, manual_cv_mask, true, alpha,
                     reduction_gain);
   mask = tonal_reducer_get_mask(reducer);
 
@@ -240,12 +246,54 @@ void test_caching_and_adaptive_support(void) {
             cv_bin);
     exit(1);
   }
+  if (fabsf(mask[cv_bin2] - 0.5f) > 1e-6f) {
+    fprintf(stderr,
+            "FAIL: Reducer in manual CV mask mode did not preserve fractional "
+            "mask at bin %d (got %f)\n",
+            cv_bin2, mask[cv_bin2]);
+    exit(1);
+  }
   if (alpha[cv_bin] <= 1.0f) {
     fprintf(stderr, "FAIL: Alpha not boosted at manual CV bin %d\n", cv_bin);
     exit(1);
   }
-  printf("  Run 4: CV mask directly applied at bin %d (above index 99) ✓\n",
-         cv_bin);
+  if (alpha[cv_bin2] <= 1.0f || alpha[cv_bin2] >= alpha[cv_bin]) {
+    fprintf(stderr,
+            "FAIL: Alpha at fractional bin %d not smaller than full-strength "
+            "bin %d (got %f vs %f)\n",
+            cv_bin2, cv_bin, alpha[cv_bin2], alpha[cv_bin]);
+    exit(1);
+  }
+  printf(
+      "  Run 4: CV mask directly applied at bins %d and %d (above index 99) "
+      "✓\n",
+      cv_bin, cv_bin2);
+
+  // Run 5: Available all-zero CV mask honors profile without adaptive detection
+  for (int i = 0; i < TEST_SPECTRUM_SIZE; i++) {
+    manual_cv_mask[i] = 0.0f;
+    alpha[i] = 1.0f;
+  }
+  tonal_reducer_run(reducer, noise_spectrum, manual_cv_mask, true, alpha,
+                    reduction_gain);
+  mask = tonal_reducer_get_mask(reducer);
+  for (int i = 0; i < TEST_SPECTRUM_SIZE; i++) {
+    if (mask[i] > 0.0f) {
+      fprintf(
+          stderr,
+          "FAIL: Available all-zero CV mask produced non-zero mask at bin %d\n",
+          i);
+      exit(1);
+    }
+    if (alpha[i] != 1.0f) {
+      fprintf(stderr,
+              "FAIL: Available all-zero CV mask modified alpha at bin %d\n", i);
+      exit(1);
+    }
+  }
+  printf(
+      "  Run 5: Available all-zero CV mask honored without adaptive detection "
+      "✓\n");
 
   tonal_reducer_free(reducer);
   printf("✓ Adaptive support and manual mask tests passed\n");
@@ -274,7 +322,7 @@ void test_tonal_reducer_peaks(void) {
   float noise[TEST_SPECTRUM_SIZE] = {0.01f};
   float cv_mask[TEST_SPECTRUM_SIZE] = {0.0f};
   // Gain 1.0f (no reduction requested, short-circuits early)
-  tonal_reducer_run(reducer, noise, cv_mask, alpha, 1.0f);
+  tonal_reducer_run(reducer, noise, cv_mask, false, alpha, 1.0f);
 
   tonal_reducer_free(reducer);
   printf("✓ Tonal reducer peaks test passed\n");

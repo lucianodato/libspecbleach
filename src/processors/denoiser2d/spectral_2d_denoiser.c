@@ -522,6 +522,7 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
   // 3.2 Detect tonal components and boost alpha at tonal bins
   tonal_reducer_run(self->tonal_reducer, delayed_noise,
                     get_noise_profile(self->noise_profile, CV_MASK),
+                    is_noise_estimation_available(self->noise_profile, CV_MASK),
                     self->alpha, self->parameters.tonal_reduction);
 
   // 3.3 Apply psychoacoustic veto to preserve transients and moderate artifacts

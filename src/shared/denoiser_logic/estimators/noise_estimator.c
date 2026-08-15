@@ -199,6 +199,13 @@ void noise_estimation_finalize(NoiseEstimator* self,
   if (noise_estimator_type == CV_MASK) {
     float* cv_mask = get_noise_profile(self->noise_profile, CV_MASK);
     float* std_dev_profile = get_noise_profile(self->noise_profile, STD_DEV);
+    if (!cv_mask || !std_dev_profile) {
+      return;
+    }
+    if (self->welford_count < 2U) {
+      memset(cv_mask, 0, self->real_spectrum_size * sizeof(float));
+      return;
+    }
     for (uint32_t k = 0; k < self->real_spectrum_size; k++) {
       float cv =
           std_dev_profile[k] / (self->welford_mean[k] + SPECTRAL_EPSILON);
