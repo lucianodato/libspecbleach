@@ -5,6 +5,7 @@ libspecbleach - A spectral processing library
 #ifndef TONAL_REDUCER_H
 #define TONAL_REDUCER_H
 
+#include <stdbool.h>
 #include <stdint.h>
 
 typedef struct TonalReducer TonalReducer;
@@ -23,6 +24,7 @@ TonalReducer* tonal_reducer_initialize(uint32_t real_spectrum_size,
                                        uint32_t sample_rate, uint32_t fft_size);
 
 void tonal_reducer_free(TonalReducer* self);
+void tonal_reducer_reset(TonalReducer* self);
 
 /**
  * Detect tonal components and boost alpha at tonal bins.
@@ -33,13 +35,13 @@ void tonal_reducer_free(TonalReducer* self);
  *
  * @param self             TonalReducer instance
  * @param noise_spectrum   Current noise estimate (morphed profile)
- * @param max_profile      Maximum captured noise profile
- * @param median_profile   Median captured noise profile
- * @param alpha            Per-bin oversubtraction array (modified in place)
- * @param tonal_reduction_gain   Linear reduction coefficient (0.0–1.0)
+ * @param cv_mask_profile      Coefficient of Variation mask profile
+ * @param cv_mask_available    Whether the CV mask profile is available
+ * @param alpha                Per-bin oversubtraction array (modified in place)
+ * @param tonal_reduction_gain Linear reduction coefficient (0.0–1.0)
  */
 void tonal_reducer_run(TonalReducer* self, const float* noise_spectrum,
-                       const float* max_profile, const float* median_profile,
+                       const float* cv_mask_profile, bool cv_mask_available,
                        float* alpha, float tonal_reduction_gain);
 
 /**

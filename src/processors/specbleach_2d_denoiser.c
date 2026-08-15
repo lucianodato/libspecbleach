@@ -141,7 +141,13 @@ bool specbleach_2d_load_noise_profile_for_mode(SpectralBleachHandle instance,
 
 bool specbleach_2d_reset_noise_profile(SpectralBleachHandle instance) {
   Sb2DDenoiser* self = (Sb2DDenoiser*)instance;
-  return self ? sb_processor_core_reset_noise_profile(self->core) : false;
+  if (!self) {
+    return false;
+  }
+  if (self->spectral_2d_denoiser) {
+    spectral_2d_denoiser_reset_noise_profile(self->spectral_2d_denoiser);
+  }
+  return sb_processor_core_reset_noise_profile(self->core);
 }
 
 uint32_t specbleach_2d_get_noise_profile_block_count_for_mode(

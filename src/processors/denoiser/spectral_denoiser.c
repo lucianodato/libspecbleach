@@ -417,9 +417,9 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
 
   // 3.2. Detect tonal components and boost alpha at tonal bins
   tonal_reducer_run(self->tonal_reducer, delayed_noise,
-                    get_noise_profile(self->noise_profile, MAX),
-                    get_noise_profile(self->noise_profile, MEDIAN), self->alpha,
-                    self->denoise_parameters.tonal_reduction);
+                    get_noise_profile(self->noise_profile, CV_MASK),
+                    is_noise_estimation_available(self->noise_profile, CV_MASK),
+                    self->alpha, self->denoise_parameters.tonal_reduction);
 
   // 3.3. Apply Structural Veto to rescue transients and moderate artifacts
   masking_veto_apply(self->masking_veto, input_magnitude, delayed_noise, NULL,
@@ -500,6 +500,25 @@ const float* spectral_denoiser_get_active_noise_profile(
     SpectralProcessorHandle instance) {
   SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
   return self ? self->noise_spectrum : NULL;
+}
+
+void spectral_denoiser_reset_noise_profile(SpectralProcessorHandle instance) {
+  SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
+  if (!self) {
+    return;
+  }
+  if (self->noise_estimator) {
+    noise_estimation_reset(self->noise_estimator);
+  }
+  if (self->tonal_reducer) {
+    tonal_reducer_reset(self->tonal_reducer);
+  }
+  if (self->manual_noise_floor) {
+    memset(self->manual_noise_floor, 0,
+           self->real_spectrum_size * sizeof(float));
+  }
+  self->was_learning = false;
+  self->last_adaptive_state = 0;
 }
 
 uint32_t spectral_denoiser_get_latency_frames(

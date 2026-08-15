@@ -23,6 +23,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdlib.h>
 
 #include "shared/configurations.h"
+#include "shared/utils/simd_utils.h"
 
 static void insertion_sort(float* arr, int n) {
   for (int i = 1; i < n; i++) {
@@ -45,6 +46,8 @@ void detect_tonal_components(const float* profile, const float* median_profile,
       (!deque_workspace && size > TONAL_DETECTOR_DEQUE_CAPACITY)) {
     return;
   }
+
+  sb_simd_state_t old_simd_state = sb_simd_enable_ftz_daz();
 
   // Check if a pre-learned profile is available
   bool profile_learned = false;
@@ -184,6 +187,8 @@ void detect_tonal_components(const float* profile, const float* median_profile,
       tonal_mask[k] = 0.0f;
     }
   }
+
+  sb_simd_restore_state(old_simd_state);
 }
 
 uint32_t tonal_detector_get_peaks(const float* tonal_mask, uint32_t size,
@@ -223,9 +228,9 @@ uint32_t tonal_detector_get_peaks(const float* tonal_mask, uint32_t size,
     }
 
     // Peak center must be a local maximum above the significance threshold and
-    // stand out sharply from immediate neighbors and wider neighbors
+    // stand out from immediate neighbors
     if (mask_val >= TONAL_PEAK_MIN_SIGNIFICANCE &&
-        mask_val > tonal_mask[k - 1] && mask_val > tonal_mask[k + 1] &&
+        mask_val > tonal_mask[k - 1] && mask_val >= tonal_mask[k + 1] &&
         local_prominence >= TONAL_PEAK_MIN_LOCAL_PROMINENCE &&
         wider_prominence >= required_wider_prominence) {
 

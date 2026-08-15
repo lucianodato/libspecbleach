@@ -45,30 +45,17 @@ void test_flat_noise_no_boost(void) {
 
   float alpha[TEST_SPECTRUM_SIZE];
   float noise_spectrum[TEST_SPECTRUM_SIZE];
-  float max_profile[TEST_SPECTRUM_SIZE];
-  float median_profile[TEST_SPECTRUM_SIZE];
+  float cv_mask[TEST_SPECTRUM_SIZE];
 
   // Initialize with flat noise
   for (int i = 0; i < TEST_SPECTRUM_SIZE; i++) {
     alpha[i] = 1.0f;           // Default alpha (no oversubtraction yet)
     noise_spectrum[i] = 0.01f; // Flat noise
-    max_profile[i] = 0.01f;
-    median_profile[i] = 0.01f;
+    cv_mask[i] = 0.0f;
   }
 
-  // Run with heavy reduction requested (-60dB -> alpha target ~1.0)
-  // But wait, alpha is oversubtraction factor. Usually alpha > 1.0 means more
-  // reduction. Wait, let's check tonal_reducer.c logic. "alpha[k] =
-  // fmaxf(alpha[k], mask[k] * target_alpha)" If reduction is 0.0 (0dB),
-  // target_alpha = 1.0. If reduction is 0.9 (20dB), target_alpha = ? Let's
-  // assume standard Berouti alpha usage or similar. The code says: float
-  // target_alpha = alpha_needed * tonal_mask[k]; Actually, let's trust the
-  // module logic: it boosts alpha. If no tonal components, mask should be 0. So
-  // alpha should remain 1.0.
-
   // Run with no reduction requested (gain 1.0)
-  tonal_reducer_run(reducer, noise_spectrum, max_profile, median_profile, alpha,
-                    1.0f);
+  tonal_reducer_run(reducer, noise_spectrum, cv_mask, false, alpha, 1.0f);
 
   const float* mask = tonal_reducer_get_mask(reducer);
   for (int i = 0; i < TEST_SPECTRUM_SIZE; i++) {
@@ -94,31 +81,25 @@ void test_tonal_boost(void) {
 
   float alpha[TEST_SPECTRUM_SIZE];
   float noise_spectrum[TEST_SPECTRUM_SIZE];
-  float max_profile[TEST_SPECTRUM_SIZE];
-  float median_profile[TEST_SPECTRUM_SIZE];
+  float cv_mask[TEST_SPECTRUM_SIZE];
 
   // Initialize flat with realistic alpha=1.0 (ALPHA_MIN)
   for (int i = 0; i < TEST_SPECTRUM_SIZE; i++) {
     alpha[i] = 1.0f;
     noise_spectrum[i] = 0.01f;
-    max_profile[i] = 0.01f;
-    median_profile[i] = 0.01f;
+    cv_mask[i] = 0.0f;
   }
 
-  // Add a tone at 1 kHz (stable -> max ~ median)
+  // Add a tone at 1 kHz in CV mask
   int bin = freq_to_bin(1000.0f);
   noise_spectrum[bin] = 0.1f;
-  max_profile[bin] = 0.1f;
-  median_profile[bin] = 0.1f;
-  // Neighbors to simulate peak shape for parabolic interp
-  max_profile[bin - 1] = 0.03f;
-  max_profile[bin + 1] = 0.03f;
-  median_profile[bin - 1] = 0.03f;
-  median_profile[bin + 1] = 0.03f;
+  cv_mask[bin] = 1.0f;
+  cv_mask[bin - 1] = 0.5f;
+  cv_mask[bin + 1] = 0.5f;
 
   float reduction_gain = 0.00398f; // ~48dB reduction (gain close to 0)
 
-  tonal_reducer_run(reducer, noise_spectrum, max_profile, median_profile, alpha,
+  tonal_reducer_run(reducer, noise_spectrum, cv_mask, true, alpha,
                     reduction_gain);
 
   const float* mask = tonal_reducer_get_mask(reducer);
@@ -150,15 +131,11 @@ void test_caching_and_adaptive_support(void) {
 
   float alpha[TEST_SPECTRUM_SIZE];
   float noise_spectrum[TEST_SPECTRUM_SIZE];
-  float max_profile[TEST_SPECTRUM_SIZE];
-  float median_profile[TEST_SPECTRUM_SIZE];
 
-  // 1. Initialize empty max/median profiles (adaptive mode)
+  // 1. Initialize empty CV mask (adaptive mode)
   for (int i = 0; i < TEST_SPECTRUM_SIZE; i++) {
     alpha[i] = 1.0f;
     noise_spectrum[i] = 0.01f;
-    max_profile[i] = 0.0f;
-    median_profile[i] = 0.0f;
   }
 
   // Add a tone at bin 100
@@ -170,7 +147,7 @@ void test_caching_and_adaptive_support(void) {
   float reduction_gain = 0.0f; // max reduction strength
 
   // Run 1: Should detect the tone at bin1 in adaptive mode
-  tonal_reducer_run(reducer, noise_spectrum, max_profile, median_profile, alpha,
+  tonal_reducer_run(reducer, noise_spectrum, NULL, false, alpha,
                     reduction_gain);
 
   const float* mask = tonal_reducer_get_mask(reducer);
@@ -199,154 +176,127 @@ void test_caching_and_adaptive_support(void) {
   noise_spectrum[bin2 - 1] = 0.03f;
   noise_spectrum[bin2 + 1] = 0.03f;
 
-  // Run 2: Since sum is identical, caching should skip detection.
-  // The cached mask should still have tone at bin1 and NOT at bin2.
-  tonal_reducer_run(reducer, noise_spectrum, max_profile, median_profile, alpha,
-                    reduction_gain);
-  mask = tonal_reducer_get_mask(reducer);
-
-  if (mask[bin1] <= 0.0f) {
-    fprintf(stderr, "FAIL: Caching failed, cached mask at bin %d cleared\n",
-            bin1);
-    exit(1);
-  }
-  if (mask[bin2] > 0.0f) {
-    fprintf(stderr,
-            "FAIL: Redetected tone at bin %d despite identical sum (caching "
-            "failed)\n",
-            bin2);
-    exit(1);
-  }
-  printf(
-      "  Run 2: Tonal mask successfully cached (old tone remains, new tone "
-      "skipped) ✓\n");
-
-  // Reset alpha
-  for (int i = 0; i < TEST_SPECTRUM_SIZE; i++) {
-    alpha[i] = 1.0f;
-  }
-
-  // Run 3: Modify sum slightly (change bin 5 to 0.02)
-  noise_spectrum[5] = 0.02f;
-
-  // Should trigger recalculation. Old tone at bin1 should be cleared, new tone
-  // at bin2 detected.
-  tonal_reducer_run(reducer, noise_spectrum, max_profile, median_profile, alpha,
+  // Run 2: When noise spectrum is updated with moved tone, detection refreshes.
+  // The mask should now detect tone at bin2 and clear bin1.
+  tonal_reducer_run(reducer, noise_spectrum, NULL, false, alpha,
                     reduction_gain);
   mask = tonal_reducer_get_mask(reducer);
 
   if (mask[bin1] > 0.0f) {
     fprintf(stderr,
-            "FAIL: Cache did not invalidate after sum changed; old tone at bin "
-            "%d still present\n",
+            "FAIL: Old tone at bin %d was not cleared on spectrum update\n",
             bin1);
     exit(1);
   }
   if (mask[bin2] <= 0.0f) {
     fprintf(stderr,
-            "FAIL: Cache invalidation did not detect new tone at bin %d\n",
+            "FAIL: Moved tone at bin %d was not detected on spectrum update\n",
             bin2);
     exit(1);
   }
   printf(
-      "  Run 3: Cache successfully invalidated and updated (new tone detected, "
-      "old tone cleared) ✓\n");
-
-  // Run 4: Learned-mode scenario with non-zero median_profile
-  // Re-initialize profiles for learned mode
-  for (int i = 0; i < TEST_SPECTRUM_SIZE; i++) {
-    alpha[i] = 1.0f;
-    noise_spectrum[i] = 0.01f;
-    median_profile[i] = 0.01f; // Non-zero median profile triggers learned mode
-    max_profile[i] = 0.01f;
-  }
-
-  // Set a tone in max_profile at bin 100
-  int learned_bin1 = 100;
-  max_profile[learned_bin1] = 0.1f;
-  max_profile[learned_bin1 - 1] = 0.03f;
-  max_profile[learned_bin1 + 1] = 0.03f;
-  median_profile[learned_bin1] = 0.1f;
-  median_profile[learned_bin1 - 1] = 0.03f;
-  median_profile[learned_bin1 + 1] = 0.03f;
-  noise_spectrum[learned_bin1] = 0.1f;
-  noise_spectrum[learned_bin1 - 1] = 0.03f;
-  noise_spectrum[learned_bin1 + 1] = 0.03f;
-
-  // Run 4: Initial run in learned mode
-  tonal_reducer_run(reducer, noise_spectrum, max_profile, median_profile, alpha,
-                    reduction_gain);
-  mask = tonal_reducer_get_mask(reducer);
-
-  if (mask[learned_bin1] <= 0.0f) {
-    fprintf(stderr,
-            "FAIL: Reducer in learned mode did not detect tone at bin %d\n",
-            learned_bin1);
-    exit(1);
-  }
-  printf("  Run 4: Tone at bin %d detected in learned mode (mask=%.3f) ✓\n",
-         learned_bin1, mask[learned_bin1]);
+      "  Run 2: Tonal mask refreshed on spectrum update (tone at bin %d "
+      "detected, bin %d cleared) ✓\n",
+      bin2, bin1);
 
   // Reset alpha
   for (int i = 0; i < TEST_SPECTRUM_SIZE; i++) {
     alpha[i] = 1.0f;
   }
 
-  // Move the tone in max_profile to bin 200, keeping sum identical if we want,
-  // or just changing it
-  max_profile[learned_bin1] = 0.01f;
-  max_profile[learned_bin1 - 1] = 0.01f;
-  max_profile[learned_bin1 + 1] = 0.01f;
+  // Run 3: Modify spectrum again (add third tone at bin 50)
+  noise_spectrum[50] = 0.1f;
+  noise_spectrum[49] = 0.03f;
+  noise_spectrum[51] = 0.03f;
 
-  int learned_bin2 = 200;
-  max_profile[learned_bin2] = 0.1f;
-  max_profile[learned_bin2 - 1] = 0.03f;
-  max_profile[learned_bin2 + 1] = 0.03f;
-  median_profile[learned_bin2] = 0.1f;
-  median_profile[learned_bin2 - 1] = 0.03f;
-  median_profile[learned_bin2 + 1] = 0.03f;
-  noise_spectrum[learned_bin2] = 0.1f;
-  noise_spectrum[learned_bin2 - 1] = 0.03f;
-  noise_spectrum[learned_bin2 + 1] = 0.03f;
-
-  // Clear the old tone in noise_spectrum and median_profile to match
-  noise_spectrum[learned_bin1] = 0.01f;
-  noise_spectrum[learned_bin1 - 1] = 0.01f;
-  noise_spectrum[learned_bin1 + 1] = 0.01f;
-  median_profile[learned_bin1] = 0.01f;
-  median_profile[learned_bin1 - 1] = 0.01f;
-  median_profile[learned_bin1 + 1] = 0.01f;
-
-  // Change sum slightly to invalidate cache
-  median_profile[5] = 0.02f;
-
-  // Run 5: Run again. Since median_profile changed, it should invalidate and
-  // recompute the mask.
-  tonal_reducer_run(reducer, noise_spectrum, max_profile, median_profile, alpha,
+  tonal_reducer_run(reducer, noise_spectrum, NULL, false, alpha,
                     reduction_gain);
   mask = tonal_reducer_get_mask(reducer);
 
-  if (mask[learned_bin1] > 0.0f) {
-    fprintf(stderr,
-            "FAIL: Cache did not invalidate after median_profile changed in "
-            "learned "
-            "mode; old tone still present at bin %d\n",
-            learned_bin1);
+  if (mask[50] <= 0.0f) {
+    fprintf(stderr, "FAIL: New tone at bin 50 was not detected\n");
     exit(1);
   }
-  if (mask[learned_bin2] <= 0.0f) {
-    fprintf(stderr,
-            "FAIL: Cache invalidation did not detect new tone in learned mode "
-            "after median_profile changed (expected at bin %d)\n",
-            learned_bin2);
+  if (mask[bin2] <= 0.0f) {
+    fprintf(stderr, "FAIL: Existing tone at bin %d was not detected\n", bin2);
     exit(1);
   }
   printf(
-      "  Run 5: Learned mode cache successfully invalidated on median_profile "
-      "change ✓\n");
+      "  Run 3: Updated spectrum detected multiple tones (bins 50 and %d) ✓\n",
+      bin2);
+
+  // Run 4: Manual CV mask mode with high-frequency bin > 99
+  float manual_cv_mask[TEST_SPECTRUM_SIZE];
+  for (int i = 0; i < TEST_SPECTRUM_SIZE; i++) {
+    manual_cv_mask[i] = 0.0f;
+    alpha[i] = 1.0f;
+  }
+  int cv_bin = 150; // Above index 99 to ensure full spectrum scanning
+  manual_cv_mask[cv_bin] = 1.0f;
+  int cv_bin2 = 180; // Second high-frequency bin above index 99
+  manual_cv_mask[cv_bin2] = 0.5f;
+
+  tonal_reducer_run(reducer, noise_spectrum, manual_cv_mask, true, alpha,
+                    reduction_gain);
+  mask = tonal_reducer_get_mask(reducer);
+
+  if (mask[cv_bin] <= 0.0f) {
+    fprintf(stderr,
+            "FAIL: Reducer in manual CV mask mode did not set mask at bin %d\n",
+            cv_bin);
+    exit(1);
+  }
+  if (fabsf(mask[cv_bin2] - 0.5f) > 1e-6f) {
+    fprintf(stderr,
+            "FAIL: Reducer in manual CV mask mode did not preserve fractional "
+            "mask at bin %d (got %f)\n",
+            cv_bin2, mask[cv_bin2]);
+    exit(1);
+  }
+  if (alpha[cv_bin] <= 1.0f) {
+    fprintf(stderr, "FAIL: Alpha not boosted at manual CV bin %d\n", cv_bin);
+    exit(1);
+  }
+  if (alpha[cv_bin2] <= 1.0f || alpha[cv_bin2] >= alpha[cv_bin]) {
+    fprintf(stderr,
+            "FAIL: Alpha at fractional bin %d not smaller than full-strength "
+            "bin %d (got %f vs %f)\n",
+            cv_bin2, cv_bin, alpha[cv_bin2], alpha[cv_bin]);
+    exit(1);
+  }
+  printf(
+      "  Run 4: CV mask directly applied at bins %d and %d (above index 99) "
+      "✓\n",
+      cv_bin, cv_bin2);
+
+  // Run 5: Available all-zero CV mask honors profile without adaptive detection
+  for (int i = 0; i < TEST_SPECTRUM_SIZE; i++) {
+    manual_cv_mask[i] = 0.0f;
+    alpha[i] = 1.0f;
+  }
+  tonal_reducer_run(reducer, noise_spectrum, manual_cv_mask, true, alpha,
+                    reduction_gain);
+  mask = tonal_reducer_get_mask(reducer);
+  for (int i = 0; i < TEST_SPECTRUM_SIZE; i++) {
+    if (mask[i] > 0.0f) {
+      fprintf(
+          stderr,
+          "FAIL: Available all-zero CV mask produced non-zero mask at bin %d\n",
+          i);
+      exit(1);
+    }
+    if (alpha[i] != 1.0f) {
+      fprintf(stderr,
+              "FAIL: Available all-zero CV mask modified alpha at bin %d\n", i);
+      exit(1);
+    }
+  }
+  printf(
+      "  Run 5: Available all-zero CV mask honored without adaptive detection "
+      "✓\n");
 
   tonal_reducer_free(reducer);
-  printf("✓ Cache and adaptive support tests passed\n");
+  printf("✓ Adaptive support and manual mask tests passed\n");
 }
 
 void test_tonal_reducer_peaks(void) {
@@ -370,10 +320,9 @@ void test_tonal_reducer_peaks(void) {
 
   float alpha[TEST_SPECTRUM_SIZE];
   float noise[TEST_SPECTRUM_SIZE] = {0.01f};
-  float max_prof[TEST_SPECTRUM_SIZE] = {0.01f};
-  float med_prof[TEST_SPECTRUM_SIZE] = {0.01f};
+  float cv_mask[TEST_SPECTRUM_SIZE] = {0.0f};
   // Gain 1.0f (no reduction requested, short-circuits early)
-  tonal_reducer_run(reducer, noise, max_prof, med_prof, alpha, 1.0f);
+  tonal_reducer_run(reducer, noise, cv_mask, false, alpha, 1.0f);
 
   tonal_reducer_free(reducer);
   printf("✓ Tonal reducer peaks test passed\n");

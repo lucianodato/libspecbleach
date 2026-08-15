@@ -18,9 +18,6 @@ struct TonalReducer {
   float* tonal_mask_buffers[2];
   uint32_t* deque_workspace;
   atomic_int active_mask_idx;
-  float last_profile_sum;
-  const float* last_detection_profile;
-  bool has_cached_mask;
 };
 
 TonalReducer* tonal_reducer_initialize(uint32_t real_spectrum_size,
@@ -58,9 +55,6 @@ TonalReducer* tonal_reducer_initialize(uint32_t real_spectrum_size,
   }
 
   atomic_init(&self->active_mask_idx, 0);
-  self->last_profile_sum = -1.0f;
-  self->last_detection_profile = NULL;
-  self->has_cached_mask = false;
 
   return self;
 }
@@ -76,38 +70,36 @@ void tonal_reducer_free(TonalReducer* self) {
   free(self);
 }
 
+void tonal_reducer_reset(TonalReducer* self) {
+  if (!self) {
+    return;
+  }
+  if (self->tonal_mask) {
+    memset(self->tonal_mask, 0, self->real_spectrum_size * sizeof(float));
+  }
+  if (self->tonal_mask_buffers[0]) {
+    memset(self->tonal_mask_buffers[0], 0,
+           self->real_spectrum_size * sizeof(float));
+  }
+  if (self->tonal_mask_buffers[1]) {
+    memset(self->tonal_mask_buffers[1], 0,
+           self->real_spectrum_size * sizeof(float));
+  }
+  atomic_store_explicit(&self->active_mask_idx, 0, memory_order_release);
+}
+
 void tonal_reducer_run(TonalReducer* self, const float* noise_spectrum,
-                       const float* max_profile, const float* median_profile,
+                       const float* cv_mask_profile, bool cv_mask_available,
                        float* alpha, float tonal_reduction_gain) {
-  if (!self || !noise_spectrum || !max_profile || !median_profile || !alpha) {
+  if (!self || !noise_spectrum || !alpha) {
     return;
   }
 
-  // 1. Determine which profile is active for detection
-  bool profile_learned = false;
-  for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
-    if (median_profile[k] > 0.0f) {
-      profile_learned = true;
-      break;
-    }
-  }
-  const float* detection_profile =
-      profile_learned ? median_profile : noise_spectrum;
+  if (cv_mask_available && cv_mask_profile) {
+    // Manual Profile: copy CV mask directly
+    memcpy(self->tonal_mask, cv_mask_profile,
+           self->real_spectrum_size * sizeof(float));
 
-  // Compute profile checksum
-  float current_sum = 0.0f;
-  for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
-    current_sum += detection_profile[k];
-  }
-
-  // 2. Run detection only if the profile has changed
-  if (!self->has_cached_mask || current_sum != self->last_profile_sum ||
-      detection_profile != self->last_detection_profile) {
-    detect_tonal_components(noise_spectrum, median_profile,
-                            self->real_spectrum_size, self->sample_rate,
-                            self->fft_size, self->tonal_mask,
-                            self->deque_workspace);
-    // Write completed mask to inactive double-buffer and release-publish
     int published_idx =
         atomic_load_explicit(&self->active_mask_idx, memory_order_relaxed);
     int write_idx = 1 - published_idx;
@@ -115,9 +107,20 @@ void tonal_reducer_run(TonalReducer* self, const float* noise_spectrum,
            self->real_spectrum_size * sizeof(float));
     atomic_store_explicit(&self->active_mask_idx, write_idx,
                           memory_order_release);
-    self->last_profile_sum = current_sum;
-    self->last_detection_profile = detection_profile;
-    self->has_cached_mask = true;
+  } else {
+    // Standalone Adaptive: Fallback to detect_tonal_components on
+    // noise_spectrum
+    detect_tonal_components(noise_spectrum, noise_spectrum,
+                            self->real_spectrum_size, self->sample_rate,
+                            self->fft_size, self->tonal_mask,
+                            self->deque_workspace);
+    int published_idx =
+        atomic_load_explicit(&self->active_mask_idx, memory_order_relaxed);
+    int write_idx = 1 - published_idx;
+    memcpy(self->tonal_mask_buffers[write_idx], self->tonal_mask,
+           self->real_spectrum_size * sizeof(float));
+    atomic_store_explicit(&self->active_mask_idx, write_idx,
+                          memory_order_release);
   }
 
   // 2. Skip alpha boosting if reduction is 0 (no tonal suppression)

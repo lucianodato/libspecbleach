@@ -157,11 +157,11 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define TONAL_MEDIAN_FILTER_WINDOW                                             \
   15 // 15-bin frequency-domain median-filter window
 #define TONAL_PEAK_MIN_SIGNIFICANCE                                            \
-  0.25f // Minimum tonal mask value to report as peak
+  0.08f // Minimum tonal mask value to report as peak
 #define TONAL_PEAK_MIN_LOCAL_PROMINENCE                                        \
-  0.04f // Minimum sharpness over immediate neighbors
+  0.01f // Minimum sharpness over immediate neighbors
 #define TONAL_PEAK_MIN_WIDER_PROMINENCE                                        \
-  0.15f // Minimum sharpness over wider neighborhood (k-2, k+2)
+  0.0f // Minimum sharpness over wider neighborhood (k-2, k+2)
 #define TONAL_PEAK_OCTAVE_DYNAMIC_RANGE_DB                                     \
   20.0f // Max dB below strongest peak within same octave band
 #define TONAL_PEAK_MIN_OCTAVE_RELATIVE_POWER                                   \
@@ -192,6 +192,9 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define NOISE_ESTIMATION_INTERPOLATION_THRESHOLD (1e-9F)
 #define NOISE_ESTIMATION_SMOOTHING_FACTOR (0.5F)
 #define ADAPTIVE_NOISE_FLOOR_SMOOTHING (0.5F)
+#define RAYLEIGH_NOISE_CV_REFERENCE (0.523F)
+#define RAYLEIGH_CV_REFERENCE RAYLEIGH_NOISE_CV_REFERENCE
+#define STANDARD_DEVIATION_MORPH_SCALE (2.0F)
 
 // NLM (Lukin Algorithm B) Parameters
 #define NLM_PATCH_SIZE 8U

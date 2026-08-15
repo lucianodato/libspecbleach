@@ -323,48 +323,50 @@ void test_get_morphed_profile(void) {
   uint32_t size = 2;
   float mean[] = {2.0f, 4.0f};
   float median[] = {1.0f, 3.0f};
-  float max[] = {4.0f, 6.0f};
+  float std_dev[] = {4.0f, 6.0f};
   float min[] = {1.5f, 2.5f};
 
   float output[2] = {0.0f};
 
   // Test NULL and size 0 checks
-  TEST_ASSERT(!get_morphed_profile(NULL, mean, median, max, min, size, 0.5f),
-              "morphed NULL output");
-  TEST_ASSERT(!get_morphed_profile(output, NULL, median, max, min, size, 0.5f),
-              "morphed NULL mean");
-  TEST_ASSERT(!get_morphed_profile(output, mean, median, max, min, 0, 0.5f),
+  TEST_ASSERT(
+      !get_morphed_profile(NULL, mean, median, std_dev, min, size, 0.5f),
+      "morphed NULL output");
+  TEST_ASSERT(
+      !get_morphed_profile(output, NULL, median, std_dev, min, size, 0.5f),
+      "morphed NULL mean");
+  TEST_ASSERT(!get_morphed_profile(output, mean, median, std_dev, min, 0, 0.5f),
               "morphed size 0");
 
-  // Test positive aggressiveness (morph mean -> max)
+  // Test positive aggressiveness (morph mean -> mean + 2*std_dev*t)
   // aggressiveness = 0.5
-  // output[0] = mean[0]*(1-0.5) + max[0]*0.5 = 2.0*0.5 + 4.0*0.5 = 3.0
-  // Clamped with min[0] (1.5) -> 3.0
-  // output[1] = mean[1]*(1-0.5) + max[1]*0.5 = 4.0*0.5 + 6.0*0.5 = 5.0
-  // Clamped with min[1] (2.5) -> 5.0
-  TEST_ASSERT(get_morphed_profile(output, mean, median, max, min, size, 0.5f),
-              "morphed aggressiveness > 0");
-  TEST_FLOAT_CLOSE(output[0], 3.0f, 1e-6f);
-  TEST_FLOAT_CLOSE(output[1], 5.0f, 1e-6f);
+  // output[0] = mean[0] + std_dev[0] * 0.5 * 2.0 = 2.0 + 4.0 = 6.0
+  // output[1] = mean[1] + std_dev[1] * 0.5 * 2.0 = 4.0 + 6.0 = 10.0
+  TEST_ASSERT(
+      get_morphed_profile(output, mean, median, std_dev, min, size, 0.5f),
+      "morphed aggressiveness > 0");
+  TEST_FLOAT_CLOSE(output[0], 6.0f, 1e-6f);
+  TEST_FLOAT_CLOSE(output[1], 10.0f, 1e-6f);
 
   // Test negative aggressiveness (morph mean -> median)
   // aggressiveness = -0.5, t = 0.5
   // output[0] = mean[0]*(1-0.5) + median[0]*0.5 = 2.0*0.5 + 1.0*0.5 = 1.5
-  // Clamped with min[0] (1.5) -> 1.5
   // output[1] = mean[1]*(1-0.5) + median[1]*0.5 = 4.0*0.5 + 3.0*0.5 = 3.5
-  // Clamped with min[1] (2.5) -> 3.5
-  TEST_ASSERT(get_morphed_profile(output, mean, median, max, min, size, -0.5f),
-              "morphed aggressiveness < 0");
+  TEST_ASSERT(
+      get_morphed_profile(output, mean, median, std_dev, min, size, -0.5f),
+      "morphed aggressiveness < 0");
   TEST_FLOAT_CLOSE(output[0], 1.5f, 1e-6f);
   TEST_FLOAT_CLOSE(output[1], 3.5f, 1e-6f);
 
-  // Test negative aggressiveness clamping with min profile
+  // Test negative aggressiveness (morph mean -> median at -1.0)
   // aggressiveness = -1.0, t = 1.0
   // output[0] = mean[0]*0.0 + median[0]*1.0 = 1.0
-  // Clamped with min[0] (1.5) -> should clamp to 1.5
-  TEST_ASSERT(get_morphed_profile(output, mean, median, max, min, size, -1.0f),
-              "morphed aggressiveness clamping");
-  TEST_FLOAT_CLOSE(output[0], 1.5f, 1e-6f);
+  // output[1] = mean[1]*0.0 + median[1]*1.0 = 3.0
+  TEST_ASSERT(
+      get_morphed_profile(output, mean, median, std_dev, min, size, -1.0f),
+      "morphed aggressiveness -1.0");
+  TEST_FLOAT_CLOSE(output[0], 1.0f, 1e-6f);
+  TEST_FLOAT_CLOSE(output[1], 3.0f, 1e-6f);
 
   printf("✓ get_morphed_profile tests passed\n");
 }
