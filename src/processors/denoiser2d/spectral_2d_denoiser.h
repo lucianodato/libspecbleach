@@ -99,5 +99,6 @@ uint32_t spectral_2d_denoiser_get_peaks(SpectralProcessorHandle instance,
                                         uint32_t max_peaks);
 const float* spectral_2d_denoiser_get_active_noise_profile(
     SpectralProcessorHandle instance);
+void spectral_2d_denoiser_reset_noise_profile(SpectralProcessorHandle instance);
 
 #endif /* SPECTRAL_2D_DENOISER_H */

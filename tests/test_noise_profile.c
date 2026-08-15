@@ -276,7 +276,7 @@ void test_denoiser_profile_core_offset(void) {
   float ref_spectrum[513];
   float manual_noise_floor[513];
   int last_adaptive_state = 0;
-  float aggressiveness = 1.0f;
+  float aggressiveness = 0.0f;
 
   for (int i = 0; i < 513; i++) {
     test_profile[i] = 1.0f;
@@ -296,7 +296,7 @@ void test_denoiser_profile_core_offset(void) {
       .noise_spectrum = noise_spectrum,
       .last_adaptive_state = &last_adaptive_state,
       .aggressiveness = &aggressiveness,
-      .param_aggressiveness = 1.0f,
+      .param_aggressiveness = 0.0f,
       .adaptive_enabled = false,
       .noise_profile_offset_linear = 2.0f,
   };

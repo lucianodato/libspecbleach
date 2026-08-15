@@ -281,13 +281,12 @@ bool get_morphed_profile(float* output_profile, const float* mean_profile,
       output_profile[i] =
           (mean_profile[i] * (1.0F - t)) + (median_profile[i] * t);
     } else {
-      // Morph from Mean (0) to Max (1)
+      // Morph from Mean (0) to Mean + 2*StdDev (+1.0)
       float t = aggressiveness;
-      output_profile[i] = (mean_profile[i] * (1.0F - t)) + (max_profile[i] * t);
+      output_profile[i] = mean_profile[i] + (max_profile[i] * t * 2.0f);
     }
 
-    // Always ensure the profile is at least the Minimum
-    output_profile[i] = fmaxf(output_profile[i], min_profile[i]);
+    output_profile[i] = fmaxf(output_profile[i], 0.0f); // Safety clamp
   }
 
   return true;

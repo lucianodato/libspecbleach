@@ -31,8 +31,11 @@ bool denoiser_profile_core_handle_learning_mode(NoiseEstimator* noise_estimator,
                                                 int learn_noise_flag,
                                                 bool* was_learning) {
   if (learn_noise_flag > 0) {
+    if (!*was_learning) {
+      noise_estimation_reset(noise_estimator);
+    }
     // Learn all modes simultaneously
-    for (int mode = ROLLING_MEAN; mode <= MINIMUM; mode++) {
+    for (int mode = ROLLING_MEAN; mode <= CV_MASK; mode++) {
       noise_estimation_run(noise_estimator, (NoiseEstimatorType)mode,
                            reference_spectrum);
     }
@@ -42,7 +45,7 @@ bool denoiser_profile_core_handle_learning_mode(NoiseEstimator* noise_estimator,
 
   if (*was_learning) {
     // User just stopped learning -> Finalize all captures
-    for (int mode = ROLLING_MEAN; mode <= MINIMUM; mode++) {
+    for (int mode = ROLLING_MEAN; mode <= CV_MASK; mode++) {
       noise_estimation_finalize(noise_estimator, (NoiseEstimatorType)mode);
     }
     *was_learning = false;
@@ -70,8 +73,8 @@ void denoiser_profile_core_update(DenoiserProfileCoreParams params,
             params.manual_noise_floor,
             get_noise_profile(params.noise_profile, ROLLING_MEAN),
             get_noise_profile(params.noise_profile, MEDIAN),
-            get_noise_profile(params.noise_profile, MAX),
-            get_noise_profile(params.noise_profile, MINIMUM),
+            get_noise_profile(params.noise_profile, STD_DEV),
+            get_noise_profile(params.noise_profile, CV_MASK),
             params.spectrum_size, params.param_aggressiveness);
 
         adaptive_estimator_update_seed(params.adaptive_estimator,
@@ -112,8 +115,8 @@ void denoiser_profile_core_update(DenoiserProfileCoreParams params,
     get_morphed_profile(params.noise_spectrum,
                         get_noise_profile(params.noise_profile, ROLLING_MEAN),
                         get_noise_profile(params.noise_profile, MEDIAN),
-                        get_noise_profile(params.noise_profile, MAX),
-                        get_noise_profile(params.noise_profile, MINIMUM),
+                        get_noise_profile(params.noise_profile, STD_DEV),
+                        get_noise_profile(params.noise_profile, CV_MASK),
                         params.spectrum_size, params.param_aggressiveness);
   }
 

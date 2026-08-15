@@ -521,9 +521,8 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
 
   // 3.2 Detect tonal components and boost alpha at tonal bins
   tonal_reducer_run(self->tonal_reducer, delayed_noise,
-                    get_noise_profile(self->noise_profile, MAX),
-                    get_noise_profile(self->noise_profile, MEDIAN), self->alpha,
-                    self->parameters.tonal_reduction);
+                    get_noise_profile(self->noise_profile, CV_MASK),
+                    self->alpha, self->parameters.tonal_reduction);
 
   // 3.3 Apply psychoacoustic veto to preserve transients and moderate artifacts
   masking_veto_apply(self->masking_veto, smoothed_magnitude, delayed_noise,
@@ -622,4 +621,24 @@ const float* spectral_2d_denoiser_get_active_noise_profile(
   }
   int idx = atomic_load_explicit(&self->active_noise_idx, memory_order_acquire);
   return self->noise_spectrum_buffers[idx];
+}
+
+void spectral_2d_denoiser_reset_noise_profile(
+    SpectralProcessorHandle instance) {
+  Spectral2DDenoiser* self = (Spectral2DDenoiser*)instance;
+  if (!self) {
+    return;
+  }
+  if (self->noise_estimator) {
+    noise_estimation_reset(self->noise_estimator);
+  }
+  if (self->tonal_reducer) {
+    tonal_reducer_reset(self->tonal_reducer);
+  }
+  if (self->manual_noise_floor) {
+    memset(self->manual_noise_floor, 0,
+           self->real_spectrum_size * sizeof(float));
+  }
+  self->was_learning = false;
+  self->last_adaptive_state = 0;
 }

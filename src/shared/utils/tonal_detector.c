@@ -223,9 +223,9 @@ uint32_t tonal_detector_get_peaks(const float* tonal_mask, uint32_t size,
     }
 
     // Peak center must be a local maximum above the significance threshold and
-    // stand out sharply from immediate neighbors and wider neighbors
+    // stand out from immediate neighbors
     if (mask_val >= TONAL_PEAK_MIN_SIGNIFICANCE &&
-        mask_val > tonal_mask[k - 1] && mask_val > tonal_mask[k + 1] &&
+        mask_val > tonal_mask[k - 1] && mask_val >= tonal_mask[k + 1] &&
         local_prominence >= TONAL_PEAK_MIN_LOCAL_PROMINENCE &&
         wider_prominence >= required_wider_prominence) {
 

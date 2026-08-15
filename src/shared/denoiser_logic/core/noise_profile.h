@@ -27,7 +27,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 typedef struct NoiseProfile NoiseProfile;
 
 #define NOISE_PROFILE_MODES                                                    \
-  4 // ROLLING_MEAN, MEDIAN, MAX, MINIMUM (no OFF storage needed)
+  4 // ROLLING_MEAN, MEDIAN, STD_DEV, CV_MASK (no OFF storage needed)
 
 NoiseProfile* noise_profile_initialize(uint32_t size);
 void noise_profile_free(NoiseProfile* self);

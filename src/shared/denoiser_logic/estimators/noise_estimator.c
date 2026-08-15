@@ -22,7 +22,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "shared/configurations.h"
 #include "shared/denoiser_logic/core/noise_profile.h"
 #include "shared/utils/spectral_circular_buffer.h"
+#include "shared/utils/spectral_smoother.h"
 #include "shared/utils/spectral_utils.h"
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -31,6 +33,10 @@ struct NoiseEstimator {
   uint32_t real_spectrum_size;
   SbSpectralCircularBuffer* median_buffer;
   uint32_t layer_median;
+
+  float* welford_mean;
+  float* welford_m2;
+  uint32_t welford_count;
 
   NoiseProfile* noise_profile;
 };
@@ -58,6 +64,15 @@ NoiseEstimator* noise_estimation_initialize(const uint32_t fft_size,
   self->layer_median = spectral_circular_buffer_add_layer(
       self->median_buffer, self->real_spectrum_size);
 
+  self->welford_mean = (float*)calloc(self->real_spectrum_size, sizeof(float));
+  self->welford_m2 = (float*)calloc(self->real_spectrum_size, sizeof(float));
+  self->welford_count = 0U;
+
+  if (!self->welford_mean || !self->welford_m2) {
+    noise_estimation_free(self);
+    return NULL;
+  }
+
   return self;
 }
 
@@ -72,7 +87,26 @@ void noise_estimation_free(NoiseEstimator* self) {
     spectral_circular_buffer_free(self->median_buffer);
   }
 
+  free(self->welford_mean);
+  free(self->welford_m2);
+
   free(self);
+}
+
+void noise_estimation_reset(NoiseEstimator* self) {
+  if (!self) {
+    return;
+  }
+  self->welford_count = 0U;
+  if (self->welford_mean) {
+    memset(self->welford_mean, 0, self->real_spectrum_size * sizeof(float));
+  }
+  if (self->welford_m2) {
+    memset(self->welford_m2, 0, self->real_spectrum_size * sizeof(float));
+  }
+  if (self->median_buffer) {
+    spectral_circular_buffer_clear(self->median_buffer);
+  }
 }
 
 static void update_rolling_mean(NoiseEstimator* self, float* noise_profile,
@@ -106,18 +140,13 @@ static void update_median(NoiseEstimator* self, float* noise_profile,
   }
 }
 
-static void update_max(NoiseEstimator* self, float* noise_profile,
-                       const float* signal_spectrum, NoiseEstimatorType type) {
-  if (max_spectrum(noise_profile, signal_spectrum, self->real_spectrum_size)) {
-    set_noise_profile_available(self->noise_profile, type);
-  }
-}
-
-static void update_minimum(NoiseEstimator* self, float* noise_profile,
-                           const float* signal_spectrum,
-                           NoiseEstimatorType type) {
-  if (min_spectrum(noise_profile, signal_spectrum, self->real_spectrum_size)) {
-    set_noise_profile_available(self->noise_profile, type);
+static void update_welford(NoiseEstimator* self, const float* signal_spectrum) {
+  self->welford_count++;
+  for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
+    float delta = signal_spectrum[k] - self->welford_mean[k];
+    self->welford_mean[k] += delta / (float)self->welford_count;
+    float delta2 = signal_spectrum[k] - self->welford_mean[k];
+    self->welford_m2[k] += delta * delta2;
   }
 }
 
@@ -139,12 +168,10 @@ bool noise_estimation_run(NoiseEstimator* self,
     case MEDIAN:
       update_median(self, noise_profile, signal_spectrum, noise_estimator_type);
       break;
-    case MAX:
-      update_max(self, noise_profile, signal_spectrum, noise_estimator_type);
+    case STD_DEV:
+      update_welford(self, signal_spectrum);
       break;
-    case MINIMUM:
-      update_minimum(self, noise_profile, signal_spectrum,
-                     noise_estimator_type);
+    case CV_MASK:
       break;
     default:
       break;
@@ -156,6 +183,33 @@ bool noise_estimation_run(NoiseEstimator* self,
 void noise_estimation_finalize(NoiseEstimator* self,
                                NoiseEstimatorType noise_estimator_type) {
   if (!self) {
+    return;
+  }
+
+  if (noise_estimator_type == STD_DEV) {
+    float* std_dev_profile = get_noise_profile(self->noise_profile, STD_DEV);
+    for (uint32_t k = 0; k < self->real_spectrum_size; k++) {
+      float variance =
+          self->welford_m2[k] / fmaxf(1.0f, (float)(self->welford_count - 1));
+      std_dev_profile[k] = sqrtf(variance);
+    }
+    set_noise_profile_available(self->noise_profile, STD_DEV);
+    return;
+  }
+
+  if (noise_estimator_type == CV_MASK) {
+    float* cv_mask = get_noise_profile(self->noise_profile, CV_MASK);
+    float* std_dev_profile = get_noise_profile(self->noise_profile, STD_DEV);
+    for (uint32_t k = 0; k < self->real_spectrum_size; k++) {
+      float cv = std_dev_profile[k] / (self->welford_mean[k] + 1e-12f);
+      // Map CV to a 0.0 - 1.0 mask. Rayleigh noise CV is ~0.523.
+      float mask = 1.0f - (cv / 0.52f);
+      cv_mask[k] = fmaxf(0.0f, fminf(1.0f, mask));
+    }
+    // Apply a light 3-bin spatial smooth so the mask catches the "skirts" of
+    // the hum
+    spectral_smoothing_apply_spatial(cv_mask, self->real_spectrum_size);
+    set_noise_profile_available(self->noise_profile, CV_MASK);
     return;
   }
 
