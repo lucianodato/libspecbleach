@@ -32,9 +32,6 @@ bool denoiser_profile_core_handle_learning_mode(NoiseEstimator* noise_estimator,
                                                 int learn_noise_flag,
                                                 bool* was_learning) {
   if (learn_noise_flag > 0) {
-    if (!*was_learning) {
-      noise_estimation_reset(noise_estimator);
-    }
     sb_simd_state_t old_simd_state = sb_simd_enable_ftz_daz();
     // Learn all modes simultaneously
     for (int mode = ROLLING_MEAN; mode <= CV_MASK; mode++) {
