@@ -283,7 +283,8 @@ bool get_morphed_profile(float* output_profile, const float* mean_profile,
     } else {
       // Morph from Mean (0) to Mean + 2*StdDev (+1.0)
       float t = aggressiveness;
-      output_profile[i] = mean_profile[i] + (max_profile[i] * t * 2.0f);
+      output_profile[i] = mean_profile[i] +
+                          (max_profile[i] * t * STANDARD_DEVIATION_MORPH_SCALE);
     }
 
     output_profile[i] = fmaxf(output_profile[i], 0.0f); // Safety clamp

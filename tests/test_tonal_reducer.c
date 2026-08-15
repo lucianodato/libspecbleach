@@ -174,64 +174,60 @@ void test_caching_and_adaptive_support(void) {
   noise_spectrum[bin2 - 1] = 0.03f;
   noise_spectrum[bin2 + 1] = 0.03f;
 
-  // Run 2: Since sum is identical, caching should skip detection.
-  // The cached mask should still have tone at bin1 and NOT at bin2.
+  // Run 2: When noise spectrum is updated with moved tone, detection refreshes.
+  // The mask should now detect tone at bin2 and clear bin1.
   tonal_reducer_run(reducer, noise_spectrum, NULL, alpha, reduction_gain);
   mask = tonal_reducer_get_mask(reducer);
 
-  if (mask[bin1] <= 0.0f) {
-    fprintf(stderr, "FAIL: Caching failed, cached mask at bin %d cleared\n",
+  if (mask[bin1] > 0.0f) {
+    fprintf(stderr,
+            "FAIL: Old tone at bin %d was not cleared on spectrum update\n",
             bin1);
     exit(1);
   }
-  if (mask[bin2] > 0.0f) {
+  if (mask[bin2] <= 0.0f) {
     fprintf(stderr,
-            "FAIL: Redetected tone at bin %d despite identical sum (caching "
-            "failed)\n",
+            "FAIL: Moved tone at bin %d was not detected on spectrum update\n",
             bin2);
     exit(1);
   }
   printf(
-      "  Run 2: Tonal mask successfully cached (old tone remains, new tone "
-      "skipped) ✓\n");
+      "  Run 2: Tonal mask refreshed on spectrum update (tone at bin %d "
+      "detected, bin %d cleared) ✓\n",
+      bin2, bin1);
 
   // Reset alpha
   for (int i = 0; i < TEST_SPECTRUM_SIZE; i++) {
     alpha[i] = 1.0f;
   }
 
-  // Run 3: Modify sum slightly (change bin 5 to 0.02)
-  noise_spectrum[5] = 0.02f;
+  // Run 3: Modify spectrum again (add third tone at bin 50)
+  noise_spectrum[50] = 0.1f;
+  noise_spectrum[49] = 0.03f;
+  noise_spectrum[51] = 0.03f;
 
-  // Should trigger recalculation. Old tone at bin1 should be cleared, new tone
-  // at bin2 detected.
   tonal_reducer_run(reducer, noise_spectrum, NULL, alpha, reduction_gain);
   mask = tonal_reducer_get_mask(reducer);
 
-  if (mask[bin1] > 0.0f) {
-    fprintf(stderr,
-            "FAIL: Cache did not invalidate after sum changed; old tone at bin "
-            "%d still present\n",
-            bin1);
+  if (mask[50] <= 0.0f) {
+    fprintf(stderr, "FAIL: New tone at bin 50 was not detected\n");
     exit(1);
   }
   if (mask[bin2] <= 0.0f) {
-    fprintf(stderr,
-            "FAIL: Cache invalidation did not detect new tone at bin %d\n",
-            bin2);
+    fprintf(stderr, "FAIL: Existing tone at bin %d was not detected\n", bin2);
     exit(1);
   }
   printf(
-      "  Run 3: Cache successfully invalidated and updated (new tone detected, "
-      "old tone cleared) ✓\n");
+      "  Run 3: Updated spectrum detected multiple tones (bins 50 and %d) ✓\n",
+      bin2);
 
-  // Run 4: Manual CV mask mode
+  // Run 4: Manual CV mask mode with high-frequency bin > 99
   float manual_cv_mask[TEST_SPECTRUM_SIZE];
   for (int i = 0; i < TEST_SPECTRUM_SIZE; i++) {
     manual_cv_mask[i] = 0.0f;
     alpha[i] = 1.0f;
   }
-  int cv_bin = 50;
+  int cv_bin = 150; // Above index 99 to ensure full spectrum scanning
   manual_cv_mask[cv_bin] = 1.0f;
 
   tonal_reducer_run(reducer, noise_spectrum, manual_cv_mask, alpha,
@@ -244,10 +240,15 @@ void test_caching_and_adaptive_support(void) {
             cv_bin);
     exit(1);
   }
-  printf("  Run 4: CV mask directly applied at bin %d ✓\n", cv_bin);
+  if (alpha[cv_bin] <= 1.0f) {
+    fprintf(stderr, "FAIL: Alpha not boosted at manual CV bin %d\n", cv_bin);
+    exit(1);
+  }
+  printf("  Run 4: CV mask directly applied at bin %d (above index 99) ✓\n",
+         cv_bin);
 
   tonal_reducer_free(reducer);
-  printf("✓ Cache and adaptive support tests passed\n");
+  printf("✓ Adaptive support and manual mask tests passed\n");
 }
 
 void test_tonal_reducer_peaks(void) {

@@ -192,6 +192,8 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define NOISE_ESTIMATION_INTERPOLATION_THRESHOLD (1e-9F)
 #define NOISE_ESTIMATION_SMOOTHING_FACTOR (0.5F)
 #define ADAPTIVE_NOISE_FLOOR_SMOOTHING (0.5F)
+#define RAYLEIGH_CV_REFERENCE (0.52F)
+#define STANDARD_DEVIATION_MORPH_SCALE (2.0F)
 
 // NLM (Lukin Algorithm B) Parameters
 #define NLM_PATCH_SIZE 8U
