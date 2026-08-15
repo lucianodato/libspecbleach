@@ -172,7 +172,6 @@ bool noise_estimation_run(NoiseEstimator* self,
       update_welford(self, signal_spectrum);
       break;
     case CV_MASK:
-      break;
     default:
       break;
   }
