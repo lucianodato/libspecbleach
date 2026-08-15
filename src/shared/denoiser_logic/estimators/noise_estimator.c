@@ -203,7 +203,7 @@ void noise_estimation_finalize(NoiseEstimator* self,
       float cv =
           std_dev_profile[k] / (self->welford_mean[k] + SPECTRAL_EPSILON);
       // Map CV to a 0.0 - 1.0 mask. Rayleigh noise CV is ~0.523.
-      float mask = 1.0f - (cv / RAYLEIGH_CV_REFERENCE);
+      float mask = 1.0f - (cv / RAYLEIGH_NOISE_CV_REFERENCE);
       cv_mask[k] = fmaxf(0.0f, fminf(1.0f, mask));
     }
     // Apply a light 3-bin spatial smooth so the mask catches the "skirts" of
