@@ -81,6 +81,9 @@ typedef struct SpectralBleachDenoiserParameters {
    */
   int hpss_quality_mode;
 
+  /* HPSS transient detection sensitivity (0.0 to 1.0). Default: 0.5 */
+  float hpss_sensitivity;
+
   /* Noise Profile Offset — shifts the noise threshold up/down in dB.
    * Positive values make detection more aggressive (more noise removed).
    * Default: 2.0, Range: [-6.0, +6.0] */
@@ -188,6 +191,12 @@ uint32_t specbleach_get_tonal_peaks_for_profile(SpectralBleachHandle instance,
  * Returns a pointer to the active morphed noise profile array.
  */
 const float* specbleach_get_active_noise_profile(SpectralBleachHandle instance);
+
+/**
+ * Returns true if a transient was detected and protected by HPSS in the last
+ * processed frame.
+ */
+bool specbleach_is_transient_detected(SpectralBleachHandle instance);
 
 #ifdef __cplusplus
 }

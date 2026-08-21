@@ -96,7 +96,8 @@ int main(int argc, char** argv) {
           .reduction_amount = 20.F,
           .smoothing_factor = 0.F,
           .whitening_factor = 50.F,
-          .masking_depth = 0.5F};
+          .masking_depth = 0.5F,
+          .hpss_quality_mode = 1};
 
   static struct option long_options[] = {
       {"reduction", required_argument, 0, 'r'},

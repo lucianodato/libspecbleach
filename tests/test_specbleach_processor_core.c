@@ -176,6 +176,8 @@ void test_params_sanitize_functions(void) {
       .suppression_strength = 80.0f,
       .aggressiveness = 1.0f,
       .tonal_reduction = -6.0f,
+      .hpss_quality_mode = 1,
+      .hpss_sensitivity = 0.7f,
       .noise_profile_offset_db = 2.0f,
       .reduction_curve_bias = NULL,
       .reduction_curve_enabled = false,
@@ -185,6 +187,7 @@ void test_params_sanitize_functions(void) {
   TEST_ASSERT(sp1.learn_noise == true, "Sanitize learn_noise");
   TEST_FLOAT_CLOSE(sp1.whitening_factor, 1.0f, 1e-4f);
   TEST_FLOAT_CLOSE(sp1.suppression_strength, 0.8f, 1e-4f);
+  TEST_FLOAT_CLOSE(sp1.hpss_sensitivity, 0.7f, 1e-4f);
   TEST_FLOAT_CLOSE(sp1.noise_profile_offset_linear, 1.2589f, 1e-3f);
   TEST_ASSERT(sp1.reduction_curve_bias == NULL, "Sanitize disabled curve bias");
 
@@ -200,6 +203,8 @@ void test_params_sanitize_functions(void) {
       .suppression_strength = 100.0f,
       .aggressiveness = 2.0f,
       .tonal_reduction = -3.0f,
+      .hpss_quality_mode = 2,
+      .hpss_sensitivity = 0.85f,
       .noise_profile_offset_db = -6.0f,
       .reduction_curve_bias = (const float*)0x1234,
       .reduction_curve_enabled = true,
@@ -209,6 +214,7 @@ void test_params_sanitize_functions(void) {
   TEST_ASSERT(sp2.residual_listen == true, "Sanitize 2d residual_listen");
   TEST_FLOAT_CLOSE(sp2.whitening_factor, 0.5f, 1e-4f);
   TEST_FLOAT_CLOSE(sp2.suppression_strength, 1.0f, 1e-4f);
+  TEST_FLOAT_CLOSE(sp2.hpss_sensitivity, 0.85f, 1e-4f);
   TEST_FLOAT_CLOSE(sp2.noise_profile_offset_linear, 0.5011f, 1e-3f);
   TEST_ASSERT(sp2.reduction_curve_bias == (const float*)0x1234,
               "Sanitize enabled curve bias ptr");

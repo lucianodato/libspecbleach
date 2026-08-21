@@ -223,3 +223,9 @@ const float* specbleach_get_active_noise_profile(
                     self->spectral_denoiser)
               : NULL;
 }
+
+bool specbleach_is_transient_detected(SpectralBleachHandle instance) {
+  SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
+  return self ? spectral_denoiser_is_transient_detected(self->spectral_denoiser)
+              : false;
+}

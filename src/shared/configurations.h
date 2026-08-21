@@ -212,16 +212,16 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 // Using power-of-two (64U) for efficient modulo wrap-around and future headroom
 #define DELAY_BUFFER_FRAMES 64U
 
-#define HPSS_TIME_WINDOW_LOW 9U
-#define HPSS_TIME_WINDOW_MEDIUM 17U
-#define HPSS_TIME_WINDOW_HIGH 33U
-#define HPSS_TIME_WINDOW_MAX HPSS_TIME_WINDOW_HIGH
-
-#define HPSS_FREQ_WINDOW_LOW 9U
-#define HPSS_FREQ_WINDOW_MEDIUM 17U
-#define HPSS_FREQ_WINDOW_HIGH 33U
-
+#define HPSS_SLIDING_ITERATIONS 3U
+#define HPSS_SLIDING_SMOOTH_FACTOR 0.50F
 #define HPSS_BASS_CUTOFF_BINS 24.0F
+#define HPSS_TRANSIENT_MARGIN_FACTOR 1.30F
+#define HPSS_TRANSIENT_MARGIN_MIN 1.05F
+#define HPSS_TRANSIENT_MARGIN_MAX 1.65F
+#define HPSS_TRANSIENT_ENERGY_RATIO_THRESHOLD 0.25F
+#define HPSS_SENSITIVITY_DEFAULT 0.50F
+#define HPSS_RATIO_THRESHOLD_MIN 0.08F
+#define HPSS_RATIO_THRESHOLD_MAX 0.60F
 
 /* --------------------------------------------------------------- */
 /* ------------------- 1D Denoiser configurations ---------------- */

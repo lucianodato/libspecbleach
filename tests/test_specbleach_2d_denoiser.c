@@ -350,19 +350,13 @@ void test_process_loop(void) {
   specbleach_2d_load_parameters(h, params);
   specbleach_2d_process(h, 1024, in_buf, out_buf);
   uint32_t lat1 = specbleach_2d_get_latency(h);
-  TEST_ASSERT(lat1 >= lat0, "Low quality 2D latency >= Off");
-
-  params.hpss_quality_mode = HPSS_QUALITY_MEDIUM;
-  specbleach_2d_load_parameters(h, params);
-  specbleach_2d_process(h, 1024, in_buf, out_buf);
-  uint32_t lat2 = specbleach_2d_get_latency(h);
-  TEST_ASSERT(lat2 > lat1, "Medium quality 2D latency > Low");
+  TEST_ASSERT(lat1 == lat0, "Sliding HPSS introduces zero lookahead latency");
 
   params.hpss_quality_mode = HPSS_QUALITY_HIGH;
   specbleach_2d_load_parameters(h, params);
   specbleach_2d_process(h, 1024, in_buf, out_buf);
   uint32_t lat3 = specbleach_2d_get_latency(h);
-  TEST_ASSERT(lat3 > lat2, "High quality 2D latency > Medium");
+  TEST_ASSERT(lat3 == lat0, "Sliding HPSS introduces zero lookahead latency");
 
   // NULL checks
   TEST_ASSERT(specbleach_2d_get_tonal_mask(NULL) == NULL, "NULL 2D tonal mask");
