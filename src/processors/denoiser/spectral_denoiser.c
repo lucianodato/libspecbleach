@@ -356,7 +356,8 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
   };
   denoiser_profile_core_update(profile_params, reference_spectrum);
 
-  // 2.1 Align internal state and output to the delayed frame (temporal plumbing)
+  // 2.1 Align internal state and output to the delayed frame (temporal
+  // plumbing)
   const uint32_t delay_frames =
       hpss_filter_get_latency_frames(self->hpss_filter);
 
@@ -436,12 +437,14 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
     }
   }
 
-  // 2. Recombine: Harmonic gets G_H suppression, Percussive gets unity pass-through
+  // 2. Recombine: Harmonic gets G_H suppression, Percussive gets unity
+  // pass-through
   for (uint32_t k = 0U; k < self->real_spectrum_size; ++k) {
     float w_h = self->mask_harmonic[k];
     float w_p = self->mask_percussive[k];
 
-    // G_final blends Wiener suppression on stationary content with unity gain on transient bursts
+    // G_final blends Wiener suppression on stationary content with unity gain
+    // on transient bursts
     float combined_gain = (w_h * self->g_h[k]) + w_p;
     self->gain_spectrum[k] = fminf(fmaxf(combined_gain, 0.0f), 1.0f);
   }

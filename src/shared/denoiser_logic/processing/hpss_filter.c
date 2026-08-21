@@ -103,9 +103,11 @@ void hpss_filter_set_sensitivity(HpssFilter* self, float sensitivity) {
 
   // Invert mapping: higher sensitivity -> lower detection thresholds
   self->energy_ratio_threshold =
-      HPSS_RATIO_THRESHOLD_MAX - s * (HPSS_RATIO_THRESHOLD_MAX - HPSS_RATIO_THRESHOLD_MIN);
+      HPSS_RATIO_THRESHOLD_MAX -
+      s * (HPSS_RATIO_THRESHOLD_MAX - HPSS_RATIO_THRESHOLD_MIN);
   self->margin_factor =
-      HPSS_TRANSIENT_MARGIN_MAX - s * (HPSS_TRANSIENT_MARGIN_MAX - HPSS_TRANSIENT_MARGIN_MIN);
+      HPSS_TRANSIENT_MARGIN_MAX -
+      s * (HPSS_TRANSIENT_MARGIN_MAX - HPSS_TRANSIENT_MARGIN_MIN);
 }
 
 uint32_t hpss_filter_get_latency_frames(const HpssFilter* self) {
@@ -167,7 +169,8 @@ bool hpss_filter_process(HpssFilter* self, const float* current_magnitude,
 
   // 2. Sliding HPSS Iterations (Ono / Tachibana ISMIR 2008)
   // Harmonic continuity: H_{t,k} aligns with H_{t-1,k} (temporal continuity)
-  // Percussive continuity: P_{t,k} aligns with (P_{t,k-1} + P_{t,k+1})/2 (frequency continuity)
+  // Percussive continuity: P_{t,k} aligns with (P_{t,k-1} + P_{t,k+1})/2
+  // (frequency continuity)
   for (uint32_t iter = 0U; iter < HPSS_SLIDING_ITERATIONS; ++iter) {
     for (uint32_t k = 0U; k < spectrum_size; ++k) {
       float mag = current_magnitude[k];
@@ -210,7 +213,8 @@ bool hpss_filter_process(HpssFilter* self, const float* current_magnitude,
     // Margin test against horizontal sustain
     float p_diff = p_val - (current_margin * h_val);
 
-    // If noise floor is provided, ensure percussive energy also emerges above noise floor
+    // If noise floor is provided, ensure percussive energy also emerges above
+    // noise floor
     if (noise_floor != NULL && p_diff > 0.0f) {
       float noise_level = noise_floor[k];
       if (p_val < 1.15f * noise_level) {

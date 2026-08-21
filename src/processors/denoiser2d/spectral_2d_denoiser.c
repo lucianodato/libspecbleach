@@ -449,9 +449,9 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
                                 self->noise_spectrum);
 
   // 2.1.2 HPSS Process (operates on current reference_spectrum, produces masks)
-  if (!hpss_filter_process(
-          self->hpss_filter, reference_spectrum, self->noise_spectrum,
-          self->delayed_magnitude, self->mask_harmonic, self->mask_percussive)) {
+  if (!hpss_filter_process(self->hpss_filter, reference_spectrum,
+                           self->noise_spectrum, self->delayed_magnitude,
+                           self->mask_harmonic, self->mask_percussive)) {
     memcpy(self->delayed_magnitude, reference_spectrum,
            self->real_spectrum_size * sizeof(float));
     for (uint32_t k = 0U; k < self->real_spectrum_size; ++k) {
@@ -460,7 +460,8 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
     }
   }
 
-  // Push HPSS outputs to circular buffer to allow exact temporal alignment with NLM
+  // Push HPSS outputs to circular buffer to allow exact temporal alignment with
+  // NLM
   spectral_circular_buffer_push(self->circular_buffer, self->layer_hpss_wh,
                                 self->mask_harmonic);
   spectral_circular_buffer_push(self->circular_buffer, self->layer_hpss_wp,
@@ -474,8 +475,7 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
   nlm_filter_push_frame(self->nlm_filter, self->snr_frame);
 
   const uint32_t nlm_delay = nlm_filter_get_latency_frames(self->nlm_filter);
-  const uint32_t hpss_delay =
-      hpss_filter_get_latency_frames(self->hpss_filter);
+  const uint32_t hpss_delay = hpss_filter_get_latency_frames(self->hpss_filter);
   const uint32_t total_delay =
       (hpss_delay > nlm_delay) ? hpss_delay : nlm_delay;
 
@@ -503,17 +503,13 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
   float* delayed_noise = spectral_circular_buffer_retrieve(
       self->circular_buffer, self->layer_noise, total_delay);
   float* smoothed_magnitude = spectral_circular_buffer_retrieve(
-      self->circular_buffer, self->layer_nlm_smoothed,
-      total_delay - nlm_delay);
+      self->circular_buffer, self->layer_nlm_smoothed, total_delay - nlm_delay);
   float* aligned_wh = spectral_circular_buffer_retrieve(
-      self->circular_buffer, self->layer_hpss_wh,
-      total_delay - hpss_delay);
+      self->circular_buffer, self->layer_hpss_wh, total_delay - hpss_delay);
   float* aligned_wp = spectral_circular_buffer_retrieve(
-      self->circular_buffer, self->layer_hpss_wp,
-      total_delay - hpss_delay);
+      self->circular_buffer, self->layer_hpss_wp, total_delay - hpss_delay);
   float* aligned_mag = spectral_circular_buffer_retrieve(
-      self->circular_buffer, self->layer_hpss_mag,
-      total_delay - hpss_delay);
+      self->circular_buffer, self->layer_hpss_mag, total_delay - hpss_delay);
 
   if (!delayed_spectrum) {
     delayed_spectrum = fft_spectrum;
@@ -569,12 +565,14 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
                   delayed_noise, self->g_h, self->alpha, self->beta,
                   self->gain_calculation_type);
 
-  // 2. Recombine: Harmonic gets G_H suppression, Percussive gets unity pass-through
+  // 2. Recombine: Harmonic gets G_H suppression, Percussive gets unity
+  // pass-through
   for (uint32_t k = 0U; k < self->real_spectrum_size; ++k) {
     float w_h = self->mask_harmonic[k];
     float w_p = self->mask_percussive[k];
 
-    // G_final blends Wiener suppression on stationary content with unity gain on transient bursts
+    // G_final blends Wiener suppression on stationary content with unity gain
+    // on transient bursts
     float combined_gain = (w_h * self->g_h[k]) + w_p;
     self->gain_spectrum[k] = fminf(fmaxf(combined_gain, 0.0f), 1.0f);
   }

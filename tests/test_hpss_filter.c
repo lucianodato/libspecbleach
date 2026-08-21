@@ -247,7 +247,8 @@ void test_hpss_subband_transient_in_noise(void) {
     noise_floor[i] = (i < 40) ? 2.0f : 0.2f;
   }
 
-  // 1. Feed baseline heavy stationary noise (e.g. low-frequency hum/rumble + noise)
+  // 1. Feed baseline heavy stationary noise (e.g. low-frequency hum/rumble +
+  // noise)
   for (uint32_t frame = 0; frame < 30; ++frame) {
     for (uint32_t i = 0; i < 257; ++i) {
       current_mag[i] = (i < 40) ? 2.0f : 0.2f; // Heavy bass noise
@@ -258,7 +259,8 @@ void test_hpss_subband_transient_in_noise(void) {
   TEST_ASSERT(!hpss_filter_is_transient_detected(filter),
               "Baseline noise with heavy rumble should be harmonic");
 
-  // 2. Inject high-frequency localized transient (e.g. snare/hat/pluck attack in bins 80-160)
+  // 2. Inject high-frequency localized transient (e.g. snare/hat/pluck attack
+  // in bins 80-160)
   for (uint32_t i = 0; i < 257; ++i) {
     current_mag[i] = (i < 40) ? 2.0f : 0.2f;
     if (i >= 80 && i <= 160) {
