@@ -424,7 +424,7 @@ int main(void) {
       .learn_noise = false,
       .tonal_reduction = 0.5f,
       .reduction_amount = 20.0f,
-      .hpss_quality_mode = 2,
+      .hpss_enable = 1,
   };
   specbleach_load_parameters(h, t_params);
   specbleach_process(h, 1024, in_buf, out_buf);
@@ -459,22 +459,16 @@ int main(void) {
   t_params.reduction_curve_enabled = false;
   t_params.reduction_curve_bias = NULL;
 
-  t_params.hpss_quality_mode = HPSS_QUALITY_OFF;
+  t_params.hpss_enable = 0;
   specbleach_load_parameters(h, t_params);
   specbleach_process(h, 1024, in_buf, out_buf);
   uint32_t lat0 = specbleach_get_latency(h);
 
-  t_params.hpss_quality_mode = HPSS_QUALITY_LOW;
+  t_params.hpss_enable = 1;
   specbleach_load_parameters(h, t_params);
   specbleach_process(h, 1024, in_buf, out_buf);
   uint32_t lat1 = specbleach_get_latency(h);
   TEST_ASSERT(lat1 == lat0, "Sliding HPSS introduces zero lookahead latency");
-
-  t_params.hpss_quality_mode = HPSS_QUALITY_HIGH;
-  specbleach_load_parameters(h, t_params);
-  specbleach_process(h, 1024, in_buf, out_buf);
-  uint32_t lat3 = specbleach_get_latency(h);
-  TEST_ASSERT(lat3 == lat0, "Sliding HPSS introduces zero lookahead latency");
 
   // Verify NULL handle protections
   TEST_ASSERT(specbleach_get_latency(NULL) == 0, "NULL latency");

@@ -25,16 +25,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdbool.h>
 #include <stdint.h>
 
-#ifndef HPSS_QUALITY_MODE_DEFINED
-#define HPSS_QUALITY_MODE_DEFINED
-typedef enum HpssQualityMode {
-  HPSS_QUALITY_OFF = 0,
-  HPSS_QUALITY_LOW = 1,
-  HPSS_QUALITY_MEDIUM = 2,
-  HPSS_QUALITY_HIGH = 3
-} HpssQualityMode;
-#endif
-
 typedef struct HpssFilter HpssFilter;
 
 typedef struct HpssConfig {
@@ -45,8 +35,7 @@ HpssFilter* hpss_filter_initialize(HpssConfig config);
 void hpss_filter_free(HpssFilter* self);
 
 // Dynamic parameter update (allocator-free)
-void hpss_filter_set_quality_mode(HpssFilter* self, HpssQualityMode mode);
-void hpss_filter_set_sensitivity(HpssFilter* self, float sensitivity);
+void hpss_filter_set_enabled(HpssFilter* self, bool enabled);
 
 // Sliding HPSS is causal with 0 lookahead delay frames
 uint32_t hpss_filter_get_latency_frames(const HpssFilter* self);

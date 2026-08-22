@@ -387,9 +387,7 @@ bool load_2d_reduction_parameters(SpectralProcessorHandle instance,
   self->aggressiveness = parameters.aggressiveness;
 
   if (self->hpss_filter) {
-    hpss_filter_set_quality_mode(self->hpss_filter,
-                                 (HpssQualityMode)parameters.hpss_quality_mode);
-    hpss_filter_set_sensitivity(self->hpss_filter, parameters.hpss_sensitivity);
+    hpss_filter_set_enabled(self->hpss_filter, parameters.hpss_enable != 0);
   }
 
   // Update NLM h parameter based on smoothing factor (scales h up to 5.0F for
@@ -523,9 +521,16 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
   if (aligned_wh) {
     memcpy(self->mask_harmonic, aligned_wh,
            self->real_spectrum_size * sizeof(float));
+  } else {
+    for (uint32_t k = 0U; k < self->real_spectrum_size; ++k) {
+      self->mask_harmonic[k] = 1.0f;
+    }
   }
   if (aligned_wp) {
     memcpy(self->mask_percussive, aligned_wp,
+           self->real_spectrum_size * sizeof(float));
+  } else {
+    memset(self->mask_percussive, 0,
            self->real_spectrum_size * sizeof(float));
   }
   if (aligned_mag) {

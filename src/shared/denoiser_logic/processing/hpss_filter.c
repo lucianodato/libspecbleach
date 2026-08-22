@@ -20,13 +20,14 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "hpss_filter.h"
 #include "shared/configurations.h"
+#include "shared/utils/simd_utils.h"
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
 struct HpssFilter {
   HpssConfig config;
-  bool is_active;
+  bool is_enabled;
   bool is_initialized;
 
   float* prev_h; // Previous frame harmonic magnitude estimate H_{t-1, k}
@@ -50,7 +51,7 @@ HpssFilter* hpss_filter_initialize(HpssConfig config) {
   }
 
   self->config = config;
-  self->is_active = true;
+  self->is_enabled = true;
   self->is_initialized = false;
   self->energy_ratio_threshold = HPSS_TRANSIENT_ENERGY_RATIO_THRESHOLD;
   self->margin_factor = HPSS_TRANSIENT_MARGIN_FACTOR;
@@ -86,28 +87,11 @@ void hpss_filter_free(HpssFilter* self) {
   free(self);
 }
 
-void hpss_filter_set_quality_mode(HpssFilter* self, HpssQualityMode mode) {
+void hpss_filter_set_enabled(HpssFilter* self, bool enabled) {
   if (!self) {
     return;
   }
-  self->is_active = (mode != HPSS_QUALITY_OFF);
-}
-
-void hpss_filter_set_sensitivity(HpssFilter* self, float sensitivity) {
-  if (!self) {
-    return;
-  }
-
-  // Clamp sensitivity to [0.0, 1.0]
-  float s = fmaxf(0.0f, fminf(1.0f, sensitivity));
-
-  // Invert mapping: higher sensitivity -> lower detection thresholds
-  self->energy_ratio_threshold =
-      HPSS_RATIO_THRESHOLD_MAX -
-      s * (HPSS_RATIO_THRESHOLD_MAX - HPSS_RATIO_THRESHOLD_MIN);
-  self->margin_factor =
-      HPSS_TRANSIENT_MARGIN_MAX -
-      s * (HPSS_TRANSIENT_MARGIN_MAX - HPSS_TRANSIENT_MARGIN_MIN);
+  self->is_enabled = enabled;
 }
 
 uint32_t hpss_filter_get_latency_frames(const HpssFilter* self) {
@@ -120,7 +104,7 @@ float hpss_filter_get_onset_ratio(const HpssFilter* self) {
 }
 
 bool hpss_filter_is_transient_detected(const HpssFilter* self) {
-  return (self && self->is_active) ? self->is_transient_detected : false;
+  return (self && self->is_enabled) ? self->is_transient_detected : false;
 }
 
 bool hpss_filter_process(HpssFilter* self, const float* current_magnitude,
@@ -137,7 +121,7 @@ bool hpss_filter_process(HpssFilter* self, const float* current_magnitude,
            spectrum_size * sizeof(float));
   }
 
-  if (!self->is_active) {
+  if (!self->is_enabled) {
     if (mask_harmonic_out) {
       for (uint32_t k = 0U; k < spectrum_size; ++k) {
         mask_harmonic_out[k] = 1.0f;
@@ -160,11 +144,13 @@ bool hpss_filter_process(HpssFilter* self, const float* current_magnitude,
     self->is_initialized = true;
   }
 
+  sb_simd_state_t simd_state = sb_simd_enable_ftz_daz();
+
   // 1. Initialize H and P for current frame
   for (uint32_t k = 0U; k < spectrum_size; ++k) {
     float mag = current_magnitude[k];
-    self->h[k] = 0.5f * mag;
-    self->p[k] = 0.5f * mag;
+    self->h[k] = HPSS_SLIDING_SMOOTH_FACTOR * mag;
+    self->p[k] = HPSS_SLIDING_SMOOTH_FACTOR * mag;
   }
 
   // 2. Sliding HPSS Iterations (Ono / Tachibana ISMIR 2008)
@@ -186,14 +172,15 @@ bool hpss_filter_process(HpssFilter* self, const float* current_magnitude,
       // Percussive reference from adjacent frequency bins
       float p_prev = (k > 0U) ? self->p[k - 1U] : self->p[k];
       float p_next = (k + 1U < spectrum_size) ? self->p[k + 1U] : self->p[k];
-      float p_ref = 0.5f * (p_prev + p_next);
+      float p_ref = HPSS_SLIDING_SMOOTH_FACTOR * (p_prev + p_next);
 
       // Auxiliary function update
       float h_sq = h_ref * h_ref;
       float p_sq = p_ref * p_ref;
       float denom = h_sq + p_sq;
 
-      float w_h = (denom > SPECTRAL_EPSILON) ? (h_sq / denom) : 0.5f;
+      float w_h = (denom > SPECTRAL_EPSILON) ? (h_sq / denom)
+                                             : HPSS_SLIDING_SMOOTH_FACTOR;
       float w_p = 1.0f - w_h;
 
       self->h[k] = w_h * mag;
@@ -217,7 +204,7 @@ bool hpss_filter_process(HpssFilter* self, const float* current_magnitude,
     // noise floor
     if (noise_floor != NULL && p_diff > 0.0f) {
       float noise_level = noise_floor[k];
-      if (p_val < 1.15f * noise_level) {
+      if (p_val < HPSS_NOISE_FLOOR_GATE_MULTIPLIER * noise_level) {
         p_diff = 0.0f; // Sub-noise fluctuation: treat as stationary noise
       }
     }
@@ -252,11 +239,15 @@ bool hpss_filter_process(HpssFilter* self, const float* current_magnitude,
     }
 
     // Update state for next frame with exponential temporal tracking
-    self->prev_h[k] = 0.5f * (self->prev_h[k] + current_magnitude[k]);
+    self->prev_h[k] = HPSS_SLIDING_SMOOTH_FACTOR * (self->prev_h[k] + self->h[k]);
   }
 
+  sb_simd_restore_state(simd_state);
+
   self->percussive_ratio =
-      (total_mag_sq > 1e-8f) ? (percussive_mag_sq / total_mag_sq) : 0.0f;
+      (total_mag_sq > HPSS_RATIO_DENOMINATOR_FLOOR)
+          ? (percussive_mag_sq / total_mag_sq)
+          : 0.0f;
 
   self->is_transient_detected =
       (self->percussive_ratio >= self->energy_ratio_threshold);

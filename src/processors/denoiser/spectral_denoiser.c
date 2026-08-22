@@ -312,9 +312,7 @@ bool load_reduction_parameters(SpectralProcessorHandle instance,
   self->aggressiveness = parameters.aggressiveness;
 
   if (self->hpss_filter) {
-    hpss_filter_set_quality_mode(self->hpss_filter,
-                                 (HpssQualityMode)parameters.hpss_quality_mode);
-    hpss_filter_set_sensitivity(self->hpss_filter, parameters.hpss_sensitivity);
+    hpss_filter_set_enabled(self->hpss_filter, parameters.hpss_enable != 0);
   }
 
   return true;

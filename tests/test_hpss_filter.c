@@ -126,44 +126,38 @@ void test_hpss_filter(void) {
 
   hpss_filter_free(filter);
 
-  // 6. Test Quality Mode On/Off
+  // 6. Test Enable / Disable On/Off
   filter = hpss_filter_initialize(config);
   TEST_ASSERT(filter != NULL, "HPSS filter initialization should succeed");
   TEST_ASSERT(hpss_filter_get_latency_frames(filter) == 0U,
               "Sliding HPSS latency is 0");
 
-  // Switch to Off
-  hpss_filter_set_quality_mode(filter, HPSS_QUALITY_OFF);
+  // Disable HPSS
+  hpss_filter_set_enabled(filter, false);
   for (uint32_t frame = 0; frame < 10; ++frame) {
     bool ok = hpss_filter_process(filter, current_mag, NULL, delayed_mag,
                                   mask_h, mask_p);
-    TEST_ASSERT(ok, "Process on Off quality mode should succeed");
+    TEST_ASSERT(ok, "Process on disabled filter should succeed");
     TEST_ASSERT(delayed_mag[10] == current_mag[10],
-                "Delayed magnitude should match current magnitude in Off mode");
-    TEST_ASSERT(mask_h[10] == 1.0f, "Harmonic mask should be 1.0 in Off mode");
+                "Delayed magnitude should match current magnitude when disabled");
+    TEST_ASSERT(mask_h[10] == 1.0f, "Harmonic mask should be 1.0 when disabled");
+    TEST_ASSERT(mask_p[10] == 0.0f, "Percussive mask should be 0.0 when disabled");
   }
+  TEST_ASSERT(!hpss_filter_is_transient_detected(filter),
+              "Disabled HPSS should not report transients");
 
-  // Switch back to Medium (active)
-  hpss_filter_set_quality_mode(filter, HPSS_QUALITY_MEDIUM);
+  // Enable HPSS back
+  hpss_filter_set_enabled(filter, true);
   for (uint32_t frame = 0; frame < 10; ++frame) {
     bool ok = hpss_filter_process(filter, current_mag, NULL, delayed_mag,
                                   mask_h, mask_p);
-    TEST_ASSERT(ok, "Process on Medium quality mode should succeed");
+    TEST_ASSERT(ok, "Process on enabled filter should succeed");
   }
 
   hpss_filter_free(filter);
 
-  // 7. Test Sensitivity Adjustment
-  filter = hpss_filter_initialize(config);
-  TEST_ASSERT(filter != NULL, "HPSS filter initialization should succeed");
-  hpss_filter_set_sensitivity(filter, 0.0f);
-  hpss_filter_set_sensitivity(filter, 1.0f);
-  hpss_filter_set_sensitivity(filter, 0.5f);
-  hpss_filter_free(filter);
-
-  // 8. Test NULL safety
-  hpss_filter_set_quality_mode(NULL, HPSS_QUALITY_LOW);
-  hpss_filter_set_sensitivity(NULL, 0.5f);
+  // 7. Test NULL safety
+  hpss_filter_set_enabled(NULL, false);
   TEST_ASSERT(hpss_filter_get_latency_frames(NULL) == 0U, "NULL latency is 0");
   TEST_ASSERT(hpss_filter_get_onset_ratio(NULL) == 0.0f, "NULL onset ratio 0");
   TEST_ASSERT(hpss_filter_is_transient_detected(NULL) == false,
@@ -235,7 +229,6 @@ void test_hpss_subband_transient_in_noise(void) {
   };
   HpssFilter* filter = hpss_filter_initialize(config);
   TEST_ASSERT(filter != NULL, "HPSS filter initialization should succeed");
-  hpss_filter_set_sensitivity(filter, 0.8f); // 80% sensitivity
 
   float current_mag[257];
   float noise_floor[257];

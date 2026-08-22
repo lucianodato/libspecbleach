@@ -38,8 +38,7 @@ typedef struct DenoiserParameters {
   float suppression_strength;
   float aggressiveness;  /**< -1.0 (Median/Min) to 1.0 (Max), 0.0 (Mean) */
   float tonal_reduction; /**< 0.0 to 1.0 (Phase 3) */
-  int hpss_quality_mode; /**< 0=Off, 1=Low, 2=Medium, 3=High */
-  float hpss_sensitivity;
+  int hpss_enable;       /**< 0=disabled, 1=enabled */
   float noise_profile_offset_linear; /**< Linear scalar for noise profile */
   const float* reduction_curve_bias; /**< Per-bin dB bias, NULL = disabled */
   bool reduction_curve_enabled;
