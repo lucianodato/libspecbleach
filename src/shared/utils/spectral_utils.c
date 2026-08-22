@@ -292,21 +292,3 @@ bool get_morphed_profile(float* output_profile, const float* mean_profile,
 
   return true;
 }
-
-void apply_onset_alpha_ducking(float* alpha, uint32_t num_bins,
-                               float onset_ratio) {
-  if (!alpha || onset_ratio <= 0.01f || num_bins == 0U) {
-    return;
-  }
-
-  float reduction = onset_ratio * 2.0f;
-  if (reduction > 1.0f) {
-    reduction = 1.0f;
-  }
-
-  for (uint32_t k = 0U; k < num_bins; k++) {
-    // Duck alpha down toward 1.0 (no over-subtraction) on attack frame across
-    // full spectrum
-    alpha[k] = 1.0f + ((alpha[k] - 1.0f) * (1.0f - reduction));
-  }
-}

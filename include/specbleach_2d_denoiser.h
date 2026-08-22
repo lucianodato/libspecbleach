@@ -95,9 +95,8 @@ typedef struct SpectralBleach2DDenoiserParameters {
   /* Tonal Separation */
   float tonal_reduction; // 0.0 to 1.0: Independent reduction for tones
 
-  /* HPSS quality mode (0 = Off, 1 = Low, 2 = Mid, 3 = High). Default: 0 (Off)
-   */
-  int hpss_quality_mode;
+  /* Enable HPSS transient protection (0 = disabled, 1 = enabled). Default: 1 */
+  int hpss_enable;
 
   /* Noise Profile Offset — shifts the noise threshold up/down in dB.
    * Positive values make detection more aggressive (more noise removed).
@@ -222,6 +221,12 @@ uint32_t specbleach_2d_get_tonal_peaks_for_profile(
  */
 const float* specbleach_2d_get_active_noise_profile(
     SpectralBleachHandle instance);
+
+/**
+ * Returns true if a transient was detected and protected by HPSS in the last
+ * processed frame.
+ */
+bool specbleach_2d_is_transient_detected(SpectralBleachHandle instance);
 
 #ifdef __cplusplus
 }

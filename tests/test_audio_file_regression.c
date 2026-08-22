@@ -33,7 +33,7 @@ static const SpectralBleachDenoiserParameters canonical_denoiser_params = {
     .smoothing_factor = 0.0f,
     .whitening_factor = 50.0f,
     .masking_depth = 0.5f,
-    .hpss_quality_mode = HPSS_QUALITY_LOW};
+    .hpss_enable = 1};
 
 static const SpectralBleachDenoiserParameters canonical_adenoiser_params = {
     .residual_listen = false,
@@ -41,7 +41,7 @@ static const SpectralBleachDenoiserParameters canonical_adenoiser_params = {
     .smoothing_factor = 0.0f,
     .whitening_factor = 50.0f,
     .masking_depth = 0.5f,
-    .hpss_quality_mode = HPSS_QUALITY_LOW,
+    .hpss_enable = 1,
 
     .adaptive_noise = 1,
     .noise_estimation_method = 0};

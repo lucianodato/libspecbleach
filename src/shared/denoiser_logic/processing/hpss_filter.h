@@ -25,37 +25,40 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdbool.h>
 #include <stdint.h>
 
-#ifndef HPSS_QUALITY_MODE_DEFINED
-#define HPSS_QUALITY_MODE_DEFINED
-typedef enum HpssQualityMode {
-  HPSS_QUALITY_OFF = 0,    // Bypassed (Lookahead: 0)
-  HPSS_QUALITY_LOW = 1,    // L_time = 9 frames (Lookahead: 4)
-  HPSS_QUALITY_MEDIUM = 2, // L_time = 17 frames (Lookahead: 8)
-  HPSS_QUALITY_HIGH = 3    // L_time = 33 frames (Lookahead: 16)
-} HpssQualityMode;
-#endif
-
 typedef struct HpssFilter HpssFilter;
 
 typedef struct HpssConfig {
   uint32_t real_spectrum_size;
-  uint32_t time_window_size; // Default: 17 frames
-  uint32_t freq_window_size; // Default: 17 bins
 } HpssConfig;
 
-// Pre-allocates ring buffers to HPSS_TIME_WINDOW_MAX
 HpssFilter* hpss_filter_initialize(HpssConfig config);
 void hpss_filter_free(HpssFilter* self);
 
 // Dynamic parameter update (allocator-free)
-void hpss_filter_set_quality_mode(HpssFilter* self, HpssQualityMode mode);
+void hpss_filter_set_enabled(HpssFilter* self, bool enabled);
 
-// Returns current lookahead delay in frames: (current_time_window - 1) / 2
+// Sliding HPSS is causal with 0 lookahead delay frames
 uint32_t hpss_filter_get_latency_frames(const HpssFilter* self);
 float hpss_filter_get_onset_ratio(const HpssFilter* self);
-
+bool hpss_filter_is_transient_detected(const HpssFilter* self);
+/**
+ * Process a spectral magnitude frame with Sliding HPSS.
+ *
+ * @param self HPSS filter instance
+ * @param current_magnitude Current frame magnitude spectrum
+ * [real_spectrum_size]
+ * @param noise_floor Optional noise floor spectrum (or NULL to skip sub-noise
+ * gate)
+ * @param current_magnitude_out Optional destination for current frame magnitude
+ * copy (or NULL)
+ * @param mask_harmonic_out Optional output array for harmonic soft mask (or
+ * NULL)
+ * @param mask_percussive_out Optional output array for percussive soft mask (or
+ * NULL)
+ * @return true on success, false on invalid arguments
+ */
 bool hpss_filter_process(HpssFilter* self, const float* current_magnitude,
-                         float* delayed_magnitude_out, float* mask_harmonic_out,
-                         float* mask_percussive_out);
+                         const float* noise_floor, float* current_magnitude_out,
+                         float* mask_harmonic_out, float* mask_percussive_out);
 
 #endif // SHARED_DENOISER_LOGIC_HPSS_FILTER_H

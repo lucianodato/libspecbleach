@@ -20,110 +20,29 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "hpss_filter.h"
 #include "shared/configurations.h"
-#include "shared/utils/spectral_circular_buffer.h"
+#include "shared/utils/simd_utils.h"
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
 struct HpssFilter {
   HpssConfig config;
-  uint32_t latency_frames;
-  SbSpectralCircularBuffer* circular_buffer;
-  uint32_t mag_layer_id;
+  bool is_enabled;
+  bool is_initialized;
 
-  float* prev_mag;
-  float* m_h;
-  float* m_p;
-  float* time_sort_buffer;
-  float* onset_boost_buffer;
-  float* onset_ratio_buffer;
+  float* prev_h; // Previous frame harmonic magnitude estimate H_{t-1, k}
+  float* h;      // Current frame harmonic magnitude estimate H_{t, k}
+  float* p;      // Current frame percussive magnitude estimate P_{t, k}
 
-  uint32_t write_pos;
-  float delayed_onset_ratio;
-  bool is_initialized_flux;
+  float percussive_ratio;
+  float energy_ratio_threshold;
+  float margin_factor;
+  bool is_transient_detected;
 };
 
-static float fast_median(float* arr, uint32_t n) {
-  for (uint32_t i = 1U; i < n; ++i) {
-    float key = arr[i];
-    int32_t j = (int32_t)i - 1;
-    while (j >= 0 && arr[j] > key) {
-      arr[j + 1] = arr[j];
-      j--;
-    }
-    arr[j + 1] = key;
-  }
-  if (n % 2U == 1U) {
-    return arr[n / 2U];
-  }
-  return 0.5f * (arr[(n / 2U) - 1U] + arr[n / 2U]);
-}
-
-static void compute_adaptive_freq_median(const float* src, float* dst,
-                                         int num_bins, int max_win_size) {
-  int max_half = max_win_size / 2;
-  if (max_half > 31) {
-    max_half = 31;
-  }
-  float scratch[64];
-
-  for (int k = 0; k < num_bins; k++) {
-    // Scale half-window size: 1 bin at bass, scaling up to max_half at high
-    // frequencies
-    int half_win = k / ((int)HPSS_BASS_CUTOFF_BINS / 2);
-    if (half_win < 1) {
-      half_win = 1; // 3-bin window for bass (k-1, k, k+1)
-    }
-    if (half_win > max_half) {
-      half_win = max_half; // Cap at max_half (e.g. 8 for 17-bin)
-    }
-
-    int start_idx = k - half_win;
-    if (start_idx < 0) {
-      start_idx = 0;
-    }
-
-    int end_idx = k + half_win;
-    if (end_idx >= num_bins) {
-      end_idx = num_bins - 1;
-    }
-
-    int count = end_idx - start_idx + 1;
-
-    for (int i = 0; i < count; i++) {
-      scratch[i] = src[start_idx + i];
-    }
-
-    // Fast insertion sort for small array
-    for (int i = 1; i < count; i++) {
-      float key = scratch[i];
-      int j = i - 1;
-      while (j >= 0 && scratch[j] > key) {
-        scratch[j + 1] = scratch[j];
-        j--;
-      }
-      scratch[j + 1] = key;
-    }
-
-    dst[k] = scratch[count / 2];
-  }
-}
-
 HpssFilter* hpss_filter_initialize(HpssConfig config) {
-  if (config.real_spectrum_size == 0U || config.time_window_size == 0U ||
-      config.freq_window_size == 0U) {
+  if (config.real_spectrum_size == 0U) {
     return NULL;
-  }
-
-  // Enforce odd window sizes
-  if (config.time_window_size % 2U == 0U) {
-    config.time_window_size += 1U;
-  }
-  if (config.time_window_size > HPSS_TIME_WINDOW_MAX) {
-    config.time_window_size = HPSS_TIME_WINDOW_MAX;
-  }
-  if (config.freq_window_size % 2U == 0U) {
-    config.freq_window_size += 1U;
   }
 
   HpssFilter* self = (HpssFilter*)calloc(1U, sizeof(HpssFilter));
@@ -132,44 +51,20 @@ HpssFilter* hpss_filter_initialize(HpssConfig config) {
   }
 
   self->config = config;
-  self->latency_frames = (config.time_window_size - 1U) / 2U;
-  self->write_pos = 0U;
-  self->delayed_onset_ratio = 0.0f;
-  self->is_initialized_flux = false;
+  self->is_enabled = true;
+  self->is_initialized = false;
+  self->energy_ratio_threshold = HPSS_TRANSIENT_ENERGY_RATIO_THRESHOLD;
+  self->margin_factor = HPSS_TRANSIENT_MARGIN_FACTOR;
+  self->percussive_ratio = 0.0f;
+  self->is_transient_detected = false;
 
-  // Pre-allocate circular buffer to maximum window size
-  self->circular_buffer = spectral_circular_buffer_create(HPSS_TIME_WINDOW_MAX);
-  if (!self->circular_buffer) {
+  self->prev_h = (float*)calloc(config.real_spectrum_size, sizeof(float));
+  self->h = (float*)calloc(config.real_spectrum_size, sizeof(float));
+  self->p = (float*)calloc(config.real_spectrum_size, sizeof(float));
+
+  if (!self->prev_h || !self->h || !self->p) {
     hpss_filter_free(self);
     return NULL;
-  }
-
-  self->mag_layer_id = spectral_circular_buffer_add_layer(
-      self->circular_buffer, config.real_spectrum_size);
-
-  if (self->mag_layer_id == 0xFFFFFFFFU) {
-    hpss_filter_free(self);
-    return NULL;
-  }
-
-  self->prev_mag = (float*)calloc(config.real_spectrum_size, sizeof(float));
-  self->m_h = (float*)calloc(config.real_spectrum_size, sizeof(float));
-  self->m_p = (float*)calloc(config.real_spectrum_size, sizeof(float));
-  self->time_sort_buffer = (float*)calloc(HPSS_TIME_WINDOW_MAX, sizeof(float));
-  self->onset_boost_buffer =
-      (float*)calloc(HPSS_TIME_WINDOW_MAX, sizeof(float));
-  self->onset_ratio_buffer =
-      (float*)calloc(HPSS_TIME_WINDOW_MAX, sizeof(float));
-
-  if (!self->prev_mag || !self->m_h || !self->m_p || !self->time_sort_buffer ||
-      !self->onset_boost_buffer || !self->onset_ratio_buffer) {
-    hpss_filter_free(self);
-    return NULL;
-  }
-
-  for (uint32_t i = 0U; i < HPSS_TIME_WINDOW_MAX; ++i) {
-    self->onset_boost_buffer[i] = 0.0f;
-    self->onset_ratio_buffer[i] = 0.0f;
   }
 
   return self;
@@ -180,147 +75,53 @@ void hpss_filter_free(HpssFilter* self) {
     return;
   }
 
-  if (self->circular_buffer) {
-    spectral_circular_buffer_free(self->circular_buffer);
+  if (self->prev_h) {
+    free(self->prev_h);
   }
-  if (self->prev_mag) {
-    free(self->prev_mag);
+  if (self->h) {
+    free(self->h);
   }
-  if (self->m_h) {
-    free(self->m_h);
-  }
-  if (self->m_p) {
-    free(self->m_p);
-  }
-  if (self->time_sort_buffer) {
-    free(self->time_sort_buffer);
-  }
-  if (self->onset_boost_buffer) {
-    free(self->onset_boost_buffer);
-  }
-  if (self->onset_ratio_buffer) {
-    free(self->onset_ratio_buffer);
+  if (self->p) {
+    free(self->p);
   }
   free(self);
 }
 
-void hpss_filter_set_quality_mode(HpssFilter* self, HpssQualityMode mode) {
+void hpss_filter_set_enabled(HpssFilter* self, bool enabled) {
   if (!self) {
     return;
   }
-
-  uint32_t new_time_win = HPSS_TIME_WINDOW_MEDIUM;
-  uint32_t new_freq_win = HPSS_FREQ_WINDOW_MEDIUM;
-  switch (mode) {
-    case HPSS_QUALITY_OFF:
-      new_time_win = 0U;
-      new_freq_win = 0U;
-      break;
-    case HPSS_QUALITY_LOW:
-      new_time_win = HPSS_TIME_WINDOW_LOW;
-      new_freq_win = HPSS_FREQ_WINDOW_LOW;
-      break;
-    case HPSS_QUALITY_MEDIUM:
-      new_time_win = HPSS_TIME_WINDOW_MEDIUM;
-      new_freq_win = HPSS_FREQ_WINDOW_MEDIUM;
-      break;
-    case HPSS_QUALITY_HIGH:
-      new_time_win = HPSS_TIME_WINDOW_HIGH;
-      new_freq_win = HPSS_FREQ_WINDOW_HIGH;
-      break;
-    default:
-      new_time_win = HPSS_TIME_WINDOW_MEDIUM;
-      new_freq_win = HPSS_FREQ_WINDOW_MEDIUM;
-      break;
-  }
-
-  if (self->config.time_window_size == new_time_win &&
-      self->config.freq_window_size == new_freq_win) {
-    return;
-  }
-
-  if (new_time_win > self->config.time_window_size) {
-    spectral_circular_buffer_clear(self->circular_buffer);
-    self->is_initialized_flux = false;
-  }
-
-  self->config.time_window_size = new_time_win;
-  self->config.freq_window_size = new_freq_win;
-  self->latency_frames = (new_time_win > 0U) ? ((new_time_win - 1U) / 2U) : 0U;
+  self->is_enabled = enabled;
 }
 
 uint32_t hpss_filter_get_latency_frames(const HpssFilter* self) {
-  return self ? self->latency_frames : 0U;
+  (void)self;
+  return 0U; // Sliding HPSS is strictly causal with zero lookahead frames
 }
 
 float hpss_filter_get_onset_ratio(const HpssFilter* self) {
-  return self ? self->delayed_onset_ratio : 0.0f;
+  return self ? self->percussive_ratio : 0.0f;
+}
+
+bool hpss_filter_is_transient_detected(const HpssFilter* self) {
+  return (self && self->is_enabled) ? self->is_transient_detected : false;
 }
 
 bool hpss_filter_process(HpssFilter* self, const float* current_magnitude,
-                         float* delayed_magnitude_out, float* mask_harmonic_out,
-                         float* mask_percussive_out) {
+                         const float* noise_floor, float* current_magnitude_out,
+                         float* mask_harmonic_out, float* mask_percussive_out) {
   if (!self || !current_magnitude) {
     return false;
   }
 
   const uint32_t spectrum_size = self->config.real_spectrum_size;
 
-  const uint32_t time_win = self->config.time_window_size;
-  const uint32_t freq_win = self->config.freq_window_size;
-
-  // 1. Multi-band Onset / Spectral Flux Detection (Preserves high-frequency
-  // plucks & attacks)
-  float onset_ratio = 0.0f;
-  float boost_add = 0.0f;
-  if (self->is_initialized_flux) {
-    // Subband flux across 4 frequency regions (Low, Mid-Low, Mid-High, High)
-    const uint32_t bounds[5] = {0U, spectrum_size / 8U, spectrum_size / 4U,
-                                spectrum_size / 2U, spectrum_size};
-    float max_subband_ratio = 0.0f;
-
-    for (int b = 0; b < 4; ++b) {
-      uint32_t start_k = bounds[b];
-      uint32_t end_k = bounds[b + 1];
-      float sub_flux = 0.0f;
-      float sub_prev_sum = 0.0f;
-
-      for (uint32_t k = start_k; k < end_k; ++k) {
-        float diff = current_magnitude[k] - self->prev_mag[k];
-        if (diff > 0.0f) {
-          sub_flux += diff;
-        }
-        sub_prev_sum += self->prev_mag[k];
-      }
-      float sub_ratio = sub_flux / (sub_prev_sum + 1e-6f);
-      if (sub_ratio > max_subband_ratio) {
-        max_subband_ratio = sub_ratio;
-      }
-    }
-
-    onset_ratio = max_subband_ratio;
-    boost_add = 3.0f * onset_ratio;
-    if (boost_add > 3.0f) {
-      boost_add = 3.0f;
-    } else if (boost_add < 0.0f) {
-      boost_add = 0.0f;
-    }
-  } else {
-    self->is_initialized_flux = true;
+  if (current_magnitude_out) {
+    memcpy(current_magnitude_out, current_magnitude,
+           spectrum_size * sizeof(float));
   }
-  memcpy(self->prev_mag, current_magnitude, spectrum_size * sizeof(float));
-  self->onset_boost_buffer[self->write_pos] = boost_add;
-  self->onset_ratio_buffer[self->write_pos] = onset_ratio;
 
-  // 2. Push magnitude frames into circular buffer
-  spectral_circular_buffer_push(self->circular_buffer, self->mag_layer_id,
-                                current_magnitude);
-
-  if (self->config.time_window_size == 0U || self->latency_frames == 0U) {
-    if (delayed_magnitude_out) {
-      memcpy(delayed_magnitude_out, current_magnitude,
-             spectrum_size * sizeof(float));
-    }
+  if (!self->is_enabled) {
     if (mask_harmonic_out) {
       for (uint32_t k = 0U; k < spectrum_size; ++k) {
         mask_harmonic_out[k] = 1.0f;
@@ -329,68 +130,98 @@ bool hpss_filter_process(HpssFilter* self, const float* current_magnitude,
     if (mask_percussive_out) {
       memset(mask_percussive_out, 0, spectrum_size * sizeof(float));
     }
-    self->delayed_onset_ratio = 0.0f;
-    self->write_pos = (self->write_pos + 1U) % HPSS_TIME_WINDOW_MAX;
-    spectral_circular_buffer_advance(self->circular_buffer);
+    self->percussive_ratio = 0.0f;
+    self->is_transient_detected = false;
     return true;
   }
 
-  // 3. Retrieve delayed frame
-  const float* delayed_mag = spectral_circular_buffer_retrieve(
-      self->circular_buffer, self->mag_layer_id, self->latency_frames);
-
-  if (!delayed_mag) {
-    return false;
-  }
-
-  if (delayed_magnitude_out) {
-    memcpy(delayed_magnitude_out, delayed_mag, spectrum_size * sizeof(float));
-  }
-
-  uint32_t delayed_idx =
-      (self->write_pos + HPSS_TIME_WINDOW_MAX - self->latency_frames) %
-      HPSS_TIME_WINDOW_MAX;
-  float frame_onset_boost = self->onset_boost_buffer[delayed_idx];
-  self->delayed_onset_ratio = self->onset_ratio_buffer[delayed_idx];
-
-  // 4. Median Filtering
-  // 4a. Harmonic median (M_H) along time axis for each frequency bin
-  const float* frames[HPSS_TIME_WINDOW_MAX];
-  for (uint32_t t = 0U; t < time_win; ++t) {
-    frames[t] = spectral_circular_buffer_retrieve(self->circular_buffer,
-                                                  self->mag_layer_id, t);
-  }
-
-  for (uint32_t k = 0U; k < spectrum_size; ++k) {
-    for (uint32_t t = 0U; t < time_win; ++t) {
-      self->time_sort_buffer[t] = frames[t] ? frames[t][k] : 0.0f;
+  if (!self->is_initialized) {
+    for (uint32_t k = 0U; k < spectrum_size; ++k) {
+      self->prev_h[k] = current_magnitude[k];
+      self->h[k] = current_magnitude[k];
+      self->p[k] = 0.0f;
     }
-    self->m_h[k] = fast_median(self->time_sort_buffer, time_win);
+    self->is_initialized = true;
   }
 
-  // 4b. Percussive median (M_P) along frequency axis for delayed frame
-  compute_adaptive_freq_median(delayed_mag, self->m_p, (int)spectrum_size,
-                               (int)freq_win);
+  sb_simd_state_t simd_state = sb_simd_enable_ftz_daz();
 
-  // 5. Onset-Boosted Soft Masking with Transient Excess Margin
-  // In stationary noise (M_P ~= M_H), excess is zero -> 100% smoothed harmonic
-  // path G_H to eliminate musical noise
+  // 1. Initialize H and P for current frame
   for (uint32_t k = 0U; k < spectrum_size; ++k) {
-    float m_h = self->m_h[k];
-    float m_p_boosted = self->m_p[k] * (1.0f + frame_onset_boost);
+    float mag = current_magnitude[k];
+    self->h[k] = HPSS_SLIDING_SMOOTH_FACTOR * mag;
+    self->p[k] = HPSS_SLIDING_SMOOTH_FACTOR * mag;
+  }
 
-    float p_diff = m_p_boosted - m_h;
-    float p_excess = (p_diff > 0.0f) ? p_diff : 0.0f;
+  // 2. Sliding HPSS Iterations (Ono / Tachibana ISMIR 2008)
+  // Harmonic continuity: H_{t,k} aligns with H_{t-1,k} (temporal continuity)
+  // Percussive continuity: P_{t,k} aligns with (P_{t,k-1} + P_{t,k+1})/2
+  // (frequency continuity)
+  for (uint32_t iter = 0U; iter < HPSS_SLIDING_ITERATIONS; ++iter) {
+    for (uint32_t k = 0U; k < spectrum_size; ++k) {
+      float mag = current_magnitude[k];
+      if (mag <= SPECTRAL_EPSILON) {
+        self->h[k] = 0.0f;
+        self->p[k] = 0.0f;
+        continue;
+      }
 
-    float m_h_sq = m_h * m_h;
+      // Harmonic reference from previous frame
+      float h_ref = self->prev_h[k];
+
+      // Percussive reference from adjacent frequency bins
+      float p_prev = (k > 0U) ? self->p[k - 1U] : self->p[k];
+      float p_next = (k + 1U < spectrum_size) ? self->p[k + 1U] : self->p[k];
+      float p_ref = HPSS_SLIDING_SMOOTH_FACTOR * (p_prev + p_next);
+
+      // Auxiliary function update
+      float h_sq = h_ref * h_ref;
+      float p_sq = p_ref * p_ref;
+      float denom = h_sq + p_sq;
+
+      float w_h = (denom > SPECTRAL_EPSILON) ? (h_sq / denom)
+                                             : HPSS_SLIDING_SMOOTH_FACTOR;
+      float w_p = 1.0f - w_h;
+
+      self->h[k] = w_h * mag;
+      self->p[k] = w_p * mag;
+    }
+  }
+
+  // 3. Compute Soft Masks with Noise Floor Adaptive Gating & Excess Margin
+  float total_mag_sq = 0.0f;
+  float percussive_mag_sq = 0.0f;
+  const float current_margin = self->margin_factor;
+
+  for (uint32_t k = 0U; k < spectrum_size; ++k) {
+    float h_val = self->h[k];
+    float p_val = self->p[k];
+
+    // Margin test against horizontal sustain
+    float p_diff = p_val - (current_margin * h_val);
+
+    // If noise floor is provided, ensure percussive energy also emerges above
+    // noise floor
+    if (noise_floor != NULL && p_diff > 0.0f) {
+      float noise_level = noise_floor[k];
+      if (p_val < HPSS_NOISE_FLOOR_GATE_MULTIPLIER * noise_level) {
+        p_diff = 0.0f; // Sub-noise fluctuation: treat as stationary noise
+      }
+    }
+
+    float p_excess =
+        (k >= (uint32_t)HPSS_BASS_CUTOFF_BINS && p_diff > 0.0f) ? p_diff : 0.0f;
+
+    float h_sq = h_val * h_val;
     float p_excess_sq = p_excess * p_excess;
-    float sum_sq = m_h_sq + p_excess_sq;
+    float sum_sq = h_sq + p_excess_sq;
 
     float w_p = 0.0f;
     float w_h = 1.0f;
     if (sum_sq > SPECTRAL_EPSILON) {
-      float inv_sum_sq = 1.0f / sum_sq;
-      w_p = p_excess_sq * inv_sum_sq;
+      float raw_w_p = p_excess_sq / sum_sq;
+      // Apply smooth power compression to prevent pre-echo ghosting
+      w_p = raw_w_p * raw_w_p;
       w_h = 1.0f - w_p;
     }
 
@@ -400,11 +231,26 @@ bool hpss_filter_process(HpssFilter* self, const float* current_magnitude,
     if (mask_percussive_out) {
       mask_percussive_out[k] = w_p;
     }
+
+    float mag_sq = current_magnitude[k] * current_magnitude[k];
+    if (k >= (uint32_t)HPSS_BASS_CUTOFF_BINS) {
+      total_mag_sq += mag_sq;
+      percussive_mag_sq += w_p * mag_sq;
+    }
+
+    // Update state for next frame with exponential temporal tracking
+    self->prev_h[k] =
+        HPSS_SLIDING_SMOOTH_FACTOR * (self->prev_h[k] + self->h[k]);
   }
 
-  // 6. Advance circular buffer and write position
-  self->write_pos = (self->write_pos + 1U) % HPSS_TIME_WINDOW_MAX;
-  spectral_circular_buffer_advance(self->circular_buffer);
+  sb_simd_restore_state(simd_state);
+
+  self->percussive_ratio = (total_mag_sq > HPSS_RATIO_DENOMINATOR_FLOOR)
+                               ? (percussive_mag_sq / total_mag_sq)
+                               : 0.0f;
+
+  self->is_transient_detected =
+      (self->percussive_ratio >= self->energy_ratio_threshold);
 
   return true;
 }

@@ -212,26 +212,21 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 // Using power-of-two (64U) for efficient modulo wrap-around and future headroom
 #define DELAY_BUFFER_FRAMES 64U
 
-#define HPSS_TIME_WINDOW_LOW 9U
-#define HPSS_TIME_WINDOW_MEDIUM 17U
-#define HPSS_TIME_WINDOW_HIGH 33U
-#define HPSS_TIME_WINDOW_MAX HPSS_TIME_WINDOW_HIGH
-
-#define HPSS_FREQ_WINDOW_LOW 9U
-#define HPSS_FREQ_WINDOW_MEDIUM 17U
-#define HPSS_FREQ_WINDOW_HIGH 33U
-
+#define HPSS_SLIDING_ITERATIONS 3U
+#define HPSS_SLIDING_SMOOTH_FACTOR 0.50F
 #define HPSS_BASS_CUTOFF_BINS 24.0F
+#define HPSS_NOISE_FLOOR_GATE_MULTIPLIER 1.15F
+#define HPSS_RATIO_DENOMINATOR_FLOOR 1e-8F
+#define HPSS_TRANSIENT_MARGIN_FACTOR 1.30F
+#define HPSS_TRANSIENT_ENERGY_RATIO_THRESHOLD 0.25F
 
 /* --------------------------------------------------------------- */
 /* ------------------- 1D Denoiser configurations ---------------- */
 #define GAIN_SMOOTHING_MIN_RELEASE_SEC (0.010F)
 #define GAIN_SMOOTHING_MAX_RELEASE_SEC (0.150F)
 
-// HPSS configurations (Defaults to 0 = HPSS_QUALITY_OFF / zero latency)
-#define HPSS_QUALITY_MODE_1D_DEFAULT 0
-#define HPSS_TIME_WINDOW_1D_DEFAULT HPSS_TIME_WINDOW_LOW
-#define HPSS_FREQ_WINDOW_1D_DEFAULT HPSS_FREQ_WINDOW_LOW
+// HPSS configurations (Defaults to enabled)
+#define HPSS_ENABLE_1D_DEFAULT 1
 
 // STFT configurations
 #define OVERLAP_FACTOR_1D 4
@@ -256,10 +251,8 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 /* ------------------- 2D Denoiser configurations ------------------- */
 /* ------------------------------------------------------------------ */
 
-// HPSS configurations (Defaults to 0 = HPSS_QUALITY_OFF / zero latency)
-#define HPSS_QUALITY_MODE_2D_DEFAULT 0
-#define HPSS_TIME_WINDOW_2D_DEFAULT HPSS_TIME_WINDOW_HIGH
-#define HPSS_FREQ_WINDOW_2D_DEFAULT HPSS_FREQ_WINDOW_HIGH
+// HPSS configurations (Defaults to enabled)
+#define HPSS_ENABLE_2D_DEFAULT 1
 
 // STFT configurations
 #define OVERLAP_FACTOR_2D 4
