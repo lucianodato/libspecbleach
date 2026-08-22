@@ -190,20 +190,20 @@ void test_2d_parameter_switching(void) {
       .reduction_gain = 0.1f,
       .smoothing_factor = 1.0f,
       .adaptive_noise = 1,
-      .noise_estimation_method = 0, // Louizou
+      .noise_estimation_method = 0, // SPP-MMSE
       .nlm_masking_protection = 0.5f,
       .tonal_reduction_gain = 1.0f,
       .aggressiveness = 0.0f,
   };
 
-  // 1. Load Louizou adaptive
+  // 1. Load SPP-MMSE adaptive
   TEST_ASSERT(specbleach_2d_load_parameters(h, params),
-              "Load Louizou adaptive should succeed");
+              "Load SPP-MMSE adaptive should succeed");
 
-  // 2. Switch to SPP-MMSE adaptive
+  // 2. Switch to Brandt (Trimmed Mean) adaptive
   params.noise_estimation_method = 1;
   TEST_ASSERT(specbleach_2d_load_parameters(h, params),
-              "Switch to SPP-MMSE should succeed");
+              "Switch to Brandt (Trimmed Mean) should succeed");
 
   // 3. Switch adaptive off
   params.adaptive_noise = 0;

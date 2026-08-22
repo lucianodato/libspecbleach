@@ -76,7 +76,8 @@ typedef struct SpectralBleachDenoiserParameters {
   int hpss_enable;
 
   /* Noise Profile Linear Scale — multiplier for the noise power spectrum.
-   * Values > 1.0 shift threshold higher (more reduction). Default: 1.0 */
+   * Positive inputs are clamped to [0.01f, 100.0f]. Non-positive inputs use
+   * the 1.0f default. Values > 1.0 shift threshold higher (more reduction). */
   float noise_profile_scale;
 
   /* Frequency-dependent reduction bias curve.

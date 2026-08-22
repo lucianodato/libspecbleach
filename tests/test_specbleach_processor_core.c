@@ -227,6 +227,11 @@ void test_params_sanitize_functions(void) {
   TEST_FLOAT_CLOSE(sp_min.reduction_amount, 0.0f, 1e-3f);
   TEST_FLOAT_CLOSE(sp_min.noise_profile_offset_linear, 1.0f, 1e-3f);
 
+  SpectralBleachDenoiserParameters p_scale_low = p1;
+  p_scale_low.noise_profile_scale = 0.001f;
+  DenoiserParameters sp_scale_low = sb_denoiser_params_sanitize(p_scale_low);
+  TEST_FLOAT_CLOSE(sp_scale_low.noise_profile_offset_linear, 0.01f, 1e-3f);
+
   SpectralBleachDenoiserParameters p_max = p1;
   p_max.reduction_gain = 5.0f;
   p_max.noise_profile_scale = 200.0f;
@@ -240,6 +245,11 @@ void test_params_sanitize_functions(void) {
   Denoiser2DParameters sp2_min = sb_denoiser_2d_params_sanitize(p2_min);
   TEST_FLOAT_CLOSE(sp2_min.reduction_amount, 0.0f, 1e-3f);
   TEST_FLOAT_CLOSE(sp2_min.noise_profile_offset_linear, 1.0f, 1e-3f);
+
+  SpectralBleach2DDenoiserParameters p2_scale_low = p2;
+  p2_scale_low.noise_profile_scale = 0.001f;
+  Denoiser2DParameters sp2_scale_low = sb_denoiser_2d_params_sanitize(p2_scale_low);
+  TEST_FLOAT_CLOSE(sp2_scale_low.noise_profile_offset_linear, 0.01f, 1e-3f);
 
   SpectralBleach2DDenoiserParameters p2_max = p2;
   p2_max.reduction_gain = 5.0f;
