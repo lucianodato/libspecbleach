@@ -29,16 +29,12 @@ DenoiserParameters sb_denoiser_params_sanitize(
   return (DenoiserParameters){
       .learn_noise = parameters.learn_noise,
       .residual_listen = parameters.residual_listen,
-      .reduction_amount =
-          fmaxf(0.0f, fminf(1.0f, parameters.reduction_gain)),
-      .smoothing_factor =
-          fmaxf(0.0f, fminf(1.0f, parameters.smoothing_factor)),
-      .whitening_factor =
-          fmaxf(0.0f, fminf(1.0f, parameters.whitening_factor)),
+      .reduction_amount = fmaxf(0.0f, fminf(1.0f, parameters.reduction_gain)),
+      .smoothing_factor = fmaxf(0.0f, fminf(1.0f, parameters.smoothing_factor)),
+      .whitening_factor = fmaxf(0.0f, fminf(1.0f, parameters.whitening_factor)),
       .adaptive_noise = parameters.adaptive_noise,
       .noise_estimation_method = parameters.noise_estimation_method,
-      .masking_depth =
-          fmaxf(0.0f, fminf(1.0f, parameters.masking_depth)),
+      .masking_depth = fmaxf(0.0f, fminf(1.0f, parameters.masking_depth)),
       .suppression_strength =
           fmaxf(0.0f, fminf(1.0f, parameters.suppression_strength)),
       .aggressiveness = parameters.aggressiveness,
@@ -61,12 +57,9 @@ Denoiser2DParameters sb_denoiser_2d_params_sanitize(
   return (Denoiser2DParameters){
       .learn_noise = parameters.learn_noise,
       .residual_listen = parameters.residual_listen,
-      .reduction_amount =
-          fmaxf(0.0f, fminf(1.0f, parameters.reduction_gain)),
-      .smoothing_factor =
-          fmaxf(0.0f, fminf(1.0f, parameters.smoothing_factor)),
-      .whitening_factor =
-          fmaxf(0.0f, fminf(1.0f, parameters.whitening_factor)),
+      .reduction_amount = fmaxf(0.0f, fminf(1.0f, parameters.reduction_gain)),
+      .smoothing_factor = fmaxf(0.0f, fminf(1.0f, parameters.smoothing_factor)),
+      .whitening_factor = fmaxf(0.0f, fminf(1.0f, parameters.whitening_factor)),
       .adaptive_noise = parameters.adaptive_noise,
       .noise_estimation_method = parameters.noise_estimation_method,
       .nlm_masking_protection =

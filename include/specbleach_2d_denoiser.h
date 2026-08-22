@@ -43,7 +43,8 @@ typedef struct SpectralBleach2DDenoiserParameters {
   bool residual_listen;
 
   /**
-   * Linear gain floor for broadband noise reduction (0.0 to 1.0, where 1.0 = 0 dB / no reduction).
+   * Linear gain floor for broadband noise reduction (0.0 to 1.0, where 1.0 = 0
+   * dB / no reduction).
    */
   float reduction_gain;
 
@@ -86,7 +87,8 @@ typedef struct SpectralBleach2DDenoiserParameters {
   /* Intelligent Steering */
   float aggressiveness; /**< -1.0 (Median/Min) to 1.0 (Max), 0.0 (Mean) */
 
-  /* Linear gain floor for tonal noise components (0.0 to 1.0, where 1.0 = 0 dB / no reduction). */
+  /* Linear gain floor for tonal noise components (0.0 to 1.0, where 1.0 = 0 dB
+   * / no reduction). */
   float tonal_reduction_gain;
 
   /* Enable HPSS transient protection (0 = disabled, 1 = enabled). Default: 1 */

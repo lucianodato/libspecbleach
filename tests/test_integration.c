@@ -187,8 +187,9 @@ void test_different_noise_levels(void) {
       block_size = (uint32_t)(BLOCK_SIZE - processed);
     }
 
-    bool result = specbleach_process(handle, block_size, input_buffer + processed,
-                                     output_buffer + processed);
+    bool result =
+        specbleach_process(handle, block_size, input_buffer + processed,
+                           output_buffer + processed);
     TEST_ASSERT(result == true, "Processing failed");
 
     processed += block_size;

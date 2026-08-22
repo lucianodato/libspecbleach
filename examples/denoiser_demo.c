@@ -25,6 +25,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
 #include <getopt.h>
+#include <math.h>
 #include <sndfile.h>
 #include <specbleach_denoiser.h>
 #include <stdbool.h>

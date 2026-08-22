@@ -77,7 +77,7 @@ void test_specbleach_noise_profile_mode_functions(void) {
     // Note: get_noise_profile_for_mode returns the profile array even if not
     // available (this matches the behavior of the original single-mode API)
     TEST_ASSERT(specbleach_get_noise_profile_for_mode(handle, mode) != NULL,
-        "Should return profile array even if not available");
+                "Should return profile array even if not available");
   }
 
   specbleach_free(handle);

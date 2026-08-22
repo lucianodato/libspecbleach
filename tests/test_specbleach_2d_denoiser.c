@@ -226,7 +226,7 @@ void test_2d_parameter_switching(void) {
   }
 
   specbleach_2d_load_noise_profile_for_mode(h, profile, profile_size, 1,
-                                             ROLLING_MEAN);
+                                            ROLLING_MEAN);
 
   // Run with SPP-MMSE adaptive (method 1)
   params.adaptive_noise = 1;
