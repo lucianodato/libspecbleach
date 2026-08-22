@@ -75,9 +75,9 @@ void process_audio(const float* input, float* output, int length) {
   SpectralBleachDenoiserParameters parameters =
       (SpectralBleachDenoiserParameters){
           .learn_noise = 1, // Learn all modes
-          .tonal_reduction = 0.0f,
+          .tonal_reduction_gain = 1.0f,
           .aggressiveness = -1.0f, // Use median when processing
-          .reduction_amount = 20.0f,
+          .reduction_gain = 0.1f,
           .smoothing_factor = 0.0f,
           .masking_depth = 0.5f,
 
@@ -119,7 +119,7 @@ void process_audio_adaptive(const float* input, float* output, int length) {
   TEST_ASSERT(handle != NULL, "Failed to initialize adaptive denoiser");
 
   SpectralBleachDenoiserParameters parameters =
-      (SpectralBleachDenoiserParameters){.reduction_amount = 20.0f,
+      (SpectralBleachDenoiserParameters){.reduction_gain = 0.1f,
                                          .smoothing_factor = 0.0f,
                                          .masking_depth = 0.5f,
 
@@ -362,7 +362,7 @@ void test_noise_estimation_methods(void) {
   // Process with Martin MS method (Default)
   SpectralBleachDenoiserParameters params_martin =
       (SpectralBleachDenoiserParameters){
-          .reduction_amount = 20.0f,
+          .reduction_gain = 0.1f,
           .smoothing_factor = 0.0f,
           .masking_depth = 0.5f,
 
@@ -391,7 +391,7 @@ void test_noise_estimation_methods(void) {
   // Process with SPP-MMSE method
   SpectralBleachDenoiserParameters params_spp_mmse =
       (SpectralBleachDenoiserParameters){
-          .reduction_amount = 20.0f,
+          .reduction_gain = 0.1f,
           .smoothing_factor = 0.0f,
           .masking_depth = 0.5f,
 

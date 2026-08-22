@@ -24,7 +24,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  * with the algorithm and write it to an output file
  */
 
+#include <errno.h>
 #include <getopt.h>
+#include <math.h>
 #include <sndfile.h>
 #include <specbleach_denoiser.h>
 #include <stdbool.h>
@@ -40,27 +42,86 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
     // anywhere)
 #define FRAME_SIZE 50
 
+static bool parse_float_arg(const char* str, float* out, float min_val,
+                            float max_val) {
+  if (!str || *str == '\0') {
+    return false;
+  }
+  char* endptr = NULL;
+  errno = 0;
+  float val = strtof(str, &endptr);
+  if (errno != 0 || endptr == str || *endptr != '\0') {
+    return false;
+  }
+  if (!isfinite(val) || val < min_val || val > max_val) {
+    return false;
+  }
+  *out = val;
+  return true;
+}
+
+static bool parse_int_arg(const char* str, int* out, int min_val, int max_val) {
+  if (!str || *str == '\0') {
+    return false;
+  }
+  char* endptr = NULL;
+  errno = 0;
+  long val = strtol(str, &endptr, 10);
+  if (errno != 0 || endptr == str || *endptr != '\0') {
+    return false;
+  }
+  if (val < min_val || val > max_val) {
+    return false;
+  }
+  *out = (int)val;
+  return true;
+}
+
+static bool parse_uint32_arg(const char* str, uint32_t* out, uint32_t min_val,
+                             uint32_t max_val) {
+  if (!str || *str == '\0') {
+    return false;
+  }
+  char* endptr = NULL;
+  errno = 0;
+  long val = strtol(str, &endptr, 10);
+  if (errno != 0 || endptr == str || *endptr != '\0') {
+    return false;
+  }
+  if (val < 0 || (unsigned long)val < min_val || (unsigned long)val > max_val) {
+    return false;
+  }
+  *out = (uint32_t)val;
+  return true;
+}
+
 static void print_usage(const char* prog_name) {
   fprintf(stderr, "Usage: %s [options] <noisy input> <denoised output>\n",
           prog_name);
   fprintf(stderr, "Options:\n");
-  fprintf(stderr,
-          "  --reduction <val>      Reduction amount in dB (default: 20.0)\n");
-  fprintf(stderr,
-          "  --whitening <val>      Whitening factor (default: 50.0)\n");
-  fprintf(stderr, "  --smoothing <val>      Smoothing factor (default: 0.0)\n");
-  fprintf(stderr,
-          "  --masking-depth <val>  Masking depth (0.0-1.0, default: 0.5)\n");
-  fprintf(stderr,
-          "  --learn-avg <val>      Learn average mode (0-3, default: 3)\n");
-  fprintf(stderr, "  --adaptive            Enable adaptive noise estimation\n");
   fprintf(
       stderr,
-      "  --noise-method <val>  Noise estimation method (0-2, default: 0)\n");
-  fprintf(stderr, "  --frame-size <val>    Frame size in ms (default: 46.0)\n");
+      "  --reduction <val>          Reduction amount in dB (default: 20.0)\n");
   fprintf(stderr,
-          "  --learn-frames <val>  Number of learn frames (default: 8)\n");
-  fprintf(stderr, "  --help                Show this help message\n");
+          "  --whitening <val>          Whitening factor (default: 50.0)\n");
+  fprintf(stderr,
+          "  --smoothing <val>          Smoothing factor (default: 0.0)\n");
+  fprintf(
+      stderr,
+      "  --masking-depth <val>      Masking depth (0.0-1.0, default: 0.5)\n");
+  fprintf(stderr,
+          "  --steering-response <val>  Steering response (-1.0-1.0, default: "
+          "1.0)\n");
+  fprintf(stderr,
+          "  --adaptive                 Enable adaptive noise estimation\n");
+  fprintf(stderr,
+          "  --noise-method <val>      Noise estimation method (0-2, default: "
+          "0)\n");
+  fprintf(stderr,
+          "  --frame-size <val>        Frame size in ms (default: 46.0)\n");
+  fprintf(stderr,
+          "  --learn-frames <val>      Number of learn frames (default: 8)\n");
+  fprintf(stderr, "  --help                    Show this help message\n");
 }
 
 static void cleanup_resources(SF_INFO* sfinfo, SNDFILE* input_file,
@@ -93,10 +154,11 @@ int main(int argc, char** argv) {
           .residual_listen = false,
           .learn_noise = 1,       // Learn all modes
           .aggressiveness = 1.0f, // Use maximum mode for processing
-          .reduction_amount = 20.F,
-          .smoothing_factor = 0.F,
-          .whitening_factor = 50.F,
-          .masking_depth = 0.5F,
+          .reduction_gain = 0.1f, // 20 dB
+          .smoothing_factor = 0.0f,
+          .whitening_factor = 0.5f,
+          .masking_depth = 0.5f,
+          .tonal_reduction_gain = 1.0f,
           .hpss_enable = 1};
 
   static struct option long_options[] = {
@@ -118,32 +180,65 @@ int main(int argc, char** argv) {
   while ((opt = getopt_long(argc, argv, "r:w:s:d:l:am:f:n:", long_options,
                             NULL)) != -1) {
     switch (opt) {
-      case 'r':
-        parameters.reduction_amount = (float)atof(optarg);
+      case 'r': {
+        float red_db;
+        if (!parse_float_arg(optarg, &red_db, 0.0f, INFINITY)) {
+          print_usage(argv[0]);
+          return 1;
+        }
+        parameters.reduction_gain = powf(10.0f, -fabsf(red_db) / 20.0f);
         break;
-      case 'w':
-        parameters.whitening_factor = (float)atof(optarg);
+      }
+      case 'w': {
+        float whitening;
+        if (!parse_float_arg(optarg, &whitening, 0.0f, 100.0f)) {
+          print_usage(argv[0]);
+          return 1;
+        }
+        parameters.whitening_factor = whitening / 100.0f;
         break;
-      case 's':
-        parameters.smoothing_factor = (float)atof(optarg);
+      }
+      case 's': {
+        float smoothing;
+        if (!parse_float_arg(optarg, &smoothing, 0.0f, 100.0f)) {
+          print_usage(argv[0]);
+          return 1;
+        }
+        parameters.smoothing_factor = smoothing / 100.0f;
         break;
+      }
       case 'd':
-        parameters.masking_depth = (float)atof(optarg);
+        if (!parse_float_arg(optarg, &parameters.masking_depth, 0.0f, 1.0f)) {
+          print_usage(argv[0]);
+          return 1;
+        }
         break;
       case 'l':
-        parameters.aggressiveness = (float)atof(optarg);
+        if (!parse_float_arg(optarg, &parameters.aggressiveness, -1.0f, 1.0f)) {
+          print_usage(argv[0]);
+          return 1;
+        }
         break;
       case 'a':
         parameters.adaptive_noise = 1;
         break;
       case 'm':
-        parameters.noise_estimation_method = atoi(optarg);
+        if (!parse_int_arg(optarg, &parameters.noise_estimation_method, 0, 2)) {
+          print_usage(argv[0]);
+          return 1;
+        }
         break;
       case 'f':
-        frame_size_ms = (float)atof(optarg);
+        if (!parse_float_arg(optarg, &frame_size_ms, 0.0001f, INFINITY)) {
+          print_usage(argv[0]);
+          return 1;
+        }
         break;
       case 'n':
-        learn_frames = (uint32_t)atoi(optarg);
+        if (!parse_uint32_arg(optarg, &learn_frames, 1, UINT32_MAX)) {
+          print_usage(argv[0]);
+          return 1;
+        }
         break;
       case '?':
       default:

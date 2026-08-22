@@ -101,10 +101,10 @@ void test_noise_profile_api(void) {
 
   SpectralBleach2DDenoiserParameters params = {
       .learn_noise = 0,
-      .reduction_amount = 20.0f,
+      .reduction_gain = 0.1f,
       .smoothing_factor = 1.0f,
       .nlm_masking_protection = 0.5f,
-      .tonal_reduction = 0.0f,
+      .tonal_reduction_gain = 1.0f,
       .aggressiveness = 0.0f,
   };
   specbleach_2d_load_parameters(h, params);
@@ -187,23 +187,23 @@ void test_2d_parameter_switching(void) {
 
   SpectralBleach2DDenoiserParameters params = {
       .learn_noise = 0,
-      .reduction_amount = 20.0f,
+      .reduction_gain = 0.1f,
       .smoothing_factor = 1.0f,
       .adaptive_noise = 1,
-      .noise_estimation_method = 0, // Louizou
+      .noise_estimation_method = 0, // SPP-MMSE
       .nlm_masking_protection = 0.5f,
-      .tonal_reduction = 0.0f,
+      .tonal_reduction_gain = 1.0f,
       .aggressiveness = 0.0f,
   };
 
-  // 1. Load Louizou adaptive
+  // 1. Load SPP-MMSE adaptive
   TEST_ASSERT(specbleach_2d_load_parameters(h, params),
-              "Load Louizou adaptive should succeed");
+              "Load SPP-MMSE adaptive should succeed");
 
-  // 2. Switch to SPP-MMSE adaptive
+  // 2. Switch to Brandt (Trimmed Mean) adaptive
   params.noise_estimation_method = 1;
   TEST_ASSERT(specbleach_2d_load_parameters(h, params),
-              "Switch to SPP-MMSE should succeed");
+              "Switch to Brandt (Trimmed Mean) should succeed");
 
   // 3. Switch adaptive off
   params.adaptive_noise = 0;
@@ -255,9 +255,9 @@ void test_process_loop(void) {
   // 1. Process without noise profile (unhappy path for reduction)
   SpectralBleach2DDenoiserParameters params = {
       .learn_noise = 0,
-      .reduction_amount = 20.0f,
+      .reduction_gain = 0.1f,
       .smoothing_factor = 1.0f,
-      .tonal_reduction = 0.0f,
+      .tonal_reduction_gain = 1.0f,
       .aggressiveness = 0.0f,
   };
   specbleach_2d_load_parameters(h, params);
@@ -296,8 +296,8 @@ void test_process_loop(void) {
   float in_buf[1024] = {0};
   float out_buf[1024] = {0};
   params.learn_noise = 0;
-  params.tonal_reduction = 0.5f;
-  params.reduction_amount = 20.0f;
+  params.tonal_reduction_gain = 0.5f;
+  params.reduction_gain = 0.1f;
   params.hpss_enable = 1;
   specbleach_2d_load_parameters(h, params);
   specbleach_2d_process(h, 1024, in_buf, out_buf);
@@ -312,8 +312,8 @@ void test_process_loop(void) {
   params.smoothing_factor = 0.5f;
   params.whitening_factor = 0.5f;
   params.residual_listen = 1;
-  params.nlm_masking_protection = 5.0f;
-  params.suppression_strength = 2.0f;
+  params.nlm_masking_protection = 0.5f;
+  params.suppression_strength = 0.5f;
   specbleach_2d_load_parameters(h, params);
   for (int f = 0; f < 10; ++f) {
     specbleach_2d_process(h, 1024, in_buf, out_buf);
@@ -388,7 +388,7 @@ void test_2d_smoothing_factor_responsiveness(void) {
   // 1. Learn noise profile for both handles
   SpectralBleach2DDenoiserParameters params_learn = {
       .learn_noise = 1,
-      .reduction_amount = 20.0f,
+      .reduction_gain = 0.1f,
       .smoothing_factor = 0.0f,
   };
 
@@ -410,7 +410,7 @@ void test_2d_smoothing_factor_responsiveness(void) {
   // 2. Process with 0% smoothing on h0
   SpectralBleach2DDenoiserParameters params_0 = {
       .learn_noise = 0,
-      .reduction_amount = 20.0f,
+      .reduction_gain = 0.1f,
       .smoothing_factor = 0.0f,
   };
   TEST_ASSERT(specbleach_2d_load_parameters(h0, params_0),
@@ -421,8 +421,8 @@ void test_2d_smoothing_factor_responsiveness(void) {
   // 3. Process with 100% smoothing on h100
   SpectralBleach2DDenoiserParameters params_100 = {
       .learn_noise = 0,
-      .reduction_amount = 20.0f,
-      .smoothing_factor = 100.0f,
+      .reduction_gain = 0.1f,
+      .smoothing_factor = 1.0f,
   };
   TEST_ASSERT(specbleach_2d_load_parameters(h100, params_100),
               "Loading 100% smoothing params for h100 should succeed");

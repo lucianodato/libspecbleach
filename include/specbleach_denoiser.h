@@ -39,21 +39,14 @@ typedef struct SpectralBleachDenoiserParameters {
    * true or false */
   bool residual_listen;
 
-  /* Sets the amount of dBs that the noise will be attenuated. It goes from 0 dB
-   * to 40 dB. This controls both the gain attenuation strength and the residual
-   * noise mixing level for optimal noise reduction. */
-  float reduction_amount;
+  /* Linear gain floor for broadband noise reduction (0.0 to 1.0, where 1.0 = 0
+   * dB / no reduction). */
+  float reduction_gain;
 
-  /* Percentage of smoothing to apply. Averages the reduction calculation frame
-   * per frame so the rate of change is less resulting in less musical noise but
-   * if too strong it can blur transient and reduce high frequencies. It goes
-   * from 0 to 100 percent */
+  /* Normalized smoothing factor across frames (0.0 to 1.0). */
   float smoothing_factor;
 
-  /* Percentage of whitening that is going to be applied to the residue of the
-   * reduction. It modifies the noise floor to be more like white noise. This
-   * can help hide musical noise when the noise is colored. It goes from 0 to
-   * 100 percent */
+  /* Normalized whitening factor for residue noise floor (0.0 to 1.0). */
   float whitening_factor;
 
   /* Enables the adaptive noise estimation, which will continuously update the
@@ -66,24 +59,26 @@ typedef struct SpectralBleachDenoiserParameters {
    * 2: Martin Minimum Statistics */
   int noise_estimation_method;
 
-  /** Masking Veto depth (0.0 - 1.0) */
-  float masking_depth; // 0.0 - 1.0: Depth of signal energy preservation
+  /** Masking Veto depth (0.0 - 1.0: Depth of signal energy preservation) */
+  float masking_depth;
 
-  /** Suppression aggressiveness (0.0 - 1.0) */
-  float suppression_strength; // 0.0 - 1.0: Berouti oversubtraction factor
+  /** Suppression aggressiveness (0.0 - 1.0: Berouti oversubtraction factor) */
+  float suppression_strength;
 
   /* Intelligent Steering */
   float aggressiveness; /**< -1.0 (Median/Min) to 1.0 (Max), 0.0 (Mean) */
-  /* Tonal Separation */
-  float tonal_reduction; // 0.0 to 1.0: Independent reduction for tones
+
+  /* Linear gain floor for tonal noise components (0.0 to 1.0, where 1.0 = 0 dB
+   * / no reduction). */
+  float tonal_reduction_gain;
 
   /* Enable HPSS transient protection (0 = disabled, 1 = enabled). Default: 1 */
   int hpss_enable;
 
-  /* Noise Profile Offset — shifts the noise threshold up/down in dB.
-   * Positive values make detection more aggressive (more noise removed).
-   * Default: 2.0, Range: [-6.0, +6.0] */
-  float noise_profile_offset_db;
+  /* Noise Profile Linear Scale — multiplier for the noise power spectrum.
+   * Positive inputs are clamped to [0.01f, 100.0f]. Non-positive inputs use
+   * the 1.0f default. Values > 1.0 shift threshold higher (more reduction). */
+  float noise_profile_scale;
 
   /* Frequency-dependent reduction bias curve.
    * Array of dB offsets per frequency bin, or NULL if disabled.
