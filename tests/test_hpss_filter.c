@@ -138,10 +138,13 @@ void test_hpss_filter(void) {
     bool ok = hpss_filter_process(filter, current_mag, NULL, delayed_mag,
                                   mask_h, mask_p);
     TEST_ASSERT(ok, "Process on disabled filter should succeed");
-    TEST_ASSERT(delayed_mag[10] == current_mag[10],
-                "Delayed magnitude should match current magnitude when disabled");
-    TEST_ASSERT(mask_h[10] == 1.0f, "Harmonic mask should be 1.0 when disabled");
-    TEST_ASSERT(mask_p[10] == 0.0f, "Percussive mask should be 0.0 when disabled");
+    TEST_ASSERT(
+        delayed_mag[10] == current_mag[10],
+        "Delayed magnitude should match current magnitude when disabled");
+    TEST_ASSERT(mask_h[10] == 1.0f,
+                "Harmonic mask should be 1.0 when disabled");
+    TEST_ASSERT(mask_p[10] == 0.0f,
+                "Percussive mask should be 0.0 when disabled");
   }
   TEST_ASSERT(!hpss_filter_is_transient_detected(filter),
               "Disabled HPSS should not report transients");

@@ -393,10 +393,10 @@ bool load_2d_reduction_parameters(SpectralProcessorHandle instance,
   // Update NLM h parameter based on smoothing factor (scales h up to 5.0F for
   // strong NLM patch smoothing)
   if (self->nlm_filter) {
-    nlm_filter_set_h_parameter(self->nlm_filter,
-                               (parameters.smoothing_factor > 0.0F)
-                                   ? (0.5F + parameters.smoothing_factor * 4.5F)
-                                   : 0.0F);
+    nlm_filter_set_h_parameter(
+        self->nlm_filter, (parameters.smoothing_factor > 0.0F)
+                              ? (0.5F + (parameters.smoothing_factor * 4.5F))
+                              : 0.0F);
   }
 
   return true;
@@ -530,8 +530,7 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
     memcpy(self->mask_percussive, aligned_wp,
            self->real_spectrum_size * sizeof(float));
   } else {
-    memset(self->mask_percussive, 0,
-           self->real_spectrum_size * sizeof(float));
+    memset(self->mask_percussive, 0, self->real_spectrum_size * sizeof(float));
   }
   if (aligned_mag) {
     memcpy(self->delayed_magnitude, aligned_mag,

@@ -108,7 +108,7 @@ bool hpss_filter_is_transient_detected(const HpssFilter* self) {
 }
 
 bool hpss_filter_process(HpssFilter* self, const float* current_magnitude,
-                         const float* noise_floor, float* delayed_magnitude_out,
+                         const float* noise_floor, float* current_magnitude_out,
                          float* mask_harmonic_out, float* mask_percussive_out) {
   if (!self || !current_magnitude) {
     return false;
@@ -116,8 +116,8 @@ bool hpss_filter_process(HpssFilter* self, const float* current_magnitude,
 
   const uint32_t spectrum_size = self->config.real_spectrum_size;
 
-  if (delayed_magnitude_out) {
-    memcpy(delayed_magnitude_out, current_magnitude,
+  if (current_magnitude_out) {
+    memcpy(current_magnitude_out, current_magnitude,
            spectrum_size * sizeof(float));
   }
 
@@ -239,15 +239,15 @@ bool hpss_filter_process(HpssFilter* self, const float* current_magnitude,
     }
 
     // Update state for next frame with exponential temporal tracking
-    self->prev_h[k] = HPSS_SLIDING_SMOOTH_FACTOR * (self->prev_h[k] + self->h[k]);
+    self->prev_h[k] =
+        HPSS_SLIDING_SMOOTH_FACTOR * (self->prev_h[k] + self->h[k]);
   }
 
   sb_simd_restore_state(simd_state);
 
-  self->percussive_ratio =
-      (total_mag_sq > HPSS_RATIO_DENOMINATOR_FLOOR)
-          ? (percussive_mag_sq / total_mag_sq)
-          : 0.0f;
+  self->percussive_ratio = (total_mag_sq > HPSS_RATIO_DENOMINATOR_FLOOR)
+                               ? (percussive_mag_sq / total_mag_sq)
+                               : 0.0f;
 
   self->is_transient_detected =
       (self->percussive_ratio >= self->energy_ratio_threshold);
