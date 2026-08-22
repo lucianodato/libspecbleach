@@ -27,19 +27,19 @@
 static const SpectralBleachDenoiserParameters canonical_denoiser_params = {
     .residual_listen = false,
     .learn_noise = 1,
-    .tonal_reduction = 0.0f,
+    .tonal_reduction_gain = 1.0f,
     .aggressiveness = 1.0f, // Use maximum profile
-    .reduction_amount = 20.0f,
+    .reduction_gain = 0.1f, // 20 dB = 0.1 linear gain
     .smoothing_factor = 0.0f,
-    .whitening_factor = 50.0f,
+    .whitening_factor = 0.5f,
     .masking_depth = 0.5f,
     .hpss_enable = 1};
 
 static const SpectralBleachDenoiserParameters canonical_adenoiser_params = {
     .residual_listen = false,
-    .reduction_amount = 20.0f,
+    .reduction_gain = 0.1f, // 20 dB = 0.1 linear gain
     .smoothing_factor = 0.0f,
-    .whitening_factor = 50.0f,
+    .whitening_factor = 0.5f,
     .masking_depth = 0.5f,
     .hpss_enable = 1,
 

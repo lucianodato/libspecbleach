@@ -167,76 +167,86 @@ void test_params_sanitize_functions(void) {
   SpectralBleachDenoiserParameters p1 = {
       .learn_noise = true,
       .residual_listen = false,
-      .reduction_amount = -12.0f,
-      .smoothing_factor = 50.0f,
-      .whitening_factor = 100.0f,
+      .reduction_gain = 0.25f,
+      .smoothing_factor = 0.5f,
+      .whitening_factor = 1.0f,
       .adaptive_noise = false,
       .noise_estimation_method = 1,
       .masking_depth = 0.5f,
-      .suppression_strength = 80.0f,
+      .suppression_strength = 0.8f,
       .aggressiveness = 1.0f,
-      .tonal_reduction = -6.0f,
+      .tonal_reduction_gain = 0.5f,
       .hpss_enable = 1,
-      .noise_profile_offset_db = 2.0f,
+      .noise_profile_scale = 1.5849f,
       .reduction_curve_bias = NULL,
       .reduction_curve_enabled = false,
   };
 
   DenoiserParameters sp1 = sb_denoiser_params_sanitize(p1);
   TEST_ASSERT(sp1.learn_noise == true, "Sanitize learn_noise");
+  TEST_FLOAT_CLOSE(sp1.reduction_amount, 0.25f, 1e-4f);
   TEST_FLOAT_CLOSE(sp1.whitening_factor, 1.0f, 1e-4f);
   TEST_FLOAT_CLOSE(sp1.suppression_strength, 0.8f, 1e-4f);
   TEST_ASSERT(sp1.hpss_enable == 1, "Sanitize hpss_enable");
-  TEST_FLOAT_CLOSE(sp1.noise_profile_offset_linear, 1.2589f, 1e-3f);
+  TEST_FLOAT_CLOSE(sp1.noise_profile_offset_linear, 1.5849f, 1e-3f);
   TEST_ASSERT(sp1.reduction_curve_bias == NULL, "Sanitize disabled curve bias");
 
   SpectralBleach2DDenoiserParameters p2 = {
       .learn_noise = false,
       .residual_listen = true,
-      .reduction_amount = -18.0f,
+      .reduction_gain = 0.125f,
       .smoothing_factor = 0.3f,
-      .whitening_factor = 50.0f,
+      .whitening_factor = 0.5f,
       .adaptive_noise = true,
       .noise_estimation_method = 2,
       .nlm_masking_protection = 0.8f,
-      .suppression_strength = 100.0f,
+      .suppression_strength = 1.0f,
       .aggressiveness = 2.0f,
-      .tonal_reduction = -3.0f,
+      .tonal_reduction_gain = 0.7f,
       .hpss_enable = 1,
-      .noise_profile_offset_db = -6.0f,
+      .noise_profile_scale = 0.2512f,
       .reduction_curve_bias = (const float*)0x1234,
       .reduction_curve_enabled = true,
   };
 
   Denoiser2DParameters sp2 = sb_denoiser_2d_params_sanitize(p2);
   TEST_ASSERT(sp2.residual_listen == true, "Sanitize 2d residual_listen");
+  TEST_FLOAT_CLOSE(sp2.reduction_amount, 0.125f, 1e-4f);
   TEST_FLOAT_CLOSE(sp2.whitening_factor, 0.5f, 1e-4f);
   TEST_FLOAT_CLOSE(sp2.suppression_strength, 1.0f, 1e-4f);
   TEST_ASSERT(sp2.hpss_enable == 1, "Sanitize 2d hpss_enable");
-  TEST_FLOAT_CLOSE(sp2.noise_profile_offset_linear, 0.5011f, 1e-3f);
+  TEST_FLOAT_CLOSE(sp2.noise_profile_offset_linear, 0.2512f, 1e-3f);
   TEST_ASSERT(sp2.reduction_curve_bias == (const float*)0x1234,
               "Sanitize enabled curve bias ptr");
 
-  // Bounds clamping checks for noise_profile_offset_db (-12dB to +12dB)
+  // Bounds clamping checks for linear parameters
   SpectralBleachDenoiserParameters p_min = p1;
-  p_min.noise_profile_offset_db = -20.0f;
+  p_min.reduction_gain = -5.0f;
+  p_min.noise_profile_scale = -2.0f;
   DenoiserParameters sp_min = sb_denoiser_params_sanitize(p_min);
-  TEST_FLOAT_CLOSE(sp_min.noise_profile_offset_linear, 0.2512f, 1e-3f);
+  TEST_FLOAT_CLOSE(sp_min.reduction_amount, 0.0f, 1e-3f);
+  TEST_FLOAT_CLOSE(sp_min.noise_profile_offset_linear, 1.0f, 1e-3f);
 
   SpectralBleachDenoiserParameters p_max = p1;
-  p_max.noise_profile_offset_db = 20.0f;
+  p_max.reduction_gain = 5.0f;
+  p_max.noise_profile_scale = 200.0f;
   DenoiserParameters sp_max = sb_denoiser_params_sanitize(p_max);
-  TEST_FLOAT_CLOSE(sp_max.noise_profile_offset_linear, 3.9811f, 1e-3f);
+  TEST_FLOAT_CLOSE(sp_max.reduction_amount, 1.0f, 1e-3f);
+  TEST_FLOAT_CLOSE(sp_max.noise_profile_offset_linear, 100.0f, 1e-3f);
 
   SpectralBleach2DDenoiserParameters p2_min = p2;
-  p2_min.noise_profile_offset_db = -20.0f;
+  p2_min.reduction_gain = -5.0f;
+  p2_min.noise_profile_scale = -2.0f;
   Denoiser2DParameters sp2_min = sb_denoiser_2d_params_sanitize(p2_min);
-  TEST_FLOAT_CLOSE(sp2_min.noise_profile_offset_linear, 0.2512f, 1e-3f);
+  TEST_FLOAT_CLOSE(sp2_min.reduction_amount, 0.0f, 1e-3f);
+  TEST_FLOAT_CLOSE(sp2_min.noise_profile_offset_linear, 1.0f, 1e-3f);
 
   SpectralBleach2DDenoiserParameters p2_max = p2;
-  p2_max.noise_profile_offset_db = 20.0f;
+  p2_max.reduction_gain = 5.0f;
+  p2_max.noise_profile_scale = 200.0f;
   Denoiser2DParameters sp2_max = sb_denoiser_2d_params_sanitize(p2_max);
-  TEST_FLOAT_CLOSE(sp2_max.noise_profile_offset_linear, 3.9811f, 1e-3f);
+  TEST_FLOAT_CLOSE(sp2_max.reduction_amount, 1.0f, 1e-3f);
+  TEST_FLOAT_CLOSE(sp2_max.noise_profile_offset_linear, 100.0f, 1e-3f);
 
   printf("✓ Params sanitize functions tests passed\n");
 }

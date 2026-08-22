@@ -43,13 +43,12 @@ typedef struct SpectralBleach2DDenoiserParameters {
   bool residual_listen;
 
   /**
-   * Sets the amount of dBs that the noise will be attenuated.
-   * It goes from 0 dB to 40 dB.
+   * Linear gain floor for broadband noise reduction (0.0 to 1.0, where 1.0 = 0 dB / no reduction).
    */
-  float reduction_amount;
+  float reduction_gain;
 
   /**
-   * Percentage of 2D smoothing (0 to 100 percent).
+   * Normalized 2D smoothing factor (0.0 to 1.0).
    * Controls 2D time-frequency gain-mask artifact smoothing across time and
    * frequency. Also controls the NLM h parameter: non-zero values activate and
    * scale NLM patch similarity smoothing up to NLM_MAX_H_PARAMETER.
@@ -57,10 +56,7 @@ typedef struct SpectralBleach2DDenoiserParameters {
   float smoothing_factor;
 
   /**
-   * Percentage of whitening that is going to be applied to the residue of the
-   * reduction. It modifies the noise floor to be more like white noise. This
-   * can help hide musical noise when the noise is colored. It goes from 0 to
-   * 100 percent
+   * Normalized whitening factor for residue noise floor (0.0 to 1.0).
    */
   float whitening_factor;
 
@@ -78,30 +74,27 @@ typedef struct SpectralBleach2DDenoiserParameters {
   int noise_estimation_method;
 
   /**
-   * Sets the masking protection depth for the NLM filter.
-   * Controls how aggressively the masking threshold protects transients.
-   * Range: 0.0 (No protection, full smoothing) to 1.0 (Full protection).
+   * Sets the masking protection depth for the NLM filter (0.0 to 1.0).
    */
   float nlm_masking_protection;
 
-  /** Sets the suppression aggressiveness (0-100%).
-   * Controls the SNR-dependent oversubtraction factor.
+  /**
+   * Sets the suppression aggressiveness (0.0 to 1.0).
    */
   float suppression_strength;
 
   /* Intelligent Steering */
   float aggressiveness; /**< -1.0 (Median/Min) to 1.0 (Max), 0.0 (Mean) */
 
-  /* Tonal Separation */
-  float tonal_reduction; // 0.0 to 1.0: Independent reduction for tones
+  /* Linear gain floor for tonal noise components (0.0 to 1.0, where 1.0 = 0 dB / no reduction). */
+  float tonal_reduction_gain;
 
   /* Enable HPSS transient protection (0 = disabled, 1 = enabled). Default: 1 */
   int hpss_enable;
 
-  /* Noise Profile Offset — shifts the noise threshold up/down in dB.
-   * Positive values make detection more aggressive (more noise removed).
-   * Default: 2.0, Range: [-6.0, +6.0] */
-  float noise_profile_offset_db;
+  /* Noise Profile Linear Scale — multiplier for the noise power spectrum.
+   * Values > 1.0 shift threshold higher (more reduction). Default: 1.0 */
+  float noise_profile_scale;
 
   /* Frequency-dependent reduction bias curve.
    * Array of dB offsets per frequency bin, or NULL if disabled.

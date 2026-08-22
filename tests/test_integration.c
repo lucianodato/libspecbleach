@@ -92,7 +92,7 @@ void test_spectral_denoiser(void) {
 
   SpectralBleachDenoiserParameters parameters =
       (SpectralBleachDenoiserParameters){.learn_noise = 1, // Learn all modes
-                                         .reduction_amount = 20.0f,
+                                         .reduction_gain = 0.1f,
                                          .smoothing_factor = 0.0f,
                                          .masking_depth = 0.5f,
 
@@ -163,7 +163,7 @@ void test_different_noise_levels(void) {
 
   SpectralBleachDenoiserParameters parameters =
       (SpectralBleachDenoiserParameters){.learn_noise = 1, // Average
-                                         .reduction_amount = 20.0f,
+                                         .reduction_gain = 0.1f,
                                          .smoothing_factor = 0.0f,
                                          .masking_depth = 0.5f,
 
@@ -179,10 +179,20 @@ void test_different_noise_levels(void) {
   parameters.learn_noise = 0;
   specbleach_load_parameters(handle, parameters);
 
-  // Process all at once for simplicity
-  bool result = specbleach_process(handle, BLOCK_SIZE - 5000,
-                                   input_buffer + 5000, output_buffer + 5000);
-  TEST_ASSERT(result == true, "Processing failed");
+  // Process all blocks
+  size_t processed = 5000;
+  while (processed < BLOCK_SIZE) {
+    uint32_t block_size = FRAME_SIZE;
+    if (processed + (size_t)block_size > BLOCK_SIZE) {
+      block_size = (uint32_t)(BLOCK_SIZE - processed);
+    }
+
+    bool result = specbleach_process(handle, block_size, input_buffer + processed,
+                                     output_buffer + processed);
+    TEST_ASSERT(result == true, "Processing failed");
+
+    processed += block_size;
+  }
 
   float input_rms = calculate_rms(input_buffer, BLOCK_SIZE);
   float output_rms = calculate_rms(output_buffer, BLOCK_SIZE);
@@ -261,12 +271,12 @@ void test_adaptive_denoiser(void) {
   SpectralBleachDenoiserParameters parameters =
       (SpectralBleachDenoiserParameters){
           .learn_noise = 0,
-          .reduction_amount = 20.0f,
-          .smoothing_factor = 50.0f,
+          .reduction_gain = 0.1f,
+          .smoothing_factor = 0.5f,
           .masking_depth = 0.5f,
 
           .residual_listen = false,
-          .whitening_factor = 50.0f,
+          .whitening_factor = 0.5f,
           .adaptive_noise = 1,         // Enable adaptive mode
           .noise_estimation_method = 0 // Default method
       };
@@ -312,8 +322,8 @@ void test_2d_denoiser(void) {
   // Configure for noise learning
   SpectralBleach2DDenoiserParameters parameters = {
       .learn_noise = 1, // Learn mode
-      .reduction_amount = 20.0f,
-      .smoothing_factor = 1.5f, // NLM h parameter
+      .reduction_gain = 0.1f,
+      .smoothing_factor = 0.5f, // NLM h parameter
       .whitening_factor = 0.0f,
       .residual_listen = false,
   };

@@ -93,10 +93,11 @@ int main(int argc, char** argv) {
           .residual_listen = false,
           .learn_noise = 1,       // Learn all modes
           .aggressiveness = 1.0f, // Use maximum mode for processing
-          .reduction_amount = 20.F,
-          .smoothing_factor = 0.F,
-          .whitening_factor = 50.F,
-          .masking_depth = 0.5F,
+          .reduction_gain = 0.1f, // 20 dB
+          .smoothing_factor = 0.0f,
+          .whitening_factor = 0.5f,
+          .masking_depth = 0.5f,
+          .tonal_reduction_gain = 1.0f,
           .hpss_enable = 1};
 
   static struct option long_options[] = {
@@ -118,14 +119,16 @@ int main(int argc, char** argv) {
   while ((opt = getopt_long(argc, argv, "r:w:s:d:l:am:f:n:", long_options,
                             NULL)) != -1) {
     switch (opt) {
-      case 'r':
-        parameters.reduction_amount = (float)atof(optarg);
+      case 'r': {
+        float red_db = (float)atof(optarg);
+        parameters.reduction_gain = powf(10.0f, -fabsf(red_db) / 20.0f);
         break;
+      }
       case 'w':
-        parameters.whitening_factor = (float)atof(optarg);
+        parameters.whitening_factor = (float)atof(optarg) / 100.0f;
         break;
       case 's':
-        parameters.smoothing_factor = (float)atof(optarg);
+        parameters.smoothing_factor = (float)atof(optarg) / 100.0f;
         break;
       case 'd':
         parameters.masking_depth = (float)atof(optarg);

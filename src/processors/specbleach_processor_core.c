@@ -30,22 +30,25 @@ DenoiserParameters sb_denoiser_params_sanitize(
       .learn_noise = parameters.learn_noise,
       .residual_listen = parameters.residual_listen,
       .reduction_amount =
-          from_db_to_coefficient(parameters.reduction_amount * -1.F),
-      .smoothing_factor = parameters.smoothing_factor / 100.F,
-      .whitening_factor = parameters.whitening_factor / 100.F,
+          fmaxf(0.0f, fminf(1.0f, parameters.reduction_gain)),
+      .smoothing_factor =
+          fmaxf(0.0f, fminf(1.0f, parameters.smoothing_factor)),
+      .whitening_factor =
+          fmaxf(0.0f, fminf(1.0f, parameters.whitening_factor)),
       .adaptive_noise = parameters.adaptive_noise,
       .noise_estimation_method = parameters.noise_estimation_method,
-      .masking_depth = parameters.masking_depth,
-      .suppression_strength = parameters.suppression_strength / 100.F,
+      .masking_depth =
+          fmaxf(0.0f, fminf(1.0f, parameters.masking_depth)),
+      .suppression_strength =
+          fmaxf(0.0f, fminf(1.0f, parameters.suppression_strength)),
       .aggressiveness = parameters.aggressiveness,
       .tonal_reduction =
-          from_db_to_coefficient(parameters.tonal_reduction * -1.F),
+          fmaxf(0.0f, fminf(1.0f, parameters.tonal_reduction_gain)),
       .hpss_enable = parameters.hpss_enable,
       .noise_profile_offset_linear =
-          powf(10.0f, fmaxf(NOISE_PROFILE_OFFSET_MIN_DB,
-                            fminf(NOISE_PROFILE_OFFSET_MAX_DB,
-                                  parameters.noise_profile_offset_db)) /
-                          20.0f),
+          fmaxf(0.01f, fminf(100.0f, parameters.noise_profile_scale > 0.0f
+                                         ? parameters.noise_profile_scale
+                                         : 1.0f)),
       .reduction_curve_bias = parameters.reduction_curve_enabled
                                   ? parameters.reduction_curve_bias
                                   : NULL,
@@ -59,22 +62,25 @@ Denoiser2DParameters sb_denoiser_2d_params_sanitize(
       .learn_noise = parameters.learn_noise,
       .residual_listen = parameters.residual_listen,
       .reduction_amount =
-          from_db_to_coefficient(parameters.reduction_amount * -1.F),
-      .smoothing_factor = parameters.smoothing_factor / 100.F,
-      .whitening_factor = parameters.whitening_factor / 100.F,
+          fmaxf(0.0f, fminf(1.0f, parameters.reduction_gain)),
+      .smoothing_factor =
+          fmaxf(0.0f, fminf(1.0f, parameters.smoothing_factor)),
+      .whitening_factor =
+          fmaxf(0.0f, fminf(1.0f, parameters.whitening_factor)),
       .adaptive_noise = parameters.adaptive_noise,
       .noise_estimation_method = parameters.noise_estimation_method,
-      .nlm_masking_protection = parameters.nlm_masking_protection,
-      .suppression_strength = parameters.suppression_strength / 100.F,
+      .nlm_masking_protection =
+          fmaxf(0.0f, fminf(1.0f, parameters.nlm_masking_protection)),
+      .suppression_strength =
+          fmaxf(0.0f, fminf(1.0f, parameters.suppression_strength)),
       .aggressiveness = parameters.aggressiveness,
       .tonal_reduction =
-          from_db_to_coefficient(parameters.tonal_reduction * -1.F),
+          fmaxf(0.0f, fminf(1.0f, parameters.tonal_reduction_gain)),
       .hpss_enable = parameters.hpss_enable,
       .noise_profile_offset_linear =
-          powf(10.0f, fmaxf(NOISE_PROFILE_OFFSET_MIN_DB,
-                            fminf(NOISE_PROFILE_OFFSET_MAX_DB,
-                                  parameters.noise_profile_offset_db)) /
-                          20.0f),
+          fmaxf(0.01f, fminf(100.0f, parameters.noise_profile_scale > 0.0f
+                                         ? parameters.noise_profile_scale
+                                         : 1.0f)),
       .reduction_curve_bias = parameters.reduction_curve_enabled
                                   ? parameters.reduction_curve_bias
                                   : NULL,

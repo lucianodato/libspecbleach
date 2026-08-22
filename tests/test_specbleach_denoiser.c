@@ -33,11 +33,11 @@ void test_specbleach_noise_profile_mode_functions(void) {
   SpectralBleachDenoiserParameters params = {
       .learn_noise = true,
       .residual_listen = false,
-      .reduction_amount = -20.0f,
-      .smoothing_factor = 50.0f,
+      .reduction_gain = 0.1f,
+      .smoothing_factor = 0.5f,
       .whitening_factor = 0.0f,
       .masking_depth = 0.5f,
-      .tonal_reduction = 0.0f,
+      .tonal_reduction_gain = 1.0f,
       .aggressiveness = 0.0f,
   };
 
@@ -77,7 +77,7 @@ void test_specbleach_noise_profile_mode_functions(void) {
     // Note: get_noise_profile_for_mode returns the profile array even if not
     // available (this matches the behavior of the original single-mode API)
     TEST_ASSERT(specbleach_get_noise_profile_for_mode(handle, mode) != NULL,
-                "Should return profile array even if not available");
+        "Should return profile array even if not available");
   }
 
   specbleach_free(handle);
@@ -94,11 +94,11 @@ void test_specbleach_load_noise_profile_with_mode(void) {
   SpectralBleachDenoiserParameters params = (SpectralBleachDenoiserParameters){
       .learn_noise = true,
       .residual_listen = false,
-      .reduction_amount = -20.0f,
-      .smoothing_factor = 50.0f,
+      .reduction_gain = 0.1f,
+      .smoothing_factor = 0.5f,
       .whitening_factor = 0.0f,
       .masking_depth = 0.5f,
-      .tonal_reduction = 0.0f,
+      .tonal_reduction_gain = 1.0f,
       .aggressiveness = 0.0f,
   };
 
@@ -177,11 +177,11 @@ void test_specbleach_mode_switching(void) {
   params = (SpectralBleachDenoiserParameters){
       .learn_noise = true,
       .residual_listen = false,
-      .reduction_amount = -20.0f,
-      .smoothing_factor = 50.0f,
+      .reduction_gain = 0.1f,
+      .smoothing_factor = 0.5f,
       .whitening_factor = 0.0f,
       .masking_depth = 0.5f,
-      .tonal_reduction = 0.0f,
+      .tonal_reduction_gain = 1.0f,
       .aggressiveness = 0.0f,
   };
   TEST_ASSERT(specbleach_load_parameters(handle, params) == true,
@@ -262,11 +262,11 @@ void test_specbleach_reset_noise_profile(void) {
   SpectralBleachDenoiserParameters params = {
       .learn_noise = true,
       .residual_listen = false,
-      .reduction_amount = -20.0f,
-      .smoothing_factor = 50.0f,
+      .reduction_gain = 0.1f,
+      .smoothing_factor = 0.5f,
       .whitening_factor = 0.0f,
       .masking_depth = 0.5f,
-      .tonal_reduction = 0.0f,
+      .tonal_reduction_gain = 1.0f,
       .aggressiveness = 0.0f,
   };
 
@@ -339,19 +339,20 @@ void test_specbleach_load_noise_profile_for_mode(void) {
 }
 
 void test_specbleach_run_features(void) {
-  printf("Testing specbleach denoiser features (run)...\n");
+  printf("Testing specbleach run features (whitening, residual listen)...\n");
 
   SpectralBleachHandle handle = specbleach_initialize(44100, 20.0f);
-  TEST_ASSERT(handle != NULL, "Initialization should succeed");
+  TEST_ASSERT(handle != NULL, "Denoiser initialization should succeed");
 
-  uint32_t profile_size = specbleach_get_noise_profile_size(handle);
-  float* input = (float*)calloc(1024, sizeof(float));
-  float* output = (float*)calloc(1024, sizeof(float));
-  float* profile = (float*)calloc(profile_size, sizeof(float));
-
+  float* input = (float*)malloc(1024 * sizeof(float));
+  float* output = (float*)malloc(1024 * sizeof(float));
   for (int i = 0; i < 1024; i++) {
     input[i] = 0.5f;
+    output[i] = 0.0f;
   }
+
+  uint32_t profile_size = specbleach_get_noise_profile_size(handle);
+  float* profile = (float*)malloc(profile_size * sizeof(float));
   for (uint32_t i = 0; i < profile_size; i++) {
     profile[i] = 0.1f;
   }
@@ -362,11 +363,11 @@ void test_specbleach_run_features(void) {
   SpectralBleachDenoiserParameters params = {
       .learn_noise = false,
       .residual_listen = false,
-      .reduction_amount = 20.0f,
-      .smoothing_factor = 50.0f,
+      .reduction_gain = 0.1f,
+      .smoothing_factor = 0.5f,
       .whitening_factor = 1.0f, // Test whitening
       .masking_depth = 0.5f,
-      .tonal_reduction = 0.0f,
+      .tonal_reduction_gain = 1.0f,
       .aggressiveness = 0.0f,
   };
 
@@ -422,8 +423,8 @@ int main(void) {
   float out_buf[1024] = {0};
   SpectralBleachDenoiserParameters t_params = {
       .learn_noise = false,
-      .tonal_reduction = 0.5f,
-      .reduction_amount = 20.0f,
+      .tonal_reduction_gain = 0.5f,
+      .reduction_gain = 0.1f,
       .hpss_enable = 1,
   };
   specbleach_load_parameters(h, t_params);
@@ -436,8 +437,8 @@ int main(void) {
   t_params.smoothing_factor = 0.5f;
   t_params.whitening_factor = 0.5f;
   t_params.residual_listen = 1;
-  t_params.masking_depth = 5.0f;
-  t_params.suppression_strength = 2.0f;
+  t_params.masking_depth = 0.5f;
+  t_params.suppression_strength = 0.5f;
   specbleach_load_parameters(h, t_params);
   for (int f = 0; f < 10; ++f) {
     specbleach_process(h, 1024, in_buf, out_buf);
@@ -504,7 +505,7 @@ int main(void) {
   SpectralBleachDenoiserParameters adapt_params = {
       .adaptive_noise = 1,
       .noise_estimation_method = 0,
-      .reduction_amount = 12.0f,
+      .reduction_gain = 0.25f,
   };
   specbleach_load_parameters(h_adapt, adapt_params);
 
