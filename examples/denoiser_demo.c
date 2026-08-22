@@ -99,20 +99,26 @@ static void print_usage(const char* prog_name) {
   fprintf(stderr, "Usage: %s [options] <noisy input> <denoised output>\n",
           prog_name);
   fprintf(stderr, "Options:\n");
-  fprintf(stderr,
-          "  --reduction <val>          Reduction amount in dB (default: 20.0)\n");
-  fprintf(stderr,
-          "  --whitening <val>          Whitening factor (default: 50.0)\n");
-  fprintf(stderr, "  --smoothing <val>          Smoothing factor (default: 0.0)\n");
-  fprintf(stderr,
-          "  --masking-depth <val>      Masking depth (0.0-1.0, default: 0.5)\n");
-  fprintf(stderr,
-          "  --steering-response <val>  Steering response (-1.0-1.0, default: 1.0)\n");
-  fprintf(stderr, "  --adaptive                 Enable adaptive noise estimation\n");
   fprintf(
       stderr,
-      "  --noise-method <val>      Noise estimation method (0-2, default: 0)\n");
-  fprintf(stderr, "  --frame-size <val>        Frame size in ms (default: 46.0)\n");
+      "  --reduction <val>          Reduction amount in dB (default: 20.0)\n");
+  fprintf(stderr,
+          "  --whitening <val>          Whitening factor (default: 50.0)\n");
+  fprintf(stderr,
+          "  --smoothing <val>          Smoothing factor (default: 0.0)\n");
+  fprintf(
+      stderr,
+      "  --masking-depth <val>      Masking depth (0.0-1.0, default: 0.5)\n");
+  fprintf(stderr,
+          "  --steering-response <val>  Steering response (-1.0-1.0, default: "
+          "1.0)\n");
+  fprintf(stderr,
+          "  --adaptive                 Enable adaptive noise estimation\n");
+  fprintf(stderr,
+          "  --noise-method <val>      Noise estimation method (0-2, default: "
+          "0)\n");
+  fprintf(stderr,
+          "  --frame-size <val>        Frame size in ms (default: 46.0)\n");
   fprintf(stderr,
           "  --learn-frames <val>      Number of learn frames (default: 8)\n");
   fprintf(stderr, "  --help                    Show this help message\n");
