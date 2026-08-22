@@ -240,7 +240,7 @@ bool hpss_filter_process(HpssFilter* self, const float* current_magnitude,
 
     // Update state for next frame with exponential temporal tracking
     self->prev_h[k] =
-        HPSS_SLIDING_SMOOTH_FACTOR * (self->prev_h[k] + self->h[k]);
+        HPSS_SLIDING_SMOOTH_FACTOR * (self->prev_h[k] + current_magnitude[k]);
   }
 
   sb_simd_restore_state(simd_state);
