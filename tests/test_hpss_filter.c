@@ -44,7 +44,7 @@ void test_hpss_filter(void) {
   HpssConfig invalid_cfg = {
       .real_spectrum_size = 0U,
   };
-  HpssFilter* invalid_f = hpss_filter_initialize(invalid_cfg);
+  const HpssFilter* invalid_f = hpss_filter_initialize(invalid_cfg);
   TEST_ASSERT(invalid_f == NULL, "Initialization with size 0 should fail");
 
   // 2. NULL free check

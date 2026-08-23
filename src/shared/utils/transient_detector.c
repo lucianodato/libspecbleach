@@ -170,7 +170,7 @@ bool transient_detector_process(TransientDetector* self,
                               : 0.0f;
 
   // True transients: broadband onset OR high-frequency localized snap/click
-  float broadband_score = 0.55f * band_fraction + 0.45f * energy_fraction;
+  float broadband_score = (0.55f * band_fraction) + (0.45f * energy_fraction);
   // Localized HF click score: NO additive offset — requires genuine hf_ratio >
   // 0 to score Fricative onsets hit only 1 upper band slowly; mouth clicks hit
   // 2+ upper bands simultaneously

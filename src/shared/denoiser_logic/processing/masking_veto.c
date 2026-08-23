@@ -143,7 +143,7 @@ void masking_veto_apply(MaskingVeto* self, const float* smoothed_spectrum,
   }
 
   // 1.1 Estimate future clean signal magnitude for backward masking
-  float* future_clean_estimation = NULL;
+  const float* future_clean_estimation = NULL;
   if (future_spectrum) {
     for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
       self->future_clean_estimation_buf[k] = fmaxf(

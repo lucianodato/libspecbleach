@@ -460,7 +460,7 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
   const uint32_t nlm_delay = nlm_filter_get_latency_frames(self->nlm_filter);
   const uint32_t total_delay = nlm_delay;
 
-  float* nlm_intermediate_noise = spectral_circular_buffer_retrieve(
+  const float* nlm_intermediate_noise = spectral_circular_buffer_retrieve(
       self->circular_buffer, self->layer_noise, nlm_delay);
   if (!nlm_intermediate_noise) {
     nlm_intermediate_noise = self->noise_spectrum;
@@ -478,11 +478,11 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
   }
 
   // Retrieve unified aligned frames at total_delay
-  float* delayed_spectrum = spectral_circular_buffer_retrieve(
+  const float* delayed_spectrum = spectral_circular_buffer_retrieve(
       self->circular_buffer, self->layer_fft, total_delay);
-  float* delayed_noise = spectral_circular_buffer_retrieve(
+  const float* delayed_noise = spectral_circular_buffer_retrieve(
       self->circular_buffer, self->layer_noise, total_delay);
-  float* smoothed_magnitude = spectral_circular_buffer_retrieve(
+  const float* smoothed_magnitude = spectral_circular_buffer_retrieve(
       self->circular_buffer, self->layer_nlm_smoothed, 0U);
 
   if (!delayed_spectrum) {
@@ -597,7 +597,7 @@ uint32_t spectral_2d_denoiser_get_latency_frames(
 
 const float* spectral_2d_denoiser_get_tonal_mask(
     SpectralProcessorHandle instance) {
-  Spectral2DDenoiser* self = (Spectral2DDenoiser*)instance;
+  const Spectral2DDenoiser* self = (const Spectral2DDenoiser*)instance;
   return (self && self->tonal_reducer)
              ? tonal_reducer_get_mask(self->tonal_reducer)
              : NULL;
@@ -606,7 +606,7 @@ const float* spectral_2d_denoiser_get_tonal_mask(
 uint32_t spectral_2d_denoiser_get_peaks(SpectralProcessorHandle instance,
                                         float* peak_freqs_hz,
                                         uint32_t max_peaks) {
-  Spectral2DDenoiser* self = (Spectral2DDenoiser*)instance;
+  const Spectral2DDenoiser* self = (const Spectral2DDenoiser*)instance;
   return (self && self->tonal_reducer)
              ? tonal_reducer_get_peaks(self->tonal_reducer, peak_freqs_hz,
                                        max_peaks)
@@ -615,7 +615,7 @@ uint32_t spectral_2d_denoiser_get_peaks(SpectralProcessorHandle instance,
 
 const float* spectral_2d_denoiser_get_active_noise_profile(
     SpectralProcessorHandle instance) {
-  Spectral2DDenoiser* self = (Spectral2DDenoiser*)instance;
+  const Spectral2DDenoiser* self = (const Spectral2DDenoiser*)instance;
   if (!self) {
     return NULL;
   }
@@ -648,7 +648,7 @@ bool spectral_2d_denoiser_is_transient_detected(
   if (!instance) {
     return false;
   }
-  Spectral2DDenoiser* self = (Spectral2DDenoiser*)instance;
+  const Spectral2DDenoiser* self = (const Spectral2DDenoiser*)instance;
   return self->is_transient_detected;
 }
 
@@ -657,6 +657,6 @@ float spectral_2d_denoiser_get_transient_intensity(
   if (!instance) {
     return 0.0f;
   }
-  Spectral2DDenoiser* self = (Spectral2DDenoiser*)instance;
+  const Spectral2DDenoiser* self = (const Spectral2DDenoiser*)instance;
   return self->transient_intensity;
 }

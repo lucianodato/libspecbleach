@@ -122,8 +122,9 @@ bool spectral_smoothing_run(SpectralSmoother* self,
     float target = gains[k];
     float prev = self->smoothed_spectrum_previous[k];
     if (target >= prev) {
-      // Attack phase: Smooth sudden jumps to eliminate isolated musical noise spikes,
-      // but open immediately when transient/percussive content is detected.
+      // Attack phase: Smooth sudden jumps to eliminate isolated musical noise
+      // spikes, but open immediately when transient/percussive content is
+      // detected.
       float w_transient = t_mask ? t_mask[k] : 0.0F;
       w_transient = fmaxf(0.0F, fminf(1.0F, w_transient));
       float alpha_attack = (1.0F - w_transient) * alpha_attack_base;

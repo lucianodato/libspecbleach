@@ -41,7 +41,7 @@ void test_spectral_smoother(void) {
   printf("Testing Spectral Smoother...\n");
 
   // 1. Invalid Initialization (fft_size == 0)
-  SpectralSmoother* invalid_ss =
+  const SpectralSmoother* invalid_ss =
       spectral_smoothing_initialize(0, 44100, OVERLAP_FACTOR_1D, FIXED);
   TEST_ASSERT(invalid_ss == NULL, "Initialization with fft_size=0 should fail");
 
@@ -134,8 +134,8 @@ void test_spectral_smoother(void) {
       transient_mask[i] = 1.0f;
       transient_gains[i] = 1.0f;
     }
-    TimeSmoothingParameters transient_params = {.smoothing = 0.8f,
-                                                .transient_mask = transient_mask};
+    TimeSmoothingParameters transient_params = {
+        .smoothing = 0.8f, .transient_mask = transient_mask};
     TEST_ASSERT(spectral_smoothing_run(ss, transient_params, transient_gains),
                 "Transient attack run should succeed");
     TEST_FLOAT_CLOSE(transient_gains[0], 1.0f, 0.001f);
