@@ -219,10 +219,15 @@ const float* specbleach_2d_get_active_noise_profile(
     SpectralBleachHandle instance);
 
 /**
- * Returns true if a transient was detected and protected by HPSS in the last
- * processed frame.
+ * Returns true if a transient was detected in the last processed frame.
  */
 bool specbleach_2d_is_transient_detected(SpectralBleachHandle instance);
+
+/**
+ * Returns the detected transient intensity [0.0, 1.0] from the last processed
+ * frame.
+ */
+float specbleach_2d_get_transient_intensity(SpectralBleachHandle instance);
 
 #ifdef __cplusplus
 }

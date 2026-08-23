@@ -33,11 +33,6 @@ struct HpssFilter {
   float* prev_h; // Previous frame harmonic magnitude estimate H_{t-1, k}
   float* h;      // Current frame harmonic magnitude estimate H_{t, k}
   float* p;      // Current frame percussive magnitude estimate P_{t, k}
-
-  float percussive_ratio;
-  float energy_ratio_threshold;
-  float margin_factor;
-  bool is_transient_detected;
 };
 
 HpssFilter* hpss_filter_initialize(HpssConfig config) {
@@ -53,10 +48,6 @@ HpssFilter* hpss_filter_initialize(HpssConfig config) {
   self->config = config;
   self->is_enabled = true;
   self->is_initialized = false;
-  self->energy_ratio_threshold = HPSS_TRANSIENT_ENERGY_RATIO_THRESHOLD;
-  self->margin_factor = HPSS_TRANSIENT_MARGIN_FACTOR;
-  self->percussive_ratio = 0.0f;
-  self->is_transient_detected = false;
 
   self->prev_h = (float*)calloc(config.real_spectrum_size, sizeof(float));
   self->h = (float*)calloc(config.real_spectrum_size, sizeof(float));
@@ -99,27 +90,13 @@ uint32_t hpss_filter_get_latency_frames(const HpssFilter* self) {
   return 0U; // Sliding HPSS is strictly causal with zero lookahead frames
 }
 
-float hpss_filter_get_onset_ratio(const HpssFilter* self) {
-  return self ? self->percussive_ratio : 0.0f;
-}
-
-bool hpss_filter_is_transient_detected(const HpssFilter* self) {
-  return (self && self->is_enabled) ? self->is_transient_detected : false;
-}
-
 bool hpss_filter_process(HpssFilter* self, const float* current_magnitude,
-                         const float* noise_floor, float* current_magnitude_out,
                          float* mask_harmonic_out, float* mask_percussive_out) {
   if (!self || !current_magnitude) {
     return false;
   }
 
   const uint32_t spectrum_size = self->config.real_spectrum_size;
-
-  if (current_magnitude_out) {
-    memcpy(current_magnitude_out, current_magnitude,
-           spectrum_size * sizeof(float));
-  }
 
   if (!self->is_enabled) {
     if (mask_harmonic_out) {
@@ -130,8 +107,6 @@ bool hpss_filter_process(HpssFilter* self, const float* current_magnitude,
     if (mask_percussive_out) {
       memset(mask_percussive_out, 0, spectrum_size * sizeof(float));
     }
-    self->percussive_ratio = 0.0f;
-    self->is_transient_detected = false;
     return true;
   }
 
@@ -174,7 +149,7 @@ bool hpss_filter_process(HpssFilter* self, const float* current_magnitude,
       float p_next = (k + 1U < spectrum_size) ? self->p[k + 1U] : self->p[k];
       float p_ref = HPSS_SLIDING_SMOOTH_FACTOR * (p_prev + p_next);
 
-      // Auxiliary function update
+      // Auxiliary function update (Wiener-style soft masks)
       float h_sq = h_ref * h_ref;
       float p_sq = p_ref * p_ref;
       float denom = h_sq + p_sq;
@@ -188,41 +163,17 @@ bool hpss_filter_process(HpssFilter* self, const float* current_magnitude,
     }
   }
 
-  // 3. Compute Soft Masks with Noise Floor Adaptive Gating & Excess Margin
-  float total_mag_sq = 0.0f;
-  float percussive_mag_sq = 0.0f;
-  const float current_margin = self->margin_factor;
-
+  // 3. Compute Soft Masks and update temporal state
   for (uint32_t k = 0U; k < spectrum_size; ++k) {
     float h_val = self->h[k];
     float p_val = self->p[k];
+    float denom = (h_val * h_val) + (p_val * p_val);
 
-    // Margin test against horizontal sustain
-    float p_diff = p_val - (current_margin * h_val);
-
-    // If noise floor is provided, ensure percussive energy also emerges above
-    // noise floor
-    if (noise_floor != NULL && p_diff > 0.0f) {
-      float noise_level = noise_floor[k];
-      if (p_val < HPSS_NOISE_FLOOR_GATE_MULTIPLIER * noise_level) {
-        p_diff = 0.0f; // Sub-noise fluctuation: treat as stationary noise
-      }
-    }
-
-    float p_excess =
-        (k >= (uint32_t)HPSS_BASS_CUTOFF_BINS && p_diff > 0.0f) ? p_diff : 0.0f;
-
-    float h_sq = h_val * h_val;
-    float p_excess_sq = p_excess * p_excess;
-    float sum_sq = h_sq + p_excess_sq;
-
-    float w_p = 0.0f;
     float w_h = 1.0f;
-    if (sum_sq > SPECTRAL_EPSILON) {
-      float raw_w_p = p_excess_sq / sum_sq;
-      // Apply smooth power compression to prevent pre-echo ghosting
-      w_p = raw_w_p * raw_w_p;
-      w_h = 1.0f - w_p;
+    float w_p = 0.0f;
+    if (denom > SPECTRAL_EPSILON) {
+      w_h = (h_val * h_val) / denom;
+      w_p = (p_val * p_val) / denom;
     }
 
     if (mask_harmonic_out) {
@@ -232,25 +183,12 @@ bool hpss_filter_process(HpssFilter* self, const float* current_magnitude,
       mask_percussive_out[k] = w_p;
     }
 
-    float mag_sq = current_magnitude[k] * current_magnitude[k];
-    if (k >= (uint32_t)HPSS_BASS_CUTOFF_BINS) {
-      total_mag_sq += mag_sq;
-      percussive_mag_sq += w_p * mag_sq;
-    }
-
     // Update state for next frame with exponential temporal tracking
     self->prev_h[k] =
         HPSS_SLIDING_SMOOTH_FACTOR * (self->prev_h[k] + current_magnitude[k]);
   }
 
   sb_simd_restore_state(simd_state);
-
-  self->percussive_ratio = (total_mag_sq > HPSS_RATIO_DENOMINATOR_FLOOR)
-                               ? (percussive_mag_sq / total_mag_sq)
-                               : 0.0f;
-
-  self->is_transient_detected =
-      (self->percussive_ratio >= self->energy_ratio_threshold);
 
   return true;
 }

@@ -60,5 +60,7 @@ const float* spectral_denoiser_get_active_noise_profile(
 void spectral_denoiser_reset_noise_profile(SpectralProcessorHandle instance);
 uint32_t spectral_denoiser_get_latency_frames(SpectralProcessorHandle instance);
 bool spectral_denoiser_is_transient_detected(SpectralProcessorHandle instance);
+float spectral_denoiser_get_transient_intensity(
+    SpectralProcessorHandle instance);
 
 #endif

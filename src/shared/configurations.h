@@ -182,9 +182,12 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 // Transient Detector Constants
 #define UPPER_LIMIT (5.F)
 #define DEFAULT_TRANSIENT_THRESHOLD (2.F)
-#define MIN_INNOVATION_ENERGY 1e-10F  // ~ -100dB floor for transient trigger
+#define MIN_INNOVATION_ENERGY                                                  \
+  1e-4F // Minimum clean energy threshold in band (~-40dB magnitude)
 #define ONSET_RATIO_SENSITIVITY 0.25F // Innovation required for full weight
 #define TRANSIENT_SMOOTH_ALPHA 0.8F   // Reference smoothing alpha
+#define TRANSIENT_CLEAN_NOISE_SCALE                                            \
+  4.0F // Noise over-subtraction factor for clean transient estimation
 
 // Noise Estimator Constants
 #define MIN_NUMBER_OF_WINDOWS_NOISE_AVERAGED 5

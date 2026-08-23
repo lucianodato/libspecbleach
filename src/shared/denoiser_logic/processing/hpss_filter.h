@@ -39,18 +39,14 @@ void hpss_filter_set_enabled(HpssFilter* self, bool enabled);
 
 // Sliding HPSS is causal with 0 lookahead delay frames
 uint32_t hpss_filter_get_latency_frames(const HpssFilter* self);
-float hpss_filter_get_onset_ratio(const HpssFilter* self);
-bool hpss_filter_is_transient_detected(const HpssFilter* self);
+
 /**
- * Process a spectral magnitude frame with Sliding HPSS.
+ * Process a spectral magnitude frame with Sliding HPSS (Ono / Tachibana).
+ * Decomposes current_magnitude into harmonic and percussive components.
  *
  * @param self HPSS filter instance
  * @param current_magnitude Current frame magnitude spectrum
  * [real_spectrum_size]
- * @param noise_floor Optional noise floor spectrum (or NULL to skip sub-noise
- * gate)
- * @param current_magnitude_out Optional destination for current frame magnitude
- * copy (or NULL)
  * @param mask_harmonic_out Optional output array for harmonic soft mask (or
  * NULL)
  * @param mask_percussive_out Optional output array for percussive soft mask (or
@@ -58,7 +54,6 @@ bool hpss_filter_is_transient_detected(const HpssFilter* self);
  * @return true on success, false on invalid arguments
  */
 bool hpss_filter_process(HpssFilter* self, const float* current_magnitude,
-                         const float* noise_floor, float* current_magnitude_out,
                          float* mask_harmonic_out, float* mask_percussive_out);
 
 #endif // SHARED_DENOISER_LOGIC_HPSS_FILTER_H

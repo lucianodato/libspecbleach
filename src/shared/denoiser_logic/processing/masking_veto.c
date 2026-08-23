@@ -280,11 +280,11 @@ void masking_veto_apply(MaskingVeto* self, const float* smoothed_spectrum,
     const float bin_snr_scale =
         fminf(bin_snr / MASKING_VETO_SNR_THRESHOLD, 1.0F);
 
-    // Scale alpha down toward 0.0 (unity gain) based on protection and bin SNR.
-    // At full protection (depth=1.0, protection=1.0): alpha -> 0.0 (full energy
-    // preservation) At zero protection (protection=0.0): alpha is unchanged
-    // (full noise suppression)
+    // Scale alpha down toward ALPHA_MIN (1.0) based on protection and bin SNR.
+    // At full protection (depth=1.0, protection=1.0): alpha -> ALPHA_MIN (full
+    // un-oversubtracted energy preservation) At zero protection
+    // (protection=0.0): alpha is unchanged (full noise oversubtraction)
     const float veto_amount = bin_protection * bin_snr_scale * depth;
-    alpha[k] = alpha[k] * (1.0F - veto_amount);
+    alpha[k] = fmaxf(ALPHA_MIN, alpha[k] * (1.0F - veto_amount));
   }
 }

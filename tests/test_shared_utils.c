@@ -143,8 +143,10 @@ void test_transient_detector(void) {
     energies[i] = 1.0f;
   }
 
-  bool result1 = transient_detector_process(td, energies, weights);
+  float intensity = 0.0f;
+  bool result1 = transient_detector_process(td, energies, weights, &intensity);
   TEST_ASSERT(result1 == false, "First frame should not detect transient");
+  TEST_ASSERT(intensity == 0.0f, "First frame intensity should be 0");
 
   transient_detector_free(td);
   printf("✓ Transient Detector tests passed\n");

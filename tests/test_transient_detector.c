@@ -42,19 +42,36 @@ int main(void) {
   }
 
   // First frame initializes background energy
-  bool is_transient =
-      transient_detector_process(td, steady_energies, onset_weights);
+  float intensity = 0.0f;
+  bool is_transient = transient_detector_process(td, steady_energies,
+                                                 onset_weights, &intensity);
   TEST_ASSERT(!is_transient, "First frame should not trigger transient");
+  TEST_ASSERT(intensity == 0.0f, "First frame intensity should be 0.0");
 
-  // Sudden energy burst in band 5
+  // Sudden high-frequency energy burst (e.g. bands 18-20, sharp click/snap)
   float burst_energies[24];
   for (int i = 0; i < 24; i++) {
-    burst_energies[i] = (i == 5) ? 10.0f : 1.0f;
+    burst_energies[i] = (i >= 18 && i <= 20) ? 10.0f : 1.0f;
   }
 
-  is_transient = transient_detector_process(td, burst_energies, onset_weights);
+  is_transient =
+      transient_detector_process(td, burst_energies, onset_weights, &intensity);
   TEST_ASSERT(is_transient, "Energy burst should trigger transient");
-  TEST_ASSERT(onset_weights[5] > 0.8f, "Band 5 onset weight should be high");
+  TEST_ASSERT(onset_weights[18] > 0.8f,
+              "High band onset weight should be high");
+  TEST_ASSERT(intensity >= 0.25f,
+              "Sharp high-frequency burst should produce strong intensity");
+
+  // Broadband transient burst across all bands
+  float broadband_energies[24];
+  for (int i = 0; i < 24; i++) {
+    broadband_energies[i] = 10.0f;
+  }
+  is_transient = transient_detector_process(td, broadband_energies,
+                                            onset_weights, &intensity);
+  TEST_ASSERT(is_transient, "Broadband burst should trigger transient");
+  TEST_ASSERT(intensity >= 0.8f,
+              "Broadband burst should produce high intensity");
 
   transient_detector_free(td);
   printf("✓ Transient Detector tests passed\n");

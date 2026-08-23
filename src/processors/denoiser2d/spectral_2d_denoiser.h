@@ -102,5 +102,7 @@ const float* spectral_2d_denoiser_get_active_noise_profile(
 void spectral_2d_denoiser_reset_noise_profile(SpectralProcessorHandle instance);
 bool spectral_2d_denoiser_is_transient_detected(
     SpectralProcessorHandle instance);
+float spectral_2d_denoiser_get_transient_intensity(
+    SpectralProcessorHandle instance);
 
 #endif /* SPECTRAL_2D_DENOISER_H */
