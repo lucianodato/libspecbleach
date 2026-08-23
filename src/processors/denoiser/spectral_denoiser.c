@@ -7,16 +7,15 @@
 #include "shared/denoiser_logic/estimators/adaptive_noise_estimator.h"
 #include "shared/denoiser_logic/estimators/noise_estimator.h"
 #include "shared/denoiser_logic/processing/gain_calculator.h"
-#include "shared/denoiser_logic/processing/hpss_filter.h"
 #include "shared/denoiser_logic/processing/masking_veto.h"
 #include "shared/denoiser_logic/processing/suppression_engine.h"
 #include "shared/denoiser_logic/processing/tonal_reducer.h"
 #include "shared/stft/stft_processor.h"
 #include "shared/utils/critical_bands.h"
-#include "shared/utils/spectral_circular_buffer.h"
 #include "shared/utils/spectral_features.h"
 #include "shared/utils/spectral_smoother.h"
 #include "shared/utils/spectral_utils.h"
+#include "shared/utils/transient_detector.h"
 #include <float.h>
 #include <math.h>
 #include <stdlib.h>
@@ -51,16 +50,17 @@ typedef struct SbSpectralDenoiser {
   NoiseFloorManager* noise_floor_manager;
   MaskingVeto* masking_veto;
   SuppressionEngine* suppression_engine;
-  HpssFilter* hpss_filter;
+  CriticalBands* critical_bands;
+  TransientDetector* transient_detector;
 
-  SbSpectralCircularBuffer* circular_buffer;
-  uint32_t layer_fft;
-  uint32_t layer_noise;
+  float* band_energies;
+  float* onset_weights;
+  float* transient_mask;
+  float* smoothed_magnitude;
+  float* clean_magnitude;
 
-  float* delayed_magnitude;
-  float* mask_harmonic;
-  float* mask_percussive;
-  float* g_h;
+  bool is_transient_detected;
+  float transient_intensity;
 
   int last_adaptive_state;
   int last_noise_estimation_method;
@@ -98,7 +98,7 @@ SpectralProcessorHandle spectral_denoiser_initialize(
     return NULL;
   }
   (void)initialize_spectrum_with_value(self->gain_spectrum, self->fft_size,
-                                       1.F);
+                                       1.0F);
 
   self->alpha = (float*)calloc(self->real_spectrum_size, sizeof(float));
   if (!self->alpha) {
@@ -171,37 +171,30 @@ SpectralProcessorHandle spectral_denoiser_initialize(
       self->real_spectrum_size, self->sample_rate, self->band_type,
       self->spectrum_type, true, USE_TEMPORAL_MASKING_1D_DEFAULT);
 
-  self->circular_buffer = spectral_circular_buffer_create(DELAY_BUFFER_FRAMES);
-  if (!self->circular_buffer) {
-    spectral_denoiser_free(self);
-    return NULL;
-  }
+  self->critical_bands = critical_bands_initialize(
+      self->sample_rate, self->fft_size, self->band_type);
+  uint32_t num_bands = self->critical_bands
+                           ? get_number_of_critical_bands(self->critical_bands)
+                           : 0U;
+  self->transient_detector = transient_detector_initialize(num_bands);
 
-  self->layer_fft =
-      spectral_circular_buffer_add_layer(self->circular_buffer, self->fft_size);
-  self->layer_noise = spectral_circular_buffer_add_layer(
-      self->circular_buffer, self->real_spectrum_size);
-
-  if (self->layer_fft == 0xFFFFFFFFU || self->layer_noise == 0xFFFFFFFFU) {
-    spectral_denoiser_free(self);
-    return NULL;
-  }
-
-  HpssConfig hpss_cfg = {
-      .real_spectrum_size = self->real_spectrum_size,
-  };
-  self->hpss_filter = hpss_filter_initialize(hpss_cfg);
-  self->delayed_magnitude =
+  self->band_energies =
+      (float*)calloc(num_bands > 0U ? num_bands : 1U, sizeof(float));
+  self->onset_weights =
+      (float*)calloc(num_bands > 0U ? num_bands : 1U, sizeof(float));
+  self->transient_mask =
       (float*)calloc(self->real_spectrum_size, sizeof(float));
-  self->mask_harmonic = (float*)calloc(self->real_spectrum_size, sizeof(float));
-  self->mask_percussive =
+
+  self->smoothed_magnitude =
       (float*)calloc(self->real_spectrum_size, sizeof(float));
-  self->g_h = (float*)calloc(self->fft_size, sizeof(float));
+  self->clean_magnitude =
+      (float*)calloc(self->real_spectrum_size, sizeof(float));
 
   if (!self->noise_floor_manager || !self->masking_veto ||
-      !self->suppression_engine || !self->hpss_filter ||
-      !self->delayed_magnitude || !self->mask_harmonic ||
-      !self->mask_percussive || !self->g_h) {
+      !self->suppression_engine || !self->critical_bands ||
+      !self->transient_detector || !self->band_energies ||
+      !self->onset_weights || !self->transient_mask ||
+      !self->smoothed_magnitude || !self->clean_magnitude) {
     spectral_denoiser_free(self);
     return NULL;
   }
@@ -218,9 +211,6 @@ void spectral_denoiser_free(SpectralProcessorHandle instance) {
 
   // Don't free noise profile used as reference here
 
-  if (self->circular_buffer) {
-    spectral_circular_buffer_free(self->circular_buffer);
-  }
   if (self->noise_estimator) {
     noise_estimation_free(self->noise_estimator);
   }
@@ -238,6 +228,21 @@ void spectral_denoiser_free(SpectralProcessorHandle instance) {
   }
   if (self->suppression_engine) {
     suppression_engine_free(self->suppression_engine);
+  }
+  if (self->critical_bands) {
+    critical_bands_free(self->critical_bands);
+  }
+  if (self->transient_detector) {
+    transient_detector_free(self->transient_detector);
+  }
+  if (self->band_energies) {
+    free(self->band_energies);
+  }
+  if (self->onset_weights) {
+    free(self->onset_weights);
+  }
+  if (self->transient_mask) {
+    free(self->transient_mask);
   }
   if (self->gain_spectrum) {
     free(self->gain_spectrum);
@@ -263,20 +268,11 @@ void spectral_denoiser_free(SpectralProcessorHandle instance) {
     tonal_reducer_free(self->tonal_reducer);
   }
 
-  if (self->hpss_filter) {
-    hpss_filter_free(self->hpss_filter);
+  if (self->smoothed_magnitude) {
+    free(self->smoothed_magnitude);
   }
-  if (self->delayed_magnitude) {
-    free(self->delayed_magnitude);
-  }
-  if (self->mask_harmonic) {
-    free(self->mask_harmonic);
-  }
-  if (self->mask_percussive) {
-    free(self->mask_percussive);
-  }
-  if (self->g_h) {
-    free(self->g_h);
+  if (self->clean_magnitude) {
+    free(self->clean_magnitude);
   }
 
   free(self);
@@ -310,10 +306,6 @@ bool load_reduction_parameters(SpectralProcessorHandle instance,
 
   self->denoise_parameters = parameters;
   self->aggressiveness = parameters.aggressiveness;
-
-  if (self->hpss_filter) {
-    hpss_filter_set_enabled(self->hpss_filter, parameters.hpss_enable != 0);
-  }
 
   return true;
 }
@@ -354,100 +346,152 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
   };
   denoiser_profile_core_update(profile_params, reference_spectrum);
 
-  // 2.1 Align internal state and output to the delayed frame (temporal
-  // plumbing)
-  const uint32_t delay_frames =
-      hpss_filter_get_latency_frames(self->hpss_filter);
-
-  // 1. Push incoming frames
-  spectral_circular_buffer_push(self->circular_buffer, self->layer_fft,
-                                fft_spectrum);
-  spectral_circular_buffer_push(self->circular_buffer, self->layer_noise,
-                                self->noise_spectrum);
-
-  // 2. Process HPSS (internally produces masks aligned at delay_frames)
-  if (!hpss_filter_process(self->hpss_filter, reference_spectrum,
-                           self->noise_spectrum, self->delayed_magnitude,
-                           self->mask_harmonic, self->mask_percussive)) {
-    memcpy(self->delayed_magnitude, reference_spectrum,
-           self->real_spectrum_size * sizeof(float));
+  // 2.1 Transient Detection via Transient Detector across Critical Bands
+  // Transient detection runs on a clean signal estimate with scaled-up noise
+  // subtraction to avoid false triggering from residual musical noise.
+  bool transient_enabled = (self->denoise_parameters.hpss_enable != 0);
+  if (transient_enabled && self->critical_bands && self->transient_detector) {
     for (uint32_t k = 0U; k < self->real_spectrum_size; ++k) {
-      self->mask_harmonic[k] = 1.0f;
-      self->mask_percussive[k] = 0.0f;
+      // Scale noise up using TRANSIENT_CLEAN_NOISE_SCALE to eliminate spurious
+      // noise peaks
+      float clean = fmaxf(reference_spectrum[k] - (TRANSIENT_CLEAN_NOISE_SCALE *
+                                                   self->noise_spectrum[k]),
+                          0.0F);
+      self->clean_magnitude[k] = clean;
     }
+
+    compute_critical_bands_spectrum(self->critical_bands, self->clean_magnitude,
+                                    self->band_energies);
+    self->is_transient_detected = transient_detector_process(
+        self->transient_detector, self->band_energies, self->onset_weights,
+        &self->transient_intensity);
+
+    // Expand critical band onset weights to per-bin transient mask
+    uint32_t num_bands = get_number_of_critical_bands(self->critical_bands);
+    memset(self->transient_mask, 0, self->real_spectrum_size * sizeof(float));
+    for (uint32_t b = 0; b < num_bands; ++b) {
+      float bw = self->onset_weights[b];
+      if (bw > 0.0F) {
+        CriticalBandIndexes idx = get_band_indexes(self->critical_bands, b);
+        uint32_t end = (idx.end_position < self->real_spectrum_size)
+                           ? idx.end_position
+                           : self->real_spectrum_size;
+        for (uint32_t k = idx.start_position; k < end; ++k) {
+          self->transient_mask[k] = fmaxf(self->transient_mask[k], bw);
+        }
+      }
+    }
+  } else {
+    self->is_transient_detected = false;
+    self->transient_intensity = 0.0f;
+    memset(self->transient_mask, 0, self->real_spectrum_size * sizeof(float));
   }
 
-  // 3. Retrieve aligned FFT and noise at the exact same delay
-  float* delayed_spectrum = spectral_circular_buffer_retrieve(
-      self->circular_buffer, self->layer_fft, delay_frames);
-  float* delayed_noise = spectral_circular_buffer_retrieve(
-      self->circular_buffer, self->layer_noise, delay_frames);
+  // 3. Pre-Subtraction Smoothing:
+  // Pre-subtraction temporal and spatial smoothing on input magnitude to
+  // suppress musical noise. Transient bins are spared bin-by-bin during gain
+  // calculation and time smoothing.
+  const float* input_magnitude = reference_spectrum;
+  const float* effective_magnitude;
 
-  if (!delayed_spectrum) {
-    delayed_spectrum = fft_spectrum;
-  }
-  if (!delayed_noise) {
-    delayed_noise = self->noise_spectrum;
-  }
+  if (self->denoise_parameters.smoothing_factor > 0.0F) {
+    float smooth_alpha =
+        fminf(0.95F, self->denoise_parameters.smoothing_factor * 0.90F);
 
-  // Align output to delayed frame for post-processing
-  if (delayed_spectrum != fft_spectrum) {
-    memcpy(fft_spectrum, delayed_spectrum, self->fft_size * sizeof(float));
-  }
+    for (uint32_t k = 0U; k < self->real_spectrum_size; ++k) {
+      float raw = input_magnitude[k];
+      float prev = self->smoothed_magnitude[k];
+      // Bin-by-bin adaptive smoothing: open immediately on transient bins while
+      // keeping full smoothing elsewhere
+      float t_w = self->transient_mask[k];
+      float adapt_alpha = (1.0F - t_w) * smooth_alpha;
+      self->smoothed_magnitude[k] =
+          (adapt_alpha * prev) + ((1.0F - adapt_alpha) * raw);
+    }
 
-  float* input_magnitude = self->delayed_magnitude;
+    int spatial_passes =
+        (int)(self->denoise_parameters.smoothing_factor * 2.0F);
+    for (int p = 0; p < spatial_passes; ++p) {
+      spectral_smoothing_apply_spatial(self->smoothed_magnitude,
+                                       self->real_spectrum_size);
+    }
+
+    effective_magnitude = self->smoothed_magnitude;
+  } else {
+    memcpy(self->smoothed_magnitude, input_magnitude,
+           self->real_spectrum_size * sizeof(float));
+    effective_magnitude = input_magnitude;
+  }
 
   // 3.1. Calculate SNR-dependent oversubtraction factors (Alpha/Beta)
   SuppressionParameters suppression_params = {
       .type = SUPPRESSION_BEROUTI_PER_BIN,
       .strength = self->denoise_parameters.suppression_strength,
       .undersubtraction = 0.0F};
-  suppression_engine_calculate(self->suppression_engine, input_magnitude,
-                               delayed_noise, suppression_params, self->alpha,
-                               self->beta);
+  suppression_engine_calculate(self->suppression_engine, effective_magnitude,
+                               self->noise_spectrum, suppression_params,
+                               self->alpha, self->beta);
 
   // 3.2. Detect tonal components and boost alpha at tonal bins
-  tonal_reducer_run(self->tonal_reducer, delayed_noise,
+  tonal_reducer_run(self->tonal_reducer, self->noise_spectrum,
                     get_noise_profile(self->noise_profile, CV_MASK),
                     is_noise_estimation_available(self->noise_profile, CV_MASK),
                     self->alpha, self->denoise_parameters.tonal_reduction);
 
-  // 3.3. Apply Structural Veto to rescue transients and moderate artifacts
-  masking_veto_apply(self->masking_veto, input_magnitude, delayed_noise, NULL,
-                     self->alpha, self->denoise_parameters.masking_depth);
+  // 3.3. Apply Structural Veto to rescue psychoacoustically masked signal
+  masking_veto_apply(self->masking_veto, effective_magnitude,
+                     self->noise_spectrum, NULL, self->alpha,
+                     self->denoise_parameters.masking_depth);
 
-  // 3.4. Gain Calculation & HPSS Combination
-  // 1. Calculate heavily smoothed Harmonic Gain (G_H) on stationary path
-  calculate_gains(self->real_spectrum_size, self->fft_size, input_magnitude,
-                  delayed_noise, self->g_h, self->alpha, self->beta,
-                  self->gain_calculation_type);
-
-  TimeSmoothingParameters spectral_smoothing_parameters =
-      (TimeSmoothingParameters){
-          .smoothing = self->denoise_parameters.smoothing_factor,
-      };
-  spectral_smoothing_run(self->spectrum_smoothing,
-                         spectral_smoothing_parameters, self->g_h);
-  if (self->denoise_parameters.smoothing_factor > 0.0f) {
-    int passes = 1 + (int)(self->denoise_parameters.smoothing_factor * 2.0f);
-    for (int p = 0; p < passes; ++p) {
-      spectral_smoothing_apply_spatial(self->g_h, self->real_spectrum_size);
+  // 3.4. When transients are detected and enabled, drop alphas firmly to
+  // ALPHA_MIN (1.0) strictly on the specific frequencies where transient energy
+  // was detected. Minimum alpha is never allowed below ALPHA_MIN (1.0).
+  if (self->is_transient_detected) {
+    for (uint32_t k = 0U; k < self->real_spectrum_size; ++k) {
+      float t_weight = self->transient_mask[k];
+      if (t_weight > 0.0F) {
+        float prot_factor = sqrtf(t_weight);
+        self->alpha[k] =
+            (self->alpha[k] * (1.0F - prot_factor)) + (ALPHA_MIN * prot_factor);
+        self->alpha[k] = fmaxf(ALPHA_MIN, self->alpha[k]);
+      }
     }
   }
 
-  // 2. Recombine: Harmonic gets G_H suppression, Percussive gets unity
-  // pass-through
-  for (uint32_t k = 0U; k < self->real_spectrum_size; ++k) {
-    float w_h = self->mask_harmonic[k];
-    float w_p = self->mask_percussive[k];
+  // 3.5. Gain Calculation & Smoothing
+  calculate_gains(self->real_spectrum_size, self->fft_size, effective_magnitude,
+                  self->noise_spectrum, self->gain_spectrum, self->alpha,
+                  self->beta, self->gain_calculation_type);
 
-    // G_final blends Wiener suppression on stationary content with unity gain
-    // on transient bursts
-    float combined_gain = (w_h * self->g_h[k]) + w_p;
-    self->gain_spectrum[k] = fminf(fmaxf(combined_gain, 0.0f), 1.0f);
+  // Transient Protection: ensure transient bins have gain near 1.0 (preserved
+  // in residual listen)
+  if (self->is_transient_detected) {
+    for (uint32_t k = 0U; k < self->real_spectrum_size; ++k) {
+      float t_weight = self->transient_mask[k];
+      if (t_weight > 0.0F) {
+        // Protect transient bins from being attenuated: gain -> 1.0
+        self->gain_spectrum[k] = fmaxf(self->gain_spectrum[k], t_weight);
+      }
+    }
   }
-  sb_apply_spectral_symmetry(self->gain_spectrum, self->real_spectrum_size,
-                             self->fft_size);
+
+  // On detected transients, time smoother attacks instantly (0 attack time)
+  // strictly on transient bins, while non-transient bins receive 100% of full
+  // time smoothing to prevent musical noise.
+  TimeSmoothingParameters spectral_smoothing_parameters =
+      (TimeSmoothingParameters){
+          .smoothing = self->denoise_parameters.smoothing_factor,
+          .transient_mask = self->transient_mask,
+      };
+  spectral_smoothing_run(self->spectrum_smoothing,
+                         spectral_smoothing_parameters, self->gain_spectrum);
+  if (self->denoise_parameters.smoothing_factor > 0.0f) {
+    int passes = 1 + (int)(self->denoise_parameters.smoothing_factor * 2.0f);
+    for (int p = 0; p < passes; ++p) {
+      spectral_smoothing_apply_spatial(self->gain_spectrum,
+                                       self->real_spectrum_size);
+    }
+  }
 
   // 4. Post-Processing: Final gain management and mixing
   DenoiserPostProcessParams post_params = {
@@ -460,21 +504,18 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
       .noise_floor_manager = self->noise_floor_manager,
       .tonal_reducer = self->tonal_reducer,
       .gain_spectrum = self->gain_spectrum,
-      .noise_spectrum = delayed_noise,
+      .noise_spectrum = self->noise_spectrum,
       .fft_spectrum = fft_spectrum,
       .reduction_curve_bias = self->denoise_parameters.reduction_curve_bias,
   };
   denoiser_post_process_apply(post_params);
-
-  // Advance circular buffer write index
-  spectral_circular_buffer_advance(self->circular_buffer);
 
   return true;
 }
 
 const float* spectral_denoiser_get_tonal_mask(
     SpectralProcessorHandle instance) {
-  SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
+  const SbSpectralDenoiser* self = (const SbSpectralDenoiser*)instance;
   return (self && self->tonal_reducer)
              ? tonal_reducer_get_mask(self->tonal_reducer)
              : NULL;
@@ -482,7 +523,7 @@ const float* spectral_denoiser_get_tonal_mask(
 
 uint32_t spectral_denoiser_get_peaks(SpectralProcessorHandle instance,
                                      float* peak_freqs_hz, uint32_t max_peaks) {
-  SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
+  const SbSpectralDenoiser* self = (const SbSpectralDenoiser*)instance;
   return self ? tonal_reducer_get_peaks(self->tonal_reducer, peak_freqs_hz,
                                         max_peaks)
               : 0;
@@ -490,7 +531,7 @@ uint32_t spectral_denoiser_get_peaks(SpectralProcessorHandle instance,
 
 const float* spectral_denoiser_get_active_noise_profile(
     SpectralProcessorHandle instance) {
-  SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
+  const SbSpectralDenoiser* self = (const SbSpectralDenoiser*)instance;
   return self ? self->noise_spectrum : NULL;
 }
 
@@ -515,17 +556,23 @@ void spectral_denoiser_reset_noise_profile(SpectralProcessorHandle instance) {
 
 uint32_t spectral_denoiser_get_latency_frames(
     SpectralProcessorHandle instance) {
-  if (!instance) {
-    return 0;
-  }
-  SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
-  return hpss_filter_get_latency_frames(self->hpss_filter);
+  (void)instance;
+  return 0U;
 }
 
 bool spectral_denoiser_is_transient_detected(SpectralProcessorHandle instance) {
   if (!instance) {
     return false;
   }
-  SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
-  return hpss_filter_is_transient_detected(self->hpss_filter);
+  const SbSpectralDenoiser* self = (const SbSpectralDenoiser*)instance;
+  return self->is_transient_detected;
+}
+
+float spectral_denoiser_get_transient_intensity(
+    SpectralProcessorHandle instance) {
+  if (!instance) {
+    return 0.0f;
+  }
+  const SbSpectralDenoiser* self = (const SbSpectralDenoiser*)instance;
+  return self->transient_intensity;
 }

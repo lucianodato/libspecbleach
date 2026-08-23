@@ -182,9 +182,12 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 // Transient Detector Constants
 #define UPPER_LIMIT (5.F)
 #define DEFAULT_TRANSIENT_THRESHOLD (2.F)
-#define MIN_INNOVATION_ENERGY 1e-10F  // ~ -100dB floor for transient trigger
+#define MIN_INNOVATION_ENERGY                                                  \
+  1e-4F // Minimum clean energy threshold in band (~-40dB magnitude)
 #define ONSET_RATIO_SENSITIVITY 0.25F // Innovation required for full weight
 #define TRANSIENT_SMOOTH_ALPHA 0.8F   // Reference smoothing alpha
+#define TRANSIENT_CLEAN_NOISE_SCALE                                            \
+  4.0F // Noise over-subtraction factor for clean transient estimation
 
 // Noise Estimator Constants
 #define MIN_NUMBER_OF_WINDOWS_NOISE_AVERAGED 5
@@ -214,16 +217,13 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 
 #define HPSS_SLIDING_ITERATIONS 3U
 #define HPSS_SLIDING_SMOOTH_FACTOR 0.50F
-#define HPSS_BASS_CUTOFF_BINS 24.0F
-#define HPSS_NOISE_FLOOR_GATE_MULTIPLIER 1.15F
-#define HPSS_RATIO_DENOMINATOR_FLOOR 1e-8F
-#define HPSS_TRANSIENT_MARGIN_FACTOR 1.30F
-#define HPSS_TRANSIENT_ENERGY_RATIO_THRESHOLD 0.25F
 
 /* --------------------------------------------------------------- */
 /* ------------------- 1D Denoiser configurations ---------------- */
 #define GAIN_SMOOTHING_MIN_RELEASE_SEC (0.010F)
-#define GAIN_SMOOTHING_MAX_RELEASE_SEC (0.150F)
+#define GAIN_SMOOTHING_MAX_RELEASE_SEC (0.350F)
+#define GAIN_SMOOTHING_MIN_ATTACK_SEC (0.001F)
+#define GAIN_SMOOTHING_MAX_ATTACK_SEC (0.040F)
 
 // HPSS configurations (Defaults to enabled)
 #define HPSS_ENABLE_1D_DEFAULT 1

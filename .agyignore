@@ -1,0 +1,22 @@
+# Build outputs & artifacts
+build/
+out/
+bin/
+*.o
+*.obj
+*.a
+*.so
+*.dylib
+*.dll
+
+# Preprocessor & compilation databases
+*.i
+*.s
+*.d
+compile_commands.json
+.cache/
+
+# Vendored sources
+deps/
+vendor/
+third_party/

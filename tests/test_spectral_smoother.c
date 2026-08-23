@@ -41,7 +41,7 @@ void test_spectral_smoother(void) {
   printf("Testing Spectral Smoother...\n");
 
   // 1. Invalid Initialization (fft_size == 0)
-  SpectralSmoother* invalid_ss =
+  const SpectralSmoother* invalid_ss =
       spectral_smoothing_initialize(0, 44100, OVERLAP_FACTOR_1D, FIXED);
   TEST_ASSERT(invalid_ss == NULL, "Initialization with fft_size=0 should fail");
 
@@ -111,13 +111,42 @@ void test_spectral_smoother(void) {
       TEST_FLOAT_CLOSE(new_gains[fft_size - i], new_gains[i], 0.001f);
     }
 
+    // Test attack smoothing (increasing gain)
+    float attack_gains[1024];
+    for (uint32_t i = 0; i < num_bins; i++) {
+      attack_gains[i] = 1.0f;
+    }
+    float prev_val = new_gains[0];
+    TEST_ASSERT(spectral_smoothing_run(ss, params, attack_gains),
+                "Attack smoothing run should succeed");
+    float test_tau_attack = GAIN_SMOOTHING_MIN_ATTACK_SEC +
+                            (0.8f * (GAIN_SMOOTHING_MAX_ATTACK_SEC -
+                                     GAIN_SMOOTHING_MIN_ATTACK_SEC));
+    float test_alpha_attack = expf(-test_dt / test_tau_attack);
+    float expected_attack =
+        (test_alpha_attack * prev_val) + ((1.0f - test_alpha_attack) * 1.0f);
+    TEST_FLOAT_CLOSE(attack_gains[0], expected_attack, 0.001f);
+
+    // Test transient mask override (transient_mask = 1.0 -> instant attack)
+    float transient_mask[1024];
+    float transient_gains[1024];
+    for (uint32_t i = 0; i < num_bins; i++) {
+      transient_mask[i] = 1.0f;
+      transient_gains[i] = 1.0f;
+    }
+    TimeSmoothingParameters transient_params = {
+        .smoothing = 0.8f, .transient_mask = transient_mask};
+    TEST_ASSERT(spectral_smoothing_run(ss, transient_params, transient_gains),
+                "Transient attack run should succeed");
+    TEST_FLOAT_CLOSE(transient_gains[0], 1.0f, 0.001f);
+
     // Test 100% smoothing factor does not lock memory (alpha < 1.0)
     TimeSmoothingParameters max_params = {.smoothing = 1.0f};
     float max_gains[1024] = {0.0f};
     TEST_ASSERT(spectral_smoothing_run(ss, max_params, max_gains),
                 "Run with smoothing=1.0 should succeed");
-    // Ensure gains updated (decayed towards 0.0, not frozen)
-    TEST_ASSERT(max_gains[0] < new_gains[0],
+    // Ensure gains updated (decayed towards 0.0 from 1.0, not frozen at 1.0)
+    TEST_ASSERT(max_gains[0] < 1.0f && max_gains[0] > 0.0f,
                 "100% smoothing must update gains rather than freeze");
 
     // Third run with bypass smoothing <= 0.0f

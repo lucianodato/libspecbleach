@@ -237,3 +237,10 @@ bool specbleach_2d_is_transient_detected(SpectralBleachHandle instance) {
                     self->spectral_2d_denoiser)
               : false;
 }
+
+float specbleach_2d_get_transient_intensity(SpectralBleachHandle instance) {
+  Sb2DDenoiser* self = (Sb2DDenoiser*)instance;
+  return self ? spectral_2d_denoiser_get_transient_intensity(
+                    self->spectral_2d_denoiser)
+              : 0.0f;
+}

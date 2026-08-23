@@ -3,6 +3,7 @@
  */
 
 #include <math.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -143,8 +144,10 @@ void test_transient_detector(void) {
     energies[i] = 1.0f;
   }
 
-  bool result1 = transient_detector_process(td, energies, weights);
+  float intensity = 0.0f;
+  bool result1 = transient_detector_process(td, energies, weights, &intensity);
   TEST_ASSERT(result1 == false, "First frame should not detect transient");
+  TEST_ASSERT(intensity == 0.0f, "First frame intensity should be 0");
 
   transient_detector_free(td);
   printf("✓ Transient Detector tests passed\n");
@@ -155,7 +158,7 @@ void test_simd_utils(void) {
 
   sb_simd_state_t state = sb_simd_enable_ftz_daz();
 
-  float buf[8] = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f};
+  const float buf[8] = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f};
   float out[8] = {0.0f};
 
   sb_vec8_t v1 = sb_load8(buf);
@@ -169,6 +172,12 @@ void test_simd_utils(void) {
 
   sb_store8(out, vadd);
   TEST_FLOAT_CLOSE(out[0], 3.0f, 0.001f);
+
+  sb_store8(out, vdiv);
+  TEST_FLOAT_CLOSE(out[0], 0.5f, 0.001f);
+
+  sb_store8(out, vmax);
+  TEST_FLOAT_CLOSE(out[0], 2.0f, 0.001f);
 
   sb_vec4_t v4_1 = sb_load4(buf);
   sb_vec4_t v4_2 = sb_load4(buf + 4);
@@ -222,8 +231,8 @@ void test_patch_ssd(void) {
 
   sb_vec8_t target_vecs[8];
   for (int r = 0; r < 8; r++) {
-    target_vecs[r] = sb_load8(target + r * 8);
-    cand_rows[r] = candidate + r * 8;
+    target_vecs[r] = sb_load8(target + ((ptrdiff_t)r * 8));
+    cand_rows[r] = candidate + ((ptrdiff_t)r * 8);
   }
 
   float ssd = sb_vec8_patch_ssd(target_vecs, cand_rows);
