@@ -100,25 +100,37 @@ bool spectral_smoothing_run(SpectralSmoother* self,
     return true;
   }
 
-  // Map smoothing factor (0.0 to 1.0) to release time (10ms to 150ms)
+  // Map smoothing factor (0.0 to 1.0) to release time (10ms to 350ms)
+  // and attack time (1ms to 40ms)
   float p = fmaxf(0.0f, fminf(1.0f, smoothing));
-  float tau_sec =
+  float tau_release_sec =
       GAIN_SMOOTHING_MIN_RELEASE_SEC +
       (p * (GAIN_SMOOTHING_MAX_RELEASE_SEC - GAIN_SMOOTHING_MIN_RELEASE_SEC));
+  float tau_attack_sec =
+      GAIN_SMOOTHING_MIN_ATTACK_SEC +
+      (p * (GAIN_SMOOTHING_MAX_ATTACK_SEC - GAIN_SMOOTHING_MIN_ATTACK_SEC));
+
   float dt = ((float)self->fft_size / (float)self->overlap_factor) /
              (float)self->sample_rate;
-  float alpha_release = expf(-dt / tau_sec);
+  float alpha_release = expf(-dt / tau_release_sec);
+  float alpha_attack_base = expf(-dt / tau_attack_sec);
+
+  const float* t_mask = parameters.transient_mask;
 
   uint32_t k = 0U;
   for (k = 0U; k < self->real_spectrum_size; k++) {
     float target = gains[k];
     float prev = self->smoothed_spectrum_previous[k];
     if (target >= prev) {
-      // Instant attack: gain opens immediately so onsets and attacks are never
-      // eaten
-      gains[k] = target;
+      // Attack phase: Smooth sudden jumps to eliminate isolated musical noise spikes,
+      // but open immediately when transient/percussive content is detected.
+      float w_transient = t_mask ? t_mask[k] : 0.0F;
+      w_transient = fmaxf(0.0F, fminf(1.0F, w_transient));
+      float alpha_attack = (1.0F - w_transient) * alpha_attack_base;
+
+      gains[k] = (alpha_attack * prev) + ((1.0F - alpha_attack) * target);
     } else {
-      // Smooth release: gain decays slowly to eliminate musical noise
+      // Release phase: Gain decays smoothly to prevent musical noise chatter
       gains[k] = (alpha_release * prev) + ((1.0F - alpha_release) * target);
     }
     self->smoothed_spectrum_previous[k] = gains[k];

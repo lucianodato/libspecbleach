@@ -58,6 +58,7 @@ typedef struct SbSpectralDenoiser {
   uint32_t layer_noise;
 
   float* delayed_magnitude;
+  float* smoothed_magnitude;
   float* mask_harmonic;
   float* mask_percussive;
   float* g_h;
@@ -193,6 +194,8 @@ SpectralProcessorHandle spectral_denoiser_initialize(
   self->hpss_filter = hpss_filter_initialize(hpss_cfg);
   self->delayed_magnitude =
       (float*)calloc(self->real_spectrum_size, sizeof(float));
+  self->smoothed_magnitude =
+      (float*)calloc(self->real_spectrum_size, sizeof(float));
   self->mask_harmonic = (float*)calloc(self->real_spectrum_size, sizeof(float));
   self->mask_percussive =
       (float*)calloc(self->real_spectrum_size, sizeof(float));
@@ -200,8 +203,8 @@ SpectralProcessorHandle spectral_denoiser_initialize(
 
   if (!self->noise_floor_manager || !self->masking_veto ||
       !self->suppression_engine || !self->hpss_filter ||
-      !self->delayed_magnitude || !self->mask_harmonic ||
-      !self->mask_percussive || !self->g_h) {
+      !self->delayed_magnitude || !self->smoothed_magnitude ||
+      !self->mask_harmonic || !self->mask_percussive || !self->g_h) {
     spectral_denoiser_free(self);
     return NULL;
   }
@@ -268,6 +271,9 @@ void spectral_denoiser_free(SpectralProcessorHandle instance) {
   }
   if (self->delayed_magnitude) {
     free(self->delayed_magnitude);
+  }
+  if (self->smoothed_magnitude) {
+    free(self->smoothed_magnitude);
   }
   if (self->mask_harmonic) {
     free(self->mask_harmonic);
@@ -396,13 +402,47 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
   }
 
   float* input_magnitude = self->delayed_magnitude;
+  float* effective_magnitude = input_magnitude;
+
+  // 3.0 Pre-Subtraction SNR/Magnitude Smoothing (Mirrors 2D NLM pipeline in 1D):
+  // When smoothing is engaged, smooth the stationary input magnitude (gated by HPSS)
+  // before computing Alpha and Wiener gains so that random fluctuations near the
+  // subtraction threshold are stabilized, eliminating musical noise.
+  if (self->denoise_parameters.smoothing_factor > 0.0F) {
+    float smooth_alpha =
+        fminf(0.95F, self->denoise_parameters.smoothing_factor * 0.90F);
+
+    for (uint32_t k = 0U; k < self->real_spectrum_size; ++k) {
+      float w_p = self->mask_percussive[k];
+      float raw = input_magnitude[k];
+      float prev = self->smoothed_magnitude[k];
+
+      // Effective alpha drops on transients to preserve sharp attacks
+      float alpha_k = (1.0F - w_p) * smooth_alpha;
+      self->smoothed_magnitude[k] = (alpha_k * prev) + ((1.0F - alpha_k) * raw);
+    }
+
+    int spatial_passes =
+        (int)(self->denoise_parameters.smoothing_factor * 2.0F);
+    for (int p = 0; p < spatial_passes; ++p) {
+      spectral_smoothing_apply_spatial(self->smoothed_magnitude,
+                                       self->real_spectrum_size);
+    }
+
+    effective_magnitude = self->smoothed_magnitude;
+  } else {
+    // When smoothing is at 0%, track raw input directly
+    memcpy(self->smoothed_magnitude, input_magnitude,
+           self->real_spectrum_size * sizeof(float));
+    effective_magnitude = input_magnitude;
+  }
 
   // 3.1. Calculate SNR-dependent oversubtraction factors (Alpha/Beta)
   SuppressionParameters suppression_params = {
       .type = SUPPRESSION_BEROUTI_PER_BIN,
       .strength = self->denoise_parameters.suppression_strength,
       .undersubtraction = 0.0F};
-  suppression_engine_calculate(self->suppression_engine, input_magnitude,
+  suppression_engine_calculate(self->suppression_engine, effective_magnitude,
                                delayed_noise, suppression_params, self->alpha,
                                self->beta);
 
@@ -413,18 +453,19 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
                     self->alpha, self->denoise_parameters.tonal_reduction);
 
   // 3.3. Apply Structural Veto to rescue transients and moderate artifacts
-  masking_veto_apply(self->masking_veto, input_magnitude, delayed_noise, NULL,
+  masking_veto_apply(self->masking_veto, effective_magnitude, delayed_noise, NULL,
                      self->alpha, self->denoise_parameters.masking_depth);
 
   // 3.4. Gain Calculation & HPSS Combination
-  // 1. Calculate heavily smoothed Harmonic Gain (G_H) on stationary path
-  calculate_gains(self->real_spectrum_size, self->fft_size, input_magnitude,
+  // 1. Calculate Harmonic Gain (G_H) on stationary path using stabilized magnitude
+  calculate_gains(self->real_spectrum_size, self->fft_size, effective_magnitude,
                   delayed_noise, self->g_h, self->alpha, self->beta,
                   self->gain_calculation_type);
 
   TimeSmoothingParameters spectral_smoothing_parameters =
       (TimeSmoothingParameters){
           .smoothing = self->denoise_parameters.smoothing_factor,
+          .transient_mask = self->mask_percussive,
       };
   spectral_smoothing_run(self->spectrum_smoothing,
                          spectral_smoothing_parameters, self->g_h);
@@ -435,15 +476,18 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
     }
   }
 
-  // 2. Recombine: Harmonic gets G_H suppression, Percussive gets unity
-  // pass-through
+  // 2. Recombine: Harmonic path gets full G_H suppression with smoothing,
+  // Percussive transient path gets gentle, transparent reduction (preserves crisp attack without unmasking background hiss)
   for (uint32_t k = 0U; k < self->real_spectrum_size; ++k) {
     float w_h = self->mask_harmonic[k];
     float w_p = self->mask_percussive[k];
 
-    // G_final blends Wiener suppression on stationary content with unity gain
-    // on transient bursts
-    float combined_gain = (w_h * self->g_h[k]) + w_p;
+    // On transient bursts, provide soft transparent suppression (g_p = sqrt(g_h) or gentle floor)
+    // rather than full raw 1.0 pass-through, so background noise during attacks is still tamed.
+    float g_harmonic = self->g_h[k];
+    float g_percussive = fmaxf(g_harmonic, sqrtf(g_harmonic)); // Softer reduction on transients
+
+    float combined_gain = (w_h * g_harmonic) + (w_p * g_percussive);
     self->gain_spectrum[k] = fminf(fmaxf(combined_gain, 0.0f), 1.0f);
   }
   sb_apply_spectral_symmetry(self->gain_spectrum, self->real_spectrum_size,

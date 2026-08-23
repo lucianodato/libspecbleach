@@ -29,6 +29,7 @@ typedef enum TimeSmoothingType { FIXED, TRANSIENT_AWARE } TimeSmoothingType;
 
 typedef struct TimeSmoothingParameters {
   float smoothing;
+  const float* transient_mask; // Optional per-bin percussive/transient weights (0.0 to 1.0)
 } TimeSmoothingParameters;
 
 typedef struct SpectralSmoother SpectralSmoother;

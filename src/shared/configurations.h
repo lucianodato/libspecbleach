@@ -215,15 +215,20 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define HPSS_SLIDING_ITERATIONS 3U
 #define HPSS_SLIDING_SMOOTH_FACTOR 0.50F
 #define HPSS_BASS_CUTOFF_BINS 24.0F
-#define HPSS_NOISE_FLOOR_GATE_MULTIPLIER 1.15F
-#define HPSS_RATIO_DENOMINATOR_FLOOR 1e-8F
-#define HPSS_TRANSIENT_MARGIN_FACTOR 1.30F
-#define HPSS_TRANSIENT_ENERGY_RATIO_THRESHOLD 0.25F
+#define HPSS_NOISE_FLOOR_GATE_MULTIPLIER 2.20F
+#define HPSS_CLEAN_SIGNAL_ALPHA_GATE                                           \
+  4.00F // Alpha multiplier scaling the noise floor for clean signal isolation
+        // (+6dB peak headroom)
+#define HPSS_RATIO_DENOMINATOR_FLOOR 1e-6F
+#define HPSS_TRANSIENT_MARGIN_FACTOR 1.85F
+#define HPSS_TRANSIENT_ENERGY_RATIO_THRESHOLD 0.35F
 
 /* --------------------------------------------------------------- */
 /* ------------------- 1D Denoiser configurations ---------------- */
 #define GAIN_SMOOTHING_MIN_RELEASE_SEC (0.010F)
-#define GAIN_SMOOTHING_MAX_RELEASE_SEC (0.150F)
+#define GAIN_SMOOTHING_MAX_RELEASE_SEC (0.350F)
+#define GAIN_SMOOTHING_MIN_ATTACK_SEC (0.001F)
+#define GAIN_SMOOTHING_MAX_ATTACK_SEC (0.040F)
 
 // HPSS configurations (Defaults to enabled)
 #define HPSS_ENABLE_1D_DEFAULT 1

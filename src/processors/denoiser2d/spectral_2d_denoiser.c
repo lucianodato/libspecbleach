@@ -569,15 +569,15 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
                   delayed_noise, self->g_h, self->alpha, self->beta,
                   self->gain_calculation_type);
 
-  // 2. Recombine: Harmonic gets G_H suppression, Percussive gets unity
-  // pass-through
+  // 2. Recombine: Harmonic path gets full G_H suppression, Percussive path gets gentle transparent reduction
   for (uint32_t k = 0U; k < self->real_spectrum_size; ++k) {
     float w_h = self->mask_harmonic[k];
     float w_p = self->mask_percussive[k];
 
-    // G_final blends Wiener suppression on stationary content with unity gain
-    // on transient bursts
-    float combined_gain = (w_h * self->g_h[k]) + w_p;
+    float g_harmonic = self->g_h[k];
+    float g_percussive = fmaxf(g_harmonic, sqrtf(g_harmonic));
+
+    float combined_gain = (w_h * g_harmonic) + (w_p * g_percussive);
     self->gain_spectrum[k] = fminf(fmaxf(combined_gain, 0.0f), 1.0f);
   }
   sb_apply_spectral_symmetry(self->gain_spectrum, self->real_spectrum_size,
