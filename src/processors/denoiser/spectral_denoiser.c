@@ -343,6 +343,11 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
       .noise_estimator = self->noise_estimator,
       .noise_profile_offset_linear =
           self->denoise_parameters.noise_profile_offset_linear,
+      .tonal_noise_profile_offset_linear =
+          self->denoise_parameters.tonal_noise_profile_offset_linear,
+      // Previous frame's tonal mask (one-frame latency) is used to apply the
+      // tonal threshold offset at detected tonal bins
+      .tonal_mask = tonal_reducer_get_mask(self->tonal_reducer),
   };
   denoiser_profile_core_update(profile_params, reference_spectrum);
 

@@ -122,10 +122,23 @@ void denoiser_profile_core_update(DenoiserProfileCoreParams params,
                         params.spectrum_size, params.param_aggressiveness);
   }
 
-  // Apply noise profile offset (threshold scalar shift)
-  if (params.noise_profile_offset_linear != 1.0f) {
+  // Apply noise profile offset (threshold scalar shift). When a distinct
+  // tonal offset is provided together with the previous frame's tonal mask,
+  // both offsets are blended per-bin using the tonal mask strength so tonal
+  // components receive their own threshold shift.
+  const float broadband_offset = params.noise_profile_offset_linear;
+  const bool tonal_active = params.tonal_noise_profile_offset_linear != 1.0f &&
+                            params.tonal_mask != NULL;
+  if (broadband_offset != 1.0f || tonal_active) {
+    const float tonal_offset = params.tonal_noise_profile_offset_linear;
     for (uint32_t k = 0U; k < params.spectrum_size; k++) {
-      params.noise_spectrum[k] *= params.noise_profile_offset_linear;
+      float scale = broadband_offset;
+      if (tonal_active && params.tonal_mask[k] > 0.0f) {
+        float mask = fminf(params.tonal_mask[k], 1.0f);
+        mask = sqrtf(sqrtf(mask));
+        scale = (broadband_offset * (1.0f - mask)) + (tonal_offset * mask);
+      }
+      params.noise_spectrum[k] *= scale;
     }
   }
 }
