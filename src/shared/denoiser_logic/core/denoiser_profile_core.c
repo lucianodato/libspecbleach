@@ -130,6 +130,7 @@ void denoiser_profile_core_update(DenoiserProfileCoreParams params,
   const bool tonal_active = params.tonal_noise_profile_offset_linear != 1.0f &&
                             params.tonal_mask != NULL;
   if (broadband_offset != 1.0f || tonal_active) {
+    sb_simd_state_t old_simd_state = sb_simd_enable_ftz_daz();
     const float tonal_offset = params.tonal_noise_profile_offset_linear;
     for (uint32_t k = 0U; k < params.spectrum_size; k++) {
       float scale = broadband_offset;
@@ -140,5 +141,6 @@ void denoiser_profile_core_update(DenoiserProfileCoreParams params,
       }
       params.noise_spectrum[k] *= scale;
     }
+    sb_simd_restore_state(old_simd_state);
   }
 }

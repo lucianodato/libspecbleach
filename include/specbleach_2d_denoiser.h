@@ -99,12 +99,6 @@ typedef struct SpectralBleach2DDenoiserParameters {
    * the 1.0f default. Values > 1.0 shift threshold higher (more reduction). */
   float noise_profile_scale;
 
-  /* Tonal Noise Profile Linear Scale — multiplier applied to the noise power
-   * spectrum only at detected tonal components. Positive inputs are clamped to
-   * [0.01f, 100.0f]. Non-positive inputs use the 1.0f default. Values > 1.0
-   * shift threshold higher (more reduction) at tonal bins. */
-  float tonal_noise_profile_scale;
-
   /* Frequency-dependent reduction bias curve.
    * Array of dB offsets per frequency bin, or NULL if disabled.
    * Positive values = more reduction at that frequency.
@@ -114,6 +108,12 @@ typedef struct SpectralBleach2DDenoiserParameters {
   /* Enables the reduction curve bias. When false, reduction_curve_bias
    * is ignored even if non-NULL. */
   bool reduction_curve_enabled;
+
+  /* Tonal Noise Profile Linear Scale — multiplier applied to the noise power
+   * spectrum only at detected tonal components. Positive inputs are clamped to
+   * [0.01f, 100.0f]. Non-positive inputs use the 1.0f default. Values > 1.0
+   * shift threshold higher (more reduction) at tonal bins. */
+  float tonal_noise_profile_scale;
 } SpectralBleach2DDenoiserParameters;
 
 /**
