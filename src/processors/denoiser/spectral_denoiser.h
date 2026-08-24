@@ -40,6 +40,7 @@ typedef struct DenoiserParameters {
   float tonal_reduction; /**< 0.0 to 1.0 (Phase 3) */
   int hpss_enable;       /**< 0=disabled, 1=enabled */
   float noise_profile_offset_linear; /**< Linear scalar for noise profile */
+  float tonal_noise_profile_offset_linear; /**< Linear scalar at tonal bins */
   const float* reduction_curve_bias; /**< Per-bin dB bias, NULL = disabled */
   bool reduction_curve_enabled;
 } DenoiserParameters;
