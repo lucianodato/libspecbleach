@@ -175,6 +175,43 @@ bool specbleach_transition_begin(specbleach_transition* instance,
   return true;
 }
 
+bool specbleach_transition_prime(specbleach_transition* instance,
+                                 const float* const* history,
+                                 const uint32_t history_length) {
+  SpecbleachTransitionState* self = instance;
+
+  if (!self || !history || history_length == 0) {
+    return false;
+  }
+  if (self->phase == TRANSITION_IDLE || self->latency_diff == 0 ||
+      !self->delay_lines) {
+    return true; /* Nothing to align; priming is a no-op. */
+  }
+
+  const size_t delay_amount = (size_t)self->latency_diff;
+  const size_t usable = (size_t)history_length < delay_amount
+                            ? (size_t)history_length
+                            : delay_amount;
+
+  /* The first processed sample reads (write_pos + capacity - delay_amount);
+   * with write_pos at its post-begin value, fill forward from there with the
+   * TAIL of the history so the fade continues the source seamlessly. */
+  const size_t first_slot =
+      (self->delay_write_pos + self->delay_capacity - delay_amount) %
+      self->delay_capacity;
+  for (uint32_t ch = 0; ch < self->channels; ++ch) {
+    if (!history[ch]) {
+      return false;
+    }
+    for (size_t i = 0; i < usable; ++i) {
+      const size_t slot = (first_slot + i) % self->delay_capacity;
+      self->delay_lines[ch][slot] = history[ch][history_length - usable + i];
+    }
+  }
+
+  return true;
+}
+
 static void transition_write_and_read_delay(
     const SpecbleachTransitionState* self, const uint32_t channel,
     const float input_sample, const size_t delay_amount, float* output_sample) {

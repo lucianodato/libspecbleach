@@ -34,8 +34,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #define SAMPLE_RATE 48000
 #define MAX_BLOCK 512
-#define BLOCK_SIZE 256
+#define BLOCK_SIZE 512
 #define CHANNELS 2
+#define PRIME_HISTORY_LEN 4096
 
 static void test_init_and_validation(void) {
   printf("Testing transition init and validation...\n");
@@ -210,11 +211,105 @@ static void test_equal_latency_noop(void) {
   printf("✓ Equal-latency tests passed\n");
 }
 
+static void test_prime_continuity(void) {
+  printf("Testing delay-line priming continuity...\n");
+
+  specbleach_transition* t =
+      specbleach_transition_initialize(SAMPLE_RATE, MAX_BLOCK, CHANNELS);
+
+  const uint32_t latency_from = 1024;
+  const uint32_t latency_to = 2048;
+  const uint32_t diff = latency_to - latency_from;
+
+  /* History: last `diff` rendered source samples, a known descending ramp
+   * ending at 1000.0f so continuity is easy to assert. */
+  float history[CHANNELS][PRIME_HISTORY_LEN];
+  const float* history_ptrs[CHANNELS] = {history[0], history[1]};
+  for (uint32_t s = 0; s < diff; ++s) {
+    history[0][s] = 1000.0f - (float)s;
+    history[1][s] = 1000.0f - (float)s;
+  }
+
+  float source[CHANNELS][BLOCK_SIZE];
+  float target[CHANNELS][BLOCK_SIZE];
+  float blended[CHANNELS][BLOCK_SIZE];
+  const float* from_ptrs[CHANNELS] = {source[0], source[1]};
+  const float* to_ptrs[CHANNELS] = {target[0], target[1]};
+  float* blended_ptrs[CHANNELS] = {blended[0], blended[1]};
+
+  /* Source stays constant at the final history value; target is silent.
+   * A primed fade must then hold output near that value throughout. */
+  for (uint32_t s = 0; s < BLOCK_SIZE; ++s) {
+    source[0][s] = 1000.0f;
+    source[1][s] = 1000.0f;
+    target[0][s] = 0.0f;
+    target[1][s] = 0.0f;
+  }
+
+  TEST_ASSERT(specbleach_transition_begin(t, latency_from, latency_to),
+              "begin before prime");
+  TEST_ASSERT(specbleach_transition_prime(t, history_ptrs, diff),
+              "prime accepted");
+  TEST_ASSERT(!specbleach_transition_prime(t, NULL, diff),
+              "NULL history rejected");
+  TEST_ASSERT(!specbleach_transition_prime(t, history_ptrs, 0),
+              "zero length rejected");
+
+  /* Order-sensitive exactness: with the oldest history sample first in the
+   * ring, the very first faded sample must equal history[0] exactly
+   * (target silent, w_from == 1 at progress zero). */
+  TEST_ASSERT(
+      specbleach_transition_process(t, 1, from_ptrs, to_ptrs, blended_ptrs),
+      "single primed sample processed");
+  TEST_ASSERT(blended[0][0] == 1000.0f,
+              "first blended sample equals oldest history sample");
+  TEST_ASSERT(blended[1][0] == 1000.0f, "ch1 first blended matches");
+
+  /* Restart and prime with a CONSTANT history matching the live constant
+   * source: a correctly primed fade must hold that level throughout, while
+   * an unprimed one would duck toward the silent target. */
+  for (uint32_t s = 0; s < diff; ++s) {
+    history[0][s] = 1000.0f;
+    history[1][s] = 1000.0f;
+  }
+  TEST_ASSERT(specbleach_transition_begin(t, latency_from, latency_to),
+              "restart for hold test");
+  TEST_ASSERT(specbleach_transition_prime(t, history_ptrs, diff),
+              "prime accepted for hold test");
+  uint32_t guard = 0;
+  uint32_t consumed = 0;
+  const uint32_t fade_samples =
+      (uint32_t)((float)SAMPLE_RATE *
+                 (SPECBLEACH_TRANSITION_FADE_TIME_MS / 1000.0f));
+  const uint32_t hold_samples = fade_samples / 2U;
+  while (specbleach_transition_active(t)) {
+    TEST_ASSERT(specbleach_transition_process(t, BLOCK_SIZE, from_ptrs, to_ptrs,
+                                              blended_ptrs),
+                "hold fade block processed");
+    /* Early in the fade the primed delay must keep the source clearly
+     * audible (w_from >= ~0.7 of a constant 1000); an unprimed ring would
+     * blend silence here and sit near zero. Later samples legitimately
+     * converge to the silent target as w_to rises. */
+    for (uint32_t s = 0; s < BLOCK_SIZE && consumed + s < hold_samples; ++s) {
+      TEST_ASSERT(blended[0][s] > 500.0f,
+                  "primed fade keeps source audible early");
+    }
+    consumed += BLOCK_SIZE;
+    if (++guard > 100U) {
+      TEST_ASSERT(0, "hold fade did not finish");
+    }
+  }
+
+  specbleach_transition_free(t);
+  printf("✓ Priming continuity tests passed\n");
+}
+
 int main(void) {
   test_init_and_validation();
   test_idle_passthrough();
   test_equal_power_fade();
   test_equal_latency_noop();
+  test_prime_continuity();
 
   printf("✅ All specbleach transition tests passed!\n");
   return 0;
