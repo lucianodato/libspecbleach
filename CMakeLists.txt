@@ -157,6 +157,44 @@ add_library(libspecbleach::libspecbleach ALIAS libspecbleach)
 add_library(specbleach ALIAS libspecbleach)
 
 # ==============================================================================
+# 6b. Optional Extras Layer (multi-channel orchestration, transitions)
+# ==============================================================================
+option(SPECBLEACH_BUILD_EXTRAS
+       "Build optional orchestration helpers (stereo groups, engine transitions)"
+       OFF)
+
+if(SPECBLEACH_BUILD_EXTRAS)
+    add_library(libspecbleach_extras
+        extras/src/specbleach_stereo.c
+        extras/src/specbleach_transition.c
+        extras/src/specbleach_profile_migration.c
+    )
+
+    set_target_properties(libspecbleach_extras PROPERTIES
+        OUTPUT_NAME "specbleach_extras"
+        VERSION ${PROJECT_VERSION}
+        SOVERSION ${PROJECT_VERSION_MAJOR}
+        C_VISIBILITY_PRESET hidden
+        VISIBILITY_INLINES_HIDDEN ON
+    )
+
+    target_include_directories(libspecbleach_extras PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/extras/include>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+    )
+
+    target_link_libraries(libspecbleach_extras PUBLIC libspecbleach)
+
+    if(BUILD_SHARED_LIBS)
+        target_compile_definitions(libspecbleach_extras PRIVATE SPECBLEACH_EXPORTS)
+    else()
+        target_compile_definitions(libspecbleach_extras PUBLIC SPECBLEACH_STATIC)
+    endif()
+
+    add_library(libspecbleach::extras ALIAS libspecbleach_extras)
+endif()
+
+# ==============================================================================
 # 7. Examples & Tests
 # ==============================================================================
 if(ENABLE_EXAMPLES AND TARGET PkgConfig::SNDFILE)
@@ -245,6 +283,15 @@ if(ENABLE_TESTS)
         target_link_libraries(test_audio_file_regression PRIVATE PkgConfig::SNDFILE)
     endif()
 
+    if(SPECBLEACH_BUILD_EXTRAS)
+        add_specbleach_test(test_specbleach_stereo "test_specbleach_stereo.c")
+        target_link_libraries(test_specbleach_stereo PRIVATE libspecbleach_extras)
+        add_specbleach_test(test_specbleach_transition "test_specbleach_transition.c")
+        target_link_libraries(test_specbleach_transition PRIVATE libspecbleach_extras)
+        add_specbleach_test(test_profile_migration "test_profile_migration.c")
+        target_link_libraries(test_profile_migration PRIVATE libspecbleach_extras)
+    endif()
+
     if(BUILD_SHARED_LIBS AND NOT MSVC)
         add_test(NAME test_exported_symbols
                  COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/scripts/check_exported_symbols.sh"
@@ -292,6 +339,43 @@ if(SPECBLEACH_INSTALL)
         "${CMAKE_CURRENT_BINARY_DIR}/libspecbleachConfigVersion.cmake"
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/libspecbleach
     )
+
+    # Optional extras layer install (own component so packagers can split it)
+    if(SPECBLEACH_BUILD_EXTRAS)
+        install(TARGETS libspecbleach_extras
+            EXPORT libspecbleachExtrasTargets
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+        )
+
+        install(DIRECTORY extras/include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+
+        install(EXPORT libspecbleachExtrasTargets
+            FILE libspecbleachExtrasTargets.cmake
+            NAMESPACE libspecbleach::
+            DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/libspecbleach
+        )
+
+        set(PKG_CONFIG_EXTRAS_FILE "${CMAKE_CURRENT_BINARY_DIR}/specbleach-extras.pc")
+        file(WRITE "${PKG_CONFIG_EXTRAS_FILE}"
+"prefix=${CMAKE_INSTALL_PREFIX}\n"
+"exec_prefix=\${prefix}\n"
+"libdir=\${exec_prefix}/${CMAKE_INSTALL_LIBDIR}\n"
+"includedir=\${prefix}/${CMAKE_INSTALL_INCLUDEDIR}\n"
+"\n"
+"Name: specbleach-extras\n"
+"Description: Optional orchestration helpers for libspecbleach\n"
+"Version: ${PROJECT_VERSION}\n"
+"Requires: specbleach = ${PROJECT_VERSION}\n"
+"Libs: -L\${libdir} -lspecbleach_extras\n"
+"Cflags: -I\${includedir}\n"
+        )
+        install(FILES "${PKG_CONFIG_EXTRAS_FILE}"
+            DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig"
+        )
+    endif()
 
     # Generate pkg-config file (specbleach.pc)
     set(PKG_CONFIG_PREFIX "\${pcfiledir}/../..")
