@@ -19,9 +19,57 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 /**
- * This is just a simple console application example using the library with the
- * denoiser processor. It uses libsndfile to read audio, process it
- * with the algorithm and write it to an output file
+ * @file denoiser_demo.c
+ * @brief Minimal single-channel integration reference for the core API.
+ *
+ * This is the smallest complete program that denoises audio with
+ * libspecbleach. Read this one FIRST; it demonstrates the fundamental
+ * lifecycle every integration follows, regardless of how fancy the
+ * surrounding application is.
+ *
+ * ===========================================================================
+ * INTEGRATION LIFECYCLE (each step maps to a labeled section in main()):
+ * ===========================================================================
+ *   1. CREATE     specbleach_denoiser_initialize(sample_rate, frame_size_ms)
+ *   2. CONFIGURE  specbleach_denoiser_load_parameters(handle, &params,
+ *                                                     sizeof(params))
+ *   3. LEARN      process blocks while params.learn_noise is
+ *                 SPECBLEACH_LEARN_ALL; the engine accumulates a noise
+ *                 profile from whatever you feed it
+ *   4. FINALIZE   load parameters again with learn_noise =
+ *                 SPECBLEACH_LEARN_OFF. IMPORTANT: profile capture modes are
+ *                 only finalized when learning turns OFF, so profiles are
+ *                 NOT fully usable until this happens (and one block has
+ *                 been processed afterwards).
+ *   5. REDUCE     keep calling specbleach_denoiser_process() per block of
+ *                 audio for as long as you have audio
+ *   6. CLEANUP    specbleach_denoiser_free(handle)
+ *
+ * ===========================================================================
+ * CONTRACTS WORTH KNOWING (all documented in include/specbleach_denoiser.h):
+ * ===========================================================================
+ * - Block size: the library accepts ANY number of samples per call; it
+ *   buffers internally. You do not need to align to frames or hops.
+ * - Buffers: input/output are plain float arrays of `number_of_samples`
+ *   length per call. Output may safely alias the input buffer.
+ * - Parameters: load_parameters() copies everything it needs, including an
+ *   optional reduction curve (see reduction_curve_bias ownership docs in
+ *   the header). After the call returns you may free or reuse your structs.
+ * - Threading: calls on the same handle must not run concurrently with
+ *   each other or with _process(). For real-time use, load_parameters()
+ *   is allocation-free EXCEPT on the first call after enabling
+ *   reduction_curve_enabled.
+ * - Latency: query specbleach_denoiser_get_latency() after initialization
+ *   and report it to your host/caller if delay compensation matters.
+ *
+ * Build: cmake -B build -DENABLE_EXAMPLES=ON && cmake --build build
+ * Link (downstream apps): pkg-config --cflags --libs specbleach
+ *                         or find_package(libspecbleach) ->
+ * libspecbleach::libspecbleach
+ *
+ * For multi-channel processing, click-free engine switching, and noise
+ * profile migration between engines, see stereo_denoiser_demo.c which uses
+ * the optional extras layer.
  */
 
 #include <errno.h>
@@ -312,6 +360,11 @@ int main(int argc, char** argv) {
       break;
     }
 
+    // ------------------------------------------------------------------
+    // STEP 1: CREATE the engine instance.
+    // frame_size_ms controls the STFT window (20-100 ms recommended). It
+    // trades frequency resolution against latency. The handle is opaque;
+    // pass it back to every specbleach_denoiser_* call from now on.
     // Initialize library instance
     lib_instance = specbleach_denoiser_initialize((uint32_t)sfinfo->samplerate,
                                                   frame_size_ms);
@@ -320,6 +373,13 @@ int main(int argc, char** argv) {
       break;
     }
 
+    // ------------------------------------------------------------------
+    // STEP 2 + 3: CONFIGURE and LEARN.
+    //
+    // While learn_noise is SPECBLEACH_LEARN_ALL, every processed block
+    // updates an internal noise profile instead of applying reduction.
+    // Feed it a section containing ONLY the noise you want removed
+    // (e.g., the first seconds of a recording before speech starts).
     // NOISE PROFILE LEARN STAGE
 
     // Load the parameters before doing the denoising or profile learning
@@ -368,6 +428,13 @@ int main(int argc, char** argv) {
       break;
     }
 
+    // ------------------------------------------------------------------
+    // STEP 4: FINALIZE the profile by turning learning OFF.
+    //
+    // This reload is not optional bookkeeping: capture modes are only
+    // finalized on the learn -> off transition, so reduction quality is
+    // undefined until this call happens. Real-time integrations (mixers,
+    // plugins) do exactly this when the user releases a "learn" button.
     // NOISE REDUCTION STAGE
 
     // Turn off noise profile learning to start applying reduction
@@ -380,6 +447,11 @@ int main(int argc, char** argv) {
       break;
     }
 
+    // ------------------------------------------------------------------
+    // STEP 5: REDUCE. From here on every process() call denoises using
+    // the captured profile. In a real-time application this loop is your
+    // audio callback: same call shape, any block size. See the threading
+    // and latency notes in the file header above.
     // Iterate over the audio to apply denoising
     sf_count_t frames_read;
     while ((frames_read = sf_readf_float(input_file, input_library_buffer,
@@ -410,6 +482,14 @@ int main(int argc, char** argv) {
       break;
     }
 
+    // ------------------------------------------------------------------
+    // STEP 6: CLEANUP frees all engine memory. Profiles that should survive
+    // a restart must be serialized BEFORE this call: copy the arrays from
+    // specbleach_denoiser_get_noise_profile_for_mode() for each mode in
+    // [SPECBLEACH_PROFILE_MODE_FIRST, SPECBLEACH_PROFILE_MODE_LAST], plus
+    // the block counts, and restore them later with
+    // specbleach_denoiser_load_noise_profile_for_mode(). See the plugin
+    // source (noise-repellent repo) for a complete serialization example.
     // Success
     ret = 0;
   } while (0);
