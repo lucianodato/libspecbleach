@@ -49,6 +49,9 @@ typedef struct NlmFilterConfig {
                                           decay */
   float distance_threshold;          /**< Skip patches with distance >
                                           threshold (default: 4*h²) */
+  uint32_t num_threads;              /**< Total threads executing the NLM
+                                          smoothing (caller included). Zero
+                                          uses NLM_NUM_THREADS_DEFAULT */
 } NlmFilterConfig;
 
 /**

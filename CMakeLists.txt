@@ -46,49 +46,13 @@ else()
 endif()
 
 # ==============================================================================
-# 2. Math & OpenMP Dependencies
+# 2. Math & Threading Dependencies
 # ==============================================================================
 find_library(MATH_LIB m)
 
-if(APPLE)
-    list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew/opt/libomp" "/usr/local/opt/libomp")
-endif()
-
-find_package(OpenMP QUIET)
-if(MSVC AND OpenMP_C_FOUND)
-    set_target_properties(OpenMP::OpenMP_C PROPERTIES
-        INTERFACE_COMPILE_OPTIONS "/openmp:llvm"
-    )
-elseif(NOT OpenMP_C_FOUND)
-    message(STATUS "OpenMP not found. Searching Homebrew paths...")
-    find_path(OMP_INCLUDE_DIR omp.h HINTS /opt/homebrew/opt/libomp/include /usr/local/opt/libomp/include)
-    find_library(OMP_LIB NAMES omp gomp HINTS /opt/homebrew/opt/libomp/lib /usr/local/opt/libomp/lib)
-    if(OMP_LIB AND OMP_INCLUDE_DIR)
-        add_library(OpenMP::OpenMP_C INTERFACE IMPORTED)
-        if(CMAKE_C_COMPILER_ID MATCHES "Clang" AND APPLE)
-            message(STATUS "OpenMP found: ${OMP_LIB}")
-            set_target_properties(OpenMP::OpenMP_C PROPERTIES
-                INTERFACE_COMPILE_OPTIONS "-Xpreprocessor;-fopenmp"
-                INTERFACE_INCLUDE_DIRECTORIES "${OMP_INCLUDE_DIR}"
-                INTERFACE_LINK_LIBRARIES "${OMP_LIB}"
-            )
-        else()
-
-            set_target_properties(OpenMP::OpenMP_C PROPERTIES
-                INTERFACE_COMPILE_OPTIONS "-fopenmp"
-                INTERFACE_INCLUDE_DIRECTORIES "${OMP_INCLUDE_DIR}"
-                INTERFACE_LINK_LIBRARIES "${OMP_LIB}"
-            )
-        endif()
-        set(OpenMP_C_FOUND TRUE)
-    endif()
-endif()
-
-if(OpenMP_C_FOUND OR TARGET OpenMP::OpenMP_C)
-    message(STATUS "OpenMP: ENABLED (Multi-threaded NLM 2D filter enabled)")
-else()
-    message(WARNING "OpenMP: NOT FOUND (NLM 2D filter will run single-threaded)")
-endif()
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
+message(STATUS "Threading: internal worker pool via ${Threads_LIBRARIES}")
 
 # ==============================================================================
 # 3. Optional Dependencies (Examples & Tests)
@@ -160,11 +124,7 @@ if(MATH_LIB)
 endif()
 
 # FFTW is an internal implementation detail (not exposed in public headers) -> PRIVATE
-target_link_libraries(libspecbleach PRIVATE ${FFTW_TARGET})
-
-if(OpenMP_C_FOUND OR TARGET OpenMP::OpenMP_C)
-    target_link_libraries(libspecbleach PRIVATE OpenMP::OpenMP_C)
-endif()
+target_link_libraries(libspecbleach PRIVATE ${FFTW_TARGET} Threads::Threads)
 
 # AVX SIMD Target
 if(ENABLE_AVX)
@@ -178,9 +138,6 @@ if(ENABLE_AVX)
         endif()
         target_include_directories(specbleach_avx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/src)
         target_link_libraries(specbleach_avx PRIVATE ${FFTW_TARGET})
-        if(OpenMP_C_FOUND OR TARGET OpenMP::OpenMP_C)
-            target_link_libraries(specbleach_avx PRIVATE OpenMP::OpenMP_C)
-        endif()
         target_link_libraries(libspecbleach PRIVATE specbleach_avx)
     endif()
 endif()
@@ -237,6 +194,7 @@ if(ENABLE_TESTS)
     add_specbleach_test(test_noise_floor_manager "test_noise_floor_manager.c")
     add_specbleach_test(test_adaptive_noise_estimator "test_adaptive_noise_estimator.c")
     add_specbleach_test(test_nlm_filter "test_nlm_filter.c")
+    add_specbleach_test(test_thread_pool "test_thread_pool.c")
     add_specbleach_test(test_specbleach_2d_denoiser "test_specbleach_2d_denoiser.c")
     add_specbleach_test(test_suppression_engine "test_suppression_engine.c")
     add_specbleach_test(test_masking_veto "test_masking_veto.c")
@@ -311,11 +269,6 @@ if(SPECBLEACH_INSTALL)
         set(PKG_CONFIG_INCLUDEDIR "${CMAKE_INSTALL_INCLUDEDIR}")
     else()
         set(PKG_CONFIG_INCLUDEDIR "\${prefix}/${CMAKE_INSTALL_INCLUDEDIR}")
-    endif()
-
-    set(PKG_CONFIG_OPENMP_FLAGS "")
-    if(OpenMP_C_FOUND)
-        set(PKG_CONFIG_OPENMP_FLAGS "${OpenMP_C_FLAGS}")
     endif()
 
     configure_file(

@@ -26,6 +26,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "shared/configurations.h"
 #include "shared/denoiser_logic/processing/nlm_filter_internal.h"
 #include "shared/utils/simd_utils.h"
+#include "shared/utils/thread_pool.h"
 
 NlmFilter* nlm_filter_initialize(NlmFilterConfig config) {
   if (config.spectrum_size == 0) {
@@ -74,16 +75,18 @@ NlmFilter* nlm_filter_initialize(NlmFilterConfig config) {
 
   self->target_frame_offset = self->config.search_range_time_past;
 
-  self->num_threads = 4;
-#ifdef _OPENMP
-  const char* omp_env = getenv("OMP_NUM_THREADS");
-  if (omp_env) {
-    int val = atoi(omp_env);
-    if (val > 0) {
-      self->num_threads = (uint32_t)val;
+  self->num_threads = self->config.num_threads > 0U ? self->config.num_threads
+                                                    : NLM_NUM_THREADS_DEFAULT;
+  if (self->num_threads > 1U) {
+    // The calling thread participates in every dispatch, so the pool only
+    // needs num_threads - 1 dedicated workers.
+    self->pool = sb_thread_pool_create(self->num_threads - 1U);
+    if (!self->pool) {
+      self->num_threads = 1U; // Graceful fallback to sequential processing
     }
+  } else {
+    self->num_threads = 1U;
   }
-#endif
 
   self->frame_buffer =
       (float**)calloc(self->config.time_buffer_size, sizeof(float*));
@@ -151,6 +154,9 @@ void nlm_filter_free(NlmFilter* filter) {
   if (filter->frame_ptrs) {
     free((void*)filter->frame_ptrs);
   }
+
+  sb_thread_pool_free(filter->pool);
+  filter->pool = NULL;
 
   free(filter);
 }
