@@ -40,8 +40,7 @@ jobs:
             clang-tools \
             cmake \
             libfftw3-dev \
-            libsndfile1-dev \
-            libomp-dev
+            libsndfile1-dev
 
       - name: Configure build
         run: |

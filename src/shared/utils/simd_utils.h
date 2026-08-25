@@ -421,6 +421,7 @@ SB_SIMD_INLINE sb_vec8_t sb_sqrt8(sb_vec8_t a) {
 #else
   sb_vec8_t r;
   float32x4_t zero = vdupq_n_f32(0.0f);
+  // cppcheck-suppress duplicateExpression ; intentional NaN (0/0)
   float32x4_t nan_val = vdupq_n_f32(0.0f / 0.0f);
 
   // Process a.v1

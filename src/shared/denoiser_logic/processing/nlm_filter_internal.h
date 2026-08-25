@@ -25,19 +25,13 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "shared/denoiser_logic/processing/nlm_filter.h"
 #include "shared/utils/general_utils.h"
 #include "shared/utils/simd_utils.h"
+#include "shared/utils/thread_pool.h"
 #include <float.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-
-#ifdef _OPENMP
-#include <omp.h>
-#define SB_HAS_OPENMP 1
-#else
-#define SB_HAS_OPENMP 0
-#endif
 
 typedef bool (*nlm_process_impl_fn)(NlmFilter* filter, float* smoothed_snr);
 
@@ -69,7 +63,11 @@ struct NlmFilter {
   // Function pointer for runtime architecture dispatch
   nlm_process_impl_fn process_fn;
 
-  // Number of threads for parallel processing
+  // Preallocated worker pool for the NLM smoothing loop (NULL if
+  // single-threaded)
+  SbThreadPool* pool;
+
+  // Number of threads executing the smoothing loop (caller included)
   uint32_t num_threads;
 };
 
@@ -171,17 +169,25 @@ static inline SB_UNUSED float compute_patch_distance(NlmFilter* self,
   return distance;
 }
 
-static inline SB_UNUSED bool nlm_filter_process_core(NlmFilter* filter,
-                                                     float* smoothed_snr) {
-  if (!filter || !smoothed_snr) {
-    return false;
-  }
+// Context for the block-smoothing loop. Every block accumulates into a
+// disjoint range of smoothed_snr/weight_sum, so contiguous static partitioning
+// is race-free and produces the same per-bin accumulation order (and therefore
+// the same output) as sequential execution.
+typedef struct {
+  NlmFilter* filter;
+  float* smoothed_snr;
+  float* weight_sum;
+  float* target_frame;
+} NlmBlockTask;
 
-  if (!nlm_filter_is_ready(filter)) {
-    return false;
-  }
-
-  sb_simd_state_t old_simd_state = sb_simd_enable_ftz_daz();
+static inline SB_UNUSED void nlm_process_block_range(void* raw_ctx,
+                                                     uint32_t first_block,
+                                                     uint32_t block_count) {
+  const NlmBlockTask* ctx = (const NlmBlockTask*)raw_ctx;
+  NlmFilter* filter = ctx->filter;
+  float* smoothed_snr = ctx->smoothed_snr;
+  float* weight_sum = ctx->weight_sum;
+  const float* target_frame = ctx->target_frame;
 
   const uint32_t spectrum_size = filter->config.spectrum_size;
   const uint32_t paste_size = filter->config.paste_block_size;
@@ -190,28 +196,13 @@ static inline SB_UNUSED bool nlm_filter_process_core(NlmFilter* filter,
       (int32_t)filter->config.search_range_time_past;
   const int32_t search_time_future =
       (int32_t)filter->config.search_range_time_future;
+  const float current_inv_h2 = filter->inv_h_squared;
+  const float current_dist_threshold = filter->distance_threshold_actual;
+  const uint32_t patch_size = filter->config.patch_size;
+  const uint32_t half_patch_size = patch_size / 2;
 
-  populate_frame_ptrs(filter);
-
-  float* target_frame = cached_get_frame(filter, 0);
-
-  if (filter->config.h_parameter <= 0.0F || filter->h_squared <= 0.0F) {
-    memcpy(smoothed_snr, target_frame, spectrum_size * sizeof(float));
-    sb_simd_restore_state(old_simd_state);
-    return true;
-  }
-
-  memset(smoothed_snr, 0, spectrum_size * sizeof(float));
-
-  float* weight_sum = filter->weight_accum;
-  memset(weight_sum, 0, spectrum_size * sizeof(float));
-
-  uint32_t block_start = 0;
-#if SB_HAS_OPENMP
-#pragma omp parallel for schedule(dynamic) num_threads(filter->num_threads)
-#endif
-  for (block_start = 0; block_start < spectrum_size;
-       block_start += paste_size) {
+  for (uint32_t block = 0; block < block_count; block++) {
+    const uint32_t block_start = (first_block + block) * paste_size;
 
     uint32_t block_center = block_start + (paste_size / 2);
     if (block_center >= spectrum_size) {
@@ -231,12 +222,7 @@ static inline SB_UNUSED bool nlm_filter_process_core(NlmFilter* filter,
       continue;
     }
 
-    float current_inv_h2 = filter->inv_h_squared;
-    float current_dist_threshold = filter->distance_threshold_actual;
-
     sb_vec8_t target_vecs[8];
-    const uint32_t patch_size = filter->config.patch_size;
-    const uint32_t half_patch_size = patch_size / 2;
 
     bool safe_block = (block_center >= half_patch_size) &&
                       (block_center + half_patch_size <= spectrum_size);
@@ -308,6 +294,47 @@ static inline SB_UNUSED bool nlm_filter_process_core(NlmFilter* filter,
         }
       }
     }
+  }
+}
+
+static inline SB_UNUSED bool nlm_filter_process_core(NlmFilter* filter,
+                                                     float* smoothed_snr) {
+  if (!filter || !smoothed_snr) {
+    return false;
+  }
+
+  if (!nlm_filter_is_ready(filter)) {
+    return false;
+  }
+
+  sb_simd_state_t old_simd_state = sb_simd_enable_ftz_daz();
+
+  const uint32_t spectrum_size = filter->config.spectrum_size;
+  const uint32_t paste_size = filter->config.paste_block_size;
+
+  populate_frame_ptrs(filter);
+
+  float* target_frame = cached_get_frame(filter, 0);
+
+  if (filter->config.h_parameter <= 0.0F || filter->h_squared <= 0.0F) {
+    memcpy(smoothed_snr, target_frame, spectrum_size * sizeof(float));
+    sb_simd_restore_state(old_simd_state);
+    return true;
+  }
+
+  memset(smoothed_snr, 0, spectrum_size * sizeof(float));
+
+  float* weight_sum = filter->weight_accum;
+  memset(weight_sum, 0, spectrum_size * sizeof(float));
+
+  NlmBlockTask task_ctx = {filter, smoothed_snr, weight_sum, target_frame};
+  const uint32_t num_blocks = (spectrum_size + paste_size - 1) / paste_size;
+
+  if (filter->pool) {
+    sb_thread_pool_parallel_for(filter->pool, num_blocks,
+                                nlm_process_block_range, &task_ctx);
+  } else {
+    nlm_process_block_range(&task_ctx, 0, num_blocks);
   }
 
   for (uint32_t k = 0; k < spectrum_size; k++) {

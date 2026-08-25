@@ -439,26 +439,35 @@ void test_nlm_filter_process_patch8(void) {
   printf("✓ NLM filter patch_size=8 process tests passed\n");
 }
 
-void test_nlm_filter_omp_config(void) {
-  printf("Testing NLM filter OpenMP configuration...\n");
-
-  // Set OMP_NUM_THREADS env var
-  setenv("OMP_NUM_THREADS", "2", 1);
+void test_nlm_filter_thread_config(void) {
+  printf("Testing NLM filter threading configuration...\n");
 
   NlmFilterConfig config = {.spectrum_size = 32};
   NlmFilter* filter = nlm_filter_initialize(config);
   TEST_ASSERT(filter != NULL, "Initialization failed");
-
-  // On many platforms this will trigger the env-reading logic in nlm_filter.c
-  TEST_ASSERT(filter->num_threads == 2,
-              "Filter should respect OMP_NUM_THREADS env var");
-
+  TEST_ASSERT(filter->num_threads == NLM_NUM_THREADS_DEFAULT,
+              "Zero thread count should fall back to default");
   nlm_filter_free(filter);
 
-  // Clean up
-  unsetenv("OMP_NUM_THREADS");
+  NlmFilterConfig single_config = {.spectrum_size = 32, .num_threads = 1};
+  NlmFilter* single_filter = nlm_filter_initialize(single_config);
+  TEST_ASSERT(single_filter != NULL, "Single-threaded initialization failed");
+  TEST_ASSERT(single_filter->num_threads == 1U, "Thread count should be 1");
+  TEST_ASSERT(single_filter->pool == NULL,
+              "Single-threaded filter should not create a worker pool");
+  nlm_filter_free(single_filter);
 
-  printf("✓ NLM filter OpenMP configuration tests passed\n");
+  NlmFilterConfig multi_config = {.spectrum_size = 32, .num_threads = 3};
+  NlmFilter* multi_filter = nlm_filter_initialize(multi_config);
+  TEST_ASSERT(multi_filter != NULL, "Multi-threaded initialization failed");
+  TEST_ASSERT(multi_filter->num_threads == 3U, "Thread count should be 3");
+  TEST_ASSERT(multi_filter->pool != NULL,
+              "Multi-threaded filter should create a worker pool");
+  TEST_ASSERT(sb_thread_pool_num_workers(multi_filter->pool) == 2U,
+              "Pool should have num_threads - 1 workers");
+  nlm_filter_free(multi_filter);
+
+  printf("✓ NLM filter threading configuration tests passed\n");
 }
 
 void test_nlm_filter_snr_and_reconstruct(void) {
@@ -557,7 +566,7 @@ int main(void) {
   test_nlm_filter_null_handling();
   test_nlm_filter_snr_and_reconstruct();
   test_nlm_filter_frame_cache();
-  test_nlm_filter_omp_config();
+  test_nlm_filter_thread_config();
 
   printf("\n✅ All NLM filter tests passed!\n");
   return 0;
