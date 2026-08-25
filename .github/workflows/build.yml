@@ -36,8 +36,7 @@ jobs:
             cmake \
             gcovr \
             libfftw3-dev \
-            libsndfile1-dev \
-            libomp-dev
+            libsndfile1-dev
 
       - name: Configure build
         run: |
@@ -55,7 +54,8 @@ jobs:
       - name: Generate coverage report
         if: matrix.config.run_coverage
         run: |
-          gcovr --xml build/coverage.xml -r . -e tests/ -e examples/
+          gcovr --xml build/coverage.xml -r . -e tests/ -e examples/ \
+            --gcov-ignore-parse-errors negative_hits.warn_once_per_file
 
       - name: Upload coverage to Codecov
         if: matrix.config.run_coverage
