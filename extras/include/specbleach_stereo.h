@@ -52,7 +52,8 @@ typedef enum SpecbleachStereoEngine {
 /**
  * Opaque handle to a multi-channel engine group.
  */
-typedef struct specbleach_stereo specbleach_stereo;
+typedef struct specbleach_stereo
+    specbleach_stereo; // NOLINT(readability-identifier-naming)
 
 /**
  * Creates one engine instance per channel.

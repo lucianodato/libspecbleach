@@ -58,7 +58,8 @@ static void transition_reset_delay(specbleach_transition* instance) {
   if (self->delay_lines) {
     for (uint32_t ch = 0; ch < self->channels; ++ch) {
       if (self->delay_lines[ch]) {
-        memset(self->delay_lines[ch], 0, self->delay_capacity * sizeof(float));
+        memset(self->delay_lines[ch], 0,
+               (size_t)self->delay_capacity * sizeof(float));
       }
     }
   }
@@ -74,7 +75,7 @@ static bool transition_ensure_delay_capacity(specbleach_transition* instance,
 
   const size_t capacity = required_samples > self->max_block_size
                               ? required_samples + self->max_block_size
-                              : self->max_block_size * 2U;
+                              : (size_t)self->max_block_size * 2U;
 
   float** lines = (float**)calloc((size_t)self->channels * sizeof(float*), 1U);
   if (!lines) {
@@ -202,7 +203,8 @@ bool specbleach_transition_process(specbleach_transition* instance,
   if (self->phase == TRANSITION_IDLE) {
     for (uint32_t ch = 0; ch < self->channels; ++ch) {
       if (blended[ch] != to_out[ch]) {
-        memcpy(blended[ch], to_out[ch], number_of_samples * sizeof(float));
+        memcpy(blended[ch], to_out[ch],
+               (size_t)number_of_samples * sizeof(float));
       }
     }
     return true;
