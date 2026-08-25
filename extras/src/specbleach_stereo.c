@@ -72,7 +72,7 @@ specbleach_stereo* specbleach_stereo_initialize(
 
   self->channels = channels;
   self->engine = engine;
-  self->instances = (void**)calloc(channels, sizeof(void*));
+  self->instances = (void**)calloc((size_t)channels * sizeof(void*), 1U);
   if (!self->instances) {
     specbleach_stereo_free(self);
     return NULL;

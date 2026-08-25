@@ -76,7 +76,7 @@ static bool transition_ensure_delay_capacity(specbleach_transition* instance,
                               ? required_samples + self->max_block_size
                               : self->max_block_size * 2U;
 
-  float** lines = (float**)calloc(self->channels, sizeof(float*));
+  float** lines = (float**)calloc((size_t)self->channels * sizeof(float*), 1U);
   if (!lines) {
     return false;
   }
