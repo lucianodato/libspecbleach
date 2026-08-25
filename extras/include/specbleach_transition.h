@@ -40,12 +40,13 @@ extern "C" {
  *
  * Behavior:
  * - Fades are equal-power (sin/cos) over SPECBLEACH_TRANSITION_FADE_TIME_MS.
- * - When the target engine has HIGHER latency, the source side of the blend
- *   is taken from the caller's emitted-output history (see feed()), so both
- *   blend sides share one time origin and the output neither repeats nor
- *   ducks material.
- * - When the target has lower latency the streams blend directly; their
- *   latency offset smears across the fade duration.
+ * - Whichever engine has the SHORTER latency is blended through an
+ *   alignment tap (delayed by the latency difference) so both blend sides
+ *   share the longer time origin: the emitted timeline never jumps in
+ *   either direction.
+ * - After landing on the shorter-latency engine, a slew phase slides the
+ *   alignment delay back out by crossfading between the delayed and direct
+ *   copies of the same signal, over at least the tap length.
  * - Callers must update host delay compensation when they call begin():
  *   specbleach_transition_get_latency() reports the target latency from
  *   that moment on.
@@ -97,20 +98,6 @@ SPECBLEACH_API void specbleach_transition_free(specbleach_transition* instance);
 SPECBLEACH_API bool specbleach_transition_begin(specbleach_transition* instance,
                                                 uint32_t latency_from,
                                                 uint32_t latency_to);
-
-/**
- * Records emitted output for alignment.
- *
- * Call once per processed block with the buffer the caller actually emits
- * (after blending), in every state — idle included. The alignment tap used
- * when fading toward a higher-latency engine reads this history, so it must
- * always reflect what listeners heard, including before begin() was called.
- *
- * Real-time safe (fixed preallocated ring; no allocation).
- */
-SPECBLEACH_API void specbleach_transition_feed(specbleach_transition* instance,
-                                               const float* const* stream,
-                                               uint32_t number_of_samples);
 
 /**
  * Blends one block.
