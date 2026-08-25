@@ -182,16 +182,18 @@ static void test_equal_latency_noop(void) {
   specbleach_transition* t =
       specbleach_transition_initialize(SAMPLE_RATE, MAX_BLOCK, CHANNELS);
 
-  float source[BLOCK_SIZE];
-  float target[BLOCK_SIZE];
-  float blended[BLOCK_SIZE];
-  const float* from_ptrs[1] = {source};
-  const float* to_ptrs[1] = {target};
-  float* blended_ptrs[1] = {blended};
+  float source[CHANNELS][BLOCK_SIZE];
+  float target[CHANNELS][BLOCK_SIZE];
+  float blended[CHANNELS][BLOCK_SIZE];
+  const float* from_ptrs[CHANNELS] = {source[0], source[1]};
+  const float* to_ptrs[CHANNELS] = {target[0], target[1]};
+  float* blended_ptrs[CHANNELS] = {blended[0], blended[1]};
 
   for (uint32_t s = 0; s < BLOCK_SIZE; ++s) {
-    source[s] = 0.25f;
-    target[s] = 0.75f;
+    source[0][s] = 0.25f;
+    source[1][s] = 0.25f;
+    target[0][s] = 0.75f;
+    target[1][s] = 0.75f;
   }
 
   TEST_ASSERT(specbleach_transition_begin(t, 1024, 1024), "begin ok");
@@ -201,7 +203,8 @@ static void test_equal_latency_noop(void) {
   TEST_ASSERT(specbleach_transition_process(t, BLOCK_SIZE, from_ptrs, to_ptrs,
                                             blended_ptrs),
               "process ok");
-  TEST_ASSERT(blended[10] == 0.75f, "equal latency passes through target");
+  TEST_ASSERT(blended[0][10] == 0.75f, "equal latency passes through target");
+  TEST_ASSERT(blended[1][10] == 0.75f, "ch1 equal latency passes through");
 
   specbleach_transition_free(t);
   printf("✓ Equal-latency tests passed\n");
