@@ -186,6 +186,19 @@ SPECBLEACH_API bool specbleach_stereo_is_transient_detected(
 SPECBLEACH_API float specbleach_stereo_get_transient_intensity(
     specbleach_stereo* instance);
 
+/**
+ * Per-channel visualization/query forwarders. See the engine headers for
+ * semantics and threading notes (tonal peak queries are offline-only).
+ */
+SPECBLEACH_API const float* specbleach_stereo_get_tonal_mask_for_channel(
+    specbleach_stereo* instance, uint32_t channel);
+SPECBLEACH_API const float*
+specbleach_stereo_get_active_noise_profile_for_channel(
+    specbleach_stereo* instance, uint32_t channel);
+SPECBLEACH_API uint32_t specbleach_stereo_get_tonal_peaks_for_channel(
+    specbleach_stereo* instance, uint32_t channel, float* peak_freqs_hz,
+    uint32_t max_peaks);
+
 #ifdef __cplusplus
 }
 #endif

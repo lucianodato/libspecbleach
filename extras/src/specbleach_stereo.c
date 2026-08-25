@@ -484,3 +484,51 @@ float specbleach_stereo_get_transient_intensity(specbleach_stereo* instance) {
   }
   return maximum;
 }
+
+const float* specbleach_stereo_get_tonal_mask_for_channel(
+    specbleach_stereo* instance, const uint32_t channel) {
+  SpecbleachStereoState* self = instance;
+
+  if (!self || channel >= self->channels) {
+    return NULL;
+  }
+
+  return self->engine == SPECBLEACH_STEREO_ENGINE_SPECTRAL
+             ? specbleach_denoiser_get_tonal_mask(
+                   (specbleach_denoiser*)self->instances[channel])
+             : specbleach_2d_get_tonal_mask(
+                   (specbleach_2d_denoiser*)self->instances[channel]);
+}
+
+const float* specbleach_stereo_get_active_noise_profile_for_channel(
+    specbleach_stereo* instance, const uint32_t channel) {
+  SpecbleachStereoState* self = instance;
+
+  if (!self || channel >= self->channels) {
+    return NULL;
+  }
+
+  return self->engine == SPECBLEACH_STEREO_ENGINE_SPECTRAL
+             ? specbleach_denoiser_get_active_noise_profile(
+                   (specbleach_denoiser*)self->instances[channel])
+             : specbleach_2d_get_active_noise_profile(
+                   (specbleach_2d_denoiser*)self->instances[channel]);
+}
+
+uint32_t specbleach_stereo_get_tonal_peaks_for_channel(
+    specbleach_stereo* instance, const uint32_t channel, float* peak_freqs_hz,
+    const uint32_t max_peaks) {
+  SpecbleachStereoState* self = instance;
+
+  if (!self || channel >= self->channels) {
+    return 0;
+  }
+
+  return self->engine == SPECBLEACH_STEREO_ENGINE_SPECTRAL
+             ? specbleach_denoiser_get_tonal_peaks(
+                   (specbleach_denoiser*)self->instances[channel],
+                   peak_freqs_hz, max_peaks)
+             : specbleach_2d_get_tonal_peaks(
+                   (specbleach_2d_denoiser*)self->instances[channel],
+                   peak_freqs_hz, max_peaks);
+}
