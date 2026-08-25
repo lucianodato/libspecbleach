@@ -39,12 +39,13 @@ extern "C" {
  * and feeds them here.
  *
  * Behavior:
- * - During the fade, an equal-power (sin/cos) blend ramps from the source
- *   stream to the target stream over SPECBLEACH_TRANSITION_FADE_TIME_MS.
- *   Both streams are blended as rendered; no time alignment is applied,
- *   so the emitted output never repeats or drops samples. If the two
- *   engines' algorithmic latencies differ, the blend smears that offset
- *   over the fade duration instead.
+ * - Fades are equal-power (sin/cos) over SPECBLEACH_TRANSITION_FADE_TIME_MS.
+ * - When the target engine has HIGHER latency, the source side of the blend
+ *   is taken from the caller's emitted-output history (see feed()), so both
+ *   blend sides share one time origin and the output neither repeats nor
+ *   ducks material.
+ * - When the target has lower latency the streams blend directly; their
+ *   latency offset smears across the fade duration.
  * - Callers must update host delay compensation when they call begin():
  *   specbleach_transition_get_latency() reports the target latency from
  *   that moment on.
@@ -66,11 +67,14 @@ typedef struct specbleach_transition // NOLINT(readability-identifier-naming)
  * Creates a transition processor.
  *
  * @param max_block_size Largest block that will ever be passed to
- * specbleach_transition_process(); used for internal buffering.
+ * specbleach_transition_process() or specbleach_transition_feed().
+ * @param max_alignment_delay Largest latency difference (in samples) the
+ * instance must be able to align; begin() fails if asked for more.
  * @return New instance or NULL on failure.
  */
 SPECBLEACH_API specbleach_transition* specbleach_transition_initialize(
-    uint32_t sample_rate, uint32_t max_block_size, uint32_t channels);
+    uint32_t sample_rate, uint32_t max_block_size, uint32_t channels,
+    uint32_t max_alignment_delay);
 
 /**
  * Frees the instance. NULL is a no-op.
@@ -93,6 +97,20 @@ SPECBLEACH_API void specbleach_transition_free(specbleach_transition* instance);
 SPECBLEACH_API bool specbleach_transition_begin(specbleach_transition* instance,
                                                 uint32_t latency_from,
                                                 uint32_t latency_to);
+
+/**
+ * Records emitted output for alignment.
+ *
+ * Call once per processed block with the buffer the caller actually emits
+ * (after blending), in every state — idle included. The alignment tap used
+ * when fading toward a higher-latency engine reads this history, so it must
+ * always reflect what listeners heard, including before begin() was called.
+ *
+ * Real-time safe (fixed preallocated ring; no allocation).
+ */
+SPECBLEACH_API void specbleach_transition_feed(specbleach_transition* instance,
+                                               const float* const* stream,
+                                               uint32_t number_of_samples);
 
 /**
  * Blends one block.

@@ -32,11 +32,23 @@ typedef enum TransitionPhase {
 typedef struct specbleach_transition { // NOLINT(readability-identifier-naming)
   uint32_t sample_rate;
   uint32_t channels;
+  uint32_t max_alignment_delay;
 
   TransitionPhase phase;
+  uint32_t latency_from;
   uint32_t latency_to;
-  float fade_progress; /* 0..1 within FADING */
-  float fade_step;     /* progress increment per sample */
+  float fade_progress;
+  float fade_step;
+
+  /*
+   * Rolling copy of the caller's EMITTED output (fed via
+   * specbleach_transition_feed() every block). Alignment taps therefore
+   * read audio the listener actually heard, so a fade toward a
+   * higher-latency engine continues the audible trajectory seamlessly.
+   */
+  float** history;
+  size_t history_capacity;
+  size_t history_write_pos;
 } SpecbleachTransitionState;
 
 /* Half circle in radians; equal-power fades traverse a quarter circle. */
@@ -44,7 +56,7 @@ typedef struct specbleach_transition { // NOLINT(readability-identifier-naming)
 
 specbleach_transition* specbleach_transition_initialize(
     const uint32_t sample_rate, const uint32_t max_block_size,
-    const uint32_t channels) {
+    const uint32_t channels, const uint32_t max_alignment_delay) {
   if (sample_rate == 0 || max_block_size == 0 || channels == 0) {
     return NULL;
   }
@@ -57,7 +69,28 @@ specbleach_transition* specbleach_transition_initialize(
 
   self->sample_rate = sample_rate;
   self->channels = channels;
+  self->max_alignment_delay = max_alignment_delay;
+  /* Enough room for one full block plus the longest tap without overlap. */
+  self->history_capacity = (size_t)max_block_size + (size_t)max_alignment_delay;
   self->phase = TRANSITION_IDLE;
+
+  self->history = (float**)calloc((size_t)channels * sizeof(float*), 1U);
+  if (!self->history) {
+    free(self);
+    return NULL;
+  }
+  for (uint32_t ch = 0; ch < channels; ++ch) {
+    self->history[ch] =
+        (float*)calloc(self->history_capacity * sizeof(float), 1U);
+    if (!self->history[ch]) {
+      for (uint32_t free_ch = 0; free_ch < ch; ++free_ch) {
+        free(self->history[free_ch]);
+      }
+      free((void*)self->history);
+      free(self);
+      return NULL;
+    }
+  }
 
   return self;
 }
@@ -67,6 +100,13 @@ void specbleach_transition_free(specbleach_transition* instance) {
 
   if (!self) {
     return;
+  }
+
+  if (self->history) {
+    for (uint32_t ch = 0; ch < self->channels; ++ch) {
+      free(self->history[ch]);
+    }
+    free((void*)self->history);
   }
 
   free(self);
@@ -81,15 +121,48 @@ bool specbleach_transition_begin(specbleach_transition* instance,
     return false;
   }
 
+  const uint32_t diff = latency_to > latency_from ? latency_to - latency_from
+                                                  : latency_from - latency_to;
+  if (diff > self->max_alignment_delay) {
+    return false; /* Initialize with sufficient headroom. */
+  }
+
   const float fade_samples =
       (float)self->sample_rate * (SPECBLEACH_TRANSITION_FADE_TIME_MS / 1000.0f);
 
+  self->latency_from = latency_from;
   self->latency_to = latency_to;
   self->fade_step = fade_samples >= 1.0f ? 1.0f / fade_samples : 1.0f;
   self->fade_progress = 0.0f;
   self->phase =
       latency_to != latency_from ? TRANSITION_FADING : TRANSITION_IDLE;
   return true;
+}
+
+void specbleach_transition_feed(specbleach_transition* instance,
+                                const float* const* stream,
+                                const uint32_t number_of_samples) {
+  SpecbleachTransitionState* self = instance;
+
+  if (!self || !stream || number_of_samples == 0) {
+    return;
+  }
+  if ((size_t)number_of_samples > self->history_capacity) {
+    return; /* Larger than the whole ring cannot be meaningful history. */
+  }
+
+  for (uint32_t ch = 0; ch < self->channels; ++ch) {
+    if (!stream[ch]) {
+      continue;
+    }
+    size_t pos = self->history_write_pos;
+    for (uint32_t s = 0; s < number_of_samples; ++s) {
+      self->history[ch][pos] = stream[ch][s];
+      pos = (pos + 1U) % self->history_capacity;
+    }
+  }
+  self->history_write_pos =
+      (self->history_write_pos + number_of_samples) % self->history_capacity;
 }
 
 bool specbleach_transition_process(specbleach_transition* instance,
@@ -101,15 +174,8 @@ bool specbleach_transition_process(specbleach_transition* instance,
   if (!self || number_of_samples == 0 || !to_out || !blended) {
     return false;
   }
-  if (!from_out && self->phase == TRANSITION_FADING) {
-    return false;
-  }
 
   if (self->phase == TRANSITION_IDLE) {
-    /* Only FADING remains past the idle passthrough. */
-    assert(self->phase == TRANSITION_FADING);
-    assert(from_out != NULL);
-
     for (uint32_t ch = 0; ch < self->channels; ++ch) {
       if (blended[ch] != to_out[ch]) {
         memcpy(blended[ch], to_out[ch],
@@ -119,16 +185,32 @@ bool specbleach_transition_process(specbleach_transition* instance,
     return true;
   }
 
+  assert(self->history != NULL);
+
+  const bool to_higher = self->latency_to > self->latency_from;
+  const size_t tap =
+      to_higher ? (size_t)(self->latency_to - self->latency_from) : 0U;
+
   for (uint32_t ch = 0; ch < self->channels; ++ch) {
     float progress = self->fade_progress;
 
     for (uint32_t s = 0; s < number_of_samples; ++s) {
-      const float clamped = progress > 1.0f ? 1.0f : progress;
-      const float angle = clamped * TRANSITION_HALF_PI;
+      const float angle =
+          progress > 1.0f ? TRANSITION_HALF_PI : progress * TRANSITION_HALF_PI;
       const float w_from = cosf(angle);
       const float w_to = sinf(angle);
 
-      blended[ch][s] = (w_from * from_out[ch][s]) + (w_to * to_out[ch][s]);
+      if (to_higher) {
+        /* Both blend sides share the target's (older) time origin by taking
+         * the source from emitted history; the fade never repeats or ducks. */
+        const size_t pos =
+            (self->history_write_pos + self->history_capacity - tap) %
+            self->history_capacity;
+        blended[ch][s] =
+            (w_from * self->history[ch][pos]) + (w_to * to_out[ch][s]);
+      } else {
+        blended[ch][s] = (w_from * from_out[ch][s]) + (w_to * to_out[ch][s]);
+      }
       progress += self->fade_step;
     }
   }

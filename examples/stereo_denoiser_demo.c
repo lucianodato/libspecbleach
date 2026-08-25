@@ -263,7 +263,7 @@ int main(int argc, char** argv) {
                                   SPECBLEACH_STEREO_ENGINE_NLM_2D)
                             : NULL;
   specbleach_transition* transition =
-      specbleach_transition_initialize(sample_rate, BLOCK_SIZE, channels);
+      specbleach_transition_initialize(sample_rate, BLOCK_SIZE, channels, 4096);
 
   float* interleaved = calloc((size_t)channels * BLOCK_SIZE, sizeof(float));
   float* channel_data = calloc((size_t)channels * BLOCK_SIZE, sizeof(float));
