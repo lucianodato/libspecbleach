@@ -283,7 +283,7 @@ void sb_thread_pool_free(SbThreadPool* pool) {
     return;
   }
 
-  if (pool->threads) {
+  if (pool->threads && pool->workers) {
     atomic_store_explicit(&pool->shutdown, true, memory_order_release);
     for (uint32_t i = 0U; i < pool->threads_created; i++) {
       sb_wake_worker(&pool->workers[i]);
@@ -298,18 +298,20 @@ void sb_thread_pool_free(SbThreadPool* pool) {
     }
   }
 
-  for (uint32_t i = 0U; i < pool->worker_count; i++) {
+  if (pool->workers) {
+    for (uint32_t i = 0U; i < pool->worker_count; i++) {
 #ifdef _WIN32
-    if (pool->workers[i].sem) {
-      CloseHandle(pool->workers[i].sem);
-    }
+      if (pool->workers[i].sem) {
+        CloseHandle(pool->workers[i].sem);
+      }
 #elif defined(__APPLE__)
-    if (pool->workers[i].sem) {
-      dispatch_release(pool->workers[i].sem);
-    }
+      if (pool->workers[i].sem) {
+        dispatch_release(pool->workers[i].sem);
+      }
 #else
-    sem_destroy(&pool->workers[i].sem);
+      sem_destroy(&pool->workers[i].sem);
 #endif
+    }
   }
 
   free(pool->workers);
