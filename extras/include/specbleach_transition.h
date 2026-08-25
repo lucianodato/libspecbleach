@@ -59,8 +59,8 @@ extern "C" {
 /**
  * Opaque handle to a transition state machine.
  */
-typedef struct specbleach_transition
-    specbleach_transition; // NOLINT(readability-identifier-naming)
+typedef struct specbleach_transition // NOLINT(readability-identifier-naming)
+    specbleach_transition;
 
 /**
  * Creates a transition processor.

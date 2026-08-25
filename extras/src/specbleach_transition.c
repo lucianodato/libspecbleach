@@ -19,6 +19,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 #include "specbleach_transition.h"
+#include <assert.h>
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -105,6 +106,10 @@ bool specbleach_transition_process(specbleach_transition* instance,
   }
 
   if (self->phase == TRANSITION_IDLE) {
+    /* Only FADING remains past the idle passthrough. */
+    assert(self->phase == TRANSITION_FADING);
+    assert(from_out != NULL);
+
     for (uint32_t ch = 0; ch < self->channels; ++ch) {
       if (blended[ch] != to_out[ch]) {
         memcpy(blended[ch], to_out[ch],
