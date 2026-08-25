@@ -296,6 +296,46 @@ bool specbleach_stereo_sync_profiles(specbleach_stereo* instance) {
              : stereo_sync_profiles_2d(self);
 }
 
+bool specbleach_stereo_migrate_profiles_from(specbleach_stereo* instance,
+                                             const specbleach_stereo* source) {
+  SpecbleachStereoState* self = instance;
+  const SpecbleachStereoState* origin = source;
+
+  if (!self || !origin || self->channels != origin->channels ||
+      self->engine == origin->engine) {
+    return false;
+  }
+
+  for (uint32_t ch = 0; ch < self->channels; ++ch) {
+    bool channel_migrated = false;
+    for (int mode = SPECBLEACH_PROFILE_MODE_FIRST;
+         mode <= SPECBLEACH_PROFILE_MODE_LAST; ++mode) {
+      if (!specbleach_stereo_profile_available_for_channel(
+              (specbleach_stereo*)origin, ch, mode)) {
+        continue;
+      }
+      float* profile = specbleach_stereo_get_noise_profile_for_channel(
+          (specbleach_stereo*)origin, ch, mode);
+      if (!profile) {
+        continue;
+      }
+      if (specbleach_stereo_load_noise_profile_for_channel(
+              instance, ch, profile,
+              specbleach_stereo_get_noise_profile_size(instance),
+              specbleach_stereo_get_profile_block_count_for_channel(
+                  (specbleach_stereo*)origin, ch, mode),
+              mode)) {
+        channel_migrated = true;
+      }
+    }
+    if (!channel_migrated) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 bool specbleach_stereo_reset_profiles(specbleach_stereo* instance) {
   SpecbleachStereoState* self = instance;
 

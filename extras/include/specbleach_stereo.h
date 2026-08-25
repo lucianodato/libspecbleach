@@ -133,6 +133,19 @@ SPECBLEACH_API bool specbleach_stereo_sync_profiles(
     specbleach_stereo* instance);
 
 /**
+ * Copies noise profiles from another engine family's group into this one,
+ * channel by channel (e.g., before switching a spectral group for a 2D NLM
+ * group). Both groups must share the same channel count and profile size.
+ *
+ * Not real-time safe.
+ *
+ * @return true if every channel was migrated successfully. Fails cleanly
+ * when the source group has not learned anything yet.
+ */
+SPECBLEACH_API bool specbleach_stereo_migrate_profiles_from(
+    specbleach_stereo* instance, const specbleach_stereo* source);
+
+/**
  * Resets stored noise profiles on every channel.
  */
 SPECBLEACH_API bool specbleach_stereo_reset_profiles(
