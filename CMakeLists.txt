@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(libspecbleach VERSION 0.3.2 LANGUAGES C)
+project(libspecbleach VERSION 0.4.0 LANGUAGES C)
 
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
@@ -107,8 +107,18 @@ set_target_properties(libspecbleach PROPERTIES
     OUTPUT_NAME "specbleach"
     VERSION ${PROJECT_VERSION}
     SOVERSION ${PROJECT_VERSION_MAJOR}
-    C_VISIBILITY_PRESET default
+    C_VISIBILITY_PRESET hidden
+    VISIBILITY_INLINES_HIDDEN ON
 )
+
+# Symbol visibility contract (see include/specbleach_export.h):
+# - Building the shared library exports SPECBLEACH_API symbols only.
+# - Consuming a static archive must not use dllimport on Windows.
+if(BUILD_SHARED_LIBS)
+    target_compile_definitions(libspecbleach PRIVATE SPECBLEACH_EXPORTS)
+else()
+    target_compile_definitions(libspecbleach PUBLIC SPECBLEACH_STATIC)
+endif()
 
 target_include_directories(libspecbleach PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -166,11 +176,33 @@ if(ENABLE_TESTS)
     enable_testing()
     set(TEST_DATA_DIR "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_data/")
 
+    # Unit tests exercise internal APIs directly, which are hidden in the
+    # shared library by design. Link them against a static full-symbol copy of
+    # the library sources instead. The public shared artifact is untouched.
+    if(BUILD_SHARED_LIBS)
+        add_library(specbleach_test_internal STATIC EXCLUDE_FROM_ALL
+            ${SPECLEACH_SHARED_SOURCES}
+            ${SPECLEACH_PROCESSOR_SOURCES}
+        )
+        target_include_directories(specbleach_test_internal PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/src
+            ${CMAKE_CURRENT_SOURCE_DIR}/include
+        )
+        target_link_libraries(specbleach_test_internal PRIVATE
+            ${FFTW_TARGET} Threads::Threads)
+        if(TARGET specbleach_avx)
+            target_link_libraries(specbleach_test_internal PRIVATE specbleach_avx)
+        endif()
+        set(SPECBLEACH_TEST_LIB specbleach_test_internal)
+    else()
+        set(SPECBLEACH_TEST_LIB libspecbleach)
+    endif()
+
     macro(add_specbleach_test test_name src_file)
         add_executable(${test_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/${src_file}")
         target_compile_definitions(${test_name} PRIVATE "TEST_DATA_DIR=\"${TEST_DATA_DIR}\"")
         target_include_directories(${test_name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/src)
-        target_link_libraries(${test_name} PRIVATE libspecbleach ${FFTW_TARGET})
+        target_link_libraries(${test_name} PRIVATE ${SPECBLEACH_TEST_LIB} Threads::Threads)
         if(MATH_LIB)
             target_link_libraries(${test_name} PRIVATE ${MATH_LIB})
         endif()
@@ -211,6 +243,12 @@ if(ENABLE_TESTS)
     if(TARGET PkgConfig::SNDFILE)
         add_specbleach_test(test_audio_file_regression "test_audio_file_regression.c")
         target_link_libraries(test_audio_file_regression PRIVATE PkgConfig::SNDFILE)
+    endif()
+
+    if(BUILD_SHARED_LIBS AND NOT MSVC)
+        add_test(NAME test_exported_symbols
+                 COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/scripts/check_exported_symbols.sh"
+                         "$<TARGET_FILE:libspecbleach>")
     endif()
 endif()
 

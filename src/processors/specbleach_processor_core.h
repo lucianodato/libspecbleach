@@ -32,10 +32,25 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdint.h>
 
 DenoiserParameters sb_denoiser_params_sanitize(
-    SpectralBleachDenoiserParameters parameters);
+    const SpecbleachDenoiserParameters* parameters);
 
 Denoiser2DParameters sb_denoiser_2d_params_sanitize(
-    SpectralBleach2DDenoiserParameters parameters);
+    const Specbleach2DDenoiserParameters* parameters);
+
+/**
+ * Copies a caller-provided reduction curve bias into an internally owned
+ * buffer with capacity reuse. Returns NULL when the curve is disabled, the
+ * source is NULL, or required_size is zero; otherwise returns the owned
+ * copy, which stays valid until the next load or until the instance is
+ * freed.
+ *
+ * May allocate when required_size grows beyond current capacity; reuses the
+ * existing buffer otherwise. Callers own *buffer and must free it during
+ * instance teardown.
+ */
+const float* sb_curve_bias_copy(float** buffer, uint32_t* capacity,
+                                const uint32_t required_size,
+                                const bool enabled, const float* source);
 
 typedef struct SbProcessorCore {
   uint32_t sample_rate;

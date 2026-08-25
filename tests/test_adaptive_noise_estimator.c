@@ -33,10 +33,10 @@ int main(void) {
 
   // 1. Core API
   printf("Testing Core API...\n");
-  specbleach_free(NULL);
-  SpectralBleachHandle sb = specbleach_initialize(sample_rate, 10.0f);
+  specbleach_denoiser_free(NULL);
+  specbleach_denoiser* sb = specbleach_denoiser_initialize(sample_rate, 10.0f);
   if (sb) {
-    specbleach_free(sb);
+    specbleach_denoiser_free(sb);
   }
 
   // 2. Internal Modules

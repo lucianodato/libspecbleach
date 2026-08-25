@@ -68,13 +68,13 @@ void generate_test_signal(float* buffer, int length, unsigned int seed) {
 // Process audio through denoiser
 void process_audio(const float* input, float* output, int length) {
   float frame_size_ms = 20.0f;
-  SpectralBleachHandle handle =
-      specbleach_initialize(SAMPLE_RATE, frame_size_ms);
+  specbleach_denoiser* handle =
+      specbleach_denoiser_initialize(SAMPLE_RATE, frame_size_ms);
   TEST_ASSERT(handle != NULL, "Failed to initialize denoiser");
 
-  SpectralBleachDenoiserParameters parameters =
-      (SpectralBleachDenoiserParameters){
-          .learn_noise = 1, // Learn all modes
+  SpecbleachDenoiserParameters parameters =
+      (SpecbleachDenoiserParameters){
+          .learn_noise = SPECBLEACH_LEARN_ALL, // Learn all modes
           .tonal_reduction_gain = 1.0f,
           .aggressiveness = -1.0f, // Use median when processing
           .reduction_gain = 0.1f,
@@ -84,14 +84,14 @@ void process_audio(const float* input, float* output, int length) {
           .residual_listen = false,
           .whitening_factor = 0.0f};
 
-  specbleach_load_parameters(handle, parameters);
+  specbleach_denoiser_load_parameters(handle, &parameters, sizeof(parameters));
 
   // Learn phase (first 5000 samples)
-  specbleach_process(handle, 5000, input, output);
+  specbleach_denoiser_process(handle, 5000, input, output);
 
   // Reduction phase
-  parameters.learn_noise = 0;
-  specbleach_load_parameters(handle, parameters);
+  parameters.learn_noise = SPECBLEACH_LEARN_OFF;
+  specbleach_denoiser_load_parameters(handle, &parameters, sizeof(parameters));
 
   int processed = 5000;
   while (processed < length) {
@@ -100,35 +100,35 @@ void process_audio(const float* input, float* output, int length) {
       block_size = length - processed;
     }
 
-    bool result = specbleach_process(handle, block_size, input + processed,
+    bool result = specbleach_denoiser_process(handle, block_size, input + processed,
                                      output + processed);
     TEST_ASSERT(result == true, "Processing failed");
 
     processed += block_size;
   }
 
-  specbleach_free(handle);
+  specbleach_denoiser_free(handle);
 }
 
 // Process audio through adaptive denoiser
 // Process audio through adaptive denoiser
 void process_audio_adaptive(const float* input, float* output, int length) {
   float frame_size_ms = 20.0f;
-  SpectralBleachHandle handle =
-      specbleach_initialize(SAMPLE_RATE, frame_size_ms);
+  specbleach_denoiser* handle =
+      specbleach_denoiser_initialize(SAMPLE_RATE, frame_size_ms);
   TEST_ASSERT(handle != NULL, "Failed to initialize adaptive denoiser");
 
-  SpectralBleachDenoiserParameters parameters =
-      (SpectralBleachDenoiserParameters){.reduction_gain = 0.1f,
+  SpecbleachDenoiserParameters parameters =
+      (SpecbleachDenoiserParameters){.reduction_gain = 0.1f,
                                          .smoothing_factor = 0.0f,
                                          .masking_depth = 0.5f,
 
                                          .residual_listen = false,
                                          .whitening_factor = 0.0f,
-                                         .adaptive_noise = 1,
-                                         .noise_estimation_method = 0};
+                                         .adaptive_noise = true,
+                                         .noise_estimation_method = SPECBLEACH_NOISE_ESTIMATION_SPP_MMSE};
 
-  specbleach_load_parameters(handle, parameters);
+  specbleach_denoiser_load_parameters(handle, &parameters, sizeof(parameters));
 
   int processed = 0;
   while (processed < length) {
@@ -137,14 +137,14 @@ void process_audio_adaptive(const float* input, float* output, int length) {
       block_size = length - processed;
     }
 
-    bool result = specbleach_process(handle, block_size, input + processed,
+    bool result = specbleach_denoiser_process(handle, block_size, input + processed,
                                      output + processed);
     TEST_ASSERT(result == true, "Adaptive processing failed");
 
     processed += block_size;
   }
 
-  specbleach_free(handle);
+  specbleach_denoiser_free(handle);
 }
 
 // Calculate SNR (Signal-to-Noise Ratio)
@@ -360,63 +360,63 @@ void test_noise_estimation_methods(void) {
   generate_test_signal(input, TEST_SAMPLES, 12345);
 
   // Process with Martin MS method (Default)
-  SpectralBleachDenoiserParameters params_martin =
-      (SpectralBleachDenoiserParameters){
+  SpecbleachDenoiserParameters params_martin =
+      (SpecbleachDenoiserParameters){
           .reduction_gain = 0.1f,
           .smoothing_factor = 0.0f,
           .masking_depth = 0.5f,
 
           .residual_listen = false,
           .whitening_factor = 0.0f,
-          .adaptive_noise = 1,
-          .noise_estimation_method = 2}; // 2: Martin MS
+          .adaptive_noise = true,
+          .noise_estimation_method = SPECBLEACH_NOISE_ESTIMATION_MARTIN}; // 2: Martin MS
 
-  SpectralBleachHandle handle_martin =
-      specbleach_initialize(SAMPLE_RATE, frame_size_ms);
+  specbleach_denoiser* handle_martin =
+      specbleach_denoiser_initialize(SAMPLE_RATE, frame_size_ms);
   TEST_ASSERT(handle_martin != NULL, "Failed to initialize Martin denoiser");
 
-  specbleach_load_parameters(handle_martin, params_martin);
+  specbleach_denoiser_load_parameters(handle_martin, &params_martin, sizeof(params_martin));
 
   for (size_t i = 0; i < TEST_SAMPLES; i += (size_t)BLOCK_SIZE) {
     int block_size = (i + (size_t)BLOCK_SIZE > TEST_SAMPLES)
                          ? (int)(TEST_SAMPLES - i)
                          : BLOCK_SIZE;
-    TEST_ASSERT(specbleach_process(handle_martin, block_size, input + i,
+    TEST_ASSERT(specbleach_denoiser_process(handle_martin, block_size, input + i,
                                    output_martin + i),
                 "Failed to process with Martin method");
   }
 
-  specbleach_free(handle_martin);
+  specbleach_denoiser_free(handle_martin);
 
   // Process with SPP-MMSE method
-  SpectralBleachDenoiserParameters params_spp_mmse =
-      (SpectralBleachDenoiserParameters){
+  SpecbleachDenoiserParameters params_spp_mmse =
+      (SpecbleachDenoiserParameters){
           .reduction_gain = 0.1f,
           .smoothing_factor = 0.0f,
           .masking_depth = 0.5f,
 
           .residual_listen = false,
           .whitening_factor = 0.0f,
-          .adaptive_noise = 1,
-          .noise_estimation_method = 0}; // 0: SPP-MMSE
+          .adaptive_noise = true,
+          .noise_estimation_method = SPECBLEACH_NOISE_ESTIMATION_SPP_MMSE}; // 0: SPP-MMSE
 
-  SpectralBleachHandle handle_spp_mmse =
-      specbleach_initialize(SAMPLE_RATE, frame_size_ms);
+  specbleach_denoiser* handle_spp_mmse =
+      specbleach_denoiser_initialize(SAMPLE_RATE, frame_size_ms);
   TEST_ASSERT(handle_spp_mmse != NULL,
               "Failed to initialize SPP-MMSE denoiser");
 
-  specbleach_load_parameters(handle_spp_mmse, params_spp_mmse);
+  specbleach_denoiser_load_parameters(handle_spp_mmse, &params_spp_mmse, sizeof(params_spp_mmse));
 
   for (size_t i = 0; i < TEST_SAMPLES; i += (size_t)BLOCK_SIZE) {
     int block_size = (i + (size_t)BLOCK_SIZE > TEST_SAMPLES)
                          ? (int)(TEST_SAMPLES - i)
                          : BLOCK_SIZE;
-    TEST_ASSERT(specbleach_process(handle_spp_mmse, block_size, input + i,
+    TEST_ASSERT(specbleach_denoiser_process(handle_spp_mmse, block_size, input + i,
                                    output_spp_mmse + i),
                 "Failed to process with SPP-MMSE method");
   }
 
-  specbleach_free(handle_spp_mmse);
+  specbleach_denoiser_free(handle_spp_mmse);
 
   // Verify both methods produced valid output (finite values, reduced noise)
   double input_power = 0.0;

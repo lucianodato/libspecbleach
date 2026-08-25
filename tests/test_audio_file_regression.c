@@ -24,27 +24,27 @@
 #define FRAME_SIZE_ADAPTIVE_MS 20.0f
 
 // Canonical parameters used in generate_reference_files.sh
-static const SpectralBleachDenoiserParameters canonical_denoiser_params = {
+static const SpecbleachDenoiserParameters canonical_denoiser_params = {
     .residual_listen = false,
-    .learn_noise = 1,
+    .learn_noise = SPECBLEACH_LEARN_ALL,
     .tonal_reduction_gain = 1.0f,
     .aggressiveness = 1.0f, // Use maximum profile
     .reduction_gain = 0.1f, // 20 dB = 0.1 linear gain
     .smoothing_factor = 0.0f,
     .whitening_factor = 0.5f,
     .masking_depth = 0.5f,
-    .hpss_enable = 1};
+    .hpss_enable = true};
 
-static const SpectralBleachDenoiserParameters canonical_adenoiser_params = {
+static const SpecbleachDenoiserParameters canonical_adenoiser_params = {
     .residual_listen = false,
     .reduction_gain = 0.1f, // 20 dB = 0.1 linear gain
     .smoothing_factor = 0.0f,
     .whitening_factor = 0.5f,
     .masking_depth = 0.5f,
-    .hpss_enable = 1,
+    .hpss_enable = true,
 
-    .adaptive_noise = 1,
-    .noise_estimation_method = 0};
+    .adaptive_noise = true,
+    .noise_estimation_method = SPECBLEACH_NOISE_ESTIMATION_SPP_MMSE};
 
 void test_denoiser_file_regression(void) {
   printf("Testing spectral denoiser file regression...\n");
@@ -69,12 +69,12 @@ void test_denoiser_file_regression(void) {
   TEST_ASSERT(in_sf != NULL, "Failed to open input file");
   TEST_ASSERT(in_info.channels == 1, "Input file must be mono");
 
-  SpectralBleachHandle handle =
-      specbleach_initialize((uint32_t)in_info.samplerate, FRAME_SIZE_MS);
+  specbleach_denoiser* handle =
+      specbleach_denoiser_initialize((uint32_t)in_info.samplerate, FRAME_SIZE_MS);
   TEST_ASSERT(handle != NULL, "Failed to initialize denoiser");
 
-  SpectralBleachDenoiserParameters params = canonical_denoiser_params;
-  specbleach_load_parameters(handle, params);
+  SpecbleachDenoiserParameters params = canonical_denoiser_params;
+  specbleach_denoiser_load_parameters(handle, &params, sizeof(params));
 
   float* in_buf = malloc(BLOCK_SIZE * sizeof(float));
   float* out_buf = malloc(BLOCK_SIZE * sizeof(float));
@@ -84,17 +84,17 @@ void test_denoiser_file_regression(void) {
   for (int i = 0; i < NOISE_FRAMES; i++) {
     sf_count_t read = sf_readf_float(in_sf, in_buf, BLOCK_SIZE);
     TEST_ASSERT(read == BLOCK_SIZE, "Failed to read learn frames");
-    specbleach_process(handle, (uint32_t)BLOCK_SIZE, in_buf, out_buf);
+    specbleach_denoiser_process(handle, (uint32_t)BLOCK_SIZE, in_buf, out_buf);
   }
 
   // Reduction stage
-  params.learn_noise = 0;
-  specbleach_load_parameters(handle, params);
+  params.learn_noise = SPECBLEACH_LEARN_OFF;
+  specbleach_denoiser_load_parameters(handle, &params, sizeof(params));
 
   sf_count_t total_read = 0;
   sf_count_t read;
   while ((read = sf_readf_float(in_sf, in_buf, BLOCK_SIZE)) > 0) {
-    specbleach_process(handle, (uint32_t)read, in_buf, out_buf);
+    specbleach_denoiser_process(handle, (uint32_t)read, in_buf, out_buf);
     sf_readf_float(ref_sf, ref_buf, read);
 
     for (sf_count_t i = 0; i < read; i++) {
@@ -112,7 +112,7 @@ void test_denoiser_file_regression(void) {
   free(in_buf);
   free(out_buf);
   free(ref_buf);
-  specbleach_free(handle);
+  specbleach_denoiser_free(handle);
   sf_close(in_sf);
   sf_close(ref_sf);
 
@@ -142,12 +142,12 @@ void test_adenoiser_file_regression(void) {
   TEST_ASSERT(in_sf != NULL, "Failed to open input file");
   TEST_ASSERT(in_info.channels == 1, "Input file must be mono");
 
-  SpectralBleachHandle handle = specbleach_initialize(
+  specbleach_denoiser* handle = specbleach_denoiser_initialize(
       (uint32_t)in_info.samplerate, FRAME_SIZE_ADAPTIVE_MS);
   TEST_ASSERT(handle != NULL, "Failed to initialize adaptive denoiser");
 
-  SpectralBleachDenoiserParameters params = canonical_adenoiser_params;
-  specbleach_load_parameters(handle, params);
+  SpecbleachDenoiserParameters params = canonical_adenoiser_params;
+  specbleach_denoiser_load_parameters(handle, &params, sizeof(params));
 
   float* in_buf = malloc(BLOCK_SIZE * sizeof(float));
   float* out_buf = malloc(BLOCK_SIZE * sizeof(float));
@@ -156,7 +156,7 @@ void test_adenoiser_file_regression(void) {
   sf_count_t total_read = 0;
   sf_count_t read;
   while ((read = sf_readf_float(in_sf, in_buf, BLOCK_SIZE)) > 0) {
-    specbleach_process(handle, (uint32_t)read, in_buf, out_buf);
+    specbleach_denoiser_process(handle, (uint32_t)read, in_buf, out_buf);
     sf_readf_float(ref_sf, ref_buf, read);
 
     for (sf_count_t i = 0; i < read; i++) {
@@ -172,7 +172,7 @@ void test_adenoiser_file_regression(void) {
   free(in_buf);
   free(out_buf);
   free(ref_buf);
-  specbleach_free(handle);
+  specbleach_denoiser_free(handle);
   sf_close(in_sf);
   sf_close(ref_sf);
 

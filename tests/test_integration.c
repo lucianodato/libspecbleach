@@ -86,12 +86,12 @@ void test_spectral_denoiser(void) {
 
   // Initialize denoiser
   float frame_size_ms = 20.0f;
-  SpectralBleachHandle handle =
-      specbleach_initialize(SAMPLE_RATE, frame_size_ms);
+  specbleach_denoiser* handle =
+      specbleach_denoiser_initialize(SAMPLE_RATE, frame_size_ms);
   TEST_ASSERT(handle != NULL, "Failed to initialize spectral denoiser");
 
-  SpectralBleachDenoiserParameters parameters =
-      (SpectralBleachDenoiserParameters){.learn_noise = 1, // Learn all modes
+  SpecbleachDenoiserParameters parameters =
+      (SpecbleachDenoiserParameters){.learn_noise = SPECBLEACH_LEARN_ALL, // Learn all modes
                                          .reduction_gain = 0.1f,
                                          .smoothing_factor = 0.0f,
                                          .masking_depth = 0.5f,
@@ -99,14 +99,14 @@ void test_spectral_denoiser(void) {
                                          .residual_listen = false,
                                          .whitening_factor = 0.0f};
 
-  specbleach_load_parameters(handle, parameters);
+  specbleach_denoiser_load_parameters(handle, &parameters, sizeof(parameters));
 
   // Process first blocks in learn mode (at least 10 frames)
-  specbleach_process(handle, FRAME_SIZE * 10, input_buffer, output_buffer);
+  specbleach_denoiser_process(handle, FRAME_SIZE * 10, input_buffer, output_buffer);
 
   // Switch to reduction mode
-  parameters.learn_noise = 0;
-  specbleach_load_parameters(handle, parameters);
+  parameters.learn_noise = SPECBLEACH_LEARN_OFF;
+  specbleach_denoiser_load_parameters(handle, &parameters, sizeof(parameters));
 
   // Process remaining blocks
   size_t processed_samples = FRAME_SIZE * 10;
@@ -117,7 +117,7 @@ void test_spectral_denoiser(void) {
     }
 
     bool result =
-        specbleach_process(handle, block_size, input_buffer + processed_samples,
+        specbleach_denoiser_process(handle, block_size, input_buffer + processed_samples,
                            output_buffer + processed_samples);
     TEST_ASSERT(result == true, "Processing failed");
 
@@ -138,7 +138,7 @@ void test_spectral_denoiser(void) {
               "Signal should be reasonably preserved");
 
   // Cleanup
-  specbleach_free(handle);
+  specbleach_denoiser_free(handle);
   free(input_buffer);
   free(output_buffer);
 
@@ -157,12 +157,12 @@ void test_different_noise_levels(void) {
   generate_test_audio(input_buffer, BLOCK_SIZE, 1000.0f, 0.05f); // Low noise
 
   float frame_size_ms = 20.0f;
-  SpectralBleachHandle handle =
-      specbleach_initialize(SAMPLE_RATE, frame_size_ms);
+  specbleach_denoiser* handle =
+      specbleach_denoiser_initialize(SAMPLE_RATE, frame_size_ms);
   TEST_ASSERT(handle != NULL, "Failed to initialize denoiser");
 
-  SpectralBleachDenoiserParameters parameters =
-      (SpectralBleachDenoiserParameters){.learn_noise = 1, // Average
+  SpecbleachDenoiserParameters parameters =
+      (SpecbleachDenoiserParameters){.learn_noise = SPECBLEACH_LEARN_ALL, // Average
                                          .reduction_gain = 0.1f,
                                          .smoothing_factor = 0.0f,
                                          .masking_depth = 0.5f,
@@ -170,14 +170,14 @@ void test_different_noise_levels(void) {
                                          .residual_listen = false,
                                          .whitening_factor = 0.0f};
 
-  specbleach_load_parameters(handle, parameters);
+  specbleach_denoiser_load_parameters(handle, &parameters, sizeof(parameters));
 
   // Learn a bit (at least 10 frames)
-  specbleach_process(handle, 5000, input_buffer, output_buffer);
+  specbleach_denoiser_process(handle, 5000, input_buffer, output_buffer);
 
   // Process remaining with reduction
-  parameters.learn_noise = 0;
-  specbleach_load_parameters(handle, parameters);
+  parameters.learn_noise = SPECBLEACH_LEARN_OFF;
+  specbleach_denoiser_load_parameters(handle, &parameters, sizeof(parameters));
 
   // Process all blocks
   size_t processed = 5000;
@@ -188,7 +188,7 @@ void test_different_noise_levels(void) {
     }
 
     bool result =
-        specbleach_process(handle, block_size, input_buffer + processed,
+        specbleach_denoiser_process(handle, block_size, input_buffer + processed,
                            output_buffer + processed);
     TEST_ASSERT(result == true, "Processing failed");
 
@@ -201,7 +201,7 @@ void test_different_noise_levels(void) {
   printf("  Low noise - Input RMS: %.4f, Output RMS: %.4f\n", input_rms,
          output_rms);
 
-  specbleach_free(handle);
+  specbleach_denoiser_free(handle);
   free(input_buffer);
   free(output_buffer);
 
@@ -214,25 +214,25 @@ void test_library_info(void) {
 
   // Test spectral denoiser info
   int latency =
-      (int)specbleach_get_latency(NULL); // Should return 0 for NULL handle
+      (int)specbleach_denoiser_get_latency(NULL); // Should return 0 for NULL handle
   TEST_ASSERT(latency == 0, "NULL handle should return 0 latency");
 
-  int profile_size = (int)specbleach_get_noise_profile_size(NULL);
+  int profile_size = (int)specbleach_denoiser_get_noise_profile_size(NULL);
   TEST_ASSERT(profile_size == 0, "NULL handle should return 0 profile size");
 
   // Test that we can get valid information after initialization
   float frame_size_ms = 20.0f;
-  SpectralBleachHandle handle =
-      specbleach_initialize(SAMPLE_RATE, frame_size_ms);
+  specbleach_denoiser* handle =
+      specbleach_denoiser_initialize(SAMPLE_RATE, frame_size_ms);
   TEST_ASSERT(handle != NULL, "Failed to initialize for info test");
 
-  latency = (int)specbleach_get_latency(handle);
+  latency = (int)specbleach_denoiser_get_latency(handle);
   TEST_ASSERT(latency >= 0, "Latency should be non-negative");
 
-  profile_size = (int)specbleach_get_noise_profile_size(handle);
+  profile_size = (int)specbleach_denoiser_get_noise_profile_size(handle);
   TEST_ASSERT(profile_size > 0, "Profile size should be positive");
 
-  specbleach_free(handle);
+  specbleach_denoiser_free(handle);
 
   printf("✓ Library information tests passed\n");
 }
@@ -265,28 +265,28 @@ void test_adaptive_denoiser(void) {
   generate_test_audio(input_buffer, BLOCK_SIZE, 1000.0f, 0.1f);
 
   float frame_size_ms = 40.0f;
-  SpectralBleachHandle handle =
-      specbleach_initialize(SAMPLE_RATE, frame_size_ms);
+  specbleach_denoiser* handle =
+      specbleach_denoiser_initialize(SAMPLE_RATE, frame_size_ms);
   TEST_ASSERT(handle != NULL, "Failed to initialize denoiser");
 
-  SpectralBleachDenoiserParameters parameters =
-      (SpectralBleachDenoiserParameters){
-          .learn_noise = 0,
+  SpecbleachDenoiserParameters parameters =
+      (SpecbleachDenoiserParameters){
+          .learn_noise = SPECBLEACH_LEARN_OFF,
           .reduction_gain = 0.1f,
           .smoothing_factor = 0.5f,
           .masking_depth = 0.5f,
 
           .residual_listen = false,
           .whitening_factor = 0.5f,
-          .adaptive_noise = 1,         // Enable adaptive mode
-          .noise_estimation_method = 0 // Default method
+          .adaptive_noise = true,         // Enable adaptive mode
+          .noise_estimation_method = SPECBLEACH_NOISE_ESTIMATION_SPP_MMSE // Default method
       };
 
-  specbleach_load_parameters(handle, parameters);
+  specbleach_denoiser_load_parameters(handle, &parameters, sizeof(parameters));
 
   // Process all samples
   bool result =
-      specbleach_process(handle, BLOCK_SIZE, input_buffer, output_buffer);
+      specbleach_denoiser_process(handle, BLOCK_SIZE, input_buffer, output_buffer);
   TEST_ASSERT(result == true, "Processing failed");
 
   float input_rms = calculate_rms(input_buffer, BLOCK_SIZE);
@@ -294,7 +294,7 @@ void test_adaptive_denoiser(void) {
   printf("  Adaptive - Input RMS: %.4f, Output RMS: %.4f\n", input_rms,
          output_rms);
 
-  specbleach_free(handle);
+  specbleach_denoiser_free(handle);
   free(input_buffer);
   free(output_buffer);
 
@@ -311,7 +311,7 @@ void test_2d_denoiser(void) {
   generate_test_audio(input_buffer, BLOCK_SIZE, 1000.0f, 0.1f);
 
   float frame_size_ms = 20.0f;
-  SpectralBleachHandle handle =
+  specbleach_2d_denoiser* handle =
       specbleach_2d_initialize(SAMPLE_RATE, frame_size_ms);
   TEST_ASSERT(handle != NULL, "Failed to initialize 2D denoiser");
 
@@ -321,15 +321,15 @@ void test_2d_denoiser(void) {
   TEST_ASSERT(latency > 0, "2D denoiser should report latency");
 
   // Configure for noise learning
-  SpectralBleach2DDenoiserParameters parameters = {
-      .learn_noise = 1, // Learn mode
+  Specbleach2DDenoiserParameters parameters = {
+      .learn_noise = SPECBLEACH_LEARN_ALL, // Learn mode
       .reduction_gain = 0.1f,
       .smoothing_factor = 0.5f, // NLM h parameter
       .whitening_factor = 0.0f,
       .residual_listen = false,
   };
 
-  specbleach_2d_load_parameters(handle, parameters);
+  specbleach_2d_load_parameters(handle, &parameters, sizeof(parameters));
 
   // Process first blocks in learn mode
   specbleach_2d_process(handle, FRAME_SIZE * 10, input_buffer, output_buffer);
@@ -340,8 +340,8 @@ void test_2d_denoiser(void) {
       "Noise profile should be available after learning");
 
   // Switch to reduction mode
-  parameters.learn_noise = 0;
-  specbleach_2d_load_parameters(handle, parameters);
+  parameters.learn_noise = SPECBLEACH_LEARN_OFF;
+  specbleach_2d_load_parameters(handle, &parameters, sizeof(parameters));
 
   // Process remaining blocks
   size_t processed_samples = FRAME_SIZE * 10;

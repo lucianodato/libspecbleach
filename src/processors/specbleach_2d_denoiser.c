@@ -30,14 +30,16 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdlib.h>
 #include <string.h>
 
-typedef struct Sb2DDenoiser {
+typedef struct specbleach_2d_denoiser {
   uint32_t hop;
   SbProcessorCore* core;
   SpectralProcessorHandle spectral_2d_denoiser;
+  float* reduction_curve_copy;
+  uint32_t reduction_curve_capacity;
 } Sb2DDenoiser;
 
-SpectralBleachHandle specbleach_2d_initialize(const uint32_t sample_rate,
-                                              float frame_size) {
+specbleach_2d_denoiser* specbleach_2d_initialize(const uint32_t sample_rate,
+                                                 float frame_size) {
   if (sample_rate == 0 || frame_size <= 0.0f) {
     return NULL;
   }
@@ -71,8 +73,8 @@ SpectralBleachHandle specbleach_2d_initialize(const uint32_t sample_rate,
   return self;
 }
 
-void specbleach_2d_free(SpectralBleachHandle instance) {
-  Sb2DDenoiser* self = (Sb2DDenoiser*)instance;
+void specbleach_2d_free(specbleach_2d_denoiser* instance) {
+  Sb2DDenoiser* self = instance;
 
   if (!self) {
     return;
@@ -84,12 +86,15 @@ void specbleach_2d_free(SpectralBleachHandle instance) {
   if (self->core) {
     sb_processor_core_free(self->core);
   }
+  if (self->reduction_curve_copy) {
+    free(self->reduction_curve_copy);
+  }
 
   free(self);
 }
 
-uint32_t specbleach_2d_get_latency(SpectralBleachHandle instance) {
-  Sb2DDenoiser* self = (Sb2DDenoiser*)instance;
+uint32_t specbleach_2d_get_latency(specbleach_2d_denoiser* instance) {
+  Sb2DDenoiser* self = instance;
 
   if (!self || !self->core || !self->core->stft_processor) {
     return 0;
@@ -106,14 +111,14 @@ uint32_t specbleach_2d_get_latency(SpectralBleachHandle instance) {
   return stft_latency + nlm_latency_samples;
 }
 
-bool specbleach_2d_process(SpectralBleachHandle instance,
+bool specbleach_2d_process(specbleach_2d_denoiser* instance,
                            const uint32_t number_of_samples, const float* input,
                            float* output) {
   if (!instance || number_of_samples == 0 || !input || !output) {
     return false;
   }
 
-  Sb2DDenoiser* self = (Sb2DDenoiser*)instance;
+  Sb2DDenoiser* self = instance;
 
   stft_processor_run(self->core->stft_processor, number_of_samples, input,
                      output, &spectral_2d_denoiser_run,
@@ -122,25 +127,26 @@ bool specbleach_2d_process(SpectralBleachHandle instance,
   return true;
 }
 
-uint32_t specbleach_2d_get_noise_profile_size(SpectralBleachHandle instance) {
-  Sb2DDenoiser* self = (Sb2DDenoiser*)instance;
+uint32_t specbleach_2d_get_noise_profile_size(
+    specbleach_2d_denoiser* instance) {
+  Sb2DDenoiser* self = instance;
   return self ? sb_processor_core_get_noise_profile_size(self->core) : 0;
 }
 
-bool specbleach_2d_load_noise_profile_for_mode(SpectralBleachHandle instance,
+bool specbleach_2d_load_noise_profile_for_mode(specbleach_2d_denoiser* instance,
                                                const float* restored_profile,
                                                const uint32_t profile_size,
                                                const uint32_t block_count,
                                                const int mode) {
-  Sb2DDenoiser* self = (Sb2DDenoiser*)instance;
+  Sb2DDenoiser* self = instance;
   return self ? sb_processor_core_load_noise_profile_for_mode(
                     self->core, restored_profile, profile_size, block_count,
                     mode)
               : false;
 }
 
-bool specbleach_2d_reset_noise_profile(SpectralBleachHandle instance) {
-  Sb2DDenoiser* self = (Sb2DDenoiser*)instance;
+bool specbleach_2d_reset_noise_profile(specbleach_2d_denoiser* instance) {
+  Sb2DDenoiser* self = instance;
   if (!self) {
     return false;
   }
@@ -151,63 +157,71 @@ bool specbleach_2d_reset_noise_profile(SpectralBleachHandle instance) {
 }
 
 uint32_t specbleach_2d_get_noise_profile_block_count_for_mode(
-    SpectralBleachHandle instance, int mode) {
-  Sb2DDenoiser* self = (Sb2DDenoiser*)instance;
+    specbleach_2d_denoiser* instance, int mode) {
+  Sb2DDenoiser* self = instance;
   return self ? sb_processor_core_get_noise_profile_block_count_for_mode(
                     self->core, mode)
               : 0;
 }
 
-float* specbleach_2d_get_noise_profile_for_mode(SpectralBleachHandle instance,
-                                                int mode) {
-  Sb2DDenoiser* self = (Sb2DDenoiser*)instance;
+float* specbleach_2d_get_noise_profile_for_mode(
+    specbleach_2d_denoiser* instance, int mode) {
+  Sb2DDenoiser* self = instance;
   return self ? sb_processor_core_get_noise_profile_for_mode(self->core, mode)
               : NULL;
 }
 
 bool specbleach_2d_noise_profile_available_for_mode(
-    SpectralBleachHandle instance, int mode) {
-  Sb2DDenoiser* self = (Sb2DDenoiser*)instance;
+    specbleach_2d_denoiser* instance, int mode) {
+  Sb2DDenoiser* self = instance;
   return self ? sb_processor_core_noise_profile_available_for_mode(self->core,
                                                                    mode)
               : false;
 }
 
 bool specbleach_2d_load_parameters(
-    SpectralBleachHandle instance,
-    SpectralBleach2DDenoiserParameters parameters) {
-  if (!instance) {
+    specbleach_2d_denoiser* instance,
+    const Specbleach2DDenoiserParameters* parameters,
+    const uint32_t parameters_size) {
+  if (!instance || !parameters ||
+      parameters_size != sizeof(Specbleach2DDenoiserParameters)) {
     return false;
   }
 
-  Sb2DDenoiser* self = (Sb2DDenoiser*)instance;
+  Sb2DDenoiser* self = instance;
+
+  const float* owned_bias = sb_curve_bias_copy(
+      &self->reduction_curve_copy, &self->reduction_curve_capacity,
+      sb_processor_core_get_noise_profile_size(self->core),
+      parameters->reduction_curve_enabled, parameters->reduction_curve_bias);
+
   Denoiser2DParameters denoise_parameters =
       sb_denoiser_2d_params_sanitize(parameters);
+  denoise_parameters.reduction_curve_bias = owned_bias;
 
-  load_2d_reduction_parameters(self->spectral_2d_denoiser, denoise_parameters);
-
-  return true;
+  return load_2d_reduction_parameters(self->spectral_2d_denoiser,
+                                      denoise_parameters);
 }
 
-const float* specbleach_2d_get_tonal_mask(SpectralBleachHandle instance) {
-  Sb2DDenoiser* self = (Sb2DDenoiser*)instance;
+const float* specbleach_2d_get_tonal_mask(specbleach_2d_denoiser* instance) {
+  Sb2DDenoiser* self = instance;
   return self ? spectral_2d_denoiser_get_tonal_mask(self->spectral_2d_denoiser)
               : NULL;
 }
 
-uint32_t specbleach_2d_get_tonal_peaks(SpectralBleachHandle instance,
+uint32_t specbleach_2d_get_tonal_peaks(specbleach_2d_denoiser* instance,
                                        float* peak_freqs_hz,
                                        uint32_t max_peaks) {
-  Sb2DDenoiser* self = (Sb2DDenoiser*)instance;
+  Sb2DDenoiser* self = instance;
   return self ? spectral_2d_denoiser_get_peaks(self->spectral_2d_denoiser,
                                                peak_freqs_hz, max_peaks)
               : 0;
 }
 
 uint32_t specbleach_2d_get_tonal_peaks_for_profile(
-    SpectralBleachHandle instance, const float* profile, uint32_t profile_size,
-    float* peak_freqs_hz, uint32_t max_peaks) {
-  Sb2DDenoiser* self = (Sb2DDenoiser*)instance;
+    specbleach_2d_denoiser* instance, const float* profile,
+    uint32_t profile_size, float* peak_freqs_hz, uint32_t max_peaks) {
+  Sb2DDenoiser* self = instance;
   if (!self || !self->core || !profile || profile_size == 0 ||
       profile_size != sb_processor_core_get_noise_profile_size(self->core)) {
     return 0;
@@ -224,22 +238,22 @@ uint32_t specbleach_2d_get_tonal_peaks_for_profile(
 }
 
 const float* specbleach_2d_get_active_noise_profile(
-    SpectralBleachHandle instance) {
-  Sb2DDenoiser* self = (Sb2DDenoiser*)instance;
+    specbleach_2d_denoiser* instance) {
+  Sb2DDenoiser* self = instance;
   return self ? spectral_2d_denoiser_get_active_noise_profile(
                     self->spectral_2d_denoiser)
               : NULL;
 }
 
-bool specbleach_2d_is_transient_detected(SpectralBleachHandle instance) {
-  Sb2DDenoiser* self = (Sb2DDenoiser*)instance;
+bool specbleach_2d_is_transient_detected(specbleach_2d_denoiser* instance) {
+  Sb2DDenoiser* self = instance;
   return self ? spectral_2d_denoiser_is_transient_detected(
                     self->spectral_2d_denoiser)
               : false;
 }
 
-float specbleach_2d_get_transient_intensity(SpectralBleachHandle instance) {
-  Sb2DDenoiser* self = (Sb2DDenoiser*)instance;
+float specbleach_2d_get_transient_intensity(specbleach_2d_denoiser* instance) {
+  Sb2DDenoiser* self = instance;
   return self ? spectral_2d_denoiser_get_transient_intensity(
                     self->spectral_2d_denoiser)
               : 0.0f;

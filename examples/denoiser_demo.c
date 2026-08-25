@@ -127,7 +127,7 @@ static void print_usage(const char* prog_name) {
 static void cleanup_resources(SF_INFO* sfinfo, SNDFILE* input_file,
                               SNDFILE* output_file, float* input_buffer,
                               float* output_buffer,
-                              SpectralBleachHandle lib_instance) {
+                              specbleach_denoiser* lib_instance) {
   if (input_file) {
     sf_close(input_file);
   }
@@ -144,22 +144,21 @@ static void cleanup_resources(SF_INFO* sfinfo, SNDFILE* input_file,
     free(output_buffer);
   }
   if (lib_instance) {
-    specbleach_free(lib_instance);
+    specbleach_denoiser_free(lib_instance);
   }
 }
 
 int main(int argc, char** argv) {
-  SpectralBleachDenoiserParameters parameters =
-      (SpectralBleachDenoiserParameters){
-          .residual_listen = false,
-          .learn_noise = 1,       // Learn all modes
-          .aggressiveness = 1.0f, // Use maximum mode for processing
-          .reduction_gain = 0.1f, // 20 dB
-          .smoothing_factor = 0.0f,
-          .whitening_factor = 0.5f,
-          .masking_depth = 0.5f,
-          .tonal_reduction_gain = 1.0f,
-          .hpss_enable = 1};
+  SpecbleachDenoiserParameters parameters = (SpecbleachDenoiserParameters){
+      .residual_listen = false,
+      .learn_noise = SPECBLEACH_LEARN_ALL, // Learn all modes
+      .aggressiveness = 1.0f,              // Use maximum mode for processing
+      .reduction_gain = 0.1f,              // 20 dB
+      .smoothing_factor = 0.0f,
+      .whitening_factor = 0.5f,
+      .masking_depth = 0.5f,
+      .tonal_reduction_gain = 1.0f,
+      .hpss_enable = true};
 
   static struct option long_options[] = {
       {"reduction", required_argument, 0, 'r'},
@@ -220,14 +219,18 @@ int main(int argc, char** argv) {
         }
         break;
       case 'a':
-        parameters.adaptive_noise = 1;
+        parameters.adaptive_noise = true;
         break;
-      case 'm':
-        if (!parse_int_arg(optarg, &parameters.noise_estimation_method, 0, 2)) {
+      case 'm': {
+        int noise_method;
+        if (!parse_int_arg(optarg, &noise_method, 0, 2)) {
           print_usage(argv[0]);
           return 1;
         }
+        parameters.noise_estimation_method =
+            (SpecbleachNoiseEstimationMethod)noise_method;
         break;
+      }
       case 'f':
         if (!parse_float_arg(optarg, &frame_size_ms, 0.0001f, INFINITY)) {
           print_usage(argv[0]);
@@ -260,7 +263,7 @@ int main(int argc, char** argv) {
   SNDFILE* output_file = NULL;
   float* input_library_buffer = NULL;
   float* output_library_buffer = NULL;
-  SpectralBleachHandle lib_instance = NULL;
+  specbleach_denoiser* lib_instance = NULL;
   int ret = 1;
 
   do {
@@ -310,8 +313,8 @@ int main(int argc, char** argv) {
     }
 
     // Initialize library instance
-    lib_instance =
-        specbleach_initialize((uint32_t)sfinfo->samplerate, frame_size_ms);
+    lib_instance = specbleach_denoiser_initialize((uint32_t)sfinfo->samplerate,
+                                                  frame_size_ms);
     if (!lib_instance) {
       fprintf(stderr, "Error: Failed to initialize library instance\n");
       break;
@@ -320,7 +323,8 @@ int main(int argc, char** argv) {
     // NOISE PROFILE LEARN STAGE
 
     // Load the parameters before doing the denoising or profile learning
-    if (!specbleach_load_parameters(lib_instance, parameters)) {
+    if (!specbleach_denoiser_load_parameters(lib_instance, &parameters,
+                                             sizeof(parameters))) {
       fprintf(stderr, "Error: Failed to load parameters\n");
       break;
     }
@@ -345,8 +349,9 @@ int main(int argc, char** argv) {
       }
 
       // Process the audio to learn the noise profile
-      if (!specbleach_process(lib_instance, (uint32_t)BLOCK_SIZE,
-                              input_library_buffer, output_library_buffer)) {
+      if (!specbleach_denoiser_process(lib_instance, (uint32_t)BLOCK_SIZE,
+                                       input_library_buffer,
+                                       output_library_buffer)) {
         fprintf(
             stderr,
             "Error: Failed to process audio during noise profile learning\n");
@@ -357,7 +362,8 @@ int main(int argc, char** argv) {
     // If we broke out of the learn stage due to an error, stop.
     // In adaptive mode, we can proceed even without a pre-learned profile.
     if (!parameters.adaptive_noise &&
-        !specbleach_noise_profile_available_for_mode(lib_instance, 1)) {
+        !specbleach_denoiser_noise_profile_available_for_mode(lib_instance,
+                                                              1)) {
       fprintf(stderr, "Error: Noise profile was not successfully learned\n");
       break;
     }
@@ -365,10 +371,11 @@ int main(int argc, char** argv) {
     // NOISE REDUCTION STAGE
 
     // Turn off noise profile learning to start applying reduction
-    parameters.learn_noise = 0;
+    parameters.learn_noise = SPECBLEACH_LEARN_OFF;
 
     // Reload parameters with noise learn off
-    if (!specbleach_load_parameters(lib_instance, parameters)) {
+    if (!specbleach_denoiser_load_parameters(lib_instance, &parameters,
+                                             sizeof(parameters))) {
       fprintf(stderr, "Error: Failed to reload parameters\n");
       break;
     }
@@ -378,8 +385,9 @@ int main(int argc, char** argv) {
     while ((frames_read = sf_readf_float(input_file, input_library_buffer,
                                          BLOCK_SIZE)) > 0) {
       // Process the audio
-      if (!specbleach_process(lib_instance, (uint32_t)BLOCK_SIZE,
-                              input_library_buffer, output_library_buffer)) {
+      if (!specbleach_denoiser_process(lib_instance, (uint32_t)BLOCK_SIZE,
+                                       input_library_buffer,
+                                       output_library_buffer)) {
         fprintf(stderr, "Error: Failed to process audio\n");
         break;
       }

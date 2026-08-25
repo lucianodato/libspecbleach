@@ -28,31 +28,51 @@ extern "C" {
 #include <stdbool.h>
 #include <stdint.h>
 
-typedef void* SpectralBleachHandle;
+#include "specbleach_common.h"
+#include "specbleach_export.h"
+
+/**
+ * Opaque handle to a single-channel 2D Non-Local Means denoiser instance.
+ *
+ * The underlying struct is private. Handles are created by
+ * specbleach_2d_initialize() and must only be passed to the
+ * specbleach_2d_* functions declared in this header. They are NOT
+ * interchangeable with handles from other libspecbleach APIs; mixing them is
+ * a compile-time error.
+ */
+typedef struct specbleach_2d_denoiser specbleach_2d_denoiser;
 
 /**
  * Parameters for the 2D Non-Local Means denoiser.
- * Uses 2D pattern matching on spectrograms to suppress musical noise.
+ *
+ * Thread safety contract for the whole header: unless explicitly stated
+ * otherwise, functions taking a handle may be called from any thread, but
+ * calls on the SAME instance must never run concurrently with each other or
+ * with specbleach_2d_process().
  */
-typedef struct SpectralBleach2DDenoiserParameters {
+typedef struct Specbleach2DDenoiserParameters {
   /**
    * Sets the processor in listening mode to capture the noise profile.
-   * 0 is disabled, 1 will learn all profile types simultaneously.
    */
-  int learn_noise;
+  SpecbleachLearnMode learn_noise;
+
+  /**
+   * Outputs the residue of the reduction processing instead of the denoised
+   * signal.
+   */
   bool residual_listen;
 
   /**
-   * Linear gain floor for broadband noise reduction (0.0 to 1.0, where 1.0 = 0
-   * dB / no reduction).
+   * Linear gain floor for broadband noise reduction (0.0 to 1.0, where 1.0 =
+   * 0 dB / no reduction).
    */
   float reduction_gain;
 
   /**
-   * Normalized 2D smoothing factor (0.0 to 1.0).
-   * Controls 2D time-frequency gain-mask artifact smoothing across time and
-   * frequency. Also controls the NLM h parameter: non-zero values activate and
-   * scale NLM patch similarity smoothing up to NLM_MAX_H_PARAMETER.
+   * Normalized 2D smoothing factor (0.0 to 1.0). Controls 2D time-frequency
+   * gain-mask artifact smoothing across time and frequency. Also controls
+   * the NLM h parameter: non-zero values activate and scale NLM patch
+   * similarity smoothing up to NLM_MAX_H_PARAMETER.
    */
   float smoothing_factor;
 
@@ -62,133 +82,183 @@ typedef struct SpectralBleach2DDenoiserParameters {
   float whitening_factor;
 
   /**
-   * Enabled the adaptive noise estimation.
+   * Enables adaptive noise estimation.
    */
-  int adaptive_noise;
+  bool adaptive_noise;
 
   /**
    * Sets the method used for adaptive noise estimation.
-   * 0: SPP-MMSE method
-   * 1: Brandt (Trimmed Mean)
-   * 2: Martin Minimum Statistics
    */
-  int noise_estimation_method;
+  SpecbleachNoiseEstimationMethod noise_estimation_method;
 
   /**
    * Sets the masking protection depth for the NLM filter (0.0 to 1.0).
+   * Values outside the range are clamped.
    */
   float nlm_masking_protection;
 
   /**
    * Sets the suppression aggressiveness (0.0 to 1.0).
+   * Values outside the range are clamped.
    */
   float suppression_strength;
 
-  /* Intelligent Steering */
-  float aggressiveness; /**< -1.0 (Median/Min) to 1.0 (Max), 0.0 (Mean) */
+  /**
+   * Intelligent steering: -1.0 (Median/Min) to 1.0 (Max), 0.0 (Mean).
+   */
+  float aggressiveness;
 
-  /* Linear gain floor for tonal noise components (0.0 to 1.0, where 1.0 = 0 dB
-   * / no reduction). */
+  /**
+   * Linear gain floor for tonal noise components (0.0 to 1.0, where 1.0 = 0
+   * dB / no reduction). Values outside the range are clamped.
+   */
   float tonal_reduction_gain;
 
-  /* Enable HPSS transient protection (0 = disabled, 1 = enabled). Default: 1 */
-  int hpss_enable;
+  /**
+   * Enables HPSS transient protection.
+   */
+  bool hpss_enable;
 
-  /* Noise Profile Linear Scale — multiplier for the noise power spectrum.
+  /**
+   * Noise Profile Linear Scale — multiplier for the noise power spectrum.
    * Positive inputs are clamped to [0.01f, 100.0f]. Non-positive inputs use
-   * the 1.0f default. Values > 1.0 shift threshold higher (more reduction). */
+   * the 1.0f default. Values > 1.0 shift threshold higher (more reduction).
+   */
   float noise_profile_scale;
 
-  /* Frequency-dependent reduction bias curve.
+  /**
+   * Frequency-dependent reduction bias curve.
    * Array of dB offsets per frequency bin, or NULL if disabled.
    * Positive values = more reduction at that frequency.
-   * Array length must match specbleach_2d_get_noise_profile_size(). */
+   *
+   * OWNERSHIP: the library copies this array during
+   * specbleach_2d_load_parameters(). The caller may free or reuse the buffer
+   * as soon as that call returns. Array length must match
+   * specbleach_2d_get_noise_profile_size().
+   */
   const float* reduction_curve_bias;
 
-  /* Enables the reduction curve bias. When false, reduction_curve_bias
-   * is ignored even if non-NULL. */
+  /**
+   * Enables the reduction curve bias. When false, reduction_curve_bias is
+   * ignored even if non-NULL.
+   */
   bool reduction_curve_enabled;
 
-  /* Tonal Noise Profile Linear Scale — multiplier applied to the noise power
-   * spectrum only at detected tonal components. Positive inputs are clamped to
-   * [0.01f, 100.0f]. Non-positive inputs use the 1.0f default. Values > 1.0
-   * shift threshold higher (more reduction) at tonal bins. */
+  /**
+   * Tonal Noise Profile Linear Scale — multiplier applied to the noise power
+   * spectrum only at detected tonal components. Positive inputs are clamped
+   * to [0.01f, 100.0f]. Non-positive inputs use the 1.0f default. Values >
+   * 1.0 shift threshold higher (more reduction) at tonal bins.
+   */
   float tonal_noise_profile_scale;
-} SpectralBleach2DDenoiserParameters;
+} Specbleach2DDenoiserParameters;
 
 /**
- * Returns a handle to an instance of the library for the 2D NLM based
- * noise reduction. Sample rate could be anything from 4000hz to 192khz.
- * Recommended frame size range is between 20ms and 100ms.
+ * Creates a single-channel 2D NLM based noise reduction instance.
  *
- * Note: This processor has additional latency due to NLM look-ahead.
- * Use specbleach_2d_get_latency() to query the total latency.
+ * Sample rate can be anything from 4000 Hz to 192 kHz. Recommended frame
+ * size range is between 20 ms and 100 ms.
+ *
+ * Note: This processor has additional latency due to NLM look-ahead. Use
+ * specbleach_2d_get_latency() to query the total latency.
+ *
+ * @return A new instance or NULL on allocation failure. Free it with
+ * specbleach_2d_free().
  */
-SpectralBleachHandle specbleach_2d_initialize(uint32_t sample_rate,
-                                              float frame_size);
+SPECBLEACH_API specbleach_2d_denoiser* specbleach_2d_initialize(
+    uint32_t sample_rate, float frame_size);
 
 /**
- * Free instance associated to the handle passed.
+ * Frees an instance created by specbleach_2d_initialize().
+ * Passing NULL is a no-op. The handle is invalid after this call.
  */
-void specbleach_2d_free(SpectralBleachHandle instance);
+SPECBLEACH_API void specbleach_2d_free(specbleach_2d_denoiser* instance);
 
 /**
- * Loads the parameters for the reduction.
- * This has to be called before processing.
+ * Loads parameters for the reduction.
+ *
+ * @param parameters Pointer to the parameter block to load. Must not be
+ * NULL. The library copies all data it needs, including the reduction curve,
+ * before returning.
+ * @param parameters_size Must be exactly
+ * sizeof(Specbleach2DDenoiserParameters). This guards against ABI mismatches
+ * between separately compiled binaries; any other value fails cleanly
+ * instead of reading out-of-bounds memory.
+ *
+ * Not guaranteed to be allocation-free on the FIRST call after enabling
+ * reduction_curve_enabled (the internal copy buffer is allocated then);
+ * subsequent calls reuse that buffer. Load parameters once during setup if
+ * strict audio-thread allocation freedom is required.
+ *
+ * @return true if the parameters were loaded, false on NULL arguments or a
+ * mismatched parameters_size.
  */
-bool specbleach_2d_load_parameters(
-    SpectralBleachHandle instance,
-    SpectralBleach2DDenoiserParameters parameters);
+SPECBLEACH_API bool specbleach_2d_load_parameters(
+    specbleach_2d_denoiser* instance,
+    const Specbleach2DDenoiserParameters* parameters, uint32_t parameters_size);
 
 /**
- * Process buffer of a number of samples.
+ * Processes a buffer of samples in place-capable buffers.
+ *
+ * Real-time safe: contains no allocations, locks, or I/O.
+ *
+ * @return true on success, false on NULL arguments or an empty block.
  */
-bool specbleach_2d_process(SpectralBleachHandle instance,
-                           uint32_t number_of_samples, const float* input,
-                           float* output);
+SPECBLEACH_API bool specbleach_2d_process(specbleach_2d_denoiser* instance,
+                                          uint32_t number_of_samples,
+                                          const float* input, float* output);
 
 /**
- * Returns the latency in samples associated with the library instance.
- * Includes both STFT latency and NLM look-ahead latency.
+ * Returns the algorithmic latency in samples introduced by the instance.
+ * Includes both STFT latency and NLM look-ahead latency. Hosts should report
+ * this value for delay compensation.
  */
-uint32_t specbleach_2d_get_latency(SpectralBleachHandle instance);
+SPECBLEACH_API uint32_t
+specbleach_2d_get_latency(specbleach_2d_denoiser* instance);
 
 /**
- * Returns the size of the noise profile spectrum.
+ * Returns the size of the noise profile spectrum in bins.
  */
-uint32_t specbleach_2d_get_noise_profile_size(SpectralBleachHandle instance);
+SPECBLEACH_API uint32_t
+specbleach_2d_get_noise_profile_size(specbleach_2d_denoiser* instance);
 
 /**
- * Allows to load a custom noise profile for a specific mode.
+ * Loads a custom noise profile for a specific mode.
+ *
+ * @param mode One of [SPECBLEACH_PROFILE_MODE_FIRST,
+ * SPECBLEACH_PROFILE_MODE_LAST].
+ * @return false on invalid mode, size mismatch, or NULL arguments.
  */
-bool specbleach_2d_load_noise_profile_for_mode(SpectralBleachHandle instance,
-                                               const float* restored_profile,
-                                               uint32_t profile_size,
-                                               uint32_t block_count, int mode);
+SPECBLEACH_API bool specbleach_2d_load_noise_profile_for_mode(
+    specbleach_2d_denoiser* instance, const float* restored_profile,
+    uint32_t profile_size, uint32_t block_count, int mode);
 
 /**
- * Resets the internal noise profile of the library instance.
+ * Resets the internal noise profile of the instance.
  */
-bool specbleach_2d_reset_noise_profile(SpectralBleachHandle instance);
+SPECBLEACH_API bool specbleach_2d_reset_noise_profile(
+    specbleach_2d_denoiser* instance);
 
 /**
  * Returns the number of blocks used for the noise profile calculation for a
  * specific mode.
  */
-uint32_t specbleach_2d_get_noise_profile_block_count_for_mode(
-    SpectralBleachHandle instance, int mode);
+SPECBLEACH_API uint32_t specbleach_2d_get_noise_profile_block_count_for_mode(
+    specbleach_2d_denoiser* instance, int mode);
 
 /**
- * Returns a pointer to the noise profile for a specific mode.
+ * Returns a pointer to the internally owned noise profile for a specific
+ * mode. The pointer stays valid until the instance is freed. May return NULL
+ * if the profile was never populated.
  */
-float* specbleach_2d_get_noise_profile_for_mode(SpectralBleachHandle instance,
-                                                int mode);
+SPECBLEACH_API float* specbleach_2d_get_noise_profile_for_mode(
+    specbleach_2d_denoiser* instance, int mode);
 
 /**
- * Returns if the instance has a noise profile calculated for a specific mode.
+ * Returns whether a noise profile has been calculated for a specific mode.
  */
-bool specbleach_2d_noise_profile_available_for_mode(
-    SpectralBleachHandle instance, int mode);
+SPECBLEACH_API bool specbleach_2d_noise_profile_available_for_mode(
+    specbleach_2d_denoiser* instance, int mode);
 
 /**
  * Returns a pointer to the tonal mask array detected during spectral
@@ -196,44 +266,50 @@ bool specbleach_2d_noise_profile_available_for_mode(
  * specbleach_2d_get_noise_profile_size(instance). Values range from 0.0
  * (broadband) to 1.0 (pure tone).
  */
-const float* specbleach_2d_get_tonal_mask(SpectralBleachHandle instance);
+SPECBLEACH_API const float* specbleach_2d_get_tonal_mask(
+    specbleach_2d_denoiser* instance);
 
 /**
  * Returns the detected tonal peak frequencies in Hz.
  * Writes up to max_peaks peak frequencies into peak_freqs_hz.
- * Note: This is an offline/query-only API and must NOT be called from the
- * real-time audio thread.
+ *
+ * Offline/query-only API; must NOT be called from the real-time audio
+ * thread.
+ *
  * @return Number of peak frequencies written.
  */
-uint32_t specbleach_2d_get_tonal_peaks(SpectralBleachHandle instance,
-                                       float* peak_freqs_hz,
-                                       uint32_t max_peaks);
+SPECBLEACH_API uint32_t specbleach_2d_get_tonal_peaks(
+    specbleach_2d_denoiser* instance, float* peak_freqs_hz, uint32_t max_peaks);
 
 /**
- * Returns peak frequencies in Hz directly for a given noise profile array.
- * Note: This is an offline/query-only API and must NOT be called from the
- * real-time audio thread.
+ * Returns peak frequencies in Hz computed directly from a caller-provided
+ * noise profile array.
+ *
+ * Offline/query-only API; must NOT be called from the real-time audio
+ * thread.
  */
-uint32_t specbleach_2d_get_tonal_peaks_for_profile(
-    SpectralBleachHandle instance, const float* profile, uint32_t profile_size,
-    float* peak_freqs_hz, uint32_t max_peaks);
+SPECBLEACH_API uint32_t specbleach_2d_get_tonal_peaks_for_profile(
+    specbleach_2d_denoiser* instance, const float* profile,
+    uint32_t profile_size, float* peak_freqs_hz, uint32_t max_peaks);
 
 /**
  * Returns a pointer to the active morphed noise profile array.
  */
-const float* specbleach_2d_get_active_noise_profile(
-    SpectralBleachHandle instance);
+SPECBLEACH_API const float* specbleach_2d_get_active_noise_profile(
+    specbleach_2d_denoiser* instance);
 
 /**
  * Returns true if a transient was detected in the last processed frame.
  */
-bool specbleach_2d_is_transient_detected(SpectralBleachHandle instance);
+SPECBLEACH_API bool specbleach_2d_is_transient_detected(
+    specbleach_2d_denoiser* instance);
 
 /**
- * Returns the detected transient intensity [0.0, 1.0] from the last processed
- * frame.
+ * Returns the detected transient intensity [0.0, 1.0] from the last
+ * processed frame.
  */
-float specbleach_2d_get_transient_intensity(SpectralBleachHandle instance);
+SPECBLEACH_API float specbleach_2d_get_transient_intensity(
+    specbleach_2d_denoiser* instance);
 
 #ifdef __cplusplus
 }

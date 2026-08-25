@@ -23,70 +23,91 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "shared/utils/general_utils.h"
 #include <math.h>
 #include <stdlib.h>
+#include <string.h>
 
 DenoiserParameters sb_denoiser_params_sanitize(
-    SpectralBleachDenoiserParameters parameters) {
+    const SpecbleachDenoiserParameters* parameters) {
   return (DenoiserParameters){
-      .learn_noise = parameters.learn_noise,
-      .residual_listen = parameters.residual_listen,
-      .reduction_amount = fmaxf(0.0f, fminf(1.0f, parameters.reduction_gain)),
-      .smoothing_factor = fmaxf(0.0f, fminf(1.0f, parameters.smoothing_factor)),
-      .whitening_factor = fmaxf(0.0f, fminf(1.0f, parameters.whitening_factor)),
-      .adaptive_noise = parameters.adaptive_noise,
-      .noise_estimation_method = parameters.noise_estimation_method,
-      .masking_depth = fmaxf(0.0f, fminf(1.0f, parameters.masking_depth)),
+      .learn_noise = (int)parameters->learn_noise,
+      .residual_listen = parameters->residual_listen,
+      .reduction_amount = fmaxf(0.0f, fminf(1.0f, parameters->reduction_gain)),
+      .smoothing_factor =
+          fmaxf(0.0f, fminf(1.0f, parameters->smoothing_factor)),
+      .whitening_factor =
+          fmaxf(0.0f, fminf(1.0f, parameters->whitening_factor)),
+      .adaptive_noise = parameters->adaptive_noise ? 1 : 0,
+      .noise_estimation_method = (int)parameters->noise_estimation_method,
+      .masking_depth = fmaxf(0.0f, fminf(1.0f, parameters->masking_depth)),
       .suppression_strength =
-          fmaxf(0.0f, fminf(1.0f, parameters.suppression_strength)),
-      .aggressiveness = parameters.aggressiveness,
+          fmaxf(0.0f, fminf(1.0f, parameters->suppression_strength)),
+      .aggressiveness = parameters->aggressiveness,
       .tonal_reduction =
-          fmaxf(0.0f, fminf(1.0f, parameters.tonal_reduction_gain)),
-      .hpss_enable = parameters.hpss_enable,
+          fmaxf(0.0f, fminf(1.0f, parameters->tonal_reduction_gain)),
+      .hpss_enable = parameters->hpss_enable ? 1 : 0,
       .noise_profile_offset_linear =
-          fmaxf(0.01f, fminf(100.0f, parameters.noise_profile_scale > 0.0f
-                                         ? parameters.noise_profile_scale
+          fmaxf(0.01f, fminf(100.0f, parameters->noise_profile_scale > 0.0f
+                                         ? parameters->noise_profile_scale
                                          : 1.0f)),
-      .tonal_noise_profile_offset_linear =
-          fmaxf(0.01f, fminf(100.0f, parameters.tonal_noise_profile_scale > 0.0f
-                                         ? parameters.tonal_noise_profile_scale
-                                         : 1.0f)),
-      .reduction_curve_bias = parameters.reduction_curve_enabled
-                                  ? parameters.reduction_curve_bias
-                                  : NULL,
-      .reduction_curve_enabled = parameters.reduction_curve_enabled,
+      .tonal_noise_profile_offset_linear = fmaxf(
+          0.01f, fminf(100.0f, parameters->tonal_noise_profile_scale > 0.0f
+                                   ? parameters->tonal_noise_profile_scale
+                                   : 1.0f)),
+      .reduction_curve_bias = NULL,
+      .reduction_curve_enabled = parameters->reduction_curve_enabled,
   };
 }
 
 Denoiser2DParameters sb_denoiser_2d_params_sanitize(
-    SpectralBleach2DDenoiserParameters parameters) {
+    const Specbleach2DDenoiserParameters* parameters) {
   return (Denoiser2DParameters){
-      .learn_noise = parameters.learn_noise,
-      .residual_listen = parameters.residual_listen,
-      .reduction_amount = fmaxf(0.0f, fminf(1.0f, parameters.reduction_gain)),
-      .smoothing_factor = fmaxf(0.0f, fminf(1.0f, parameters.smoothing_factor)),
-      .whitening_factor = fmaxf(0.0f, fminf(1.0f, parameters.whitening_factor)),
-      .adaptive_noise = parameters.adaptive_noise,
-      .noise_estimation_method = parameters.noise_estimation_method,
+      .learn_noise = (int)parameters->learn_noise,
+      .residual_listen = parameters->residual_listen,
+      .reduction_amount = fmaxf(0.0f, fminf(1.0f, parameters->reduction_gain)),
+      .smoothing_factor =
+          fmaxf(0.0f, fminf(1.0f, parameters->smoothing_factor)),
+      .whitening_factor =
+          fmaxf(0.0f, fminf(1.0f, parameters->whitening_factor)),
+      .adaptive_noise = parameters->adaptive_noise ? 1 : 0,
+      .noise_estimation_method = (int)parameters->noise_estimation_method,
       .nlm_masking_protection =
-          fmaxf(0.0f, fminf(1.0f, parameters.nlm_masking_protection)),
+          fmaxf(0.0f, fminf(1.0f, parameters->nlm_masking_protection)),
       .suppression_strength =
-          fmaxf(0.0f, fminf(1.0f, parameters.suppression_strength)),
-      .aggressiveness = parameters.aggressiveness,
+          fmaxf(0.0f, fminf(1.0f, parameters->suppression_strength)),
+      .aggressiveness = parameters->aggressiveness,
       .tonal_reduction =
-          fmaxf(0.0f, fminf(1.0f, parameters.tonal_reduction_gain)),
-      .hpss_enable = parameters.hpss_enable,
+          fmaxf(0.0f, fminf(1.0f, parameters->tonal_reduction_gain)),
+      .hpss_enable = parameters->hpss_enable ? 1 : 0,
       .noise_profile_offset_linear =
-          fmaxf(0.01f, fminf(100.0f, parameters.noise_profile_scale > 0.0f
-                                         ? parameters.noise_profile_scale
+          fmaxf(0.01f, fminf(100.0f, parameters->noise_profile_scale > 0.0f
+                                         ? parameters->noise_profile_scale
                                          : 1.0f)),
-      .tonal_noise_profile_offset_linear =
-          fmaxf(0.01f, fminf(100.0f, parameters.tonal_noise_profile_scale > 0.0f
-                                         ? parameters.tonal_noise_profile_scale
-                                         : 1.0f)),
-      .reduction_curve_bias = parameters.reduction_curve_enabled
-                                  ? parameters.reduction_curve_bias
-                                  : NULL,
-      .reduction_curve_enabled = parameters.reduction_curve_enabled,
+      .tonal_noise_profile_offset_linear = fmaxf(
+          0.01f, fminf(100.0f, parameters->tonal_noise_profile_scale > 0.0f
+                                   ? parameters->tonal_noise_profile_scale
+                                   : 1.0f)),
+      .reduction_curve_bias = NULL,
+      .reduction_curve_enabled = parameters->reduction_curve_enabled,
   };
+}
+
+const float* sb_curve_bias_copy(float** buffer, uint32_t* capacity,
+                                const uint32_t required_size,
+                                const bool enabled, const float* source) {
+  if (!buffer || !capacity || !enabled || !source || required_size == 0) {
+    return NULL;
+  }
+
+  if (!*buffer || *capacity < required_size) {
+    float* resized = (float*)realloc(*buffer, required_size * sizeof(float));
+    if (!resized) {
+      return NULL;
+    }
+    *buffer = resized;
+    *capacity = required_size;
+  }
+
+  memcpy(*buffer, source, required_size * sizeof(float));
+  return *buffer;
 }
 
 SbProcessorCore* sb_processor_core_initialize(
