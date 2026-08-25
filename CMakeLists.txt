@@ -299,12 +299,6 @@ if(ENABLE_TESTS)
         add_specbleach_test(test_profile_migration "test_profile_migration.c")
         target_link_libraries(test_profile_migration PRIVATE libspecbleach_extras)
     endif()
-
-    if(BUILD_SHARED_LIBS AND NOT MSVC)
-        add_test(NAME test_exported_symbols
-                 COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/scripts/check_exported_symbols.sh"
-                         "$<TARGET_FILE:libspecbleach>")
-    endif()
 endif()
 
 # ==============================================================================

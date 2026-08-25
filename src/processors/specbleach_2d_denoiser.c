@@ -30,7 +30,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdlib.h>
 #include <string.h>
 
-typedef struct specbleach_2d_denoiser {
+typedef struct specbleach_2d_denoiser { // NOLINT(readability-identifier-naming)
   uint32_t hop;
   SbProcessorCore* core;
   SpectralProcessorHandle spectral_2d_denoiser;

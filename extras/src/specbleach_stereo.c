@@ -21,7 +21,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "specbleach_stereo.h"
 #include <stdlib.h>
 
-typedef struct specbleach_stereo {
+typedef struct specbleach_stereo { // NOLINT(readability-identifier-naming)
   uint32_t channels;
   SpecbleachStereoEngine engine;
   void** instances; /* one opaque engine handle per channel */
@@ -111,7 +111,7 @@ void specbleach_stereo_free(specbleach_stereo* instance) {
         }
       }
     }
-    free(self->instances);
+    free((void*)self->instances);
   }
 
   free(self);

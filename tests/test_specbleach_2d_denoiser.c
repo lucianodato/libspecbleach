@@ -190,7 +190,8 @@ void test_2d_parameter_switching(void) {
       .reduction_gain = 0.1f,
       .smoothing_factor = 1.0f,
       .adaptive_noise = true,
-      .noise_estimation_method = SPECBLEACH_NOISE_ESTIMATION_SPP_MMSE, // SPP-MMSE
+      .noise_estimation_method =
+          SPECBLEACH_NOISE_ESTIMATION_SPP_MMSE, // SPP-MMSE
       .nlm_masking_protection = 0.5f,
       .tonal_reduction_gain = 1.0f,
       .aggressiveness = 0.0f,
@@ -368,10 +369,12 @@ void test_process_loop(void) {
 void test_2d_smoothing_factor_responsiveness(void) {
   printf("Testing 2D smoothing factor responsiveness (0%% vs 100%%)...\n");
 
-  specbleach_2d_denoiser* h0 = specbleach_2d_initialize(SAMPLE_RATE, FRAME_SIZE);
+  specbleach_2d_denoiser* h0 =
+      specbleach_2d_initialize(SAMPLE_RATE, FRAME_SIZE);
   TEST_ASSERT(h0 != NULL, "Initialization of h0 should succeed");
 
-  specbleach_2d_denoiser* h100 = specbleach_2d_initialize(SAMPLE_RATE, FRAME_SIZE);
+  specbleach_2d_denoiser* h100 =
+      specbleach_2d_initialize(SAMPLE_RATE, FRAME_SIZE);
   TEST_ASSERT(h100 != NULL, "Initialization of h100 should succeed");
 
   // Create noisy input signal
@@ -392,15 +395,17 @@ void test_2d_smoothing_factor_responsiveness(void) {
       .smoothing_factor = 0.0f,
   };
 
-  TEST_ASSERT(specbleach_2d_load_parameters(h0, &params_learn, sizeof(params_learn)),
-              "Loading learn params for h0 should succeed");
+  TEST_ASSERT(
+      specbleach_2d_load_parameters(h0, &params_learn, sizeof(params_learn)),
+      "Loading learn params for h0 should succeed");
   TEST_ASSERT(specbleach_2d_process(h0, n_samples, noise_input, temp_out),
               "Processing learn mode for h0 should succeed");
   TEST_ASSERT(specbleach_2d_noise_profile_available_for_mode(h0, ROLLING_MEAN),
               "Profile for h0 should be available after learning");
 
-  TEST_ASSERT(specbleach_2d_load_parameters(h100, &params_learn, sizeof(params_learn)),
-              "Loading learn params for h100 should succeed");
+  TEST_ASSERT(
+      specbleach_2d_load_parameters(h100, &params_learn, sizeof(params_learn)),
+      "Loading learn params for h100 should succeed");
   TEST_ASSERT(specbleach_2d_process(h100, n_samples, noise_input, temp_out),
               "Processing learn mode for h100 should succeed");
   TEST_ASSERT(
@@ -424,8 +429,9 @@ void test_2d_smoothing_factor_responsiveness(void) {
       .reduction_gain = 0.1f,
       .smoothing_factor = 1.0f,
   };
-  TEST_ASSERT(specbleach_2d_load_parameters(h100, &params_100, sizeof(params_100)),
-              "Loading 100% smoothing params for h100 should succeed");
+  TEST_ASSERT(
+      specbleach_2d_load_parameters(h100, &params_100, sizeof(params_100)),
+      "Loading 100% smoothing params for h100 should succeed");
   TEST_ASSERT(
       specbleach_2d_process(h100, n_samples, noise_input, out_smooth_100),
       "Processing 100% smoothing for h100 should succeed");

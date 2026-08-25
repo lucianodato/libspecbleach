@@ -69,8 +69,8 @@ void test_denoiser_file_regression(void) {
   TEST_ASSERT(in_sf != NULL, "Failed to open input file");
   TEST_ASSERT(in_info.channels == 1, "Input file must be mono");
 
-  specbleach_denoiser* handle =
-      specbleach_denoiser_initialize((uint32_t)in_info.samplerate, FRAME_SIZE_MS);
+  specbleach_denoiser* handle = specbleach_denoiser_initialize(
+      (uint32_t)in_info.samplerate, FRAME_SIZE_MS);
   TEST_ASSERT(handle != NULL, "Failed to initialize denoiser");
 
   SpecbleachDenoiserParameters params = canonical_denoiser_params;

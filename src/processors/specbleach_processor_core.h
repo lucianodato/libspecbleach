@@ -49,8 +49,8 @@ Denoiser2DParameters sb_denoiser_2d_params_sanitize(
  * instance teardown.
  */
 const float* sb_curve_bias_copy(float** buffer, uint32_t* capacity,
-                                const uint32_t required_size,
-                                const bool enabled, const float* source);
+                                uint32_t required_size, bool enabled,
+                                const float* source);
 
 typedef struct SbProcessorCore {
   uint32_t sample_rate;

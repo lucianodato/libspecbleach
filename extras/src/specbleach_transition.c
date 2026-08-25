@@ -29,7 +29,7 @@ typedef enum TransitionPhase {
   TRANSITION_SLEWING = 2,
 } TransitionPhase;
 
-typedef struct specbleach_transition {
+typedef struct specbleach_transition { // NOLINT(readability-identifier-naming)
   uint32_t sample_rate;
   uint32_t channels;
   uint32_t max_block_size;
@@ -87,7 +87,7 @@ static bool transition_ensure_delay_capacity(specbleach_transition* instance,
       for (uint32_t free_ch = 0; free_ch < ch; ++free_ch) {
         free(lines[free_ch]);
       }
-      free(lines);
+      free((void*)lines);
       return false;
     }
   }
@@ -96,7 +96,7 @@ static bool transition_ensure_delay_capacity(specbleach_transition* instance,
   for (uint32_t ch = 0; ch < self->channels; ++ch) {
     free(self->delay_lines ? self->delay_lines[ch] : NULL);
   }
-  free(self->delay_lines);
+  free((void*)self->delay_lines);
 
   self->delay_lines = lines;
   self->delay_capacity = capacity;
@@ -136,7 +136,7 @@ void specbleach_transition_free(specbleach_transition* instance) {
     for (uint32_t ch = 0; ch < self->channels; ++ch) {
       free(self->delay_lines[ch]);
     }
-    free(self->delay_lines);
+    free((void*)self->delay_lines);
   }
 
   free(self);
@@ -159,7 +159,7 @@ bool specbleach_transition_begin(specbleach_transition* instance,
   }
 
   const float fade_samples =
-      self->sample_rate * (SPECBLEACH_TRANSITION_FADE_TIME_MS / 1000.0f);
+      (float)self->sample_rate * (SPECBLEACH_TRANSITION_FADE_TIME_MS / 1000.0f);
 
   self->latency_from = latency_from;
   self->latency_to = latency_to;
@@ -231,7 +231,7 @@ bool specbleach_transition_process(specbleach_transition* instance,
         const float w_from = cosf(angle);
         const float w_to = sinf(angle);
 
-        blended[ch][s] = w_from * aligned_source + w_to * to_out[ch][s];
+        blended[ch][s] = (w_from * aligned_source) + (w_to * to_out[ch][s]);
         progress += self->fade_step;
       } else {
         /* SLEWING: ramp the compensation delay on the target stream back
@@ -250,7 +250,8 @@ bool specbleach_transition_process(specbleach_transition* instance,
         const float w_aligned = cosf(angle);
         const float w_direct = sinf(angle);
 
-        blended[ch][s] = w_aligned * aligned_target + w_direct * target_sample;
+        blended[ch][s] =
+            (w_aligned * aligned_target) + (w_direct * target_sample);
         slew += self->fade_step;
       }
     }

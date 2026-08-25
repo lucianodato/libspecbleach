@@ -41,43 +41,51 @@ void test_specbleach_noise_profile_mode_functions(void) {
       .aggressiveness = 0.0f,
   };
 
-  TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &params, sizeof(params)) == true,
+  TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &params,
+                                                  sizeof(params)) == true,
               "Loading parameters should succeed");
 
   // Test NULL handle cases
-  TEST_ASSERT(specbleach_denoiser_get_noise_profile_block_count_for_mode(NULL, 1) == 0,
-              "NULL handle should return 0");
+  TEST_ASSERT(
+      specbleach_denoiser_get_noise_profile_block_count_for_mode(NULL, 1) == 0,
+      "NULL handle should return 0");
   TEST_ASSERT(specbleach_denoiser_get_noise_profile_for_mode(NULL, 1) == NULL,
               "NULL handle should return NULL");
-  TEST_ASSERT(specbleach_denoiser_noise_profile_available_for_mode(NULL, 1) == false,
-              "NULL handle should return false");
+  TEST_ASSERT(
+      specbleach_denoiser_noise_profile_available_for_mode(NULL, 1) == false,
+      "NULL handle should return false");
 
   // Test invalid modes
-  TEST_ASSERT(specbleach_denoiser_get_noise_profile_block_count_for_mode(handle, 0) == 0,
+  TEST_ASSERT(specbleach_denoiser_get_noise_profile_block_count_for_mode(
+                  handle, 0) == 0,
               "Invalid mode should return 0");
-  TEST_ASSERT(specbleach_denoiser_get_noise_profile_block_count_for_mode(handle, 5) == 0,
+  TEST_ASSERT(specbleach_denoiser_get_noise_profile_block_count_for_mode(
+                  handle, 5) == 0,
               "Invalid mode should return 0");
   TEST_ASSERT(specbleach_denoiser_get_noise_profile_for_mode(handle, 0) == NULL,
               "Invalid mode should return NULL");
   TEST_ASSERT(specbleach_denoiser_get_noise_profile_for_mode(handle, 5) == NULL,
               "Invalid mode should return NULL");
-  TEST_ASSERT(specbleach_denoiser_noise_profile_available_for_mode(handle, 0) == false,
-              "Invalid mode should return false");
-  TEST_ASSERT(specbleach_denoiser_noise_profile_available_for_mode(handle, 5) == false,
-              "Invalid mode should return false");
+  TEST_ASSERT(
+      specbleach_denoiser_noise_profile_available_for_mode(handle, 0) == false,
+      "Invalid mode should return false");
+  TEST_ASSERT(
+      specbleach_denoiser_noise_profile_available_for_mode(handle, 5) == false,
+      "Invalid mode should return false");
 
   // Initially no profiles should be available
   for (int mode = 1; mode <= 4; mode++) {
-    TEST_ASSERT(
-        specbleach_denoiser_noise_profile_available_for_mode(handle, mode) == false,
-        "Profile should not be available initially");
-    TEST_ASSERT(
-        specbleach_denoiser_get_noise_profile_block_count_for_mode(handle, mode) == 0,
-        "Should have 0 blocks initially");
+    TEST_ASSERT(specbleach_denoiser_noise_profile_available_for_mode(
+                    handle, mode) == false,
+                "Profile should not be available initially");
+    TEST_ASSERT(specbleach_denoiser_get_noise_profile_block_count_for_mode(
+                    handle, mode) == 0,
+                "Should have 0 blocks initially");
     // Note: get_noise_profile_for_mode returns the profile array even if not
     // available (this matches the behavior of the original single-mode API)
-    TEST_ASSERT(specbleach_denoiser_get_noise_profile_for_mode(handle, mode) != NULL,
-                "Should return profile array even if not available");
+    TEST_ASSERT(
+        specbleach_denoiser_get_noise_profile_for_mode(handle, mode) != NULL,
+        "Should return profile array even if not available");
   }
 
   specbleach_denoiser_free(handle);
@@ -102,7 +110,8 @@ void test_specbleach_load_noise_profile_with_mode(void) {
       .aggressiveness = 0.0f,
   };
 
-  TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &params, sizeof(params)) == true,
+  TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &params,
+                                                  sizeof(params)) == true,
               "Loading parameters should succeed");
 
   // Get profile size
@@ -123,14 +132,16 @@ void test_specbleach_load_noise_profile_with_mode(void) {
               "Loading noise profile should succeed");
 
   // Verify profile is available and has correct block count
-  TEST_ASSERT(specbleach_denoiser_noise_profile_available_for_mode(handle, 1) == true,
-              "Profile should be available for mode 1");
   TEST_ASSERT(
-      specbleach_denoiser_get_noise_profile_block_count_for_mode(handle, 1) == 10,
-      "Should have 10 blocks averaged");
+      specbleach_denoiser_noise_profile_available_for_mode(handle, 1) == true,
+      "Profile should be available for mode 1");
+  TEST_ASSERT(specbleach_denoiser_get_noise_profile_block_count_for_mode(
+                  handle, 1) == 10,
+              "Should have 10 blocks averaged");
 
   // Get the profile back and verify it matches
-  float* retrieved_profile = specbleach_denoiser_get_noise_profile_for_mode(handle, 1);
+  float* retrieved_profile =
+      specbleach_denoiser_get_noise_profile_for_mode(handle, 1);
   TEST_ASSERT(retrieved_profile != NULL, "Should get valid profile");
 
   for (uint32_t i = 0; i < profile_size; i++) {
@@ -138,10 +149,12 @@ void test_specbleach_load_noise_profile_with_mode(void) {
   }
 
   // Test that other modes are unaffected
-  TEST_ASSERT(specbleach_denoiser_noise_profile_available_for_mode(handle, 2) == false,
-              "Mode 2 should still be unavailable");
-  TEST_ASSERT(specbleach_denoiser_noise_profile_available_for_mode(handle, 3) == false,
-              "Mode 3 should still be unavailable");
+  TEST_ASSERT(
+      specbleach_denoiser_noise_profile_available_for_mode(handle, 2) == false,
+      "Mode 2 should still be unavailable");
+  TEST_ASSERT(
+      specbleach_denoiser_noise_profile_available_for_mode(handle, 3) == false,
+      "Mode 3 should still be unavailable");
 
   free(test_profile);
   specbleach_denoiser_free(handle);
@@ -184,7 +197,8 @@ void test_specbleach_mode_switching(void) {
       .tonal_reduction_gain = 1.0f,
       .aggressiveness = 0.0f,
   };
-  TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &params, sizeof(params)) == true,
+  TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &params,
+                                                  sizeof(params)) == true,
               "Loading mode 1 parameters should succeed");
   TEST_ASSERT(specbleach_denoiser_load_noise_profile_for_mode(
                   handle, profile1, profile_size, 5, ROLLING_MEAN) == true,
@@ -192,7 +206,8 @@ void test_specbleach_mode_switching(void) {
 
   // Mode 2
   // Explicitly loading for mode 2 since noise_reduction_mode is removed
-  TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &params, sizeof(params)) == true,
+  TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &params,
+                                                  sizeof(params)) == true,
               "Loading mode 2 parameters should succeed");
   TEST_ASSERT(specbleach_denoiser_load_noise_profile_for_mode(
                   handle, profile2, profile_size, 10, 2) == true,
@@ -200,7 +215,8 @@ void test_specbleach_mode_switching(void) {
 
   // Mode 3
   // Explicitly loading for mode 3
-  TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &params, sizeof(params)) == true,
+  TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &params,
+                                                  sizeof(params)) == true,
               "Loading mode 3 parameters should succeed");
   TEST_ASSERT(specbleach_denoiser_load_noise_profile_for_mode(
                   handle, profile3, profile_size, 15, 3) == true,
@@ -208,20 +224,21 @@ void test_specbleach_mode_switching(void) {
 
   // Verify all modes have their profiles
   for (int mode = 1; mode <= 3; mode++) {
-    TEST_ASSERT(
-        specbleach_denoiser_noise_profile_available_for_mode(handle, mode) == true,
-        "Profile should be available");
+    TEST_ASSERT(specbleach_denoiser_noise_profile_available_for_mode(
+                    handle, mode) == true,
+                "Profile should be available");
   }
 
   // Check block counts
-  TEST_ASSERT(specbleach_denoiser_get_noise_profile_block_count_for_mode(handle, 1) == 5,
+  TEST_ASSERT(specbleach_denoiser_get_noise_profile_block_count_for_mode(
+                  handle, 1) == 5,
               "Mode 1 should have 5 blocks");
-  TEST_ASSERT(
-      specbleach_denoiser_get_noise_profile_block_count_for_mode(handle, 2) == 10,
-      "Mode 2 should have 10 blocks");
-  TEST_ASSERT(
-      specbleach_denoiser_get_noise_profile_block_count_for_mode(handle, 3) == 15,
-      "Mode 3 should have 15 blocks");
+  TEST_ASSERT(specbleach_denoiser_get_noise_profile_block_count_for_mode(
+                  handle, 2) == 10,
+              "Mode 2 should have 10 blocks");
+  TEST_ASSERT(specbleach_denoiser_get_noise_profile_block_count_for_mode(
+                  handle, 3) == 15,
+              "Mode 3 should have 15 blocks");
 
   // Check profile values
   float* retrieved1 = specbleach_denoiser_get_noise_profile_for_mode(handle, 1);
@@ -270,15 +287,17 @@ void test_specbleach_reset_noise_profile(void) {
       .aggressiveness = 0.0f,
   };
 
-  TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &params, sizeof(params)) == true,
+  TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &params,
+                                                  sizeof(params)) == true,
               "Loading parameters should succeed");
   TEST_ASSERT(specbleach_denoiser_load_noise_profile_for_mode(
                   handle, test_profile, profile_size, 10, ROLLING_MEAN) == true,
               "Loading profile should succeed");
 
   // Verify profile is available
-  TEST_ASSERT(specbleach_denoiser_noise_profile_available_for_mode(handle, 1) == true,
-              "Profile should be available before reset");
+  TEST_ASSERT(
+      specbleach_denoiser_noise_profile_available_for_mode(handle, 1) == true,
+      "Profile should be available before reset");
 
   // Reset profile
   TEST_ASSERT(specbleach_denoiser_reset_noise_profile(handle) == true,
@@ -286,12 +305,12 @@ void test_specbleach_reset_noise_profile(void) {
 
   // Verify all profiles are reset
   for (int mode = 1; mode <= 4; mode++) {
-    TEST_ASSERT(
-        specbleach_denoiser_noise_profile_available_for_mode(handle, mode) == false,
-        "Profile should not be available after reset");
-    TEST_ASSERT(
-        specbleach_denoiser_get_noise_profile_block_count_for_mode(handle, mode) == 0,
-        "Blocks should be 0 after reset");
+    TEST_ASSERT(specbleach_denoiser_noise_profile_available_for_mode(
+                    handle, mode) == false,
+                "Profile should not be available after reset");
+    TEST_ASSERT(specbleach_denoiser_get_noise_profile_block_count_for_mode(
+                    handle, mode) == 0,
+                "Blocks should be 0 after reset");
   }
 
   free(test_profile);
@@ -357,8 +376,8 @@ void test_specbleach_run_features(void) {
     profile[i] = 0.1f;
   }
 
-  specbleach_denoiser_load_noise_profile_for_mode(handle, profile, profile_size, 1,
-                                         ROLLING_MEAN);
+  specbleach_denoiser_load_noise_profile_for_mode(handle, profile, profile_size,
+                                                  1, ROLLING_MEAN);
 
   SpecbleachDenoiserParameters params = {
       .learn_noise = SPECBLEACH_LEARN_OFF,
@@ -414,8 +433,8 @@ int main(void) {
   specbleach_denoiser_get_tonal_peaks(h, peak_freqs, 10);
 
   float* dummy_prof = calloc(prof_size, sizeof(float));
-  specbleach_denoiser_get_tonal_peaks_for_profile(h, dummy_prof, prof_size, peak_freqs,
-                                         10);
+  specbleach_denoiser_get_tonal_peaks_for_profile(h, dummy_prof, prof_size,
+                                                  peak_freqs, 10);
   free(dummy_prof);
 
   // Process with tonal reduction and HPSS enabled
@@ -473,25 +492,28 @@ int main(void) {
 
   // Verify NULL handle protections
   TEST_ASSERT(specbleach_denoiser_get_latency(NULL) == 0, "NULL latency");
-  TEST_ASSERT(specbleach_denoiser_get_noise_profile_size(NULL) == 0, "NULL size");
-  TEST_ASSERT(specbleach_denoiser_get_noise_profile_for_mode(NULL, ROLLING_MEAN) == NULL,
+  TEST_ASSERT(specbleach_denoiser_get_noise_profile_size(NULL) == 0,
+              "NULL size");
+  TEST_ASSERT(specbleach_denoiser_get_noise_profile_for_mode(
+                  NULL, ROLLING_MEAN) == NULL,
               "NULL profile");
-  TEST_ASSERT(
-      specbleach_denoiser_noise_profile_available_for_mode(NULL, ROLLING_MEAN) == false,
-      "NULL available");
-  TEST_ASSERT(specbleach_denoiser_reset_noise_profile(NULL) == false, "NULL reset");
+  TEST_ASSERT(specbleach_denoiser_noise_profile_available_for_mode(
+                  NULL, ROLLING_MEAN) == false,
+              "NULL available");
+  TEST_ASSERT(specbleach_denoiser_reset_noise_profile(NULL) == false,
+              "NULL reset");
   SpecbleachDenoiserParameters null_params = {0};
   TEST_ASSERT(specbleach_denoiser_load_parameters(NULL, &null_params,
-                                                  sizeof(null_params)) ==
-                  false,
+                                                  sizeof(null_params)) == false,
               "NULL load");
-  TEST_ASSERT(specbleach_denoiser_get_tonal_mask(NULL) == NULL, "NULL tonal mask");
+  TEST_ASSERT(specbleach_denoiser_get_tonal_mask(NULL) == NULL,
+              "NULL tonal mask");
   TEST_ASSERT(specbleach_denoiser_get_active_noise_profile(NULL) == NULL,
               "NULL active profile");
   TEST_ASSERT(specbleach_denoiser_get_tonal_peaks(NULL, peak_freqs, 10) == 0,
               "NULL tonal peaks");
-  TEST_ASSERT(specbleach_denoiser_get_tonal_peaks_for_profile(NULL, NULL, 0, peak_freqs,
-                                                     10) == 0,
+  TEST_ASSERT(specbleach_denoiser_get_tonal_peaks_for_profile(
+                  NULL, NULL, 0, peak_freqs, 10) == 0,
               "NULL tonal peaks for profile");
 
   specbleach_denoiser_free(h);
@@ -501,15 +523,17 @@ int main(void) {
   specbleach_denoiser* h_adapt = specbleach_denoiser_initialize(44100, 20.0f);
   TEST_ASSERT(h_adapt != NULL, "Initialization should succeed");
 
-  TEST_ASSERT(specbleach_denoiser_noise_profile_available_for_mode(h_adapt, 1) == false,
-              "Profile should not be available initially");
+  TEST_ASSERT(
+      specbleach_denoiser_noise_profile_available_for_mode(h_adapt, 1) == false,
+      "Profile should not be available initially");
 
   SpecbleachDenoiserParameters adapt_params = {
       .adaptive_noise = true,
       .noise_estimation_method = SPECBLEACH_NOISE_ESTIMATION_SPP_MMSE,
       .reduction_gain = 0.25f,
   };
-  specbleach_denoiser_load_parameters(h_adapt, &adapt_params, sizeof(adapt_params));
+  specbleach_denoiser_load_parameters(h_adapt, &adapt_params,
+                                      sizeof(adapt_params));
 
   float adapt_in[1024];
   float adapt_out[1024];
@@ -528,7 +552,8 @@ int main(void) {
 
   // Deactivate adaptive mode
   adapt_params.adaptive_noise = false;
-  specbleach_denoiser_load_parameters(h_adapt, &adapt_params, sizeof(adapt_params));
+  specbleach_denoiser_load_parameters(h_adapt, &adapt_params,
+                                      sizeof(adapt_params));
   specbleach_denoiser_process(h_adapt, 1024, adapt_in, adapt_out);
 
   specbleach_denoiser_free(h_adapt);
