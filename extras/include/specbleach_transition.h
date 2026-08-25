@@ -34,18 +34,20 @@ extern "C" {
  * Click-free switching between two already-configured engine groups.
  *
  * This module belongs to the optional extras layer. It is engine-agnostic:
- * it knows nothing about denoisers or parameters, it only aligns latencies
- * and blends two streams of audio. The caller renders BOTH engines' wet
- * outputs itself and feeds them here.
+ * it knows nothing about denoisers or parameters, it only blends two
+ * streams of audio. The caller renders BOTH engines' wet outputs itself
+ * and feeds them here.
  *
- * Behavior (mirrors proven plugin practice):
- * - During the fade, the lower-latency stream is delayed by the latency
- *   difference so both streams align at the larger latency, and an
- *   equal-power (sin/cos) blend ramps toward the target over
- *   SPECBLEACH_TRANSITION_FADE_TIME_MS.
- * - After landing on a target whose latency is LOWER than the source, the
- *   compensation delay ramps back down over the same duration so listeners
- *   never hear the latency jump.
+ * Behavior:
+ * - During the fade, an equal-power (sin/cos) blend ramps from the source
+ *   stream to the target stream over SPECBLEACH_TRANSITION_FADE_TIME_MS.
+ *   Both streams are blended as rendered; no time alignment is applied,
+ *   so the emitted output never repeats or drops samples. If the two
+ *   engines' algorithmic latencies differ, the blend smears that offset
+ *   over the fade duration instead.
+ * - Callers must update host delay compensation when they call begin():
+ *   specbleach_transition_get_latency() reports the target latency from
+ *   that moment on.
  */
 
 /**
@@ -91,27 +93,6 @@ SPECBLEACH_API void specbleach_transition_free(specbleach_transition* instance);
 SPECBLEACH_API bool specbleach_transition_begin(specbleach_transition* instance,
                                                 uint32_t latency_from,
                                                 uint32_t latency_to);
-
-/**
- * Pre-fills the alignment delay with recent source output.
- *
- * Without priming, the first latency-difference samples of a fade blend the
- * source against silence (the delay ring starts empty), which is audible.
- * Call this right after specbleach_transition_begin() — and before
- * specbleach_transition_process() — passing the last rendered samples of the
- * SOURCE engine's output, oldest sample first, ending at the most recent one.
- *
- * Not real-time safe. At most min(history_length, latency difference)
- * samples are consumed per channel; shorter histories simply reduce how far
- * back continuity reaches.
- *
- * @param history Per-channel arrays of previously rendered source samples.
- * @param history_length Number of valid samples per channel in history[].
- * @return false on invalid arguments or internal allocation failure.
- */
-SPECBLEACH_API bool specbleach_transition_prime(specbleach_transition* instance,
-                                                const float* const* history,
-                                                uint32_t history_length);
 
 /**
  * Blends one block.

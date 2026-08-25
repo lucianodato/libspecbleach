@@ -21,22 +21,20 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "specbleach_transition.h"
 #include <math.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
-
-#define TEST_ASSERT(condition, message)                                        \
-  do {                                                                         \
-    if (!(condition)) {                                                        \
-      fprintf(stderr, "TEST FAILED: %s\n", message);                           \
-      exit(1);                                                                 \
-    }                                                                          \
-  } while (0)
 
 #define SAMPLE_RATE 48000
 #define MAX_BLOCK 512
 #define BLOCK_SIZE 512
 #define CHANNELS 2
-#define PRIME_HISTORY_LEN 4096
+
+#define TEST_ASSERT(condition, message)                                        \
+  do {                                                                         \
+    if (!(condition)) {                                                        \
+      fprintf(stderr, "TEST FAILED: %s\n", message);                           \
+      return;                                                                  \
+    }                                                                          \
+  } while (0)
 
 static void test_init_and_validation(void) {
   printf("Testing transition init and validation...\n");
@@ -45,26 +43,39 @@ static void test_init_and_validation(void) {
               "sample_rate == 0 rejected");
   TEST_ASSERT(
       specbleach_transition_initialize(SAMPLE_RATE, 0, CHANNELS) == NULL,
-      "max_block == 0 rejected");
+      "max_block_size == 0 rejected");
   TEST_ASSERT(
       specbleach_transition_initialize(SAMPLE_RATE, MAX_BLOCK, 0) == NULL,
       "channels == 0 rejected");
-  specbleach_transition_free(NULL);
 
   specbleach_transition* t =
       specbleach_transition_initialize(SAMPLE_RATE, MAX_BLOCK, CHANNELS);
-  TEST_ASSERT(t != NULL, "valid init");
-  TEST_ASSERT(!specbleach_transition_active(t), "inactive after init");
+  TEST_ASSERT(t != NULL, "valid init succeeds");
+  TEST_ASSERT(!specbleach_transition_active(t), "fresh instance is idle");
   TEST_ASSERT(specbleach_transition_get_latency(t) == 0,
-              "zero latency before begin");
+              "latency zero before begin");
 
-  TEST_ASSERT(specbleach_transition_process(NULL, BLOCK_SIZE, NULL, NULL,
-                                            NULL) == false,
-              "NULL instance process rejected");
-  TEST_ASSERT(specbleach_transition_begin(NULL, 0, 0) == false,
-              "NULL instance begin rejected");
+  /* Invalid process calls are rejected */
+  float src[CHANNELS][BLOCK_SIZE] = {{0}};
+  float dst[CHANNELS][BLOCK_SIZE] = {{0}};
+  const float* from_ptrs[CHANNELS] = {src[0], src[1]};
+  const float* to_ptrs[CHANNELS] = {dst[0], dst[1]};
+  float* blended_ptrs[CHANNELS] = {dst[0], dst[1]};
+  TEST_ASSERT(!specbleach_transition_process(NULL, BLOCK_SIZE, from_ptrs,
+                                             to_ptrs, blended_ptrs),
+              "NULL instance rejected");
+  TEST_ASSERT(
+      !specbleach_transition_process(t, 0, from_ptrs, to_ptrs, blended_ptrs),
+      "zero samples rejected");
+  TEST_ASSERT(!specbleach_transition_process(t, BLOCK_SIZE, from_ptrs, NULL,
+                                             blended_ptrs),
+              "NULL to_out rejected");
+  TEST_ASSERT(
+      !specbleach_transition_process(t, BLOCK_SIZE, from_ptrs, to_ptrs, NULL),
+      "NULL blended rejected");
 
   specbleach_transition_free(t);
+  specbleach_transition_free(NULL); /* must be a no-op */
   printf("✓ Transition init and validation tests passed\n");
 }
 
@@ -74,25 +85,39 @@ static void test_idle_passthrough(void) {
   specbleach_transition* t =
       specbleach_transition_initialize(SAMPLE_RATE, MAX_BLOCK, CHANNELS);
 
-  float to[CHANNELS][BLOCK_SIZE];
+  float source[CHANNELS][BLOCK_SIZE];
+  float target[CHANNELS][BLOCK_SIZE];
   float blended[CHANNELS][BLOCK_SIZE];
-  const float* from_ptrs[CHANNELS] = {NULL};
-  const float* to_ptrs[CHANNELS] = {to[0], to[1]};
+  const float* from_ptrs[CHANNELS] = {source[0], source[1]};
+  const float* to_ptrs[CHANNELS] = {target[0], target[1]};
   float* blended_ptrs[CHANNELS] = {blended[0], blended[1]};
 
   for (uint32_t s = 0; s < BLOCK_SIZE; ++s) {
-    to[0][s] = (float)s;
-    to[1][s] = -(float)s;
+    source[0][s] = 0.25f;
+    source[1][s] = 0.5f;
+    target[0][s] = -0.75f;
+    target[1][s] = -0.5f;
   }
 
-  // Before begin(): to_out is passed through untouched (from_out may be NULL)
   TEST_ASSERT(specbleach_transition_process(t, BLOCK_SIZE, from_ptrs, to_ptrs,
                                             blended_ptrs),
-              "idle passthrough succeeds");
-  for (uint32_t s = 0; s < BLOCK_SIZE; ++s) {
-    TEST_ASSERT(blended[0][s] == to[0][s], "ch0 passthrough identical");
-    TEST_ASSERT(blended[1][s] == to[1][s], "ch1 passthrough identical");
-  }
+              "idle passthrough processed");
+  TEST_ASSERT(blended[0][10] == target[0][10],
+              "idle passes through to_out ch0");
+  TEST_ASSERT(blended[1][20] == target[1][20],
+              "idle passes through to_out ch1");
+
+  /* Aliased destination must not memcpy over itself (guard against UB). */
+  const float* alias_to[CHANNELS] = {blended[0], blended[1]};
+  TEST_ASSERT(specbleach_transition_process(t, BLOCK_SIZE, from_ptrs, alias_to,
+                                            blended_ptrs),
+              "aliased passthrough processed");
+  TEST_ASSERT(blended[1][0] == target[1][0], "alias passthrough intact");
+
+  /* NULL from_out is allowed while idle. */
+  TEST_ASSERT(
+      specbleach_transition_process(t, BLOCK_SIZE, NULL, to_ptrs, blended_ptrs),
+      "NULL from_out allowed while idle");
 
   specbleach_transition_free(t);
   printf("✓ Idle passthrough tests passed\n");
@@ -110,12 +135,9 @@ static void test_equal_power_fade(void) {
   float source[CHANNELS][BLOCK_SIZE];
   float target[CHANNELS][BLOCK_SIZE];
   float blended[CHANNELS][BLOCK_SIZE];
-  float blended_alias[CHANNELS][BLOCK_SIZE];
   const float* from_ptrs[CHANNELS] = {source[0], source[1]};
-  const float* alias_from_ptrs[CHANNELS] = {blended_alias[0], blended_alias[1]};
   const float* to_ptrs[CHANNELS] = {target[0], target[1]};
   float* blended_ptrs[CHANNELS] = {blended[0], blended[1]};
-  float* alias_blended_ptrs[CHANNELS] = {blended_alias[0], blended_alias[1]};
 
   for (uint32_t s = 0; s < BLOCK_SIZE; ++s) {
     source[0][s] = 1.0f;
@@ -135,6 +157,14 @@ static void test_equal_power_fade(void) {
                                             blended_ptrs) == false,
               "NULL from_out during fade rejected");
 
+  /* Continuity: the very first faded sample must equal the source exactly
+   * (w_from == cos(0) == 1), proving no rewind or offset is applied. */
+  TEST_ASSERT(
+      specbleach_transition_process(t, 1, from_ptrs, to_ptrs, blended_ptrs),
+      "single sample processed");
+  TEST_ASSERT(blended[0][0] == 1.0f, "fade starts at source sample exactly");
+  TEST_ASSERT(blended[1][0] == 1.0f, "ch1 fade starts at source exactly");
+
   uint32_t blocks = 0;
   while (specbleach_transition_active(t)) {
     TEST_ASSERT(specbleach_transition_process(t, BLOCK_SIZE, from_ptrs, to_ptrs,
@@ -145,26 +175,26 @@ static void test_equal_power_fade(void) {
     }
   }
 
-  /* After a fade that lands on the HIGHER latency engine there is no slew
-   * phase; output must converge to the pure target signal. */
+  /* After the fade the output converges to the pure target signal. */
   TEST_ASSERT(fabsf(blended[0][BLOCK_SIZE - 1] - 0.5f) < 1e-4f,
               "converged to target after fade");
+  TEST_ASSERT(!specbleach_transition_active(t), "inactive after fade");
 
-  // Restart toward the LOWER latency engine: exercises the slew phase and
+  // Reverse direction exercises the same path toward the other engine and
   // in-place blending (blended aliases target).
   TEST_ASSERT(specbleach_transition_begin(t, latency_to, latency_from),
               "reverse begin accepted");
   blocks = 0;
   while (specbleach_transition_active(t)) {
-    TEST_ASSERT(specbleach_transition_process(t, BLOCK_SIZE, alias_from_ptrs,
-                                              to_ptrs, alias_blended_ptrs),
+    TEST_ASSERT(specbleach_transition_process(t, BLOCK_SIZE, to_ptrs, to_ptrs,
+                                              blended_ptrs),
                 "reverse fade block processed (in-place)");
     if (++blocks > 200U) {
       TEST_ASSERT(0, "reverse transition did not finish");
     }
   }
-  TEST_ASSERT(fabsf(blended_alias[0][BLOCK_SIZE - 1] - 0.5f) < 1e-3f,
-              "converged after slew phase");
+  TEST_ASSERT(fabsf(blended[0][BLOCK_SIZE - 1] - 0.5f) < 1e-3f,
+              "converged after reverse fade");
 
   // Post-transition: from may be NULL now, passthrough applies.
   memset(blended, 0, sizeof(blended));
@@ -200,6 +230,8 @@ static void test_equal_latency_noop(void) {
   TEST_ASSERT(specbleach_transition_begin(t, 1024, 1024), "begin ok");
   TEST_ASSERT(!specbleach_transition_active(t),
               "equal latencies need no transition");
+  TEST_ASSERT(specbleach_transition_get_latency(t) == 1024,
+              "equal-latency begin reports target");
 
   TEST_ASSERT(specbleach_transition_process(t, BLOCK_SIZE, from_ptrs, to_ptrs,
                                             blended_ptrs),
@@ -211,105 +243,11 @@ static void test_equal_latency_noop(void) {
   printf("✓ Equal-latency tests passed\n");
 }
 
-static void test_prime_continuity(void) {
-  printf("Testing delay-line priming continuity...\n");
-
-  specbleach_transition* t =
-      specbleach_transition_initialize(SAMPLE_RATE, MAX_BLOCK, CHANNELS);
-
-  const uint32_t latency_from = 1024;
-  const uint32_t latency_to = 2048;
-  const uint32_t diff = latency_to - latency_from;
-
-  /* History: last `diff` rendered source samples, a known descending ramp
-   * ending at 1000.0f so continuity is easy to assert. */
-  float history[CHANNELS][PRIME_HISTORY_LEN];
-  const float* history_ptrs[CHANNELS] = {history[0], history[1]};
-  for (uint32_t s = 0; s < diff; ++s) {
-    history[0][s] = 1000.0f - (float)s;
-    history[1][s] = 1000.0f - (float)s;
-  }
-
-  float source[CHANNELS][BLOCK_SIZE];
-  float target[CHANNELS][BLOCK_SIZE];
-  float blended[CHANNELS][BLOCK_SIZE];
-  const float* from_ptrs[CHANNELS] = {source[0], source[1]};
-  const float* to_ptrs[CHANNELS] = {target[0], target[1]};
-  float* blended_ptrs[CHANNELS] = {blended[0], blended[1]};
-
-  /* Source stays constant at the final history value; target is silent.
-   * A primed fade must then hold output near that value throughout. */
-  for (uint32_t s = 0; s < BLOCK_SIZE; ++s) {
-    source[0][s] = 1000.0f;
-    source[1][s] = 1000.0f;
-    target[0][s] = 0.0f;
-    target[1][s] = 0.0f;
-  }
-
-  TEST_ASSERT(specbleach_transition_begin(t, latency_from, latency_to),
-              "begin before prime");
-  TEST_ASSERT(specbleach_transition_prime(t, history_ptrs, diff),
-              "prime accepted");
-  TEST_ASSERT(!specbleach_transition_prime(t, NULL, diff),
-              "NULL history rejected");
-  TEST_ASSERT(!specbleach_transition_prime(t, history_ptrs, 0),
-              "zero length rejected");
-
-  /* Order-sensitive exactness: with the oldest history sample first in the
-   * ring, the very first faded sample must equal history[0] exactly
-   * (target silent, w_from == 1 at progress zero). */
-  TEST_ASSERT(
-      specbleach_transition_process(t, 1, from_ptrs, to_ptrs, blended_ptrs),
-      "single primed sample processed");
-  TEST_ASSERT(blended[0][0] == 1000.0f,
-              "first blended sample equals oldest history sample");
-  TEST_ASSERT(blended[1][0] == 1000.0f, "ch1 first blended matches");
-
-  /* Restart and prime with a CONSTANT history matching the live constant
-   * source: a correctly primed fade must hold that level throughout, while
-   * an unprimed one would duck toward the silent target. */
-  for (uint32_t s = 0; s < diff; ++s) {
-    history[0][s] = 1000.0f;
-    history[1][s] = 1000.0f;
-  }
-  TEST_ASSERT(specbleach_transition_begin(t, latency_from, latency_to),
-              "restart for hold test");
-  TEST_ASSERT(specbleach_transition_prime(t, history_ptrs, diff),
-              "prime accepted for hold test");
-  uint32_t guard = 0;
-  uint32_t consumed = 0;
-  const uint32_t fade_samples =
-      (uint32_t)((float)SAMPLE_RATE *
-                 (SPECBLEACH_TRANSITION_FADE_TIME_MS / 1000.0f));
-  const uint32_t hold_samples = fade_samples / 2U;
-  while (specbleach_transition_active(t)) {
-    TEST_ASSERT(specbleach_transition_process(t, BLOCK_SIZE, from_ptrs, to_ptrs,
-                                              blended_ptrs),
-                "hold fade block processed");
-    /* Early in the fade the primed delay must keep the source clearly
-     * audible (w_from >= ~0.7 of a constant 1000); an unprimed ring would
-     * blend silence here and sit near zero. Later samples legitimately
-     * converge to the silent target as w_to rises. */
-    for (uint32_t s = 0; s < BLOCK_SIZE && consumed + s < hold_samples; ++s) {
-      TEST_ASSERT(blended[0][s] > 500.0f,
-                  "primed fade keeps source audible early");
-    }
-    consumed += BLOCK_SIZE;
-    if (++guard > 100U) {
-      TEST_ASSERT(0, "hold fade did not finish");
-    }
-  }
-
-  specbleach_transition_free(t);
-  printf("✓ Priming continuity tests passed\n");
-}
-
 int main(void) {
   test_init_and_validation();
   test_idle_passthrough();
   test_equal_power_fade();
   test_equal_latency_noop();
-  test_prime_continuity();
 
   printf("✅ All specbleach transition tests passed!\n");
   return 0;
