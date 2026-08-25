@@ -21,6 +21,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "thread_pool.h"
 
 #include <stdatomic.h>
+#include <stdbool.h>
 #include <stdlib.h>
 
 #include "simd_utils.h"
