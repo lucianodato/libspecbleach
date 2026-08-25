@@ -262,8 +262,17 @@ int main(int argc, char** argv) {
                                   sample_rate, options.frame_size_ms, channels,
                                   SPECBLEACH_STEREO_ENGINE_NLM_2D)
                             : NULL;
-  specbleach_transition* transition =
-      specbleach_transition_initialize(sample_rate, BLOCK_SIZE, channels, 4096);
+  // Alignment headroom must cover the latency difference between engines
+  const uint32_t spectral_latency =
+      specbleach_stereo_get_latency(spectral_group);
+  const uint32_t nlm_latency =
+      nlm_group ? specbleach_stereo_get_latency(nlm_group) : spectral_latency;
+  const uint32_t max_alignment_delay = spectral_latency > nlm_latency
+                                           ? spectral_latency - nlm_latency
+                                           : nlm_latency - spectral_latency;
+
+  specbleach_transition* transition = specbleach_transition_initialize(
+      sample_rate, BLOCK_SIZE, channels, max_alignment_delay);
 
   float* interleaved = calloc((size_t)channels * BLOCK_SIZE, sizeof(float));
   float* channel_data = calloc((size_t)channels * BLOCK_SIZE, sizeof(float));
