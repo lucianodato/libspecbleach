@@ -53,8 +53,12 @@ static void fill_task(void* arg, uint32_t start, uint32_t count) {
 
 static void fill_context_init(FillContext* ctx, uint32_t num_items) {
   ctx->num_items = num_items;
-  ctx->hits = (atomic_uint*)calloc(num_items, sizeof(atomic_uint));
-  TEST_ASSERT(ctx->hits != NULL, "Failed to allocate hits array");
+  // calloc(0) may legally return NULL; only assert for non-empty ranges.
+  ctx->hits = num_items > 0U
+                  ? (atomic_uint*)calloc(num_items, sizeof(atomic_uint))
+                  : NULL;
+  TEST_ASSERT(num_items == 0U || ctx->hits != NULL,
+              "Failed to allocate hits array");
   for (uint32_t i = 0; i < num_items; i++) {
     atomic_init(&ctx->hits[i], 0U);
   }

@@ -271,6 +271,11 @@ if(SPECBLEACH_INSTALL)
         set(PKG_CONFIG_INCLUDEDIR "\${prefix}/${CMAKE_INSTALL_INCLUDEDIR}")
     endif()
 
+    set(PKG_CONFIG_LIBS_PRIVATE "-lm")
+    if(CMAKE_THREAD_LIBS_INIT)
+        string(APPEND PKG_CONFIG_LIBS_PRIVATE " ${CMAKE_THREAD_LIBS_INIT}")
+    endif()
+
     configure_file(
         "${CMAKE_CURRENT_SOURCE_DIR}/specbleach.pc.in"
         "${CMAKE_CURRENT_BINARY_DIR}/specbleach.pc"

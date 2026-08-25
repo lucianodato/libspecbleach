@@ -8,5 +8,5 @@ Description: C library for audio noise reduction and spectral processing
 Version: @PKG_CONFIG_VERSION@
 Requires.private: @PKG_CONFIG_REQUIRES_PRIVATE@
 Libs: -L${libdir} -lspecbleach
-Libs.private: -lm
+Libs.private: @PKG_CONFIG_LIBS_PRIVATE@
 Cflags: -I${includedir}

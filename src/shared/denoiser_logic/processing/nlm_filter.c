@@ -77,6 +77,9 @@ NlmFilter* nlm_filter_initialize(NlmFilterConfig config) {
 
   self->num_threads = self->config.num_threads > 0U ? self->config.num_threads
                                                     : NLM_NUM_THREADS_DEFAULT;
+  if (self->num_threads > NLM_MAX_THREADS) {
+    self->num_threads = NLM_MAX_THREADS;
+  }
   if (self->num_threads > 1U) {
     // The calling thread participates in every dispatch, so the pool only
     // needs num_threads - 1 dedicated workers.

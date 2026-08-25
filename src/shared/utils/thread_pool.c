@@ -73,6 +73,7 @@ struct SbThreadPool {
 
   uint32_t worker_count;
   uint32_t threads_created;
+  uint32_t semaphores_initialized; // Workers with a live semaphore
   SbWorker* workers;
 #ifdef _WIN32
   HANDLE* threads;
@@ -213,6 +214,7 @@ SbThreadPool* sb_thread_pool_create(uint32_t num_workers) {
       return NULL;
     }
 #endif
+    pool->semaphores_initialized++;
   }
 
   for (uint32_t i = 0U; i < num_workers; i++) {
@@ -299,7 +301,7 @@ void sb_thread_pool_free(SbThreadPool* pool) {
   }
 
   if (pool->workers) {
-    for (uint32_t i = 0U; i < pool->worker_count; i++) {
+    for (uint32_t i = 0U; i < pool->semaphores_initialized; i++) {
 #ifdef _WIN32
       if (pool->workers[i].sem) {
         CloseHandle(pool->workers[i].sem);

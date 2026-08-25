@@ -211,6 +211,7 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define NLM_SNR_NOISE_FLOOR_MIN 1e-9F
 #define NLM_DISTANCE_THRESHOLD_MULTIPLIER 4.0F
 #define NLM_NUM_THREADS_DEFAULT 4U
+#define NLM_MAX_THREADS 16U
 
 // Must be >= search_time_past + search_time_future + patch_size for NLM caching
 // Using power-of-two (64U) for efficient modulo wrap-around and future headroom

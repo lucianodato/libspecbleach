@@ -21,7 +21,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #ifndef SHARED_UTILS_THREAD_POOL_H
 #define SHARED_UTILS_THREAD_POOL_H
 
-#include <stdbool.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -59,9 +58,10 @@ uint32_t sb_thread_pool_num_workers(const SbThreadPool* pool);
  * contiguous ranges.
  *
  * The calling thread executes the first range synchronously and joins the
- * workers before returning, so on return all items are fully processed. When
- * the pool is NULL, `num_items` is zero, or there is a single range, the task
- * runs sequentially on the calling thread.
+ * workers before returning, so on return all items are fully processed. If
+ * `num_items` is zero, the function returns without invoking the task. When
+ * the pool is NULL or there is a single range, the task runs sequentially on
+ * the calling thread.
  */
 void sb_thread_pool_parallel_for(SbThreadPool* pool, uint32_t num_items,
                                  void (*task)(void* arg, uint32_t start,
