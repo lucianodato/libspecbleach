@@ -48,7 +48,8 @@ jobs:
             -DCMAKE_BUILD_TYPE=Debug \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
             -DENABLE_EXAMPLES=ON \
-            -DENABLE_TESTS=ON
+            -DENABLE_TESTS=ON \
+            -DSPECBLEACH_BUILD_EXTRAS=ON
 
       - name: Run scan-build
         run: |
