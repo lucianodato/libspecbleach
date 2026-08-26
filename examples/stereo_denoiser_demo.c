@@ -307,7 +307,8 @@ int main(int argc, char** argv) {
       /* Deinterleave into per-channel processing buffers */
       for (uint32_t ch = 0; ch < channels; ++ch) {
         for (sf_count_t s = 0; s < read_frames; ++s) {
-          channel_data[ch * BLOCK_SIZE + s] = interleaved[s * channels + ch];
+          channel_data[((size_t)ch * BLOCK_SIZE) + (size_t)s] =
+              interleaved[((size_t)s * channels) + ch];
         }
       }
 
@@ -315,9 +316,10 @@ int main(int argc, char** argv) {
       float* out_ptrs[MAX_CHANNELS] = {0};
       float* from_ptrs[MAX_CHANNELS] = {0};
       for (uint32_t ch = 0; ch < channels; ++ch) {
-        in_ptrs[ch] = &channel_data[ch * BLOCK_SIZE];
-        out_ptrs[ch] = &channel_data[ch * BLOCK_SIZE]; /* process in place */
-        from_ptrs[ch] = &scratch_from[ch * BLOCK_SIZE];
+        in_ptrs[ch] = &channel_data[(size_t)ch * BLOCK_SIZE];
+        out_ptrs[ch] =
+            &channel_data[(size_t)ch * BLOCK_SIZE]; /* process in place */
+        from_ptrs[ch] = &scratch_from[(size_t)ch * BLOCK_SIZE];
       }
 
       /* -----------------------------------------------------------------
@@ -408,7 +410,7 @@ int main(int argc, char** argv) {
             const float w_new = sinf(half_pi_f);
             const float w_old = cosf(half_pi_f);
             out_ptrs[ch][i] =
-                w_old * from_ptrs[ch][i] + w_new * out_ptrs[ch][i];
+                (w_old * from_ptrs[ch][i]) + (w_new * out_ptrs[ch][i]);
           }
         }
         fade_samples_done += (uint32_t)read_frames;
@@ -437,7 +439,8 @@ int main(int argc, char** argv) {
       /* Re-interleave processed audio */
       for (uint32_t ch = 0; ch < channels; ++ch) {
         for (sf_count_t s = 0; s < read_frames; ++s) {
-          interleaved[s * channels + ch] = channel_data[ch * BLOCK_SIZE + s];
+          interleaved[((size_t)s * channels) + ch] =
+              channel_data[((size_t)ch * BLOCK_SIZE) + (size_t)s];
         }
       }
 

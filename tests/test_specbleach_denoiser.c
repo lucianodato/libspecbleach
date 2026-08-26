@@ -473,9 +473,9 @@ int main(void) {
   t_params.reduction_curve_enabled = true;
   t_params.reduction_curve_bias = curve_bias;
   t_params.reduction_curve_size = cb_size;
-  TEST_ASSERT(specbleach_denoiser_load_parameters(h, &t_params,
-                                                  sizeof(t_params)),
-              "Load with curve bias should succeed");
+  TEST_ASSERT(
+      specbleach_denoiser_load_parameters(h, &t_params, sizeof(t_params)),
+      "Load with curve bias should succeed");
   specbleach_denoiser_process(h, 1024, transient_buf, out_buf);
 
   // Switch HPSS modes and verify latency
