@@ -237,7 +237,8 @@ int main(int argc, char** argv) {
   if (strcmp(input_file_name, output_file_name) == 0) {
     same_file = true;
   } else {
-    struct stat stat_in, stat_out;
+    struct stat stat_in;
+    struct stat stat_out;
     if (stat(input_file_name, &stat_in) == 0 &&
         stat(output_file_name, &stat_out) == 0 &&
         stat_in.st_dev == stat_out.st_dev &&
