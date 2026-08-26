@@ -31,6 +31,13 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 namespace {
 
+/**
+ * @brief Reports a failed test condition.
+ *
+ * @param condition Condition to evaluate.
+ * @param message Message to print when the condition is false.
+ * @return `true` if the condition is true, `false` otherwise.
+ */
 bool expect(const bool condition, const char* message) {
   if (!condition) {
     std::fprintf(stderr, "TEST FAILED: %s\n", message);

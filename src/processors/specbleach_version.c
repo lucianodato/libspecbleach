@@ -25,6 +25,11 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "specbleach_version.h"
 
+/**
+ * Retrieves the library version string.
+ *
+ * @return The compile-time library version string.
+ */
 const char* specbleach_get_version_string(void) {
   return SPECBLEACH_VERSION_STRING;
 }

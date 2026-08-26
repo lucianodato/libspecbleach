@@ -57,6 +57,12 @@ static void test_validation(void) {
   printf("✓ Migration validation tests passed\n");
 }
 
+/**
+ * Verifies profile migration between 1D and 2D denoisers after learning a noise profile.
+ *
+ * Confirms migration fails before a profile is learned, validates migrated profile
+ * availability and contents when profile sizes match, and tests reverse migration.
+ */
 static void test_migration_copies_profiles(void) {
   printf("Testing profile copy semantics...\n");
 

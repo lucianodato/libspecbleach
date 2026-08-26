@@ -49,6 +49,9 @@ void test_initialization_failure(void) {
               "Should fail with 0 frame size");
 }
 
+/**
+ * Verifies that the 2D denoiser API handles null handles, buffers, and noise-profile data safely.
+ */
 void test_null_handling(void) {
   printf("Testing NULL handling...\n");
 
@@ -94,6 +97,9 @@ void test_null_handling(void) {
   specbleach_2d_free(h);
 }
 
+/**
+ * Tests loading, retrieving, resetting, and validating per-mode noise profiles.
+ */
 void test_noise_profile_api(void) {
   printf("Testing Noise Profile API...\n");
 
@@ -181,6 +187,9 @@ void test_noise_profile_api(void) {
   specbleach_2d_free(h);
 }
 
+/**
+ * Verifies parameter switching between adaptive noise-estimation methods and disabled adaptation.
+ */
 void test_2d_parameter_switching(void) {
   printf("Testing 2D parameter switching and adaptive methods...\n");
   specbleach_2d_denoiser* h = specbleach_2d_initialize(SAMPLE_RATE, FRAME_SIZE);
@@ -367,6 +376,9 @@ void test_process_loop(void) {
   specbleach_2d_free(h);
 }
 
+/**
+ * Verifies that zero and full smoothing factors produce different denoised output.
+ */
 void test_2d_smoothing_factor_responsiveness(void) {
   printf("Testing 2D smoothing factor responsiveness (0%% vs 100%%)...\n");
 

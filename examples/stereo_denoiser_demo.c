@@ -113,6 +113,11 @@ typedef struct DemoOptions {
   bool switch_engine;
 } DemoOptions;
 
+/**
+ * Prints the command-line usage and supported options.
+ *
+ * @param prog_name Program name shown in the usage message.
+ */
 static void print_usage(const char* prog_name) {
   fprintf(stderr, "Usage: %s [options] <noisy input> <denoised output>\n",
           prog_name);
@@ -131,6 +136,13 @@ static void print_usage(const char* prog_name) {
   fprintf(stderr, "  --help                Show this help message\n");
 }
 
+/**
+ * Parses a decimal command-line argument and stores its positive value.
+ *
+ * @param str String to parse.
+ * @param out Destination for the parsed value.
+ * @return true if the string contains a valid positive integer, false otherwise.
+ */
 static bool parse_uint_arg(const char* str, uint32_t* out) {
   if (!str || *str == '\0') {
     return false;
@@ -145,6 +157,13 @@ static bool parse_uint_arg(const char* str, uint32_t* out) {
   return true;
 }
 
+/**
+ * Parses a finite floating-point value that meets the specified minimum.
+ * @param str String containing the value to parse.
+ * @param out Destination for the parsed value.
+ * @param min_val Minimum permitted value, inclusive.
+ * @return `true` if parsing succeeds and the value meets the minimum, `false` otherwise.
+ */
 static bool parse_float_arg(const char* str, float* out, const float min_val) {
   if (!str || *str == '\0') {
     return false;
@@ -160,6 +179,16 @@ static bool parse_float_arg(const char* str, float* out, const float min_val) {
   return true;
 }
 
+/**
+ * Processes an input audio file with configurable multichannel denoising and
+ * writes the processed audio to an output file.
+ *
+ * @param argc Number of command-line arguments.
+ * @param argv Command-line arguments containing processing options, input file,
+ *             and output file.
+ * @return 0 on success, or 1 if argument parsing, initialization, processing,
+ *         or file I/O fails.
+ */
 int main(int argc, char** argv) {
   DemoOptions options = {DEFAULT_FRAME_SIZE_MS, DEFAULT_REDUCTION_DB,
                          DEFAULT_LEARN_FRAMES, false};

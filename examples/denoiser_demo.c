@@ -172,6 +172,16 @@ static void print_usage(const char* prog_name) {
   fprintf(stderr, "  --help                    Show this help message\n");
 }
 
+/**
+ * Releases audio files, buffers, metadata, and the denoiser instance.
+ *
+ * @param sfinfo Metadata allocated for the audio file.
+ * @param input_file Input audio file handle.
+ * @param output_file Output audio file handle.
+ * @param input_buffer Input audio buffer.
+ * @param output_buffer Output audio buffer.
+ * @param lib_instance Denoiser instance to release.
+ */
 static void cleanup_resources(SF_INFO* sfinfo, SNDFILE* input_file,
                               SNDFILE* output_file, float* input_buffer,
                               float* output_buffer,
@@ -196,6 +206,15 @@ static void cleanup_resources(SF_INFO* sfinfo, SNDFILE* input_file,
   }
 }
 
+/**
+ * Runs the command-line audio denoising demonstration.
+ *
+ * @param argc Number of command-line arguments.
+ * @param argv Command-line arguments containing the input and output filenames
+ *             and optional denoising settings.
+ * @return 0 on successful denoising; 1 if argument parsing, setup,
+ *         processing, or output fails.
+ */
 int main(int argc, char** argv) {
   SpecbleachDenoiserParameters parameters = (SpecbleachDenoiserParameters){
       .residual_listen = false,

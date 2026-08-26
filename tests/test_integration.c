@@ -68,7 +68,10 @@ float calculate_rms(const float* buffer, size_t length) {
   return (float)sqrt(sum / (double)length);
 }
 
-// Test spectral denoiser with synthetic audio
+/**
+ * Tests spectral denoising with synthetic audio and verifies noise reduction
+ * while preserving a portion of the signal.
+ */
 void test_spectral_denoiser(void) {
   printf("Testing spectral denoiser integration...\n");
 
@@ -150,7 +153,9 @@ void test_spectral_denoiser(void) {
   printf("✓ Spectral denoiser integration test passed\n");
 }
 
-// Test denoiser with different noise levels
+/**
+ * Tests denoising behavior for an audio signal with low noise.
+ */
 void test_different_noise_levels(void) {
   printf("Testing denoiser with different noise levels...\n");
 
@@ -217,7 +222,9 @@ void test_different_noise_levels(void) {
   printf("✓ Different noise levels test passed\n");
 }
 
-// Test library information functions
+/**
+ * Tests denoiser latency and noise-profile size queries before and after initialization.
+ */
 void test_library_info(void) {
   printf("Testing library information functions...\n");
 
@@ -263,7 +270,9 @@ int main(void) {
   return 0;
 }
 
-// Test adaptive functionality enabled in standard denoiser
+/**
+ * Tests adaptive noise estimation and processing in the standard denoiser.
+ */
 void test_adaptive_denoiser(void) {
   printf("Testing adaptive denoiser integration...\n");
 
@@ -312,6 +321,10 @@ void test_adaptive_denoiser(void) {
   printf("✓ Adaptive denoiser integration test passed\n");
 }
 
+/**
+ * Tests initialization, noise learning, processing, noise-profile management,
+ * latency reporting, and cleanup for the 2D non-local-means denoiser.
+ */
 void test_2d_denoiser(void) {
   printf("Testing 2D NLM denoiser integration...\n");
 

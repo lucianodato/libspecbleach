@@ -161,6 +161,11 @@ void test_processor_core_noise_profile_accessors(void) {
   printf("✓ Processor core noise profile accessors tests passed\n");
 }
 
+/**
+ * Verifies parameter sanitization for standard and two-dimensional denoiser configurations.
+ *
+ * Checks value conversion, curve-bias handling, and clamping of reduction and noise-profile parameters.
+ */
 void test_params_sanitize_functions(void) {
   printf("Testing params sanitize functions...\n");
 

@@ -23,6 +23,9 @@
 #define TEST_FLOAT_CLOSE(a, b, tolerance)                                      \
   TEST_ASSERT(fabsf((a) - (b)) < (tolerance), "Float values not close enough")
 
+/**
+ * Tests noise-profile mode accessors for null handles, invalid modes, and initial profile state.
+ */
 void test_specbleach_noise_profile_mode_functions(void) {
   printf("Testing specbleach noise profile mode functions...\n");
 
@@ -92,6 +95,9 @@ void test_specbleach_noise_profile_mode_functions(void) {
   printf("✓ Specbleach noise profile mode functions tests passed\n");
 }
 
+/**
+ * Tests loading and retrieving a noise profile for a specific denoising mode.
+ */
 void test_specbleach_load_noise_profile_with_mode(void) {
   printf("Testing specbleach load noise profile with mode...\n");
 
@@ -261,6 +267,9 @@ void test_specbleach_mode_switching(void) {
   printf("✓ Specbleach mode switching tests passed\n");
 }
 
+/**
+ * Verifies that resetting the noise profile clears availability and block counts for all modes.
+ */
 void test_specbleach_reset_noise_profile(void) {
   printf("Testing specbleach reset noise profile...\n");
 
@@ -357,6 +366,9 @@ void test_specbleach_load_noise_profile_for_mode(void) {
   printf("✓ Specbleach load noise profile for mode tests passed\n");
 }
 
+/**
+ * Tests denoiser processing with whitening and residual listening enabled.
+ */
 void test_specbleach_run_features(void) {
   printf("Testing specbleach run features (whitening, residual listen)...\n");
 
@@ -406,6 +418,11 @@ void test_specbleach_run_features(void) {
   printf("✓ Specbleach denoiser features tests passed\n");
 }
 
+/**
+ * Runs the SpectralBleach denoiser API test suite.
+ *
+ * @return 0 after all tests pass.
+ */
 int main(void) {
   printf("Running specbleach denoiser tests...\n");
 

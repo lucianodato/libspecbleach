@@ -46,6 +46,9 @@ static const SpecbleachDenoiserParameters canonical_adenoiser_params = {
     .adaptive_noise = true,
     .noise_estimation_method = SPECBLEACH_NOISE_ESTIMATION_SPP_MMSE};
 
+/**
+ * Compares spectral denoiser output with the standard WAV reference file.
+ */
 void test_denoiser_file_regression(void) {
   printf("Testing spectral denoiser file regression...\n");
 
@@ -123,6 +126,12 @@ void test_denoiser_file_regression(void) {
   printf("✓ Spectral denoiser file regression passed\n");
 }
 
+/**
+ * Compares adaptive denoiser output for the test input against its reference WAV file.
+ *
+ * Skips the test when the reference file is unavailable and terminates on processing
+ * or comparison failure.
+ */
 void test_adenoiser_file_regression(void) {
   printf("Testing adaptive denoiser file regression...\n");
 

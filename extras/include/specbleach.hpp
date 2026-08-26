@@ -59,18 +59,33 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 namespace specbleach {
 
 struct DenoiserDeleter {
+  /**
+   * @brief Releases a denoiser handle.
+   *
+   * @param handle Denoiser handle to release.
+   */
   void operator()(specbleach_denoiser* handle) const noexcept {
     specbleach_denoiser_free(handle);
   }
 };
 
 struct Denoiser2dDeleter {
+  /**
+   * @brief Releases a 2D denoiser handle.
+   *
+   * @param handle The 2D denoiser handle to release.
+   */
   void operator()(specbleach_2d_denoiser* handle) const noexcept {
     specbleach_2d_free(handle);
   }
 };
 
 struct StereoGroupDeleter {
+  /**
+   * @brief Releases a stereo processing handle.
+   *
+   * @param handle Stereo processing handle to release.
+   */
   void operator()(specbleach_stereo* handle) const noexcept {
     specbleach_stereo_free(handle);
   }
@@ -88,20 +103,38 @@ using Denoiser2dPtr =
 using StereoGroupPtr = std::unique_ptr<specbleach_stereo, StereoGroupDeleter>;
 using DelayLinePtr = std::unique_ptr<specbleach_delay_line, DelayLineDeleter>;
 
-/// Creates a single-channel spectral denoiser; null on failure.
+/**
+ * @brief Creates a single-channel spectral denoiser.
+ *
+ * @return An owning denoiser pointer, or null if initialization fails.
+ */
 inline DenoiserPtr make_denoiser(const uint32_t sample_rate,
                                  const float frame_size_ms) noexcept {
   return DenoiserPtr(
       specbleach_denoiser_initialize(sample_rate, frame_size_ms));
 }
 
-/// Creates a single-channel 2D NLM denoiser; null on failure.
+/**
+ * @brief Creates a single-channel 2D non-local means denoiser.
+ *
+ * @param sample_rate Audio sample rate in hertz.
+ * @param frame_size_ms Processing frame size in milliseconds.
+ * @return An owning pointer to the denoiser, or a null pointer if initialization fails.
+ */
 inline Denoiser2dPtr make_2d_denoiser(const uint32_t sample_rate,
                                       const float frame_size_ms) noexcept {
   return Denoiser2dPtr(specbleach_2d_initialize(sample_rate, frame_size_ms));
 }
 
-/// Creates a multi-channel engine group (extras); null on failure.
+/**
+ * @brief Creates an owned multi-channel stereo processing group.
+ *
+ * @param sample_rate Audio sample rate in hertz.
+ * @param frame_size_ms Processing frame size in milliseconds.
+ * @param channels Number of audio channels.
+ * @param engine Stereo processing engine to use.
+ * @return Stereo group handle, or a null pointer if initialization fails.
+ */
 inline StereoGroupPtr make_stereo_group(
     const uint32_t sample_rate, const float frame_size_ms,
     const uint32_t channels, const SpecbleachStereoEngine engine) noexcept {
@@ -109,7 +142,13 @@ inline StereoGroupPtr make_stereo_group(
                                                      channels, engine));
 }
 
-/// Creates an alignment delay line (extras); null on failure.
+/**
+ * @brief Creates an owned delay line for the specified channel count.
+ *
+ * @param max_delay_samples Maximum delay capacity in samples.
+ * @param channels Number of audio channels.
+ * @return An owning delay-line pointer, or a null pointer if initialization fails.
+ */
 inline DelayLinePtr make_delay_line(const uint32_t max_delay_samples,
                                     const uint32_t channels) noexcept {
   return DelayLinePtr(

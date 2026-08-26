@@ -22,6 +22,11 @@
 
 #include "specbleach_denoiser.h"
 
+/**
+ * Runs safety and basic coverage tests for the denoiser and its internal modules.
+ *
+ * @return 0 after all tests complete.
+ */
 int main(void) {
   printf("Starting comprehensive module safety and coverage tests...\n");
 

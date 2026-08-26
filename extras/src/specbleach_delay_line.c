@@ -37,6 +37,12 @@ struct specbleach_delay_line {
   uint32_t write_pos; /* absolute sample counter per stream */
 };
 
+/**
+ * Initializes a multi-channel delay line.
+ * @param max_delay_samples Maximum supported delay in samples.
+ * @param channels Number of independent audio channels.
+ * @return A configured delay line, or NULL if the input is invalid or allocation fails.
+ */
 specbleach_delay_line* specbleach_delay_line_initialize(
     const uint32_t max_delay_samples, const uint32_t channels) {
   if (channels == 0) {
@@ -73,6 +79,10 @@ specbleach_delay_line* specbleach_delay_line_initialize(
   return instance;
 }
 
+/**
+ * Releases a delay-line instance and its allocated sample buffer.
+ * @param instance Delay-line instance to release; may be NULL.
+ */
 void specbleach_delay_line_free(specbleach_delay_line* instance) {
   if (!instance) {
     return;
@@ -81,6 +91,13 @@ void specbleach_delay_line_free(specbleach_delay_line* instance) {
   free(instance);
 }
 
+/**
+ * Sets the delay applied by the delay line.
+ *
+ * @param instance Delay-line instance to configure.
+ * @param delay_samples Number of samples to delay.
+ * @return true if the delay was set, false if the instance is NULL or the delay exceeds the maximum.
+ */
 bool specbleach_delay_line_set_delay(specbleach_delay_line* instance,
                                      const uint32_t delay_samples) {
   if (!instance || delay_samples > instance->max_delay_samples) {
@@ -90,18 +107,42 @@ bool specbleach_delay_line_set_delay(specbleach_delay_line* instance,
   return true;
 }
 
+/**
+ * Gets the currently configured delay in samples.
+ *
+ * @param instance Delay-line instance, or NULL.
+ * @return Configured delay in samples, or 0 if instance is NULL.
+ */
 uint32_t specbleach_delay_line_get_delay(specbleach_delay_line* instance) {
   return instance ? instance->delay_samples : 0U;
 }
 
+/**
+ * Gets the maximum configurable delay.
+ * @param instance Delay-line instance to query.
+ * @return Maximum delay in samples, or 0 if instance is NULL.
+ */
 uint32_t specbleach_delay_line_get_max_delay(specbleach_delay_line* instance) {
   return instance ? instance->max_delay_samples : 0U;
 }
 
+/**
+ * Gets the number of audio channels configured for a delay line.
+ * @param instance Delay-line instance.
+ * @returns The configured channel count, or 0 if instance is NULL.
+ */
 uint32_t specbleach_delay_line_get_channels(specbleach_delay_line* instance) {
   return instance ? instance->channels : 0U;
 }
 
+/**
+ * Processes audio samples through the configured delay line.
+ *
+ * @param num_samples Number of samples to process per channel.
+ * @param in Input sample buffers, one per channel.
+ * @param out Output sample buffers, one per channel.
+ * @return `true` if processing succeeds, `false` if the instance or any buffer pointer is NULL.
+ */
 bool specbleach_delay_line_process(specbleach_delay_line* instance,
                                    const uint32_t num_samples,
                                    const float* const* in, float* const* out) {

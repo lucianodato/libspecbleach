@@ -25,6 +25,12 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdlib.h>
 #include <string.h>
 
+/**
+ * Sanitizes public denoiser parameters for internal processing.
+ *
+ * @param parameters Parameters to sanitize.
+ * @return Sanitized denoiser parameters with bounded values and normalized flags.
+ */
 DenoiserParameters sb_denoiser_params_sanitize(
     const SpecbleachDenoiserParameters* parameters) {
   return (DenoiserParameters){
@@ -57,6 +63,12 @@ DenoiserParameters sb_denoiser_params_sanitize(
   };
 }
 
+/**
+ * Sanitizes 2D denoiser parameters for internal processing.
+ *
+ * @param parameters Parameters to sanitize.
+ * @return Sanitized 2D denoiser parameters with bounded values clamped to valid ranges.
+ */
 Denoiser2DParameters sb_denoiser_2d_params_sanitize(
     const Specbleach2DDenoiserParameters* parameters) {
   return (Denoiser2DParameters){
@@ -90,6 +102,15 @@ Denoiser2DParameters sb_denoiser_2d_params_sanitize(
   };
 }
 
+/**
+ * Copies enabled curve-bias data into a caller-managed buffer.
+ * @param buffer Destination buffer pointer, resized when its capacity is insufficient.
+ * @param capacity Current capacity of the destination buffer.
+ * @param required_size Number of float values to copy.
+ * @param enabled Whether curve-bias data is enabled.
+ * @param source Source curve-bias values.
+ * @return The destination buffer, or NULL for invalid input or allocation failure.
+ */
 const float* sb_curve_bias_copy(float** buffer, uint32_t* capacity,
                                 const uint32_t required_size,
                                 const bool enabled, const float* source) {
@@ -110,6 +131,19 @@ const float* sb_curve_bias_copy(float** buffer, uint32_t* capacity,
   return *buffer;
 }
 
+/**
+ * Initializes a processor core with the specified audio and spectral processing parameters.
+ *
+ * @param sample_rate Audio sample rate in Hz.
+ * @param frame_size Processing frame size.
+ * @param overlap_factor Frame overlap factor.
+ * @param padding_type Zero-padding mode.
+ * @param zeropadding_amount Number of zero-padding samples.
+ * @param input_window Window applied to input frames.
+ * @param output_window Window applied to output frames.
+ * @param profile_spectrum_size Noise-profile spectrum size, or a predefined value for the default real or full FFT spectrum.
+ * @returns A newly initialized processor core, or `NULL` if the parameters are invalid or initialization fails.
+ */
 SbProcessorCore* sb_processor_core_initialize(
     const uint32_t sample_rate, const float frame_size,
     const uint32_t overlap_factor, const ZeroPaddingType padding_type,

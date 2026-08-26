@@ -35,6 +35,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define CHANNELS 2
 #define MAX_DELAY 960
 
+/**
+ * Verifies that initialization rejects the maximum unsigned 32-bit delay.
+ */
 static void test_max_delay_rejected(void) {
   printf("Testing maximum delay rejected...\n");
   TEST_ASSERT(specbleach_delay_line_initialize(UINT32_MAX, 1) == NULL,
@@ -94,6 +97,9 @@ static void test_passthrough_at_zero(void) {
   specbleach_delay_line_free(dl);
 }
 
+/**
+ * Verifies that an impulse appears at the configured delay tap and that all other samples are zero.
+ */
 static void test_impulse_lands_at_tap(void) {
   printf("Testing impulse lands exactly at tap...\n");
   specbleach_delay_line* dl = specbleach_delay_line_initialize(MAX_DELAY, 1);
@@ -116,6 +122,9 @@ static void test_impulse_lands_at_tap(void) {
   specbleach_delay_line_free(dl);
 }
 
+/**
+ * Verifies delay-line continuity across irregular processing block sizes.
+ */
 static void test_continuity_across_odd_blocks(void) {
   printf("Testing continuity across odd block sizes...\n");
   specbleach_delay_line* dl =
@@ -160,6 +169,9 @@ static void test_continuity_across_odd_blocks(void) {
   specbleach_delay_line_free(dl);
 }
 
+/**
+ * Verifies argument validation, channel independence, and silence before the configured delay.
+ */
 static void test_channel_independence_and_null_args(void) {
   printf("Testing channel independence and argument checks...\n");
   specbleach_delay_line* dl =

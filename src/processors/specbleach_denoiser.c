@@ -38,6 +38,13 @@ typedef struct specbleach_denoiser { // NOLINT(readability-identifier-naming)
   uint32_t reduction_curve_capacity;
 } SbSpectralDenoiser;
 
+/**
+ * Initializes a spectral denoiser for the specified audio format.
+ *
+ * @param sample_rate Audio sample rate in Hz.
+ * @param frame_size STFT frame size.
+ * @returns A configured denoiser instance, or `NULL` if initialization fails.
+ */
 specbleach_denoiser* specbleach_denoiser_initialize(const uint32_t sample_rate,
                                                     float frame_size) {
   SbSpectralDenoiser* self =
@@ -70,6 +77,11 @@ specbleach_denoiser* specbleach_denoiser_initialize(const uint32_t sample_rate,
   return self;
 }
 
+/**
+ * Releases a spectral denoiser instance and its owned resources.
+ *
+ * @param instance Denoiser instance to release; may be NULL.
+ */
 void specbleach_denoiser_free(specbleach_denoiser* instance) {
   SbSpectralDenoiser* self = instance;
 
@@ -90,6 +102,12 @@ void specbleach_denoiser_free(specbleach_denoiser* instance) {
   free(self);
 }
 
+/**
+ * Gets the total processing latency of the denoiser in samples.
+ *
+ * @param instance Denoiser instance.
+ * @return The combined STFT and spectral-denoiser latency in samples, or 0 if the instance is invalid.
+ */
 uint32_t specbleach_denoiser_get_latency(specbleach_denoiser* instance) {
   SbSpectralDenoiser* self = instance;
 
@@ -105,6 +123,15 @@ uint32_t specbleach_denoiser_get_latency(specbleach_denoiser* instance) {
   return stft_latency + denoiser_latency_samples;
 }
 
+/**
+ * Processes audio samples through the spectral denoiser.
+ *
+ * @param instance Denoiser instance to process the audio with.
+ * @param number_of_samples Number of samples to process.
+ * @param input Input audio samples.
+ * @param output Buffer for the processed audio samples.
+ * @return `true` if processing is started, `false` if the instance, sample count, or buffers are invalid.
+ */
 bool specbleach_denoiser_process(specbleach_denoiser* instance,
                                  const uint32_t number_of_samples,
                                  const float* input, float* output) {
@@ -120,12 +147,27 @@ bool specbleach_denoiser_process(specbleach_denoiser* instance,
   return true;
 }
 
+/**
+ * Gets the number of bins in the configured noise profile.
+ *
+ * @param instance Denoiser instance.
+ * @return Noise-profile size, or 0 if instance is NULL.
+ */
 uint32_t specbleach_denoiser_get_noise_profile_size(
     specbleach_denoiser* instance) {
   SbSpectralDenoiser* self = instance;
   return self ? sb_processor_core_get_noise_profile_size(self->core) : 0;
 }
 
+/**
+ * Loads a restored noise profile using the specified profile mode.
+ *
+ * @param restored_profile Noise profile data to load.
+ * @param profile_size Number of values in the profile.
+ * @param block_count Number of blocks represented by the profile.
+ * @param mode Noise profile loading mode.
+ * @return `true` if the profile is loaded successfully, `false` otherwise.
+ */
 bool specbleach_denoiser_load_noise_profile_for_mode(
     specbleach_denoiser* instance, const float* restored_profile,
     const uint32_t profile_size, const uint32_t block_count, const int mode) {
@@ -136,6 +178,12 @@ bool specbleach_denoiser_load_noise_profile_for_mode(
               : false;
 }
 
+/**
+ * Resets the noise profile maintained by the denoiser.
+ *
+ * @param instance Denoiser instance whose noise profile should be reset.
+ * @return `true` if the profile was reset successfully, `false` if the instance is invalid or the reset failed.
+ */
 bool specbleach_denoiser_reset_noise_profile(specbleach_denoiser* instance) {
   SbSpectralDenoiser* self = instance;
   if (!self) {
@@ -147,6 +195,12 @@ bool specbleach_denoiser_reset_noise_profile(specbleach_denoiser* instance) {
   return sb_processor_core_reset_noise_profile(self->core);
 }
 
+/**
+ * Gets the number of noise-profile blocks available for a processing mode.
+ * @param instance Denoiser instance.
+ * @param mode Processing mode whose noise-profile block count is requested.
+ * @returns Number of noise-profile blocks, or 0 if the instance is invalid.
+ */
 uint32_t specbleach_denoiser_get_noise_profile_block_count_for_mode(
     specbleach_denoiser* instance, int mode) {
   SbSpectralDenoiser* self = instance;
@@ -155,6 +209,12 @@ uint32_t specbleach_denoiser_get_noise_profile_block_count_for_mode(
               : 0;
 }
 
+/**
+ * Retrieves the noise profile for the specified mode.
+ * @param instance Denoiser instance.
+ * @param mode Noise-profile mode to retrieve.
+ * @return Pointer to the noise profile, or `NULL` if the instance is invalid.
+ */
 float* specbleach_denoiser_get_noise_profile_for_mode(
     specbleach_denoiser* instance, int mode) {
   SbSpectralDenoiser* self = instance;
@@ -162,6 +222,13 @@ float* specbleach_denoiser_get_noise_profile_for_mode(
               : NULL;
 }
 
+/**
+ * Determines whether a noise profile is available for the specified mode.
+ *
+ * @param instance Denoiser instance to query.
+ * @param mode Noise-profile mode to check.
+ * @return `true` if a noise profile is available for the mode, `false` otherwise.
+ */
 bool specbleach_denoiser_noise_profile_available_for_mode(
     specbleach_denoiser* instance, int mode) {
   SbSpectralDenoiser* self = instance;
@@ -170,6 +237,14 @@ bool specbleach_denoiser_noise_profile_available_for_mode(
               : false;
 }
 
+/**
+ * Loads denoiser parameters and applies them to the instance.
+ *
+ * @param instance Denoiser instance to configure.
+ * @param parameters Parameters to load.
+ * @param parameters_size Size of the parameters structure.
+ * @return `true` if the parameters were loaded successfully, `false` otherwise.
+ */
 bool specbleach_denoiser_load_parameters(
     specbleach_denoiser* instance,
     const SpecbleachDenoiserParameters* parameters,
@@ -203,12 +278,24 @@ bool specbleach_denoiser_load_parameters(
   return load_reduction_parameters(self->spectral_denoiser, denoise_parameters);
 }
 
+/**
+ * Retrieves the current tonal mask.
+ *
+ * @param instance Denoiser instance.
+ * @return Pointer to the tonal mask, or NULL if the instance is invalid.
+ */
 const float* specbleach_denoiser_get_tonal_mask(specbleach_denoiser* instance) {
   SbSpectralDenoiser* self = instance;
   return self ? spectral_denoiser_get_tonal_mask(self->spectral_denoiser)
               : NULL;
 }
 
+/**
+ * Retrieves the frequencies of currently detected tonal peaks.
+ * @param peak_freqs_hz Buffer that receives peak frequencies in hertz.
+ * @param max_peaks Maximum number of peak frequencies to write.
+ * @returns The number of peak frequencies written.
+ */
 uint32_t specbleach_denoiser_get_tonal_peaks(specbleach_denoiser* instance,
                                              float* peak_freqs_hz,
                                              uint32_t max_peaks) {
@@ -218,6 +305,14 @@ uint32_t specbleach_denoiser_get_tonal_peaks(specbleach_denoiser* instance,
               : 0;
 }
 
+/**
+ * Detects tonal peak frequencies from a noise profile.
+ * @param profile Noise profile to analyze.
+ * @param profile_size Number of values in the noise profile.
+ * @param peak_freqs_hz Output buffer for detected peak frequencies in hertz.
+ * @param max_peaks Maximum number of frequencies to write.
+ * @returns Number of detected peak frequencies, or zero for invalid input.
+ */
 uint32_t specbleach_denoiser_get_tonal_peaks_for_profile(
     specbleach_denoiser* instance, const float* profile, uint32_t profile_size,
     float* peak_freqs_hz, uint32_t max_peaks) {
@@ -237,6 +332,12 @@ uint32_t specbleach_denoiser_get_tonal_peaks_for_profile(
       peak_freqs_hz, max_peaks);
 }
 
+/**
+ * Gets the currently active noise profile.
+ *
+ * @param instance Denoiser instance.
+ * @return Pointer to the active noise profile, or NULL if the instance is invalid.
+ */
 const float* specbleach_denoiser_get_active_noise_profile(
     specbleach_denoiser* instance) {
   SbSpectralDenoiser* self = instance;
@@ -245,12 +346,24 @@ const float* specbleach_denoiser_get_active_noise_profile(
               : NULL;
 }
 
+/**
+ * Determines whether a transient has been detected.
+ *
+ * @param instance Denoiser instance to query.
+ * @return `true` if a transient is detected, `false` otherwise.
+ */
 bool specbleach_denoiser_is_transient_detected(specbleach_denoiser* instance) {
   SbSpectralDenoiser* self = instance;
   return self ? spectral_denoiser_is_transient_detected(self->spectral_denoiser)
               : false;
 }
 
+/**
+ * Gets the intensity of the currently detected transient.
+ *
+ * @param instance Denoiser instance.
+ * @returns The transient intensity, or 0.0f if instance is NULL.
+ */
 float specbleach_denoiser_get_transient_intensity(
     specbleach_denoiser* instance) {
   SbSpectralDenoiser* self = instance;

@@ -65,7 +65,14 @@ void generate_test_signal(float* buffer, int length, unsigned int seed) {
   }
 }
 
-// Process audio through denoiser
+/**
+ * Processes audio through the denoiser using an initial noise-learning phase
+ * followed by noise reduction.
+ *
+ * @param input Input audio samples.
+ * @param output Buffer for processed audio samples.
+ * @param length Number of samples to process.
+ */
 void process_audio(const float* input, float* output, int length) {
   float frame_size_ms = 20.0f;
   specbleach_denoiser* handle =
@@ -113,7 +120,13 @@ void process_audio(const float* input, float* output, int length) {
   specbleach_denoiser_free(handle);
 }
 
-// Process audio through adaptive denoiser
+/**
+ * Processes audio through the denoiser with adaptive noise estimation.
+ *
+ * @param input Input audio samples.
+ * @param output Buffer for processed audio samples.
+ * @param length Number of samples to process.
+ */
 void process_audio_adaptive(const float* input, float* output, int length) {
   float frame_size_ms = 20.0f;
   specbleach_denoiser* handle =
@@ -349,7 +362,10 @@ void test_adaptive_denoising(void) {
   printf("✓ Adaptive denoiser test passed\n");
 }
 
-// Test that both noise estimation methods work correctly
+/**
+ * Tests Martin MS and SPP-MMSE noise estimation methods for valid, noise-reduced,
+ * and distinct output.
+ */
 void test_noise_estimation_methods(void) {
   printf("Testing noise estimation methods (Martin MS vs SPP-MMSE)...\n");
 

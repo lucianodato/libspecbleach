@@ -35,6 +35,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define BLOCK_SIZE 512
 #define CHANNELS 2
 
+/**
+ * Tests stereo initialization, parameter validation, engine configuration, and cleanup.
+ */
 static void test_init_and_free(void) {
   printf("Testing stereo init and free...\n");
 
@@ -72,6 +75,9 @@ static void test_init_and_free(void) {
   printf("✓ Stereo init and free tests passed\n");
 }
 
+/**
+ * Tests parameter loading validation and engine compatibility for a stereo instance.
+ */
 static void test_parameter_loading(void) {
   printf("Testing stereo parameter loading...\n");
 
@@ -106,6 +112,10 @@ static void test_parameter_loading(void) {
   printf("✓ Stereo parameter loading tests passed\n");
 }
 
+/**
+ * Tests stereo processing, noise learning, profile lifecycle management,
+ * synchronization, and cross-channel profile copying.
+ */
 static void test_process_and_sync(void) {
   printf("Testing stereo processing and profile sync...\n");
 

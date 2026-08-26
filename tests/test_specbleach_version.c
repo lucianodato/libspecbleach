@@ -31,6 +31,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
     }                                                                          \
   } while (0)
 
+/**
+ * Verifies that the runtime version string is present and matches the version macro.
+ */
 static void test_version_string(void) {
   printf("Testing version string...\n");
   const char* version = specbleach_get_version_string();
@@ -39,6 +42,9 @@ static void test_version_string(void) {
               "Runtime string should match header macro");
 }
 
+/**
+ * Verifies that the version string matches the major, minor, and patch components.
+ */
 static void test_version_components_compose_string(void) {
   printf("Testing version component composition...\n");
   char expected[32];
