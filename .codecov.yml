@@ -4,21 +4,12 @@ coverage:
       default:
         target: auto
         threshold: 1%
-        paths:
-          - "src/**"
     patch:
       default:
         target: auto
-        threshold: 20%
-        paths:
-          - "src/**"
+        threshold: 1%
 
 ignore:
-  - "tests/**"
-  - "examples/**"
-  - "**/*test*.c"
-  - "**/*test*.h"
-
-comment:
-  layout: "diff, files"
-  behavior: default
+  - "thirdparty/**/*"
+  - "tests/**/*"
+  - "examples/**/*"

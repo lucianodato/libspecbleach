@@ -236,8 +236,8 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define OUTPUT_WINDOW_TYPE_1D HANN_WINDOW
 
 // Fft configuration
-#define PADDING_CONFIGURATION_1D FIXED_AMOUNT
-#define ZEROPADDING_AMOUNT_1D 800
+#define PADDING_CONFIGURATION_1D NO_PADDING
+#define ZEROPADDING_AMOUNT_1D 0
 
 // Spectral Type
 #define SPECTRAL_TYPE_1D POWER_SPECTRUM
@@ -262,8 +262,8 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define OUTPUT_WINDOW_TYPE_2D HANN_WINDOW
 
 // Fft configuration
-#define PADDING_CONFIGURATION_2D FIXED_AMOUNT
-#define ZEROPADDING_AMOUNT_2D 800
+#define PADDING_CONFIGURATION_2D NO_PADDING
+#define ZEROPADDING_AMOUNT_2D 0
 
 // Spectral Type
 #define SPECTRAL_TYPE_2D POWER_SPECTRUM

@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Internal Thread Pool**: Added `SbThreadPool` (`src/shared/utils/thread_pool.h`), a fixed-size worker pool with semaphore-based dispatch and static contiguous partitioning, powering multi-threaded NLM 2D smoothing without any external threading runtime. Thread count is configurable per instance via `NlmFilterConfig::num_threads` (default `NLM_NUM_THREADS_DEFAULT`).
 
 ### Improved & Refactored
+- **PFFFT Migration**: Replaced FFTW3 backend with vendored PFFFT (`thirdparty/pffft/`). Eliminated external FFTW runtime/dynamic dependency, GPL linking restrictions, network FetchContent dependencies, and packaging overhead.
 - **OpenMP Removal**: Replaced OpenMP parallelization in the NLM 2D filter with the internal worker pool. Binaries no longer depend on `libomp`/`libgomp`/`libomp140` runtimes, dispatches are deterministic (static partitioning instead of dynamic scheduling), and no threads or locks are created in the audio path.
 - **Adaptive Profile Persistence**: Updated standalone adaptive noise estimation to persist learned noise profiles to the noise profile manager so estimated spectral curves remain available when switching to manual mode.
 - **Manual Baseline Re-seeding**: Fixed standalone adaptive mode state tracking to reset hybrid initialization state when no manual profile exists, ensuring manual noise profiles captured while adaptive mode is active immediately morph and seed the baseline floor.

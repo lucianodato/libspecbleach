@@ -134,6 +134,51 @@ void test_fft_edge_cases(void) {
   TEST_ASSERT(get_fft_size(NULL) == 0, "get_fft_size should return 0 for NULL");
   TEST_ASSERT(get_fft_real_spectrum_size(NULL) == 0,
               "get_fft_real_spectrum_size should return 0 for NULL");
+  TEST_ASSERT(get_fft_input_buffer(NULL) == NULL,
+              "get_fft_input_buffer should return NULL for NULL");
+  TEST_ASSERT(get_fft_output_buffer(NULL) == NULL,
+              "get_fft_output_buffer should return NULL for NULL");
+  TEST_ASSERT(!fft_accumulate_output_samples(NULL, output),
+              "fft_accumulate_output_samples should fail with NULL fft");
+  TEST_ASSERT(!fft_accumulate_output_samples(fft, NULL),
+              "fft_accumulate_output_samples should fail with NULL output");
+
+  // Test initialize_bins and zero argument
+  TEST_ASSERT(fft_transform_initialize(0, NO_PADDING, 0) == NULL,
+              "initialize(0) should return NULL");
+  TEST_ASSERT(fft_transform_initialize_bins(0) == NULL,
+              "initialize_bins(0) should return NULL");
+  TEST_ASSERT(fft_transform_initialize_bins(UINT32_MAX) == NULL,
+              "initialize_bins(UINT32_MAX) should return NULL");
+  TEST_ASSERT(fft_transform_initialize_bins(UINT32_MAX - 10U) == NULL,
+              "initialize_bins(UINT32_MAX - 10) should return NULL");
+  TEST_ASSERT(fft_transform_initialize(UINT32_MAX, NO_PADDING, 0) == NULL,
+              "initialize(UINT32_MAX) should return NULL");
+  TEST_ASSERT(
+      fft_transform_initialize(UINT32_MAX - 10U, FIXED_AMOUNT, 20U) == NULL,
+      "initialize with overflow padding should return NULL");
+  FftTransform* fft_bins = fft_transform_initialize_bins(1000);
+  TEST_ASSERT(fft_bins != NULL, "initialize_bins(1000) should succeed");
+  TEST_ASSERT(get_fft_size(fft_bins) >= 1000, "bins size valid");
+  TEST_ASSERT(get_fft_input_buffer(fft_bins) != NULL,
+              "get_fft_input_buffer non-null");
+  TEST_ASSERT(get_fft_output_buffer(fft_bins) != NULL,
+              "get_fft_output_buffer non-null");
+  fft_transform_free(fft_bins);
+
+  // Test accumulation
+  float acc[256] = {1.0f};
+  input[0] = 2.0f;
+  fft_load_input_samples(fft, input);
+  TEST_ASSERT(fft_accumulate_output_samples(fft, acc),
+              "fft_accumulate_output_samples should succeed");
+  TEST_FLOAT_CLOSE(acc[0], 3.0f, 1e-6f);
+
+  // Test invalid / small padding sizes
+  FftTransform* fft_small = fft_transform_initialize(16, NO_PADDING, 0);
+  TEST_ASSERT(fft_small != NULL, "small frame size initializes to valid size");
+  TEST_ASSERT(get_fft_size(fft_small) >= 32, "minimum size is 32");
+  fft_transform_free(fft_small);
 
   fft_transform_free(fft);
   printf("✓ FFT edge case tests passed\n");

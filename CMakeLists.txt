@@ -38,33 +38,18 @@ option(ENABLE_TESTS "Build test suite" OFF)
 option(ENABLE_EXAMPLES "Build example executables" OFF)
 option(ENABLE_SANITIZERS "Enable Address and Undefined Behavior Sanitizers" OFF)
 option(ENABLE_COVERAGE "Enable code coverage instrumentation" OFF)
-option(USE_SYSTEM_FFTW "Use system-installed FFTW3 library" ON)
-
 # ==============================================================================
-# 1. FFTW3 Dependency
+# 1. Vendored Third-Party Dependencies
 # ==============================================================================
-if(USE_SYSTEM_FFTW)
-    find_package(PkgConfig REQUIRED)
-    pkg_check_modules(FFTW3F REQUIRED IMPORTED_TARGET fftw3f)
-    set(FFTW_TARGET PkgConfig::FFTW3F)
-    set(PKG_CONFIG_REQUIRES_PRIVATE "fftw3f")
-else()
-    include(FetchContent)
-    set(BUILD_SHARED_LIBS_SAVED ${BUILD_SHARED_LIBS})
-    set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
-    set(ENABLE_FLOAT ON CACHE BOOL "" FORCE)
-    set(ENABLE_THREADS ON CACHE BOOL "" FORCE)
-
-    FetchContent_Declare(
-        fftw3
-        URL https://www.fftw.org/fftw-3.3.10.tar.gz
-        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-    )
-    FetchContent_MakeAvailable(fftw3)
-    set(FFTW_TARGET fftw3f)
-    set(BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS_SAVED} CACHE BOOL "Build shared libraries" FORCE)
-    set(PKG_CONFIG_REQUIRES_PRIVATE "")
-endif()
+set(PFFFT_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/pffft/src/pffft.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/pffft/src/pffft_common.c"
+)
+set(PFFFT_INCLUDE_DIRS
+    "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/pffft/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/pffft/src"
+)
+set(PKG_CONFIG_REQUIRES_PRIVATE "")
 
 # ==============================================================================
 # 2. Math & Threading Dependencies
@@ -122,6 +107,7 @@ file(GLOB_RECURSE SPECLEACH_PROCESSOR_SOURCES
 add_library(libspecbleach
     ${SPECLEACH_SHARED_SOURCES}
     ${SPECLEACH_PROCESSOR_SOURCES}
+    ${PFFFT_SOURCES}
 )
 
 set_target_properties(libspecbleach PROPERTIES
@@ -150,12 +136,16 @@ target_include_directories(libspecbleach PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
+target_include_directories(libspecbleach SYSTEM PRIVATE
+    ${PFFFT_INCLUDE_DIRS}
+)
+
 if(MATH_LIB)
     target_link_libraries(libspecbleach PRIVATE ${MATH_LIB})
 endif()
 
-# FFTW is an internal implementation detail (not exposed in public headers) -> PRIVATE
-target_link_libraries(libspecbleach PRIVATE ${FFTW_TARGET} Threads::Threads)
+# Threading is an internal implementation detail -> PRIVATE
+target_link_libraries(libspecbleach PRIVATE Threads::Threads)
 
 # AVX SIMD Target
 if(ENABLE_AVX)
@@ -168,7 +158,6 @@ if(ENABLE_AVX)
             target_compile_options(specbleach_avx PRIVATE -mavx)
         endif()
         target_include_directories(specbleach_avx PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/src)
-        target_link_libraries(specbleach_avx PRIVATE ${FFTW_TARGET})
         target_link_libraries(libspecbleach PRIVATE specbleach_avx)
     endif()
 endif()
@@ -250,6 +239,7 @@ if(ENABLE_TESTS)
         add_library(specbleach_test_internal STATIC EXCLUDE_FROM_ALL
             ${SPECLEACH_SHARED_SOURCES}
             ${SPECLEACH_PROCESSOR_SOURCES}
+            ${PFFFT_SOURCES}
         )
         target_compile_definitions(specbleach_test_internal PUBLIC
             SPECBLEACH_STATIC)
@@ -257,8 +247,11 @@ if(ENABLE_TESTS)
             ${CMAKE_CURRENT_SOURCE_DIR}/src
             ${CMAKE_CURRENT_SOURCE_DIR}/include
         )
+        target_include_directories(specbleach_test_internal SYSTEM PRIVATE
+            ${PFFFT_INCLUDE_DIRS}
+        )
         target_link_libraries(specbleach_test_internal PRIVATE
-            ${FFTW_TARGET} Threads::Threads)
+            Threads::Threads)
         if(TARGET specbleach_avx)
             target_link_libraries(specbleach_test_internal PRIVATE specbleach_avx)
         endif()
