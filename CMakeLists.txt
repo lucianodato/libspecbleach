@@ -178,6 +178,7 @@ option(SPECBLEACH_BUILD_EXTRAS
 
 if(SPECBLEACH_BUILD_EXTRAS)
     add_library(libspecbleach_extras
+        extras/src/specbleach_delay_line.c
         extras/src/specbleach_stereo.c
         extras/src/specbleach_profile_migration.c
     )
@@ -308,6 +309,8 @@ if(ENABLE_TESTS)
         add_specbleach_test(test_specbleach_stereo "test_specbleach_stereo.c")
         target_link_libraries(test_specbleach_stereo PRIVATE libspecbleach_extras)
         add_specbleach_test(test_profile_migration "test_profile_migration.c")
+        add_specbleach_test(test_specbleach_delay_line "test_specbleach_delay_line.c")
+        target_link_libraries(test_specbleach_delay_line PRIVATE libspecbleach_extras)
         target_link_libraries(test_profile_migration PRIVATE libspecbleach_extras)
     endif()
 endif()
