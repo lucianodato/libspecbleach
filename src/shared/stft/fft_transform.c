@@ -20,8 +20,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "fft_transform.h"
 #include "../utils/general_utils.h"
+#include "../utils/simd_utils.h"
 
 #include "pffft.h"
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -66,8 +68,22 @@ static uint32_t get_next_valid_fft_size(uint32_t n) {
   if (n < 32U) {
     return 32U;
   }
-  uint32_t candidate = ((n + 31U) / 32U) * 32U;
+  uint32_t candidate;
+  uint32_t rem = n % 32U;
+  if (rem == 0U) {
+    candidate = n;
+  } else {
+    uint32_t add = 32U - rem;
+    if (n > UINT32_MAX - add) {
+      return 0U;
+    }
+    candidate = n + add;
+  }
+
   while (!is_valid_fft_size(candidate)) {
+    if (candidate > UINT32_MAX - 32U) {
+      return 0U;
+    }
     candidate += 32U;
   }
   return candidate;
@@ -76,6 +92,10 @@ static uint32_t get_next_valid_fft_size(uint32_t n) {
 FftTransform* fft_transform_initialize(const uint32_t frame_size,
                                        const ZeroPaddingType padding_type,
                                        const uint32_t zeropadding_amount) {
+  if (frame_size == 0U) {
+    return NULL;
+  }
+
   FftTransform* self = (FftTransform*)calloc(1U, sizeof(FftTransform));
   if (!self) {
     return NULL;
@@ -86,6 +106,10 @@ FftTransform* fft_transform_initialize(const uint32_t frame_size,
   self->frame_size = frame_size;
 
   self->fft_size = calculate_fft_size(self);
+  if (self->fft_size == 0U || self->fft_size < self->frame_size) {
+    free(self);
+    return NULL;
+  }
 
   self->copy_position = (self->fft_size / 2U) - (self->frame_size / 2U);
 
@@ -102,12 +126,17 @@ FftTransform* fft_transform_initialize_bins(const uint32_t fft_size) {
     return NULL;
   }
 
+  uint32_t valid_fft_size = get_next_valid_fft_size(fft_size);
+  if (valid_fft_size == 0U) {
+    return NULL;
+  }
+
   FftTransform* self = (FftTransform*)calloc(1U, sizeof(FftTransform));
   if (!self) {
     return NULL;
   }
 
-  self->fft_size = get_next_valid_fft_size(fft_size);
+  self->fft_size = valid_fft_size;
   self->frame_size = self->fft_size;
 
   if (!allocate_pffft(self)) {
@@ -119,6 +148,10 @@ FftTransform* fft_transform_initialize_bins(const uint32_t fft_size) {
 }
 
 static bool allocate_pffft(FftTransform* self) {
+  if (self->fft_size == 0U || self->fft_size > (uint32_t)INT_MAX) {
+    return false;
+  }
+
   self->setup = pffft_new_setup((int)self->fft_size, PFFFT_REAL);
   if (!self->setup) {
     return false;
@@ -164,6 +197,9 @@ static uint32_t calculate_fft_size(FftTransform* self) {
     }
     case FIXED_AMOUNT: {
       self->padding_amount = self->zeropadding_amount;
+      if (self->frame_size > UINT32_MAX - self->padding_amount) {
+        return 0U;
+      }
       return get_next_valid_fft_size(self->frame_size + self->padding_amount);
     }
     default:
@@ -274,9 +310,11 @@ bool compute_forward_fft(FftTransform* self) {
   }
 
   // Perform ordered real forward transform
+  sb_simd_state_t simd_state = sb_simd_enable_ftz_daz();
   pffft_transform_ordered(self->setup, self->input_fft_buffer,
                           self->pffft_canonical_buffer, self->pffft_work_buffer,
                           PFFFT_FORWARD);
+  sb_simd_restore_state(simd_state);
 
   // Convert from PFFFT canonical layout to halfcomplex layout
   const uint32_t n = self->fft_size;
@@ -313,9 +351,11 @@ bool compute_backward_fft(FftTransform* self) {
   }
 
   // Perform ordered real backward transform
+  sb_simd_state_t simd_state = sb_simd_enable_ftz_daz();
   pffft_transform_ordered(self->setup, self->pffft_canonical_buffer,
                           self->input_fft_buffer, self->pffft_work_buffer,
                           PFFFT_BACKWARD);
+  sb_simd_restore_state(simd_state);
 
   return true;
 }

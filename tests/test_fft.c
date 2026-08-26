@@ -144,8 +144,18 @@ void test_fft_edge_cases(void) {
               "fft_accumulate_output_samples should fail with NULL output");
 
   // Test initialize_bins and zero argument
+  TEST_ASSERT(fft_transform_initialize(0, NO_PADDING, 0) == NULL,
+              "initialize(0) should return NULL");
   TEST_ASSERT(fft_transform_initialize_bins(0) == NULL,
               "initialize_bins(0) should return NULL");
+  TEST_ASSERT(fft_transform_initialize_bins(UINT32_MAX) == NULL,
+              "initialize_bins(UINT32_MAX) should return NULL");
+  TEST_ASSERT(fft_transform_initialize_bins(UINT32_MAX - 10U) == NULL,
+              "initialize_bins(UINT32_MAX - 10) should return NULL");
+  TEST_ASSERT(fft_transform_initialize(UINT32_MAX, NO_PADDING, 0) == NULL,
+              "initialize(UINT32_MAX) should return NULL");
+  TEST_ASSERT(fft_transform_initialize(UINT32_MAX - 10U, FIXED_AMOUNT, 20U) == NULL,
+              "initialize with overflow padding should return NULL");
   FftTransform* fft_bins = fft_transform_initialize_bins(1000);
   TEST_ASSERT(fft_bins != NULL, "initialize_bins(1000) should succeed");
   TEST_ASSERT(get_fft_size(fft_bins) >= 1000, "bins size valid");
