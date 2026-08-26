@@ -1,6 +1,19 @@
 cmake_minimum_required(VERSION 3.22)
 project(libspecbleach VERSION 0.4.0 LANGUAGES C)
 
+# Guard against drift between the project version and the static
+# include/specbleach_version.h macros (single source of truth: this file).
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/include/specbleach_version.h"
+     SPECBLEACH_VERSION_HEADER)
+string(REGEX MATCH "#define SPECBLEACH_VERSION_STRING \"([^\"]+)\""
+       _ "${SPECBLEACH_VERSION_HEADER}")
+set(SPECBLEACH_HEADER_VERSION "${CMAKE_MATCH_1}")
+if(NOT SPECBLEACH_HEADER_VERSION VERSION_EQUAL PROJECT_VERSION)
+    message(FATAL_ERROR
+        "specbleach_version.h reports ${SPECBLEACH_HEADER_VERSION} but "
+        "CMake project() is ${PROJECT_VERSION}; keep them in sync.")
+endif()
+
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
@@ -284,6 +297,7 @@ if(ENABLE_TESTS)
     add_specbleach_test(test_tonal_reducer "test_tonal_reducer.c")
     add_specbleach_test(test_hpss_filter "test_hpss_filter.c")
     add_specbleach_test(test_denoiser_post_process "test_denoiser_post_process.c")
+    add_specbleach_test(test_specbleach_version "test_specbleach_version.c")
 
     if(TARGET PkgConfig::SNDFILE)
         add_specbleach_test(test_audio_file_regression "test_audio_file_regression.c")
