@@ -23,7 +23,7 @@ C library for audio noise reduction and other spectral effects.
 
 This library is a standalone, modular spectral processing engine originally extracted from [noise-repellent](https://github.com/lucianodato/noise-repellent). It decouples DSP algorithms from any specific plugin framework, allowing for clean integration into C/C++ audio software.
 
-The core architecture uses a unified spectral processor concept. The library implements advanced spectral denoising using efficient circular buffering (`SbSpectralCircularBuffer`) and modern STFT processing. It is designed to be extensible, supporting future additions like de-crackle or de-click algorithms.
+The core architecture uses a unified spectral processor concept. The library is fully self-contained with zero external runtime dependencies—it includes a built-in worker pool for deterministic multi-threaded 2D denoising, efficient circular buffering (`SbSpectralCircularBuffer`), and vendored [PFFFT](https://github.com/marton78/pffft) for fast SIMD-accelerated spectral transforms. It is designed to be extensible, supporting future additions like de-crackle or de-click algorithms.
 
 ## De-noise Algorithms
 
@@ -53,8 +53,6 @@ In addition to manual noise profile capture, the library supports adaptive noise
 To compile and install `libspecbleach`, you will need:
 - A C compiling toolchain (GCC or Clang supporting C17)
 - [CMake](https://cmake.org/) (3.16 or newer)
-- `pkg-config` (required when `USE_SYSTEM_FFTW=ON`)
-- [FFTW3](http://www.fftw.org/) library (`libfftw3f`, or let CMake fetch it automatically)
 - A threading library (pthreads on POSIX; built-in on Windows)
 - [libsndfile](https://github.com/libsndfile/libsndfile) (optional, for test suite and demo tools)
 
@@ -84,7 +82,6 @@ You can configure the build using `-Doption=VALUE`:
 | :--- | :--- | :--- |
 | `BUILD_SHARED_LIBS` | `ON` | Build shared library (`.so` / `.dylib` / `.dll`) instead of static library |
 | `SPECBLEACH_INSTALL` | `ON` | Enable installation rules for library binaries, headers, and package config (`.pc`, `.cmake`) |
-| `USE_SYSTEM_FFTW` | `ON` | Link against system-installed `libfftw3f`. If set to `OFF`, CMake fetches and compiles static FFTW3 automatically |
 | `ENABLE_AVX` | `ON` | Enable AVX SIMD optimizations on x86_64 architectures |
 | `ENABLE_TESTS` | `OFF` | Build unit, integration, and audio regression test suite |
 | `ENABLE_COVERAGE` | `OFF` | Enable code coverage instrumentation |

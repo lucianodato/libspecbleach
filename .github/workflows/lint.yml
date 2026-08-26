@@ -44,7 +44,6 @@ jobs:
             clang-tidy \
             clang-tools \
             cmake \
-            libfftw3-dev \
             libsndfile1-dev
 
       - name: Configure build

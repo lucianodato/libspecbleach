@@ -35,7 +35,6 @@ jobs:
           sudo apt-get install -qq \
             cmake \
             gcovr \
-            libfftw3-dev \
             libsndfile1-dev
 
       - name: Configure build
