@@ -145,9 +145,8 @@ static void test_process_and_sync(void) {
         "process during learn");
   }
 
-  TEST_ASSERT(specbleach_stereo_is_transient_detected(stereo) ||
-                  !specbleach_stereo_is_transient_detected(stereo),
-              "transient detection queryable");
+  TEST_ASSERT(specbleach_stereo_is_transient_detected(NULL) == false,
+              "NULL transient detection returns false");
 
   const float intensity = specbleach_stereo_get_transient_intensity(stereo);
   TEST_ASSERT(intensity >= 0.0f && intensity <= 1.0f,

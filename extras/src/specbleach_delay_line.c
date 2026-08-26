@@ -25,6 +25,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "specbleach_delay_line.h"
 
+#include <stdint.h>
 #include <stdlib.h>
 
 struct specbleach_delay_line {
@@ -47,8 +48,17 @@ specbleach_delay_line* specbleach_delay_line_initialize(
     return NULL;
   }
 
+  if (max_delay_samples == UINT32_MAX) {
+    free(instance);
+    return NULL;
+  }
+
   /* +1 slot so read/write pointers never collide at max delay */
   instance->ring_capacity = max_delay_samples + 1U;
+  if ((size_t)channels > SIZE_MAX / sizeof(float) / instance->ring_capacity) {
+    free(instance);
+    return NULL;
+  }
   instance->buffer =
       calloc((size_t)channels * instance->ring_capacity, sizeof(float));
   if (!instance->buffer) {

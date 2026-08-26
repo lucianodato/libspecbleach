@@ -111,12 +111,12 @@ In both recipes run profile migration (`specbleach_stereo_migrate_profiles_from`
 before the target renders, or it starts deaf.
 
 For Recipe A's alignment stage there is a ready-made building block:
-`extras/specbleach_delay_line.h` is a policy-free multi-channel single-tap
+`specbleach_delay_line.h` is a policy-free multi-channel single-tap
 delay line (real-time safe process, any block interleaving). Size it to
 the latency difference, park the shorter-latency family in it, report
 max(latency) once, and crossfade.
 
-C++ integrators: `extras/specbleach.hpp` provides header-only RAII
+C++ integrators: `specbleach.hpp` provides header-only RAII
 ownership for every handle type (`make_denoiser`, `make_stereo_group`,
 `make_delay_line`, ...). It wraps lifetime management only and has no
 framework dependencies, so it suits JUCE, raw VST3/CLAP/LV2, DAW
@@ -149,7 +149,7 @@ codebases, and standalone apps alike.
 - Public API contracts: `include/*.h` — every function documents threading
   and ownership behavior.
 - Module-level behavior: `tests/test_*.c` double as executable
-  specification; `test_specbleach_stereo.c` and `test_specbleach_transition.c`
-  show edge cases (wrong sizes, mid-fade re-begin, NULL handling).
+  specification; `test_specbleach_stereo.c` shows edge cases (wrong sizes,
+  NULL handling).
 - Real-time orchestration reference:
   [noise-repellent `PluginProcessor.cpp`](https://github.com/lucianodato/noise-repellent/blob/master/Source/PluginProcessor.cpp).

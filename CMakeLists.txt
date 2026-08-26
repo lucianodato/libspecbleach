@@ -251,6 +251,8 @@ if(ENABLE_TESTS)
             ${SPECLEACH_SHARED_SOURCES}
             ${SPECLEACH_PROCESSOR_SOURCES}
         )
+        target_compile_definitions(specbleach_test_internal PUBLIC
+            SPECBLEACH_STATIC)
         target_include_directories(specbleach_test_internal PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/src
             ${CMAKE_CURRENT_SOURCE_DIR}/include

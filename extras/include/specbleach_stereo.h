@@ -21,16 +21,16 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #ifndef SPECBLEACH_STEREO_H_INCLUDED
 #define SPECBLEACH_STEREO_H_INCLUDED
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <stdbool.h>
 #include <stdint.h>
 
 #include "specbleach_2d_denoiser.h"
 #include "specbleach_denoiser.h"
 #include "specbleach_export.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /**
  * Multi-channel orchestration over single-channel libspecbleach engines.

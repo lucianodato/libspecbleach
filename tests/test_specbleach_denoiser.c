@@ -468,16 +468,22 @@ int main(void) {
   for (int i = 0; i < 1024; ++i) {
     transient_buf[i] = (i % 2 == 0) ? 0.9f : -0.9f;
   }
-  float curve_bias[1024] = {0};
+  uint32_t cb_size = specbleach_denoiser_get_noise_profile_size(h);
+  float* curve_bias = calloc(cb_size, sizeof(float));
   t_params.reduction_curve_enabled = true;
   t_params.reduction_curve_bias = curve_bias;
-  specbleach_denoiser_load_parameters(h, &t_params, sizeof(t_params));
+  t_params.reduction_curve_size = cb_size;
+  TEST_ASSERT(specbleach_denoiser_load_parameters(h, &t_params,
+                                                  sizeof(t_params)),
+              "Load with curve bias should succeed");
   specbleach_denoiser_process(h, 1024, transient_buf, out_buf);
 
   // Switch HPSS modes and verify latency
   t_params.residual_listen = 0;
   t_params.reduction_curve_enabled = false;
   t_params.reduction_curve_bias = NULL;
+  t_params.reduction_curve_size = 0;
+  free(curve_bias);
 
   t_params.hpss_enable = false;
   specbleach_denoiser_load_parameters(h, &t_params, sizeof(t_params));

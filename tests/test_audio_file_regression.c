@@ -74,7 +74,8 @@ void test_denoiser_file_regression(void) {
   TEST_ASSERT(handle != NULL, "Failed to initialize denoiser");
 
   SpecbleachDenoiserParameters params = canonical_denoiser_params;
-  specbleach_denoiser_load_parameters(handle, &params, sizeof(params));
+  TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &params, sizeof(params)),
+              "Load denoiser parameters should succeed");
 
   float* in_buf = malloc(BLOCK_SIZE * sizeof(float));
   float* out_buf = malloc(BLOCK_SIZE * sizeof(float));
@@ -89,7 +90,8 @@ void test_denoiser_file_regression(void) {
 
   // Reduction stage
   params.learn_noise = SPECBLEACH_LEARN_OFF;
-  specbleach_denoiser_load_parameters(handle, &params, sizeof(params));
+  TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &params, sizeof(params)),
+              "Load reduction parameters should succeed");
 
   sf_count_t total_read = 0;
   sf_count_t read;
@@ -147,7 +149,8 @@ void test_adenoiser_file_regression(void) {
   TEST_ASSERT(handle != NULL, "Failed to initialize adaptive denoiser");
 
   SpecbleachDenoiserParameters params = canonical_adenoiser_params;
-  specbleach_denoiser_load_parameters(handle, &params, sizeof(params));
+  TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &params, sizeof(params)),
+              "Load adaptive denoiser parameters should succeed");
 
   float* in_buf = malloc(BLOCK_SIZE * sizeof(float));
   float* out_buf = malloc(BLOCK_SIZE * sizeof(float));

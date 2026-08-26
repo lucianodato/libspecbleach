@@ -99,7 +99,9 @@ void test_spectral_denoiser(void) {
       .residual_listen = false,
       .whitening_factor = 0.0f};
 
-  specbleach_denoiser_load_parameters(handle, &parameters, sizeof(parameters));
+  TEST_ASSERT(
+      specbleach_denoiser_load_parameters(handle, &parameters, sizeof(parameters)),
+      "Load spectral denoiser parameters should succeed");
 
   // Process first blocks in learn mode (at least 10 frames)
   specbleach_denoiser_process(handle, FRAME_SIZE * 10, input_buffer,
@@ -107,7 +109,9 @@ void test_spectral_denoiser(void) {
 
   // Switch to reduction mode
   parameters.learn_noise = SPECBLEACH_LEARN_OFF;
-  specbleach_denoiser_load_parameters(handle, &parameters, sizeof(parameters));
+  TEST_ASSERT(
+      specbleach_denoiser_load_parameters(handle, &parameters, sizeof(parameters)),
+      "Load reduction parameters should succeed");
 
   // Process remaining blocks
   size_t processed_samples = FRAME_SIZE * 10;
@@ -171,14 +175,18 @@ void test_different_noise_levels(void) {
       .residual_listen = false,
       .whitening_factor = 0.0f};
 
-  specbleach_denoiser_load_parameters(handle, &parameters, sizeof(parameters));
+  TEST_ASSERT(
+      specbleach_denoiser_load_parameters(handle, &parameters, sizeof(parameters)),
+      "Load low-noise parameters should succeed");
 
   // Learn a bit (at least 10 frames)
   specbleach_denoiser_process(handle, 5000, input_buffer, output_buffer);
 
   // Process remaining with reduction
   parameters.learn_noise = SPECBLEACH_LEARN_OFF;
-  specbleach_denoiser_load_parameters(handle, &parameters, sizeof(parameters));
+  TEST_ASSERT(
+      specbleach_denoiser_load_parameters(handle, &parameters, sizeof(parameters)),
+      "Load reduction parameters should succeed");
 
   // Process all blocks
   size_t processed = 5000;
@@ -228,7 +236,7 @@ void test_library_info(void) {
   TEST_ASSERT(handle != NULL, "Failed to initialize for info test");
 
   latency = (int)specbleach_denoiser_get_latency(handle);
-  TEST_ASSERT(latency >= 0, "Latency should be non-negative");
+  TEST_ASSERT(latency > 0, "Latency should be strictly positive");
 
   profile_size = (int)specbleach_denoiser_get_noise_profile_size(handle);
   TEST_ASSERT(profile_size > 0, "Profile size should be positive");
@@ -283,7 +291,9 @@ void test_adaptive_denoiser(void) {
           SPECBLEACH_NOISE_ESTIMATION_SPP_MMSE // Default method
   };
 
-  specbleach_denoiser_load_parameters(handle, &parameters, sizeof(parameters));
+  TEST_ASSERT(
+      specbleach_denoiser_load_parameters(handle, &parameters, sizeof(parameters)),
+      "Load adaptive parameters should succeed");
 
   // Process all samples
   bool result = specbleach_denoiser_process(handle, BLOCK_SIZE, input_buffer,
@@ -330,7 +340,9 @@ void test_2d_denoiser(void) {
       .residual_listen = false,
   };
 
-  specbleach_2d_load_parameters(handle, &parameters, sizeof(parameters));
+  TEST_ASSERT(
+      specbleach_2d_load_parameters(handle, &parameters, sizeof(parameters)),
+      "Load 2D learn parameters should succeed");
 
   // Process first blocks in learn mode
   specbleach_2d_process(handle, FRAME_SIZE * 10, input_buffer, output_buffer);
@@ -342,7 +354,9 @@ void test_2d_denoiser(void) {
 
   // Switch to reduction mode
   parameters.learn_noise = SPECBLEACH_LEARN_OFF;
-  specbleach_2d_load_parameters(handle, &parameters, sizeof(parameters));
+  TEST_ASSERT(
+      specbleach_2d_load_parameters(handle, &parameters, sizeof(parameters)),
+      "Load 2D reduction parameters should succeed");
 
   // Process remaining blocks
   size_t processed_samples = FRAME_SIZE * 10;

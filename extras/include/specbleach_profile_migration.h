@@ -26,7 +26,6 @@ extern "C" {
 #endif
 
 #include <stdbool.h>
-#include <stdint.h>
 
 #include "specbleach_2d_denoiser.h"
 #include "specbleach_denoiser.h"

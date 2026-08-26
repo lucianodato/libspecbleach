@@ -44,6 +44,9 @@ Denoiser2DParameters sb_denoiser_2d_params_sanitize(
  * copy, which stays valid until the next load or until the instance is
  * freed.
  *
+ * When source is non-NULL, it must reference at least required_size readable
+ * float elements; the function copies exactly that many values.
+ *
  * May allocate when required_size grows beyond current capacity; reuses the
  * existing buffer otherwise. Callers own *buffer and must free it during
  * instance teardown.

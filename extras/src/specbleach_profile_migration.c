@@ -77,6 +77,48 @@ static bool migrate_profiles_generic(
   return true;
 }
 
+static bool wrap_1d_available(void* ctx, int mode) {
+  return specbleach_denoiser_noise_profile_available_for_mode(
+      (specbleach_denoiser*)ctx, mode);
+}
+
+static float* wrap_1d_get_profile(void* ctx, int mode) {
+  return specbleach_denoiser_get_noise_profile_for_mode(
+      (specbleach_denoiser*)ctx, mode);
+}
+
+static uint32_t wrap_1d_get_blocks(void* ctx, int mode) {
+  return specbleach_denoiser_get_noise_profile_block_count_for_mode(
+      (specbleach_denoiser*)ctx, mode);
+}
+
+static bool wrap_1d_load(void* ctx, const float* profile, uint32_t size,
+                         uint32_t blocks, int mode) {
+  return specbleach_denoiser_load_noise_profile_for_mode(
+      (specbleach_denoiser*)ctx, profile, size, blocks, mode);
+}
+
+static bool wrap_2d_available(void* ctx, int mode) {
+  return specbleach_2d_noise_profile_available_for_mode(
+      (specbleach_2d_denoiser*)ctx, mode);
+}
+
+static float* wrap_2d_get_profile(void* ctx, int mode) {
+  return specbleach_2d_get_noise_profile_for_mode(
+      (specbleach_2d_denoiser*)ctx, mode);
+}
+
+static uint32_t wrap_2d_get_blocks(void* ctx, int mode) {
+  return specbleach_2d_get_noise_profile_block_count_for_mode(
+      (specbleach_2d_denoiser*)ctx, mode);
+}
+
+static bool wrap_2d_load(void* ctx, const float* profile, uint32_t size,
+                         uint32_t blocks, int mode) {
+  return specbleach_2d_load_noise_profile_for_mode(
+      (specbleach_2d_denoiser*)ctx, profile, size, blocks, mode);
+}
+
 bool specbleach_migrate_profiles_1d_to_2d(specbleach_denoiser* source,
                                           specbleach_2d_denoiser* target) {
   if (!source || !target ||
@@ -87,13 +129,7 @@ bool specbleach_migrate_profiles_1d_to_2d(specbleach_denoiser* source,
 
   return migrate_profiles_generic(
       source, target, specbleach_denoiser_get_noise_profile_size(source),
-      (bool (*)(void*,
-                int))specbleach_denoiser_noise_profile_available_for_mode,
-      (float* (*)(void*, int))specbleach_denoiser_get_noise_profile_for_mode,
-      (uint32_t (*)(void*, int))
-          specbleach_denoiser_get_noise_profile_block_count_for_mode,
-      (bool (*)(void*, const float*, uint32_t, uint32_t,
-                int))specbleach_2d_load_noise_profile_for_mode);
+      wrap_1d_available, wrap_1d_get_profile, wrap_1d_get_blocks, wrap_2d_load);
 }
 
 bool specbleach_migrate_profiles_2d_to_1d(specbleach_2d_denoiser* source,
@@ -106,10 +142,6 @@ bool specbleach_migrate_profiles_2d_to_1d(specbleach_2d_denoiser* source,
 
   return migrate_profiles_generic(
       source, target, specbleach_2d_get_noise_profile_size(source),
-      (bool (*)(void*, int))specbleach_2d_noise_profile_available_for_mode,
-      (float* (*)(void*, int))specbleach_2d_get_noise_profile_for_mode,
-      (uint32_t (*)(void*,
-                    int))specbleach_2d_get_noise_profile_block_count_for_mode,
-      (bool (*)(void*, const float*, uint32_t, uint32_t,
-                int))specbleach_denoiser_load_noise_profile_for_mode);
+      wrap_2d_available, wrap_2d_get_profile, wrap_2d_get_blocks,
+      wrap_1d_load);
 }

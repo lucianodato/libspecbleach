@@ -190,10 +190,20 @@ bool specbleach_2d_load_parameters(
 
   Sb2DDenoiser* self = instance;
 
+  const uint32_t profile_size =
+      sb_processor_core_get_noise_profile_size(self->core);
+  if (parameters->reduction_curve_enabled &&
+      parameters->reduction_curve_size != profile_size) {
+    return false;
+  }
+
   const float* owned_bias = sb_curve_bias_copy(
       &self->reduction_curve_copy, &self->reduction_curve_capacity,
-      sb_processor_core_get_noise_profile_size(self->core),
-      parameters->reduction_curve_enabled, parameters->reduction_curve_bias);
+      profile_size, parameters->reduction_curve_enabled,
+      parameters->reduction_curve_bias);
+  if (parameters->reduction_curve_enabled && !owned_bias) {
+    return false;
+  }
 
   Denoiser2DParameters denoise_parameters =
       sb_denoiser_2d_params_sanitize(parameters);

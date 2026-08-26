@@ -333,6 +333,17 @@ void test_curve_bias_copy(void) {
   TEST_ASSERT(capacity == 8, "Capacity grows to required size");
   TEST_FLOAT_CLOSE(grown[7], 0.0f, 1e-6f);
 
+  // Shrink case reuses allocation and preserves original capacity
+  float small_source[4] = {7.0f, 8.0f, 9.0f, 10.0f};
+  const float* shrunk =
+      sb_curve_bias_copy(&buffer, &capacity, 4, true, small_source);
+  TEST_ASSERT(shrunk != NULL, "Shrink copy returns valid buffer");
+  TEST_ASSERT(capacity == 8, "Capacity preserved on shrink");
+  TEST_ASSERT(shrunk == grown, "Shrink reuses existing buffer");
+  for (uint32_t i = 0; i < 4; ++i) {
+    TEST_FLOAT_CLOSE(shrunk[i], small_source[i], 1e-6f);
+  }
+
   free(buffer);
   printf("✓ Curve bias copy tests passed\n");
 }

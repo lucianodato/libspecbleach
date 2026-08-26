@@ -292,7 +292,7 @@ int main(int argc, char** argv) {
      * groups' wet outputs directly over ~40 ms; see the header comment and
      * examples/README.md for why real hosts need more than this. */
     const uint32_t fade_total = (uint32_t)(0.040f * (float)sample_rate);
-    uint32_t fade_samples_left = 0;
+    uint32_t fade_samples_done = 0;
     bool switch_initiated = false;
     specbleach_stereo* active_group = spectral_group;
     success = true;
@@ -397,10 +397,9 @@ int main(int argc, char** argv) {
           success = false;
           break;
         }
-        const uint32_t fade_base = fade_total - fade_samples_left;
         for (uint32_t ch = 0; ch < channels; ++ch) {
           for (sf_count_t i = 0; i < read_frames; ++i) {
-            const uint32_t pos = fade_base + (uint32_t)i;
+            const uint32_t pos = fade_samples_done + (uint32_t)i;
             const float t =
                 pos >= fade_total
                     ? 1.0f
@@ -412,9 +411,9 @@ int main(int argc, char** argv) {
                 w_old * from_ptrs[ch][i] + w_new * out_ptrs[ch][i];
           }
         }
-        fade_samples_left += (uint32_t)read_frames;
-        if (fade_samples_left >= fade_total) {
-          fade_samples_left = fade_total;
+        fade_samples_done += (uint32_t)read_frames;
+        if (fade_samples_done >= fade_total) {
+          fade_samples_done = fade_total;
           active_group = nlm_group; /* fade complete: target takes over */
           phase = PHASE_REDUCTION;
         }
@@ -442,7 +441,10 @@ int main(int argc, char** argv) {
         }
       }
 
-      sf_writef_float(output_file, interleaved, read_frames);
+      if (sf_writef_float(output_file, interleaved, read_frames) !=
+          read_frames) {
+        success = false;
+      }
       absolute_frame += (uint64_t)read_frames;
     }
   } while (0);

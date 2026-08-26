@@ -211,12 +211,8 @@ void test_2d_parameter_switching(void) {
   TEST_ASSERT(specbleach_2d_load_parameters(h, &params, sizeof(params)),
               "Switch adaptive off should succeed");
 
-  // 4. Test different reduction modes
-  for (int mode = 2; mode <= 3; mode++) {
-    // No longer noise_reduction_mode
-    TEST_ASSERT(specbleach_2d_load_parameters(h, &params, sizeof(params)),
-                "Switch reduction mode should succeed");
-  }
+  TEST_ASSERT(specbleach_2d_load_parameters(h, &params, sizeof(params)),
+              "Switch reduction mode should succeed");
 
   uint32_t profile_size = specbleach_2d_get_noise_profile_size(h);
   float* input = calloc(1024, sizeof(float));
@@ -328,10 +324,13 @@ void test_process_loop(void) {
   for (int i = 0; i < 1024; ++i) {
     transient_buf[i] = (i % 2 == 0) ? 0.9f : -0.9f;
   }
-  float curve_bias[1024] = {0};
+  uint32_t cb_size = specbleach_2d_get_noise_profile_size(h);
+  float* curve_bias = calloc(cb_size, sizeof(float));
   params.reduction_curve_enabled = true;
   params.reduction_curve_bias = curve_bias;
-  specbleach_2d_load_parameters(h, &params, sizeof(params));
+  params.reduction_curve_size = cb_size;
+  TEST_ASSERT(specbleach_2d_load_parameters(h, &params, sizeof(params)),
+              "Load with curve bias should succeed");
   specbleach_2d_process(h, 1024, transient_buf, out_buf);
   for (int i = 0; i < 1024; ++i) {
     TEST_ASSERT(isfinite(out_buf[i]), "Output samples must be finite");
@@ -341,6 +340,8 @@ void test_process_loop(void) {
   params.residual_listen = 0;
   params.reduction_curve_enabled = false;
   params.reduction_curve_bias = NULL;
+  params.reduction_curve_size = 0;
+  free(curve_bias);
 
   params.hpss_enable = false;
   specbleach_2d_load_parameters(h, &params, sizeof(params));

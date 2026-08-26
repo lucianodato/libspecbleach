@@ -145,6 +145,13 @@ typedef struct SpecbleachDenoiserParameters {
   bool reduction_curve_enabled;
 
   /**
+   * Length of the reduction_curve_bias array in bins. Must match
+   * specbleach_denoiser_get_noise_profile_size() when
+   * reduction_curve_enabled is true; ignored otherwise.
+   */
+  uint32_t reduction_curve_size;
+
+  /**
    * Tonal Noise Profile Linear Scale — multiplier applied to the noise power
    * spectrum only at detected tonal components. Positive inputs are clamped
    * to [0.01f, 100.0f]. Non-positive inputs use the 1.0f default. Values >
@@ -246,8 +253,10 @@ specbleach_denoiser_get_noise_profile_block_count_for_mode(
 
 /**
  * Returns a pointer to the internally owned noise profile for a specific
- * mode. The pointer stays valid until the instance is freed. May return NULL
- * if the profile was never populated.
+ * mode. The pointer stays valid until the instance is freed. Returns NULL
+ * only for a NULL instance or an out-of-range mode. Use
+ * specbleach_denoiser_noise_profile_available_for_mode() to check whether
+ * learning has completed and the profile has been populated.
  */
 SPECBLEACH_API float* specbleach_denoiser_get_noise_profile_for_mode(
     specbleach_denoiser* instance, int mode);
@@ -281,7 +290,9 @@ SPECBLEACH_API uint32_t specbleach_denoiser_get_tonal_peaks(
 
 /**
  * Returns peak frequencies in Hz computed directly from a caller-provided
- * noise profile array.
+ * noise profile array. If the internal MEDIAN profile is available, it takes
+ * precedence over the caller-provided profile; the caller-provided profile
+ * is used only as fallback.
  *
  * Offline/query-only API; must NOT be called from the real-time audio
  * thread.

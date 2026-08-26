@@ -27,6 +27,8 @@ jobs:
 
   static-analysis:
     runs-on: ubuntu-22.04
+    permissions:
+      contents: read
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -58,7 +60,7 @@ jobs:
 
       - name: Run clang-tidy
         run: |
-          find src include extras -type f \( -name "*.c" -o -name "*.h" \) | \
+          find src include extras examples -type f \( -name "*.c" -o -name "*.h" \) | \
             xargs clang-tidy -p build --config-file=.clang-tidy
 
   cppcheck:

@@ -19,6 +19,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 #include "specbleach_delay_line.h"
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -33,6 +34,14 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #define CHANNELS 2
 #define MAX_DELAY 960
+
+static void test_max_delay_rejected(void) {
+  printf("Testing maximum delay rejected...\n");
+  TEST_ASSERT(specbleach_delay_line_initialize(UINT32_MAX, 1) == NULL,
+              "UINT32_MAX max_delay rejected");
+  TEST_ASSERT(specbleach_delay_line_initialize(UINT32_MAX, CHANNELS) == NULL,
+              "UINT32_MAX max_delay rejected (multi-channel)");
+}
 
 static void test_init_and_free(void) {
   printf("Testing delay line init and free...\n");
@@ -178,6 +187,7 @@ static void test_channel_independence_and_null_args(void) {
 }
 
 int main(void) {
+  test_max_delay_rejected();
   test_init_and_free();
   test_set_delay_validation();
   test_passthrough_at_zero();

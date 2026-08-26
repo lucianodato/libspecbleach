@@ -72,7 +72,7 @@ specbleach_stereo* specbleach_stereo_initialize(
 
   self->channels = channels;
   self->engine = engine;
-  self->instances = (void**)calloc((size_t)channels * sizeof(void*), 1U);
+  self->instances = calloc((size_t)channels, sizeof(void*));
   if (!self->instances) {
     specbleach_stereo_free(self);
     return NULL;
@@ -111,7 +111,7 @@ void specbleach_stereo_free(specbleach_stereo* instance) {
         }
       }
     }
-    free((void*)self->instances);
+    free(self->instances);
   }
 
   free(self);
@@ -303,6 +303,11 @@ bool specbleach_stereo_migrate_profiles_from(specbleach_stereo* instance,
 
   if (!self || !origin || self->channels != origin->channels ||
       self->engine == origin->engine) {
+    return false;
+  }
+
+  if (specbleach_stereo_get_noise_profile_size(self) !=
+      specbleach_stereo_get_noise_profile_size(origin)) {
     return false;
   }
 

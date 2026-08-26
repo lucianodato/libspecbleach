@@ -83,14 +83,18 @@ void process_audio(const float* input, float* output, int length) {
       .residual_listen = false,
       .whitening_factor = 0.0f};
 
-  specbleach_denoiser_load_parameters(handle, &parameters, sizeof(parameters));
+  TEST_ASSERT(
+      specbleach_denoiser_load_parameters(handle, &parameters, sizeof(parameters)),
+      "Load spectral parameters should succeed");
 
   // Learn phase (first 5000 samples)
   specbleach_denoiser_process(handle, 5000, input, output);
 
   // Reduction phase
   parameters.learn_noise = SPECBLEACH_LEARN_OFF;
-  specbleach_denoiser_load_parameters(handle, &parameters, sizeof(parameters));
+  TEST_ASSERT(
+      specbleach_denoiser_load_parameters(handle, &parameters, sizeof(parameters)),
+      "Load reduction parameters should succeed");
 
   int processed = 5000;
   while (processed < length) {
@@ -110,7 +114,6 @@ void process_audio(const float* input, float* output, int length) {
 }
 
 // Process audio through adaptive denoiser
-// Process audio through adaptive denoiser
 void process_audio_adaptive(const float* input, float* output, int length) {
   float frame_size_ms = 20.0f;
   specbleach_denoiser* handle =
@@ -127,7 +130,9 @@ void process_audio_adaptive(const float* input, float* output, int length) {
       .adaptive_noise = true,
       .noise_estimation_method = SPECBLEACH_NOISE_ESTIMATION_SPP_MMSE};
 
-  specbleach_denoiser_load_parameters(handle, &parameters, sizeof(parameters));
+  TEST_ASSERT(
+      specbleach_denoiser_load_parameters(handle, &parameters, sizeof(parameters)),
+      "Load adaptive parameters should succeed");
 
   int processed = 0;
   while (processed < length) {
@@ -374,8 +379,9 @@ void test_noise_estimation_methods(void) {
       specbleach_denoiser_initialize(SAMPLE_RATE, frame_size_ms);
   TEST_ASSERT(handle_martin != NULL, "Failed to initialize Martin denoiser");
 
-  specbleach_denoiser_load_parameters(handle_martin, &params_martin,
-                                      sizeof(params_martin));
+  TEST_ASSERT(specbleach_denoiser_load_parameters(handle_martin, &params_martin,
+                                                    sizeof(params_martin)),
+              "Load Martin parameters should succeed");
 
   for (size_t i = 0; i < TEST_SAMPLES; i += (size_t)BLOCK_SIZE) {
     int block_size = (i + (size_t)BLOCK_SIZE > TEST_SAMPLES)
@@ -405,13 +411,15 @@ void test_noise_estimation_methods(void) {
   TEST_ASSERT(handle_spp_mmse != NULL,
               "Failed to initialize SPP-MMSE denoiser");
 
-  specbleach_denoiser_load_parameters(handle_spp_mmse, &params_spp_mmse,
-                                      sizeof(params_spp_mmse));
+  TEST_ASSERT(specbleach_denoiser_load_parameters(handle_spp_mmse,
+                                                    &params_spp_mmse,
+                                                    sizeof(params_spp_mmse)),
+              "Load SPP-MMSE parameters should succeed");
 
   for (size_t i = 0; i < TEST_SAMPLES; i += (size_t)BLOCK_SIZE) {
     int block_size = (i + (size_t)BLOCK_SIZE > TEST_SAMPLES)
-                         ? (int)(TEST_SAMPLES - i)
-                         : BLOCK_SIZE;
+                          ? (int)(TEST_SAMPLES - i)
+                          : BLOCK_SIZE;
     TEST_ASSERT(specbleach_denoiser_process(handle_spp_mmse, block_size,
                                             input + i, output_spp_mmse + i),
                 "Failed to process with SPP-MMSE method");
