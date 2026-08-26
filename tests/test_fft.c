@@ -154,8 +154,9 @@ void test_fft_edge_cases(void) {
               "initialize_bins(UINT32_MAX - 10) should return NULL");
   TEST_ASSERT(fft_transform_initialize(UINT32_MAX, NO_PADDING, 0) == NULL,
               "initialize(UINT32_MAX) should return NULL");
-  TEST_ASSERT(fft_transform_initialize(UINT32_MAX - 10U, FIXED_AMOUNT, 20U) == NULL,
-              "initialize with overflow padding should return NULL");
+  TEST_ASSERT(
+      fft_transform_initialize(UINT32_MAX - 10U, FIXED_AMOUNT, 20U) == NULL,
+      "initialize with overflow padding should return NULL");
   FftTransform* fft_bins = fft_transform_initialize_bins(1000);
   TEST_ASSERT(fft_bins != NULL, "initialize_bins(1000) should succeed");
   TEST_ASSERT(get_fft_size(fft_bins) >= 1000, "bins size valid");
