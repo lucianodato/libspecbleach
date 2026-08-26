@@ -81,9 +81,9 @@ libspecbleach is designed to grow STFT-based processors (denoisers, dereverberat
 - **Noise profile storage & modes**: `SbProcessorCore` bundles the STFT
   engine with multi-mode noise profile state, including serialization
   accessors used by plugins (`specbleach_processor_core.{c,h}`).
-- **Orchestration layer** (`extras/`, opt-in): stereo groups, click-free
-  engine transitions, and profile migration are processor-agnostic at the
-  group level. A new engine family gets them by adding entries, not logic.
+- **Orchestration layer** (`extras/`, opt-in): stereo groups and profile
+  migration are processor-agnostic at the group level. A new engine family
+  gets them by adding entries, not logic.
 
 ### Recipe
 
@@ -109,7 +109,7 @@ libspecbleach is designed to grow STFT-based processors (denoisers, dereverberat
    `specbleach_denoiser.c`: private state struct tagged with the public
    type name, delegate to `SbProcessorCore` + your callback, own any
    copied-in data (see `sb_curve_bias_copy`) and free it in `_free`.
-4. **Extras wiring** (so integrators get stereo/transitions immediately):
+4. **Extras wiring** (so integrators get stereo groups immediately):
    - Add a value to `SpecbleachStereoEngine` and constructor/dispatch arms
      in `extras/src/specbleach_stereo.c`.
    - Cross-family profile copying needs **no new pair functions**:

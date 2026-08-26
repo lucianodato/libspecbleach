@@ -21,16 +21,16 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 /**
  * @file stereo_denoiser_demo.c
  * @brief Multi-channel integration reference using the optional extras
- *        layer (specbleach_stereo + specbleach_transition).
+ *        layer (specbleach_stereo + profile migration).
  *
  * This example answers the question: "libspecbleach engines are
  * single-channel — how do I build a stereo/surround denoiser with the
  * conveniences the Noise Repellent plugin is known for?" The answer is the
  * extras layer, a thin orchestration library on top of the core. Nothing in
- * extras does DSP; it only manages engine instances and transitions.
+ * extras does DSP; it only manages engine instances and profile state.
  *
  * ===========================================================================
- * THE THREE EXTRAS MODULES (what problem each solves)
+ * THE EXTRAS MODULES (what problem each solves)
  * ===========================================================================
  * - specbleach_stereo      Owns one core engine per channel. You load
  *                          parameters once and they fan out to every
@@ -38,17 +38,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  *                          pointer arrays. Also provides cross-channel
  *                          profile fallback fill and aggregated transient
  *                          reporting.
- * - specbleach_transition  Click-free switching between two ALREADY
- *                          CONFIGURED engine groups. It aligns their
- *                          latencies with an internal delay line, applies an
- *                          equal-power fade over 40 ms, and — when landing
- *                          on the lower-latency engine — ramps its
- *                          compensation delay back out so listeners never
- *                          hear the latency jump. It knows nothing about
- *                          parameters: YOU decide what "switching" means.
  * - specbleach_migrate_profiles_from / specbleach_migrate_profiles_1d_to_2d
  *                          Copies learned noise profiles between groups so
- *                          the new engine keeps the noise the user already
+ *                          a new engine keeps the noise the user already
  *                          taught the old one. Without this, every switch
  *                          would sound like the denoiser forgot everything.
  *
@@ -58,34 +50,31 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  *   PHASE_LEARNING    primary group learns the noise profile from the file
  *                     opening (same lifecycle as denoiser_demo.c).
  *   PHASE_REDUCTION   learn turns off (which FINALIZES all capture modes),
- *                     then the group reduces normally.
+ *                     then the active group reduces normally.
  *   PHASE_TRANSITION  (--switch-engine only) at the file midpoint:
- *                     1. create/prepare the second engine family's group
+ *                     1. load reduction parameters into the target group
  *                     2. migrate profiles into it
- *                     3. transition_begin(old_latency, new_latency)
- *                     4. per block: render BOTH groups' wet outputs, hand
- *                        them to specbleach_transition_process(), write the
- *                        blend.
- *   After the fade completes, transition_process() passes the target group
- *   through untouched, so you can keep calling it or drop to single-group
- *   rendering once specbleach_transition_active() returns false.
+ *                     3. per block: render BOTH groups' wet outputs and
+ *                        crossfade them inline with equal-power weights
+ *                        (~40 ms), then continue with the target alone.
  *
  * ===========================================================================
- * WHAT A REAL-TIME INTEGRATOR MUST ADD (this demo is offline for brevity)
+ * SWITCHING ENGINES IN A REAL-TIME HOST — READ BEFORE COPYING THIS
  * ===========================================================================
- * - Latency reporting: whenever you call transition_begin(), immediately
- *   report specbleach_transition_get_latency() to your host (it equals the
- *   target group's latency from that moment). See the "Latency now ..."
- *   print in main(): that printf stands in for setLatencySamples().
- * - Threading: transition_begin() may allocate its delay line (first use),
- *   and profile migration touches engine state — both belong on a control/
- *   message thread, NOT in the audio callback. process() calls are
- *   real-time safe. For reference, see how the Noise Repellent plugin
- *   queues switch requests to a timer-driven worker with a pause-gate
- *   handshake (Source/PluginProcessor.cpp in the noise-repellent repo).
- * - Parameter changes do NOT require transitions. Transitions are for
- *   swapping ENGINE FAMILIES (spectral <-> 2D NLM) where latency differs.
- *   Plain parameter updates can be loaded directly from the audio thread
+ * Engine families differ in algorithmic latency, and NO blend can hide the
+ * moment your host re-anchors its delay compensation. The two proven
+ * production recipes (structural alignment vs. mute-and-warm switching)
+ * are documented in examples/README.md ("Switching between processors").
+ * This offline demo keeps only the trivial part — the equal-power fade —
+ * and reports max(latency) while fading as the conservative choice.
+ * - Latency reporting: the "Latency now ..." print stands in for
+ *   setLatencySamples()/pw_stream_latency/etc. Deliver such notifications
+ *   from a message thread, never mid-callback (hosts like Reaper suspend/
+ *   resume plugins on synchronous latency changes).
+ * - Threading: parameter loads and profile migration touch engine state —
+ *   run them on a control/message thread, NOT in the audio callback.
+ *   process() calls are real-time safe.
+ * - Plain parameter changes need NONE of this machinery; load them anytime
  *   (allocation caveat: first load after enabling reduction_curve_enabled).
  *
  * Build: cmake -B build -DENABLE_EXAMPLES=ON -DSPECBLEACH_BUILD_EXTRAS=ON \
@@ -100,7 +89,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <math.h>
 #include <sndfile.h>
 #include <specbleach_stereo.h>
-#include <specbleach_transition.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -262,17 +250,10 @@ int main(int argc, char** argv) {
                                   sample_rate, options.frame_size_ms, channels,
                                   SPECBLEACH_STEREO_ENGINE_NLM_2D)
                             : NULL;
-  // Alignment headroom must cover the latency difference between engines
   const uint32_t spectral_latency =
       specbleach_stereo_get_latency(spectral_group);
   const uint32_t nlm_latency =
       nlm_group ? specbleach_stereo_get_latency(nlm_group) : spectral_latency;
-  const uint32_t max_alignment_delay = spectral_latency > nlm_latency
-                                           ? spectral_latency - nlm_latency
-                                           : nlm_latency - spectral_latency;
-
-  specbleach_transition* transition = specbleach_transition_initialize(
-      sample_rate, BLOCK_SIZE, channels, max_alignment_delay);
 
   float* interleaved = calloc((size_t)channels * BLOCK_SIZE, sizeof(float));
   float* channel_data = calloc((size_t)channels * BLOCK_SIZE, sizeof(float));
@@ -280,8 +261,8 @@ int main(int argc, char** argv) {
 
   bool success = false;
   do {
-    if (!spectral_group || !transition || !interleaved || !channel_data ||
-        !scratch_from || (options.switch_engine && !nlm_group)) {
+    if (!spectral_group || !interleaved || !channel_data || !scratch_from ||
+        (options.switch_engine && !nlm_group)) {
       fprintf(stderr, "Error: initialization failed\n");
       break;
     }
@@ -307,6 +288,13 @@ int main(int argc, char** argv) {
     uint32_t learn_blocks_left = options.learn_frames;
     DemoPhase phase = learn_blocks_left > 0 ? PHASE_LEARNING : PHASE_REDUCTION;
     uint32_t reported_latency = 0;
+    /* Inline crossfade state (--switch-engine). The demo blends the two
+     * groups' wet outputs directly over ~40 ms; see the header comment and
+     * examples/README.md for why real hosts need more than this. */
+    const uint32_t fade_total = (uint32_t)(0.040f * (float)sample_rate);
+    uint32_t fade_samples_left = 0;
+    bool switch_initiated = false;
+    specbleach_stereo* active_group = spectral_group;
     success = true;
 
     while (success) {
@@ -369,48 +357,66 @@ int main(int argc, char** argv) {
          *      transition header for why that is safe even mid-fade).
          * In a real-time app, steps 1-3 run on a control thread with a
          * pause gate around step 2 — see PluginProcessor.cpp. */
-        if (options.switch_engine && absolute_frame >= total_frames / 2U) {
+        if (options.switch_engine && !switch_initiated &&
+            absolute_frame >= total_frames / 2U) {
           /* Midpoint reached: carry profiles over to the 2D group and
-           * start the click-free fade. */
-          printf("Switching engines at t=%.1fs (fade %.0f ms)\n",
-                 (double)absolute_frame / sample_rate,
-                 (double)SPECBLEACH_TRANSITION_FADE_TIME_MS);
+           * start the inline fade. */
+          printf(
+              "Switching engines at t=%.1fs (fade %u ms)\n",
+              (double)absolute_frame / sample_rate,
+              (unsigned)((1000.0 * (double)fade_total) / (double)sample_rate));
 
           params_2d.learn_noise = SPECBLEACH_LEARN_OFF;
           if (!specbleach_stereo_load_parameters_2d(nlm_group, &params_2d,
                                                     sizeof(params_2d)) ||
               !specbleach_stereo_migrate_profiles_from(nlm_group,
-                                                       spectral_group) ||
-              !specbleach_transition_begin(
-                  transition, specbleach_stereo_get_latency(spectral_group),
-                  specbleach_stereo_get_latency(nlm_group))) {
+                                                       spectral_group)) {
             success = false;
             break;
           }
+          switch_initiated = true;
           phase = PHASE_TRANSITION;
         }
 
-        if (!specbleach_stereo_process(spectral_group, (uint32_t)read_frames,
+        if (!specbleach_stereo_process(active_group, (uint32_t)read_frames,
                                        in_ptrs, out_ptrs)) {
           success = false;
           break;
         }
       } else {
         /* -----------------------------------------------------------------
-         * PHASE_TRANSITION: the steady-state pattern while a fade runs.
-         * Both groups render their own wet output from the SAME dry input;
-         * the transition module aligns latencies and equal-power blends.
-         * Note out_ptrs aliases channel_data (in-place) and blended == the
-         * target's buffer, which specbleach_transition_process() allows. */
+         * PHASE_TRANSITION: render BOTH groups' wet outputs from the same
+         * dry input and crossfade them inline with equal-power weights.
+         * NOTE for real-time integrators: the engines' latencies differ,
+         * so this blend is only exact when streams are time-aligned — the
+         * recipes in examples/README.md cover that part. */
         if (!specbleach_stereo_process(spectral_group, (uint32_t)read_frames,
                                        in_ptrs, from_ptrs) ||
             !specbleach_stereo_process(nlm_group, (uint32_t)read_frames,
-                                       in_ptrs, out_ptrs) ||
-            !specbleach_transition_process(transition, (uint32_t)read_frames,
-                                           (const float**)from_ptrs,
-                                           (const float**)out_ptrs, out_ptrs)) {
+                                       in_ptrs, out_ptrs)) {
           success = false;
           break;
+        }
+        const uint32_t fade_base = fade_total - fade_samples_left;
+        for (uint32_t ch = 0; ch < channels; ++ch) {
+          for (sf_count_t i = 0; i < read_frames; ++i) {
+            const uint32_t pos = fade_base + (uint32_t)i;
+            const float t =
+                pos >= fade_total
+                    ? 1.0f
+                    : (float)pos / (float)(fade_total > 0 ? fade_total : 1U);
+            const float half_pi_f = 1.5707963267948966f * t;
+            const float w_new = sinf(half_pi_f);
+            const float w_old = cosf(half_pi_f);
+            out_ptrs[ch][i] =
+                w_old * from_ptrs[ch][i] + w_new * out_ptrs[ch][i];
+          }
+        }
+        fade_samples_left += (uint32_t)read_frames;
+        if (fade_samples_left >= fade_total) {
+          fade_samples_left = fade_total;
+          active_group = nlm_group; /* fade complete: target takes over */
+          phase = PHASE_REDUCTION;
         }
       }
 
@@ -421,9 +427,9 @@ int main(int argc, char** argv) {
        * group's. Replace this printf with setLatencySamples()/
        * pw_stream_latency/etc. in your application. */
       const uint32_t current_latency =
-          phase == PHASE_TRANSITION
-              ? specbleach_transition_get_latency(transition)
-              : specbleach_stereo_get_latency(spectral_group);
+          phase == PHASE_TRANSITION && spectral_latency < nlm_latency
+              ? nlm_latency /* conservative max while fading */
+              : specbleach_stereo_get_latency(active_group);
       if (current_latency != reported_latency) {
         printf("Latency now %u samples\n", current_latency);
         reported_latency = current_latency;
@@ -444,7 +450,6 @@ int main(int argc, char** argv) {
   free(interleaved);
   free(channel_data);
   free(scratch_from);
-  specbleach_transition_free(transition);
   specbleach_stereo_free(spectral_group);
   specbleach_stereo_free(nlm_group);
   sf_close(input_file);

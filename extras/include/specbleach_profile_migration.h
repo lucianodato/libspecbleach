@@ -40,8 +40,8 @@ extern "C" {
  * their block counts; missing modes are fallback-filled from the first
  * available mode so the target never ends up partially empty.
  *
- * Not real-time safe. Call before switching engines (e.g., right before
- * specbleach_transition_begin()).
+ * Not real-time safe. Call before switching engines, before the target
+ * group renders (see examples/README.md "Switching between processors").
  */
 
 /**

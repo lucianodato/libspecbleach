@@ -157,16 +157,15 @@ add_library(libspecbleach::libspecbleach ALIAS libspecbleach)
 add_library(specbleach ALIAS libspecbleach)
 
 # ==============================================================================
-# 6b. Optional Extras Layer (multi-channel orchestration, transitions)
+# 6b. Optional Extras Layer (multi-channel orchestration)
 # ==============================================================================
 option(SPECBLEACH_BUILD_EXTRAS
-       "Build optional orchestration helpers (stereo groups, engine transitions)"
+       "Build optional orchestration helpers (stereo groups, profile migration)"
        OFF)
 
 if(SPECBLEACH_BUILD_EXTRAS)
     add_library(libspecbleach_extras
         extras/src/specbleach_stereo.c
-        extras/src/specbleach_transition.c
         extras/src/specbleach_profile_migration.c
     )
 
@@ -294,8 +293,6 @@ if(ENABLE_TESTS)
     if(SPECBLEACH_BUILD_EXTRAS)
         add_specbleach_test(test_specbleach_stereo "test_specbleach_stereo.c")
         target_link_libraries(test_specbleach_stereo PRIVATE libspecbleach_extras)
-        add_specbleach_test(test_specbleach_transition "test_specbleach_transition.c")
-        target_link_libraries(test_specbleach_transition PRIVATE libspecbleach_extras)
         add_specbleach_test(test_profile_migration "test_profile_migration.c")
         target_link_libraries(test_profile_migration PRIVATE libspecbleach_extras)
     endif()
