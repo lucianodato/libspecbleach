@@ -93,6 +93,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
 
 #define BLOCK_SIZE 512
 #define MAX_CHANNELS 8
@@ -138,7 +140,8 @@ static bool parse_uint_arg(const char* str, uint32_t* out) {
   char* endptr = NULL;
   errno = 0;
   const long val = strtol(str, &endptr, 10);
-  if (errno != 0 || endptr == str || *endptr != '\0' || val < 1) {
+  if (errno != 0 || endptr == str || *endptr != '\0' || val < 1 ||
+      (unsigned long)val > UINT32_MAX) {
     return false;
   }
   *out = (uint32_t)val;
@@ -219,14 +222,6 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  SNDFILE* output_file = sf_open(output_file_name, SFM_WRITE, &input_info);
-  if (!output_file) {
-    fprintf(stderr, "Error: cannot create '%s': %s\n", output_file_name,
-            sf_strerror(NULL));
-    sf_close(input_file);
-    return 1;
-  }
-
   const uint32_t channels = (uint32_t)input_info.channels;
   const uint32_t sample_rate = (uint32_t)input_info.samplerate;
   const uint64_t total_frames = (uint64_t)input_info.frames;
@@ -235,7 +230,32 @@ int main(int argc, char** argv) {
     fprintf(stderr, "Error: this demo supports up to %u channels\n",
             MAX_CHANNELS);
     sf_close(input_file);
-    sf_close(output_file);
+    return 1;
+  }
+
+  bool same_file = false;
+  if (strcmp(input_file_name, output_file_name) == 0) {
+    same_file = true;
+  } else {
+    struct stat stat_in, stat_out;
+    if (stat(input_file_name, &stat_in) == 0 &&
+        stat(output_file_name, &stat_out) == 0 &&
+        stat_in.st_dev == stat_out.st_dev &&
+        stat_in.st_ino == stat_out.st_ino) {
+      same_file = true;
+    }
+  }
+  if (same_file) {
+    fprintf(stderr, "Error: input and output must be distinct files\n");
+    sf_close(input_file);
+    return 1;
+  }
+
+  SNDFILE* output_file = sf_open(output_file_name, SFM_WRITE, &input_info);
+  if (!output_file) {
+    fprintf(stderr, "Error: cannot create '%s': %s\n", output_file_name,
+            sf_strerror(NULL));
+    sf_close(input_file);
     return 1;
   }
 
@@ -300,7 +320,13 @@ int main(int argc, char** argv) {
     while (success) {
       const sf_count_t read_frames =
           sf_readf_float(input_file, interleaved, BLOCK_SIZE);
-      if (read_frames <= 0) {
+      if (sf_error(input_file) != 0) {
+        fprintf(stderr, "Error: failed to read input file: %s\n",
+                sf_strerror(input_file));
+        success = false;
+        break;
+      }
+      if (read_frames == 0) {
         break; /* EOF */
       }
 
