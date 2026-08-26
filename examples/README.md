@@ -8,7 +8,7 @@ then steal its structure — they are written to be copied.
 | Your situation | Read | Uses |
 | :--- | :--- | :--- |
 | Mono processing, offline or simple pipeline | [`denoiser_demo.c`](denoiser_demo.c) | Core API only (`specbleach_denoiser.h`) |
-| Stereo/surround, engine switching, "what the plugin does" | [`stereo_denoiser_demo.c`](stereo_denoiser_demo.c) | Extras layer (`specbleach_stereo.h`, `specbleach_profile_migration.h`) |
+| Stereo/surround, engine switching, "what the plugin does" | [`stereo_denoiser_demo.c`](stereo_denoiser_demo.c) | Extras layer (`specbleach_stereo.h`, `specbleach_delay_line.h`, `specbleach_profile_migration.h`) |
 | Real-time application with GUI-driven learn/switch | `stereo_denoiser_demo.c` **plus** the [Noise Repellent plugin source](https://github.com/lucianodato/noise-repellent/blob/master/Source/PluginProcessor.cpp) | Extras + threading patterns |
 
 Both demos process audio files via libsndfile so they are runnable and
@@ -109,6 +109,18 @@ single-engine CPU in steady state.
 
 In both recipes run profile migration (`specbleach_stereo_migrate_profiles_from`)
 before the target renders, or it starts deaf.
+
+For Recipe A's alignment stage there is a ready-made building block:
+`extras/specbleach_delay_line.h` is a policy-free multi-channel single-tap
+delay line (real-time safe process, any block interleaving). Size it to
+the latency difference, park the shorter-latency family in it, report
+max(latency) once, and crossfade.
+
+C++ integrators: `extras/specbleach.hpp` provides header-only RAII
+ownership for every handle type (`make_denoiser`, `make_stereo_group`,
+`make_delay_line`, ...). It wraps lifetime management only and has no
+framework dependencies, so it suits JUCE, raw VST3/CLAP/LV2, DAW
+codebases, and standalone apps alike.
 
 ## Pitfalls these examples exist to prevent
 

@@ -14,6 +14,14 @@ if(NOT SPECBLEACH_HEADER_VERSION VERSION_EQUAL PROJECT_VERSION)
         "CMake project() is ${PROJECT_VERSION}; keep them in sync.")
 endif()
 
+# Optional C++ support (used only by the header-wrapper smoke test; the
+# library itself is pure C and builds without a C++ compiler).
+include(CheckLanguage)
+check_language(CXX)
+if(CMAKE_CXX_COMPILER)
+    enable_language(CXX)
+endif()
+
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
@@ -311,6 +319,18 @@ if(ENABLE_TESTS)
         add_specbleach_test(test_profile_migration "test_profile_migration.c")
         add_specbleach_test(test_specbleach_delay_line "test_specbleach_delay_line.c")
         target_link_libraries(test_specbleach_delay_line PRIVATE libspecbleach_extras)
+        if(CMAKE_CXX_COMPILER)
+            add_executable(test_specbleach_cpp_smoke
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_specbleach_cpp_smoke.cpp")
+            target_include_directories(test_specbleach_cpp_smoke PRIVATE
+                ${CMAKE_CURRENT_SOURCE_DIR}/extras/include
+                ${CMAKE_CURRENT_SOURCE_DIR}/include
+            )
+            target_link_libraries(test_specbleach_cpp_smoke PRIVATE
+                libspecbleach_extras)
+            add_test(NAME test_specbleach_cpp_smoke
+                     COMMAND test_specbleach_cpp_smoke)
+        endif()
         target_link_libraries(test_profile_migration PRIVATE libspecbleach_extras)
     endif()
 endif()
