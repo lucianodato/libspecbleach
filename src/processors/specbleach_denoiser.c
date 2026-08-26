@@ -30,14 +30,16 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdlib.h>
 #include <string.h>
 
-typedef struct SbSpectralDenoiser {
+typedef struct specbleach_denoiser { // NOLINT(readability-identifier-naming)
   uint32_t hop;
   SbProcessorCore* core;
   SpectralProcessorHandle spectral_denoiser;
+  float* reduction_curve_copy;
+  uint32_t reduction_curve_capacity;
 } SbSpectralDenoiser;
 
-SpectralBleachHandle specbleach_initialize(const uint32_t sample_rate,
-                                           float frame_size) {
+specbleach_denoiser* specbleach_denoiser_initialize(const uint32_t sample_rate,
+                                                    float frame_size) {
   SbSpectralDenoiser* self =
       (SbSpectralDenoiser*)calloc(1U, sizeof(SbSpectralDenoiser));
   if (!self) {
@@ -49,7 +51,7 @@ SpectralBleachHandle specbleach_initialize(const uint32_t sample_rate,
       ZEROPADDING_AMOUNT_1D, INPUT_WINDOW_TYPE_1D, OUTPUT_WINDOW_TYPE_1D, 0);
 
   if (!self->core) {
-    specbleach_free(self);
+    specbleach_denoiser_free(self);
     return NULL;
   }
 
@@ -61,15 +63,15 @@ SpectralBleachHandle specbleach_initialize(const uint32_t sample_rate,
       self->core->noise_profile);
 
   if (!self->spectral_denoiser) {
-    specbleach_free(self);
+    specbleach_denoiser_free(self);
     return NULL;
   }
 
   return self;
 }
 
-void specbleach_free(SpectralBleachHandle instance) {
-  SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
+void specbleach_denoiser_free(specbleach_denoiser* instance) {
+  SbSpectralDenoiser* self = instance;
 
   if (!self) {
     return;
@@ -81,12 +83,15 @@ void specbleach_free(SpectralBleachHandle instance) {
   if (self->core) {
     sb_processor_core_free(self->core);
   }
+  if (self->reduction_curve_copy) {
+    free(self->reduction_curve_copy);
+  }
 
   free(self);
 }
 
-uint32_t specbleach_get_latency(SpectralBleachHandle instance) {
-  SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
+uint32_t specbleach_denoiser_get_latency(specbleach_denoiser* instance) {
+  SbSpectralDenoiser* self = instance;
 
   if (!self || !self->core || !self->core->stft_processor) {
     return 0;
@@ -100,14 +105,14 @@ uint32_t specbleach_get_latency(SpectralBleachHandle instance) {
   return stft_latency + denoiser_latency_samples;
 }
 
-bool specbleach_process(SpectralBleachHandle instance,
-                        const uint32_t number_of_samples, const float* input,
-                        float* output) {
+bool specbleach_denoiser_process(specbleach_denoiser* instance,
+                                 const uint32_t number_of_samples,
+                                 const float* input, float* output) {
   if (!instance || number_of_samples == 0 || !input || !output) {
     return false;
   }
 
-  SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
+  SbSpectralDenoiser* self = instance;
 
   stft_processor_run(self->core->stft_processor, number_of_samples, input,
                      output, &spectral_denoiser_run, self->spectral_denoiser);
@@ -115,25 +120,24 @@ bool specbleach_process(SpectralBleachHandle instance,
   return true;
 }
 
-uint32_t specbleach_get_noise_profile_size(SpectralBleachHandle instance) {
-  SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
+uint32_t specbleach_denoiser_get_noise_profile_size(
+    specbleach_denoiser* instance) {
+  SbSpectralDenoiser* self = instance;
   return self ? sb_processor_core_get_noise_profile_size(self->core) : 0;
 }
 
-bool specbleach_load_noise_profile_for_mode(SpectralBleachHandle instance,
-                                            const float* restored_profile,
-                                            const uint32_t profile_size,
-                                            const uint32_t block_count,
-                                            const int mode) {
-  SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
+bool specbleach_denoiser_load_noise_profile_for_mode(
+    specbleach_denoiser* instance, const float* restored_profile,
+    const uint32_t profile_size, const uint32_t block_count, const int mode) {
+  SbSpectralDenoiser* self = instance;
   return self ? sb_processor_core_load_noise_profile_for_mode(
                     self->core, restored_profile, profile_size, block_count,
                     mode)
               : false;
 }
 
-bool specbleach_reset_noise_profile(SpectralBleachHandle instance) {
-  SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
+bool specbleach_denoiser_reset_noise_profile(specbleach_denoiser* instance) {
+  SbSpectralDenoiser* self = instance;
   if (!self) {
     return false;
   }
@@ -143,64 +147,81 @@ bool specbleach_reset_noise_profile(SpectralBleachHandle instance) {
   return sb_processor_core_reset_noise_profile(self->core);
 }
 
-uint32_t specbleach_get_noise_profile_block_count_for_mode(
-    SpectralBleachHandle instance, int mode) {
-  SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
+uint32_t specbleach_denoiser_get_noise_profile_block_count_for_mode(
+    specbleach_denoiser* instance, int mode) {
+  SbSpectralDenoiser* self = instance;
   return self ? sb_processor_core_get_noise_profile_block_count_for_mode(
                     self->core, mode)
               : 0;
 }
 
-float* specbleach_get_noise_profile_for_mode(SpectralBleachHandle instance,
-                                             int mode) {
-  SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
+float* specbleach_denoiser_get_noise_profile_for_mode(
+    specbleach_denoiser* instance, int mode) {
+  SbSpectralDenoiser* self = instance;
   return self ? sb_processor_core_get_noise_profile_for_mode(self->core, mode)
               : NULL;
 }
 
-bool specbleach_noise_profile_available_for_mode(SpectralBleachHandle instance,
-                                                 int mode) {
-  SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
+bool specbleach_denoiser_noise_profile_available_for_mode(
+    specbleach_denoiser* instance, int mode) {
+  SbSpectralDenoiser* self = instance;
   return self ? sb_processor_core_noise_profile_available_for_mode(self->core,
                                                                    mode)
               : false;
 }
 
-bool specbleach_load_parameters(SpectralBleachHandle instance,
-                                SpectralBleachDenoiserParameters parameters) {
-  if (!instance) {
+bool specbleach_denoiser_load_parameters(
+    specbleach_denoiser* instance,
+    const SpecbleachDenoiserParameters* parameters,
+    const uint32_t parameters_size) {
+  if (!instance || !parameters ||
+      parameters_size != sizeof(SpecbleachDenoiserParameters)) {
     return false;
   }
 
-  SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
+  SbSpectralDenoiser* self = instance;
+
+  const uint32_t profile_size =
+      sb_processor_core_get_noise_profile_size(self->core);
+  if (parameters->reduction_curve_enabled &&
+      parameters->reduction_curve_size != profile_size) {
+    return false;
+  }
+
+  const float* owned_bias = sb_curve_bias_copy(
+      &self->reduction_curve_copy, &self->reduction_curve_capacity,
+      profile_size, parameters->reduction_curve_enabled,
+      parameters->reduction_curve_bias);
+  if (parameters->reduction_curve_enabled && !owned_bias) {
+    return false;
+  }
+
   DenoiserParameters denoise_parameters =
       sb_denoiser_params_sanitize(parameters);
+  denoise_parameters.reduction_curve_bias = owned_bias;
 
-  load_reduction_parameters(self->spectral_denoiser, denoise_parameters);
-
-  return true;
+  return load_reduction_parameters(self->spectral_denoiser, denoise_parameters);
 }
 
-const float* specbleach_get_tonal_mask(SpectralBleachHandle instance) {
-  SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
+const float* specbleach_denoiser_get_tonal_mask(specbleach_denoiser* instance) {
+  SbSpectralDenoiser* self = instance;
   return self ? spectral_denoiser_get_tonal_mask(self->spectral_denoiser)
               : NULL;
 }
 
-uint32_t specbleach_get_tonal_peaks(SpectralBleachHandle instance,
-                                    float* peak_freqs_hz, uint32_t max_peaks) {
-  SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
+uint32_t specbleach_denoiser_get_tonal_peaks(specbleach_denoiser* instance,
+                                             float* peak_freqs_hz,
+                                             uint32_t max_peaks) {
+  SbSpectralDenoiser* self = instance;
   return self ? spectral_denoiser_get_peaks(self->spectral_denoiser,
                                             peak_freqs_hz, max_peaks)
               : 0;
 }
 
-uint32_t specbleach_get_tonal_peaks_for_profile(SpectralBleachHandle instance,
-                                                const float* profile,
-                                                uint32_t profile_size,
-                                                float* peak_freqs_hz,
-                                                uint32_t max_peaks) {
-  SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
+uint32_t specbleach_denoiser_get_tonal_peaks_for_profile(
+    specbleach_denoiser* instance, const float* profile, uint32_t profile_size,
+    float* peak_freqs_hz, uint32_t max_peaks) {
+  SbSpectralDenoiser* self = instance;
   if (!self || !self->core || !profile || profile_size == 0 ||
       profile_size != sb_processor_core_get_noise_profile_size(self->core)) {
     return 0;
@@ -216,22 +237,23 @@ uint32_t specbleach_get_tonal_peaks_for_profile(SpectralBleachHandle instance,
       peak_freqs_hz, max_peaks);
 }
 
-const float* specbleach_get_active_noise_profile(
-    SpectralBleachHandle instance) {
-  SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
+const float* specbleach_denoiser_get_active_noise_profile(
+    specbleach_denoiser* instance) {
+  SbSpectralDenoiser* self = instance;
   return self ? spectral_denoiser_get_active_noise_profile(
                     self->spectral_denoiser)
               : NULL;
 }
 
-bool specbleach_is_transient_detected(SpectralBleachHandle instance) {
-  SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
+bool specbleach_denoiser_is_transient_detected(specbleach_denoiser* instance) {
+  SbSpectralDenoiser* self = instance;
   return self ? spectral_denoiser_is_transient_detected(self->spectral_denoiser)
               : false;
 }
 
-float specbleach_get_transient_intensity(SpectralBleachHandle instance) {
-  SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
+float specbleach_denoiser_get_transient_intensity(
+    specbleach_denoiser* instance) {
+  SbSpectralDenoiser* self = instance;
   return self ? spectral_denoiser_get_transient_intensity(
                     self->spectral_denoiser)
               : 0.0f;

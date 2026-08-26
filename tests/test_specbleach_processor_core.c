@@ -164,26 +164,26 @@ void test_processor_core_noise_profile_accessors(void) {
 void test_params_sanitize_functions(void) {
   printf("Testing params sanitize functions...\n");
 
-  SpectralBleachDenoiserParameters p1 = {
-      .learn_noise = true,
+  SpecbleachDenoiserParameters p1 = {
+      .learn_noise = SPECBLEACH_LEARN_ALL,
       .residual_listen = false,
       .reduction_gain = 0.25f,
       .smoothing_factor = 0.5f,
       .whitening_factor = 1.0f,
       .adaptive_noise = false,
-      .noise_estimation_method = 1,
+      .noise_estimation_method = SPECBLEACH_NOISE_ESTIMATION_BRANDT,
       .masking_depth = 0.5f,
       .suppression_strength = 0.8f,
       .aggressiveness = 1.0f,
       .tonal_reduction_gain = 0.5f,
-      .hpss_enable = 1,
+      .hpss_enable = true,
       .noise_profile_scale = 1.5849f,
       .tonal_noise_profile_scale = 3.9811f,
       .reduction_curve_bias = NULL,
       .reduction_curve_enabled = false,
   };
 
-  DenoiserParameters sp1 = sb_denoiser_params_sanitize(p1);
+  DenoiserParameters sp1 = sb_denoiser_params_sanitize(&p1);
   TEST_ASSERT(sp1.learn_noise == true, "Sanitize learn_noise");
   TEST_FLOAT_CLOSE(sp1.reduction_amount, 0.25f, 1e-4f);
   TEST_FLOAT_CLOSE(sp1.whitening_factor, 1.0f, 1e-4f);
@@ -193,26 +193,26 @@ void test_params_sanitize_functions(void) {
   TEST_FLOAT_CLOSE(sp1.tonal_noise_profile_offset_linear, 3.9811f, 1e-3f);
   TEST_ASSERT(sp1.reduction_curve_bias == NULL, "Sanitize disabled curve bias");
 
-  SpectralBleach2DDenoiserParameters p2 = {
-      .learn_noise = false,
+  Specbleach2DDenoiserParameters p2 = {
+      .learn_noise = SPECBLEACH_LEARN_OFF,
       .residual_listen = true,
       .reduction_gain = 0.125f,
       .smoothing_factor = 0.3f,
       .whitening_factor = 0.5f,
       .adaptive_noise = true,
-      .noise_estimation_method = 2,
+      .noise_estimation_method = SPECBLEACH_NOISE_ESTIMATION_MARTIN,
       .nlm_masking_protection = 0.8f,
       .suppression_strength = 1.0f,
       .aggressiveness = 2.0f,
       .tonal_reduction_gain = 0.7f,
-      .hpss_enable = 1,
+      .hpss_enable = true,
       .noise_profile_scale = 0.2512f,
       .tonal_noise_profile_scale = 0.631f,
       .reduction_curve_bias = (const float*)0x1234,
       .reduction_curve_enabled = true,
   };
 
-  Denoiser2DParameters sp2 = sb_denoiser_2d_params_sanitize(p2);
+  Denoiser2DParameters sp2 = sb_denoiser_2d_params_sanitize(&p2);
   TEST_ASSERT(sp2.residual_listen == true, "Sanitize 2d residual_listen");
   TEST_FLOAT_CLOSE(sp2.reduction_amount, 0.125f, 1e-4f);
   TEST_FLOAT_CLOSE(sp2.whitening_factor, 0.5f, 1e-4f);
@@ -220,64 +220,132 @@ void test_params_sanitize_functions(void) {
   TEST_ASSERT(sp2.hpss_enable == 1, "Sanitize 2d hpss_enable");
   TEST_FLOAT_CLOSE(sp2.noise_profile_offset_linear, 0.2512f, 1e-3f);
   TEST_FLOAT_CLOSE(sp2.tonal_noise_profile_offset_linear, 0.631f, 1e-3f);
-  TEST_ASSERT(sp2.reduction_curve_bias == (const float*)0x1234,
-              "Sanitize enabled curve bias ptr");
+  TEST_ASSERT(sp2.reduction_curve_bias == NULL,
+              "Sanitize never passes caller curve ptr");
 
   // Bounds clamping checks for linear parameters
-  SpectralBleachDenoiserParameters p_min = p1;
+  SpecbleachDenoiserParameters p_min = p1;
   p_min.reduction_gain = -5.0f;
   p_min.noise_profile_scale = -2.0f;
   p_min.tonal_noise_profile_scale = -2.0f;
-  DenoiserParameters sp_min = sb_denoiser_params_sanitize(p_min);
+  DenoiserParameters sp_min = sb_denoiser_params_sanitize(&p_min);
   TEST_FLOAT_CLOSE(sp_min.reduction_amount, 0.0f, 1e-3f);
   TEST_FLOAT_CLOSE(sp_min.noise_profile_offset_linear, 1.0f, 1e-3f);
   TEST_FLOAT_CLOSE(sp_min.tonal_noise_profile_offset_linear, 1.0f, 1e-3f);
 
-  SpectralBleachDenoiserParameters p_scale_low = p1;
+  SpecbleachDenoiserParameters p_scale_low = p1;
   p_scale_low.noise_profile_scale = 0.001f;
   p_scale_low.tonal_noise_profile_scale = 0.001f;
-  DenoiserParameters sp_scale_low = sb_denoiser_params_sanitize(p_scale_low);
+  DenoiserParameters sp_scale_low = sb_denoiser_params_sanitize(&p_scale_low);
   TEST_FLOAT_CLOSE(sp_scale_low.noise_profile_offset_linear, 0.01f, 1e-3f);
   TEST_FLOAT_CLOSE(sp_scale_low.tonal_noise_profile_offset_linear, 0.01f,
                    1e-3f);
 
-  SpectralBleachDenoiserParameters p_max = p1;
+  SpecbleachDenoiserParameters p_max = p1;
   p_max.reduction_gain = 5.0f;
   p_max.noise_profile_scale = 200.0f;
   p_max.tonal_noise_profile_scale = 200.0f;
-  DenoiserParameters sp_max = sb_denoiser_params_sanitize(p_max);
+  DenoiserParameters sp_max = sb_denoiser_params_sanitize(&p_max);
   TEST_FLOAT_CLOSE(sp_max.reduction_amount, 1.0f, 1e-3f);
   TEST_FLOAT_CLOSE(sp_max.noise_profile_offset_linear, 100.0f, 1e-3f);
   TEST_FLOAT_CLOSE(sp_max.tonal_noise_profile_offset_linear, 100.0f, 1e-3f);
 
-  SpectralBleach2DDenoiserParameters p2_min = p2;
+  Specbleach2DDenoiserParameters p2_min = p2;
   p2_min.reduction_gain = -5.0f;
   p2_min.noise_profile_scale = -2.0f;
   p2_min.tonal_noise_profile_scale = -2.0f;
-  Denoiser2DParameters sp2_min = sb_denoiser_2d_params_sanitize(p2_min);
+  Denoiser2DParameters sp2_min = sb_denoiser_2d_params_sanitize(&p2_min);
   TEST_FLOAT_CLOSE(sp2_min.reduction_amount, 0.0f, 1e-3f);
   TEST_FLOAT_CLOSE(sp2_min.noise_profile_offset_linear, 1.0f, 1e-3f);
   TEST_FLOAT_CLOSE(sp2_min.tonal_noise_profile_offset_linear, 1.0f, 1e-3f);
 
-  SpectralBleach2DDenoiserParameters p2_scale_low = p2;
+  Specbleach2DDenoiserParameters p2_scale_low = p2;
   p2_scale_low.noise_profile_scale = 0.001f;
   p2_scale_low.tonal_noise_profile_scale = 0.001f;
   Denoiser2DParameters sp2_scale_low =
-      sb_denoiser_2d_params_sanitize(p2_scale_low);
+      sb_denoiser_2d_params_sanitize(&p2_scale_low);
   TEST_FLOAT_CLOSE(sp2_scale_low.noise_profile_offset_linear, 0.01f, 1e-3f);
   TEST_FLOAT_CLOSE(sp2_scale_low.tonal_noise_profile_offset_linear, 0.01f,
                    1e-3f);
 
-  SpectralBleach2DDenoiserParameters p2_max = p2;
+  Specbleach2DDenoiserParameters p2_max = p2;
   p2_max.reduction_gain = 5.0f;
   p2_max.noise_profile_scale = 200.0f;
   p2_max.tonal_noise_profile_scale = 200.0f;
-  Denoiser2DParameters sp2_max = sb_denoiser_2d_params_sanitize(p2_max);
+  Denoiser2DParameters sp2_max = sb_denoiser_2d_params_sanitize(&p2_max);
   TEST_FLOAT_CLOSE(sp2_max.reduction_amount, 1.0f, 1e-3f);
   TEST_FLOAT_CLOSE(sp2_max.noise_profile_offset_linear, 100.0f, 1e-3f);
   TEST_FLOAT_CLOSE(sp2_max.tonal_noise_profile_offset_linear, 100.0f, 1e-3f);
 
   printf("✓ Params sanitize functions tests passed\n");
+}
+
+void test_curve_bias_copy(void) {
+  printf("Testing curve bias copy helper...\n");
+
+  float* buffer = NULL;
+  uint32_t capacity = 0;
+
+  // Disabled curve yields NULL and allocates nothing
+  const float source_disabled[3] = {1.0f, 2.0f, 3.0f};
+  TEST_ASSERT(
+      sb_curve_bias_copy(&buffer, &capacity, 3, false, source_disabled) == NULL,
+      "Copy disabled returns NULL");
+  TEST_ASSERT(buffer == NULL, "Copy disabled does not allocate");
+  TEST_ASSERT(capacity == 0, "Copy disabled leaves capacity zero");
+
+  // NULL source yields NULL
+  TEST_ASSERT(sb_curve_bias_copy(&buffer, &capacity, 3, true, NULL) == NULL,
+              "Copy NULL source returns NULL");
+
+  // Zero size yields NULL
+  TEST_ASSERT(
+      sb_curve_bias_copy(&buffer, &capacity, 0, true, source_disabled) == NULL,
+      "Copy zero size returns NULL");
+
+  // Enabled curve copies contents into owned memory
+  float source[4] = {0.5f, -1.5f, 2.25f, 0.0f};
+  const float* copied = sb_curve_bias_copy(&buffer, &capacity, 4, true, source);
+  TEST_ASSERT(copied != NULL, "Copy enabled returns pointer");
+  TEST_ASSERT(copied != source, "Copy returns owned buffer, not source");
+  TEST_ASSERT(capacity == 4, "Capacity tracks required size");
+  for (uint32_t i = 0; i < 4; ++i) {
+    TEST_FLOAT_CLOSE(copied[i], source[i], 1e-6f);
+  }
+
+  // Caller may mutate/free its source afterwards without affecting the copy
+  source[0] = 99.0f;
+  TEST_FLOAT_CLOSE(copied[0], 0.5f, 1e-6f);
+
+  // Same-size reload reuses the buffer (stable pointer, updated contents)
+  const float* previous = buffer;
+  float source_b[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+  const float* recopied =
+      sb_curve_bias_copy(&buffer, &capacity, 4, true, source_b);
+  TEST_ASSERT(recopied == previous, "Reload reuses existing buffer");
+  TEST_FLOAT_CLOSE(recopied[0], 1.0f, 1e-6f);
+
+  // Growth path reallocates and preserves capacity semantics
+  float big_source[8] = {0.0f};
+  const float* grown =
+      sb_curve_bias_copy(&buffer, &capacity, 8, true, big_source);
+  TEST_ASSERT(grown != NULL, "Growth copy succeeds");
+  TEST_ASSERT(capacity == 8, "Capacity grows to required size");
+  TEST_FLOAT_CLOSE(grown[7], 0.0f, 1e-6f);
+
+  // Shrink case reuses allocation and preserves original capacity
+  float small_source[4] = {7.0f, 8.0f, 9.0f, 10.0f};
+  const float* shrunk =
+      sb_curve_bias_copy(&buffer, &capacity, 4, true, small_source);
+  TEST_ASSERT(shrunk != NULL, "Shrink copy returns valid buffer");
+  TEST_ASSERT(capacity == 8, "Capacity preserved on shrink");
+  TEST_ASSERT(shrunk == grown, "Shrink reuses existing buffer");
+  for (uint32_t i = 0; i < 4; ++i) {
+    TEST_FLOAT_CLOSE(shrunk[i], small_source[i], 1e-6f);
+  }
+
+  free(buffer);
+  printf("✓ Curve bias copy tests passed\n");
 }
 
 int main(void) {
@@ -286,6 +354,7 @@ int main(void) {
   test_processor_core_init_and_free();
   test_processor_core_noise_profile_accessors();
   test_params_sanitize_functions();
+  test_curve_bias_copy();
 
   printf("✅ All specbleach processor core tests passed!\n");
   return 0;

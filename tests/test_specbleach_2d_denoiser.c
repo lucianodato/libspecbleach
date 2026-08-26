@@ -61,7 +61,7 @@ void test_null_handling(void) {
               "NULL handle/buffers process should fail");
 
   float buffer[100];
-  SpectralBleachHandle h = specbleach_2d_initialize(SAMPLE_RATE, FRAME_SIZE);
+  specbleach_2d_denoiser* h = specbleach_2d_initialize(SAMPLE_RATE, FRAME_SIZE);
   TEST_ASSERT(specbleach_2d_process(h, 0, buffer, buffer) == false,
               "Zero samples process should fail");
   TEST_ASSERT(specbleach_2d_process(h, 100, NULL, buffer) == false,
@@ -97,17 +97,17 @@ void test_null_handling(void) {
 void test_noise_profile_api(void) {
   printf("Testing Noise Profile API...\n");
 
-  SpectralBleachHandle h = specbleach_2d_initialize(SAMPLE_RATE, FRAME_SIZE);
+  specbleach_2d_denoiser* h = specbleach_2d_initialize(SAMPLE_RATE, FRAME_SIZE);
 
-  SpectralBleach2DDenoiserParameters params = {
-      .learn_noise = 0,
+  Specbleach2DDenoiserParameters params = {
+      .learn_noise = SPECBLEACH_LEARN_OFF,
       .reduction_gain = 0.1f,
       .smoothing_factor = 1.0f,
       .nlm_masking_protection = 0.5f,
       .tonal_reduction_gain = 1.0f,
       .aggressiveness = 0.0f,
   };
-  specbleach_2d_load_parameters(h, params);
+  specbleach_2d_load_parameters(h, &params, sizeof(params));
 
   uint32_t profile_size = specbleach_2d_get_noise_profile_size(h);
   TEST_ASSERT(profile_size > 0, "Profile size should be valid");
@@ -183,39 +183,36 @@ void test_noise_profile_api(void) {
 
 void test_2d_parameter_switching(void) {
   printf("Testing 2D parameter switching and adaptive methods...\n");
-  SpectralBleachHandle h = specbleach_2d_initialize(SAMPLE_RATE, FRAME_SIZE);
+  specbleach_2d_denoiser* h = specbleach_2d_initialize(SAMPLE_RATE, FRAME_SIZE);
 
-  SpectralBleach2DDenoiserParameters params = {
-      .learn_noise = 0,
+  Specbleach2DDenoiserParameters params = {
+      .learn_noise = SPECBLEACH_LEARN_OFF,
       .reduction_gain = 0.1f,
       .smoothing_factor = 1.0f,
-      .adaptive_noise = 1,
-      .noise_estimation_method = 0, // SPP-MMSE
+      .adaptive_noise = true,
+      .noise_estimation_method =
+          SPECBLEACH_NOISE_ESTIMATION_SPP_MMSE, // SPP-MMSE
       .nlm_masking_protection = 0.5f,
       .tonal_reduction_gain = 1.0f,
       .aggressiveness = 0.0f,
   };
 
   // 1. Load SPP-MMSE adaptive
-  TEST_ASSERT(specbleach_2d_load_parameters(h, params),
+  TEST_ASSERT(specbleach_2d_load_parameters(h, &params, sizeof(params)),
               "Load SPP-MMSE adaptive should succeed");
 
   // 2. Switch to Brandt (Trimmed Mean) adaptive
-  params.noise_estimation_method = 1;
-  TEST_ASSERT(specbleach_2d_load_parameters(h, params),
+  params.noise_estimation_method = SPECBLEACH_NOISE_ESTIMATION_BRANDT;
+  TEST_ASSERT(specbleach_2d_load_parameters(h, &params, sizeof(params)),
               "Switch to Brandt (Trimmed Mean) should succeed");
 
   // 3. Switch adaptive off
-  params.adaptive_noise = 0;
-  TEST_ASSERT(specbleach_2d_load_parameters(h, params),
+  params.adaptive_noise = false;
+  TEST_ASSERT(specbleach_2d_load_parameters(h, &params, sizeof(params)),
               "Switch adaptive off should succeed");
 
-  // 4. Test different reduction modes
-  for (int mode = 2; mode <= 3; mode++) {
-    // No longer noise_reduction_mode
-    TEST_ASSERT(specbleach_2d_load_parameters(h, params),
-                "Switch reduction mode should succeed");
-  }
+  TEST_ASSERT(specbleach_2d_load_parameters(h, &params, sizeof(params)),
+              "Switch reduction mode should succeed");
 
   uint32_t profile_size = specbleach_2d_get_noise_profile_size(h);
   float* input = calloc(1024, sizeof(float));
@@ -229,14 +226,14 @@ void test_2d_parameter_switching(void) {
                                             ROLLING_MEAN);
 
   // Run with SPP-MMSE adaptive (method 1)
-  params.adaptive_noise = 1;
-  params.noise_estimation_method = 1;
-  specbleach_2d_load_parameters(h, params);
+  params.adaptive_noise = true;
+  params.noise_estimation_method = SPECBLEACH_NOISE_ESTIMATION_BRANDT;
+  specbleach_2d_load_parameters(h, &params, sizeof(params));
   specbleach_2d_process(h, 1024, input, output);
 
   // Run with Louizou adaptive (method 0)
-  params.noise_estimation_method = 0;
-  specbleach_2d_load_parameters(h, params);
+  params.noise_estimation_method = SPECBLEACH_NOISE_ESTIMATION_SPP_MMSE;
+  specbleach_2d_load_parameters(h, &params, sizeof(params));
   specbleach_2d_process(h, 1024, input, output);
 
   free(input);
@@ -247,28 +244,28 @@ void test_2d_parameter_switching(void) {
 
 void test_process_loop(void) {
   printf("Testing process loop (happy/unhappy paths)...\n");
-  SpectralBleachHandle h = specbleach_2d_initialize(SAMPLE_RATE, FRAME_SIZE);
+  specbleach_2d_denoiser* h = specbleach_2d_initialize(SAMPLE_RATE, FRAME_SIZE);
 
   float input[1024] = {0};
   float output[1024] = {0};
 
   // 1. Process without noise profile (unhappy path for reduction)
-  SpectralBleach2DDenoiserParameters params = {
-      .learn_noise = 0,
+  Specbleach2DDenoiserParameters params = {
+      .learn_noise = SPECBLEACH_LEARN_OFF,
       .reduction_gain = 0.1f,
       .smoothing_factor = 1.0f,
       .tonal_reduction_gain = 1.0f,
       .aggressiveness = 0.0f,
   };
-  specbleach_2d_load_parameters(h, params);
+  specbleach_2d_load_parameters(h, &params, sizeof(params));
 
   // Should succeed (likely silence or passthrough depending on impl)
   TEST_ASSERT(specbleach_2d_process(h, 1024, input, output),
               "Process without profile should succeed safely");
 
   // 2. Process with learn mode
-  params.learn_noise = 1;
-  specbleach_2d_load_parameters(h, params);
+  params.learn_noise = SPECBLEACH_LEARN_ALL;
+  specbleach_2d_load_parameters(h, &params, sizeof(params));
 
   // Process enough samples to fill latency buffers and accumulate profile stats
   // We need at least ~5 frames + latency.
@@ -295,11 +292,11 @@ void test_process_loop(void) {
   // Process with tonal reduction and HPSS
   float in_buf[1024] = {0};
   float out_buf[1024] = {0};
-  params.learn_noise = 0;
+  params.learn_noise = SPECBLEACH_LEARN_OFF;
   params.tonal_reduction_gain = 0.5f;
   params.reduction_gain = 0.1f;
-  params.hpss_enable = 1;
-  specbleach_2d_load_parameters(h, params);
+  params.hpss_enable = true;
+  specbleach_2d_load_parameters(h, &params, sizeof(params));
   specbleach_2d_process(h, 1024, in_buf, out_buf);
   for (int i = 0; i < 1024; ++i) {
     TEST_ASSERT(isfinite(out_buf[i]), "Output samples must be finite");
@@ -314,7 +311,7 @@ void test_process_loop(void) {
   params.residual_listen = 1;
   params.nlm_masking_protection = 0.5f;
   params.suppression_strength = 0.5f;
-  specbleach_2d_load_parameters(h, params);
+  specbleach_2d_load_parameters(h, &params, sizeof(params));
   for (int f = 0; f < 10; ++f) {
     specbleach_2d_process(h, 1024, in_buf, out_buf);
     for (int i = 0; i < 1024; ++i) {
@@ -327,10 +324,13 @@ void test_process_loop(void) {
   for (int i = 0; i < 1024; ++i) {
     transient_buf[i] = (i % 2 == 0) ? 0.9f : -0.9f;
   }
-  float curve_bias[1024] = {0};
+  uint32_t cb_size = specbleach_2d_get_noise_profile_size(h);
+  float* curve_bias = calloc(cb_size, sizeof(float));
   params.reduction_curve_enabled = true;
   params.reduction_curve_bias = curve_bias;
-  specbleach_2d_load_parameters(h, params);
+  params.reduction_curve_size = cb_size;
+  TEST_ASSERT(specbleach_2d_load_parameters(h, &params, sizeof(params)),
+              "Load with curve bias should succeed");
   specbleach_2d_process(h, 1024, transient_buf, out_buf);
   for (int i = 0; i < 1024; ++i) {
     TEST_ASSERT(isfinite(out_buf[i]), "Output samples must be finite");
@@ -340,14 +340,16 @@ void test_process_loop(void) {
   params.residual_listen = 0;
   params.reduction_curve_enabled = false;
   params.reduction_curve_bias = NULL;
+  params.reduction_curve_size = 0;
+  free(curve_bias);
 
-  params.hpss_enable = 0;
-  specbleach_2d_load_parameters(h, params);
+  params.hpss_enable = false;
+  specbleach_2d_load_parameters(h, &params, sizeof(params));
   specbleach_2d_process(h, 1024, in_buf, out_buf);
   uint32_t lat0 = specbleach_2d_get_latency(h);
 
-  params.hpss_enable = 1;
-  specbleach_2d_load_parameters(h, params);
+  params.hpss_enable = true;
+  specbleach_2d_load_parameters(h, &params, sizeof(params));
   specbleach_2d_process(h, 1024, in_buf, out_buf);
   uint32_t lat1 = specbleach_2d_get_latency(h);
   TEST_ASSERT(lat1 == lat0, "Sliding HPSS introduces zero lookahead latency");
@@ -368,10 +370,12 @@ void test_process_loop(void) {
 void test_2d_smoothing_factor_responsiveness(void) {
   printf("Testing 2D smoothing factor responsiveness (0%% vs 100%%)...\n");
 
-  SpectralBleachHandle h0 = specbleach_2d_initialize(SAMPLE_RATE, FRAME_SIZE);
+  specbleach_2d_denoiser* h0 =
+      specbleach_2d_initialize(SAMPLE_RATE, FRAME_SIZE);
   TEST_ASSERT(h0 != NULL, "Initialization of h0 should succeed");
 
-  SpectralBleachHandle h100 = specbleach_2d_initialize(SAMPLE_RATE, FRAME_SIZE);
+  specbleach_2d_denoiser* h100 =
+      specbleach_2d_initialize(SAMPLE_RATE, FRAME_SIZE);
   TEST_ASSERT(h100 != NULL, "Initialization of h100 should succeed");
 
   // Create noisy input signal
@@ -386,21 +390,23 @@ void test_2d_smoothing_factor_responsiveness(void) {
   }
 
   // 1. Learn noise profile for both handles
-  SpectralBleach2DDenoiserParameters params_learn = {
-      .learn_noise = 1,
+  Specbleach2DDenoiserParameters params_learn = {
+      .learn_noise = SPECBLEACH_LEARN_ALL,
       .reduction_gain = 0.1f,
       .smoothing_factor = 0.0f,
   };
 
-  TEST_ASSERT(specbleach_2d_load_parameters(h0, params_learn),
-              "Loading learn params for h0 should succeed");
+  TEST_ASSERT(
+      specbleach_2d_load_parameters(h0, &params_learn, sizeof(params_learn)),
+      "Loading learn params for h0 should succeed");
   TEST_ASSERT(specbleach_2d_process(h0, n_samples, noise_input, temp_out),
               "Processing learn mode for h0 should succeed");
   TEST_ASSERT(specbleach_2d_noise_profile_available_for_mode(h0, ROLLING_MEAN),
               "Profile for h0 should be available after learning");
 
-  TEST_ASSERT(specbleach_2d_load_parameters(h100, params_learn),
-              "Loading learn params for h100 should succeed");
+  TEST_ASSERT(
+      specbleach_2d_load_parameters(h100, &params_learn, sizeof(params_learn)),
+      "Loading learn params for h100 should succeed");
   TEST_ASSERT(specbleach_2d_process(h100, n_samples, noise_input, temp_out),
               "Processing learn mode for h100 should succeed");
   TEST_ASSERT(
@@ -408,24 +414,25 @@ void test_2d_smoothing_factor_responsiveness(void) {
       "Profile for h100 should be available after learning");
 
   // 2. Process with 0% smoothing on h0
-  SpectralBleach2DDenoiserParameters params_0 = {
-      .learn_noise = 0,
+  Specbleach2DDenoiserParameters params_0 = {
+      .learn_noise = SPECBLEACH_LEARN_OFF,
       .reduction_gain = 0.1f,
       .smoothing_factor = 0.0f,
   };
-  TEST_ASSERT(specbleach_2d_load_parameters(h0, params_0),
+  TEST_ASSERT(specbleach_2d_load_parameters(h0, &params_0, sizeof(params_0)),
               "Loading 0% smoothing params for h0 should succeed");
   TEST_ASSERT(specbleach_2d_process(h0, n_samples, noise_input, out_smooth_0),
               "Processing 0% smoothing for h0 should succeed");
 
   // 3. Process with 100% smoothing on h100
-  SpectralBleach2DDenoiserParameters params_100 = {
-      .learn_noise = 0,
+  Specbleach2DDenoiserParameters params_100 = {
+      .learn_noise = SPECBLEACH_LEARN_OFF,
       .reduction_gain = 0.1f,
       .smoothing_factor = 1.0f,
   };
-  TEST_ASSERT(specbleach_2d_load_parameters(h100, params_100),
-              "Loading 100% smoothing params for h100 should succeed");
+  TEST_ASSERT(
+      specbleach_2d_load_parameters(h100, &params_100, sizeof(params_100)),
+      "Loading 100% smoothing params for h100 should succeed");
   TEST_ASSERT(
       specbleach_2d_process(h100, n_samples, noise_input, out_smooth_100),
       "Processing 100% smoothing for h100 should succeed");
