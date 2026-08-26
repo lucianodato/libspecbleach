@@ -25,6 +25,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "specbleach_version.h"
 
+static const char s_specbleach_version_banner[] =
+    "libspecbleach " SPECBLEACH_VERSION_STRING;
+
 const char* specbleach_get_version_string(void) {
-  return SPECBLEACH_VERSION_STRING;
+  return s_specbleach_version_banner;
 }
