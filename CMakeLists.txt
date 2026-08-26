@@ -126,6 +126,7 @@ if(BUILD_SHARED_LIBS)
 else()
     target_compile_definitions(libspecbleach PUBLIC SPECBLEACH_STATIC)
 endif()
+target_compile_definitions(libspecbleach PRIVATE PFFFT_STATIC_DEFINE)
 
 target_include_directories(libspecbleach PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -150,7 +151,7 @@ target_link_libraries(libspecbleach PRIVATE Threads::Threads)
 # AVX SIMD Target
 if(ENABLE_AVX)
     set(AVX_C_FILE "${CMAKE_CURRENT_SOURCE_DIR}/src/shared/denoiser_logic/processing/nlm_filter_avx.c")
-    if(EXISTS "${AVX_C_FILE}" AND CMAKE_SYSTEM_PROCESSOR MATCHES "(x86_64|amd64|AMD64|x86-64)")
+    if(EXISTS "${AVX_C_FILE}" AND (CMAKE_SYSTEM_PROCESSOR MATCHES "(x86_64|amd64|AMD64|x86-64)" OR "x86_64" IN_LIST CMAKE_OSX_ARCHITECTURES))
         add_library(specbleach_avx STATIC "${AVX_C_FILE}")
         if(MSVC)
             target_compile_options(specbleach_avx PRIVATE /arch:AVX)
@@ -243,6 +244,8 @@ if(ENABLE_TESTS)
         )
         target_compile_definitions(specbleach_test_internal PUBLIC
             SPECBLEACH_STATIC)
+        target_compile_definitions(specbleach_test_internal PRIVATE
+            PFFFT_STATIC_DEFINE)
         target_include_directories(specbleach_test_internal PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/src
             ${CMAKE_CURRENT_SOURCE_DIR}/include
