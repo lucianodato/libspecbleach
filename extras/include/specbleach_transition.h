@@ -31,25 +31,39 @@ extern "C" {
 #include "specbleach_export.h"
 
 /**
- * Click-free switching between two already-configured engine groups.
+ * Equal-power crossfade between two already-configured engine groups.
  *
  * This module belongs to the optional extras layer. It is engine-agnostic:
  * it knows nothing about denoisers or parameters, it only blends two
  * streams of audio. The caller renders BOTH engines' wet outputs itself
- * and feeds them here.
+ * and feeds them here every block during a transition.
  *
  * Behavior:
- * - Fades are equal-power (sin/cos) over SPECBLEACH_TRANSITION_FADE_TIME_MS.
- * - Whichever engine has the SHORTER latency is blended through an
- *   alignment tap (delayed by the latency difference) so both blend sides
- *   share the longer time origin: the emitted timeline never jumps in
- *   either direction.
- * - After landing on the shorter-latency engine, a slew phase slides the
- *   alignment delay back out by crossfading between the delayed and direct
- *   copies of the same signal, over at least the tap length.
+ * - Fades are equal-power (sin/cos) over SPECBLEACH_TRANSITION_FADE_TIME_MS,
+ *   so loudness stays constant mid-fade (a linear fade would dip -3 dB).
+ * - If the two engines report different latencies, whichever side has the
+ *   SHORTER latency is read through an internal alignment tap so both blend
+ *   sides share one time origin, and a slew phase slides the tap back out
+ *   after landing on the shorter engine.
  * - Callers must update host delay compensation when they call begin():
  *   specbleach_transition_get_latency() reports the target latency from
  *   that moment on.
+ *
+ * KNOWN LIMITATION — latency-mismatched engines in hosted plugins:
+ * changing the reported latency mid-stream forces the host to re-anchor its
+ * delay compensation, and that host-side event cannot be softened from
+ * inside the plugin. Empirically (DAWs such as REAPER/Ardour/Bitwig) the
+ * result is audible skips or gaps regardless of how clean the internal
+ * blend is. If your engines have different algorithmic latencies and you
+ * need seamless switching, do what Noise Repellent does: run the
+ * shorter-latency family through a permanent delay ring so both families
+ * share one time origin, report max(latency) constantly, and use plain
+ * weighted blending between the aligned streams. This module then reduces
+ * to that final blend step, which it performs correctly.
+ *
+ * Best suited to: engines with EQUAL latency, non-hosted processing
+ * (offline files, custom players without PDC), or as the blend stage of a
+ * structurally aligned pipeline.
  */
 
 /**

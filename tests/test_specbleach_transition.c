@@ -206,10 +206,61 @@ static void test_lower_latency_slew(void) {
   printf("✓ Lower-latency fade/slew tests passed\n");
 }
 
+/*
+ * Equal-latency engines still get an audible fade: two different engines
+ * at the same latency sound different, and softening THAT is the point.
+ */
+static void test_equal_latency_fades(void) {
+  printf("Testing equal-latency timbral fade...\n");
+
+  specbleach_transition* t = specbleach_transition_initialize(
+      SAMPLE_RATE, MAX_BLOCK, CHANNELS, MAX_DELAY);
+
+  float source[CHANNELS][BLOCK_SIZE];
+  float target[CHANNELS][BLOCK_SIZE];
+  float blended[CHANNELS][BLOCK_SIZE];
+  const float* from_ptrs[CHANNELS] = {source[0], source[1]};
+  const float* to_ptrs[CHANNELS] = {target[0], target[1]};
+  float* blended_ptrs[CHANNELS] = {blended[0], blended[1]};
+
+  for (uint32_t s = 0; s < BLOCK_SIZE; ++s) {
+    source[0][s] = source[1][s] = 1.0f;
+    target[0][s] = target[1][s] = -1.0f;
+  }
+
+  TEST_ASSERT(specbleach_transition_begin(t, 1024, 1024), "begin accepted");
+  TEST_ASSERT(specbleach_transition_active(t),
+              "equal-latency begin still fades");
+
+  /* First sample is pure source (equal-power start). */
+  TEST_ASSERT(
+      specbleach_transition_process(t, 1, from_ptrs, to_ptrs, blended_ptrs),
+      "single sample processed");
+  TEST_ASSERT(blended[0][0] == 1.0f, "fade starts at source level");
+
+  uint32_t guard = 0;
+  while (specbleach_transition_active(t)) {
+    TEST_ASSERT(specbleach_transition_process(t, BLOCK_SIZE, from_ptrs, to_ptrs,
+                                              blended_ptrs),
+                "fade block processed");
+    if (++guard > 100U) {
+      TEST_ASSERT(0, "fade did not finish");
+    }
+  }
+  TEST_ASSERT(fabsf(blended[0][BLOCK_SIZE - 1] - (-1.0f)) < 1e-4f,
+              "converged to target engine");
+  TEST_ASSERT(specbleach_transition_get_latency(t) == 1024,
+              "latency reports target");
+
+  specbleach_transition_free(t);
+  printf("✓ Equal-latency fade tests passed\n");
+}
+
 int main(void) {
   test_init_and_validation();
   test_higher_latency_alignment();
   test_lower_latency_slew();
+  test_equal_latency_fades();
 
   printf("✅ All specbleach transition tests passed!\n");
   return 0;

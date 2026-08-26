@@ -149,8 +149,9 @@ bool specbleach_transition_begin(specbleach_transition* instance,
   self->slew_step = slew_samples >= 1.0f ? 1.0f / slew_samples : 1.0f;
   self->fade_progress = 0.0f;
   self->slew_progress = 0.0f;
-  self->phase =
-      latency_to != latency_from ? TRANSITION_FADING : TRANSITION_IDLE;
+  /* Equal latencies still fade: two different engines at the same latency
+   * sound different, and that difference is what the fade softens. */
+  self->phase = TRANSITION_FADING;
   return true;
 }
 

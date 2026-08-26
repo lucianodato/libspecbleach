@@ -72,6 +72,13 @@ target_link_libraries(myapp PRIVATE libspecbleach::extras)
 
 ## Pitfalls these examples exist to prevent
 
+- **Switching engines with different algorithmic latencies**: no amount of
+  in-plugin blending hides the moment the host re-anchors delay
+  compensation. The proven pattern is structural: run the shorter-latency
+  family through a permanent delay ring, report max(latency) constantly,
+  and blend aligned streams. See the KNOWN LIMITATION note in
+  `extras/include/specbleach_transition.h`.
+
 1. **Profiles are not ready until learning turns OFF.** Capture modes are
    finalized on the learn → off transition, not while learning. Both demos
    reload parameters with `SPECBLEACH_LEARN_OFF` before reducing.
