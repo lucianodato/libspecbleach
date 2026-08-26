@@ -8,7 +8,7 @@ Checks: 'clang-diagnostic-*,clang-analyzer-*,bugprone-*,performance-*,portabilit
   -readability-identifier-length,
   -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling'
 WarningsAsErrors: '*'
-HeaderFilterRegex: 'src/.*|include/.*'
+HeaderFilterRegex: '^(src|include)/.*'
 FormatStyle: none
 CheckOptions:
   - key:             readability-identifier-naming.ClassCase

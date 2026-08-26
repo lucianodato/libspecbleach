@@ -286,9 +286,9 @@ bool compute_forward_fft(FftTransform* self) {
   self->output_fft_buffer[n2] = self->pffft_canonical_buffer[1];
 
   for (uint32_t k = 1U; k < n2; k++) {
-    self->output_fft_buffer[k] = self->pffft_canonical_buffer[2U * k];
+    self->output_fft_buffer[k] = self->pffft_canonical_buffer[(size_t)2U * k];
     self->output_fft_buffer[n - k] =
-        self->pffft_canonical_buffer[(2U * k) + 1U];
+        self->pffft_canonical_buffer[((size_t)2U * k) + 1U];
   }
 
   return true;
@@ -307,8 +307,8 @@ bool compute_backward_fft(FftTransform* self) {
   self->pffft_canonical_buffer[1] = self->output_fft_buffer[n2];
 
   for (uint32_t k = 1U; k < n2; k++) {
-    self->pffft_canonical_buffer[2U * k] = self->output_fft_buffer[k];
-    self->pffft_canonical_buffer[(2U * k) + 1U] =
+    self->pffft_canonical_buffer[(size_t)2U * k] = self->output_fft_buffer[k];
+    self->pffft_canonical_buffer[((size_t)2U * k) + 1U] =
         self->output_fft_buffer[n - k];
   }
 
@@ -321,9 +321,15 @@ bool compute_backward_fft(FftTransform* self) {
 }
 
 float* get_fft_input_buffer(FftTransform* self) {
+  if (!self) {
+    return NULL;
+  }
   return self->input_fft_buffer;
 }
 
 float* get_fft_output_buffer(FftTransform* self) {
+  if (!self) {
+    return NULL;
+  }
   return self->output_fft_buffer;
 }

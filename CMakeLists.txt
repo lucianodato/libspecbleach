@@ -134,6 +134,9 @@ target_include_directories(libspecbleach PUBLIC
 
 target_include_directories(libspecbleach PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
+target_include_directories(libspecbleach SYSTEM PRIVATE
     ${PFFFT_INCLUDE_DIRS}
 )
 
@@ -243,6 +246,8 @@ if(ENABLE_TESTS)
         target_include_directories(specbleach_test_internal PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/src
             ${CMAKE_CURRENT_SOURCE_DIR}/include
+        )
+        target_include_directories(specbleach_test_internal SYSTEM PRIVATE
             ${PFFFT_INCLUDE_DIRS}
         )
         target_link_libraries(specbleach_test_internal PRIVATE
