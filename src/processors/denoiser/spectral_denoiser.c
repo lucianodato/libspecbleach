@@ -351,6 +351,18 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
   };
   denoiser_profile_core_update(profile_params, reference_spectrum);
 
+  // Idle bypass: no manual profile and not adaptive → no reduction to apply.
+  // The full denoise chain (tonal detect fallback, masking, etc.) is wasteful
+  // and was the culprit for idle > learning CPU. Early-out leaves FFT
+  // spectrum untouched (gain=1) and avoids ~1200×15 sorts in tonal fallback.
+  if (!self->denoise_parameters.adaptive_noise &&
+      !is_noise_estimation_available(self->noise_profile, ROLLING_MEAN) &&
+      !is_noise_estimation_available(self->noise_profile, MEDIAN) &&
+      !is_noise_estimation_available(self->noise_profile, STD_DEV) &&
+      !is_noise_estimation_available(self->noise_profile, CV_MASK)) {
+    return true;
+  }
+
   // 2.1 Transient Detection via Transient Detector across Critical Bands
   // Transient detection runs on a clean signal estimate with scaled-up noise
   // subtraction to avoid false triggering from residual musical noise.

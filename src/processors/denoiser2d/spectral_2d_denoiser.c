@@ -410,6 +410,16 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
   };
   denoiser_profile_core_update(profile_params, reference_spectrum);
 
+  // Idle bypass: same as 1D — no manual profile and not adaptive → skip NLM
+  // and the tonal fallback (1200×15 sorts) that made idle > denoising.
+  if (!self->parameters.adaptive_noise &&
+      !is_noise_estimation_available(self->noise_profile, ROLLING_MEAN) &&
+      !is_noise_estimation_available(self->noise_profile, MEDIAN) &&
+      !is_noise_estimation_available(self->noise_profile, STD_DEV) &&
+      !is_noise_estimation_available(self->noise_profile, CV_MASK)) {
+    return true;
+  }
+
   // 2.1 Transient Detection via Transient Detector across Critical Bands
   // Transient detection runs on a clean signal estimate with scaled-up noise
   // subtraction to avoid false triggering from residual musical noise.
