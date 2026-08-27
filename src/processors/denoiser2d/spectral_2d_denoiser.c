@@ -356,7 +356,6 @@ bool load_2d_reduction_parameters(SpectralProcessorHandle instance,
   }
 
   self->parameters = parameters;
-  self->aggressiveness = parameters.aggressiveness;
 
   // Update NLM h parameter based on smoothing factor
   if (self->nlm_filter) {
