@@ -410,6 +410,34 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
   };
   denoiser_profile_core_update(profile_params, reference_spectrum);
 
+  // Idle bypass: same as 1D — no manual profile and not adaptive → skip NLM
+  // and the tonal fallback (1200×15 sorts) that made idle > denoising.
+  if (!self->parameters.adaptive_noise &&
+      !is_noise_estimation_available(self->noise_profile, ROLLING_MEAN) &&
+      !is_noise_estimation_available(self->noise_profile, MEDIAN) &&
+      !is_noise_estimation_available(self->noise_profile, STD_DEV) &&
+      !is_noise_estimation_available(self->noise_profile, CV_MASK)) {
+    // Preserve NLM latency and buffer state: push current frame, output the
+    // frame delayed by NLM_SEARCH_RANGE_TIME_FUTURE, and advance the
+    // circular buffer so idle→active transitions stay aligned.
+    spectral_circular_buffer_push(self->circular_buffer, self->layer_fft,
+                                  fft_spectrum);
+    spectral_circular_buffer_push(self->circular_buffer, self->layer_noise,
+                                  self->noise_spectrum);
+    spectral_circular_buffer_push(self->circular_buffer,
+                                  self->layer_nlm_smoothed, reference_spectrum);
+    nlm_filter_calculate_snr(self->nlm_filter, reference_spectrum,
+                             self->noise_spectrum, self->snr_frame);
+    nlm_filter_push_frame(self->nlm_filter, self->snr_frame);
+    const float* delayed_spectrum = spectral_circular_buffer_retrieve(
+        self->circular_buffer, self->layer_fft, NLM_SEARCH_RANGE_TIME_FUTURE);
+    if (delayed_spectrum) {
+      memcpy(fft_spectrum, delayed_spectrum, self->fft_size * sizeof(float));
+    }
+    spectral_circular_buffer_advance(self->circular_buffer);
+    return true;
+  }
+
   // 2.1 Transient Detection via Transient Detector across Critical Bands
   // Transient detection runs on a clean signal estimate with scaled-up noise
   // subtraction to avoid false triggering from residual musical noise.

@@ -108,19 +108,41 @@ void tonal_reducer_run(TonalReducer* self, const float* noise_spectrum,
     atomic_store_explicit(&self->active_mask_idx, write_idx,
                           memory_order_release);
   } else {
-    // Standalone Adaptive: Fallback to detect_tonal_components on
-    // noise_spectrum
-    detect_tonal_components(noise_spectrum, noise_spectrum,
-                            self->real_spectrum_size, self->sample_rate,
-                            self->fft_size, self->tonal_mask,
-                            self->deque_workspace);
-    int published_idx =
-        atomic_load_explicit(&self->active_mask_idx, memory_order_relaxed);
-    int write_idx = 1 - published_idx;
-    memcpy(self->tonal_mask_buffers[write_idx], self->tonal_mask,
-           self->real_spectrum_size * sizeof(float));
-    atomic_store_explicit(&self->active_mask_idx, write_idx,
-                          memory_order_release);
+    // Idle (no profile, noise ~0) is the common steady state before learn:
+    // detect_tonal_components does 1200×15 insertion sorts per frame and
+    // dominates CPU while producing an all-zero mask. Early-out when noise is
+    // negligible; adaptive case has non-zero noise and will not take this path.
+    float max_val = 0.0f;
+    for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
+      if (noise_spectrum[k] > max_val) {
+        max_val = noise_spectrum[k];
+      }
+      if (max_val > TONAL_REDUCER_NEGLIGIBLE_NOISE_THRESHOLD) {
+        break;
+      }
+    }
+    if (max_val <= TONAL_REDUCER_NEGLIGIBLE_NOISE_THRESHOLD) {
+      memset(self->tonal_mask, 0, self->real_spectrum_size * sizeof(float));
+      int published_idx =
+          atomic_load_explicit(&self->active_mask_idx, memory_order_relaxed);
+      int write_idx = 1 - published_idx;
+      memcpy(self->tonal_mask_buffers[write_idx], self->tonal_mask,
+             self->real_spectrum_size * sizeof(float));
+      atomic_store_explicit(&self->active_mask_idx, write_idx,
+                            memory_order_release);
+    } else {
+      detect_tonal_components(noise_spectrum, noise_spectrum,
+                              self->real_spectrum_size, self->sample_rate,
+                              self->fft_size, self->tonal_mask,
+                              self->deque_workspace);
+      int published_idx =
+          atomic_load_explicit(&self->active_mask_idx, memory_order_relaxed);
+      int write_idx = 1 - published_idx;
+      memcpy(self->tonal_mask_buffers[write_idx], self->tonal_mask,
+             self->real_spectrum_size * sizeof(float));
+      atomic_store_explicit(&self->active_mask_idx, write_idx,
+                            memory_order_release);
+    }
   }
 
   // 2. Skip alpha boosting if reduction is 0 (no tonal suppression)

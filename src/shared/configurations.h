@@ -178,6 +178,7 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define TONAL_PEAK_MIN_FREQ_HZ 20.0f
 #define TONAL_PEAK_NYQUIST_SAFETY_FACTOR 0.48f
 #define TONAL_DETECTOR_DEQUE_CAPACITY 4096U
+#define TONAL_REDUCER_NEGLIGIBLE_NOISE_THRESHOLD (1e-12F)
 
 // Transient Detector Constants
 #define UPPER_LIMIT (5.F)
@@ -192,6 +193,7 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 // Noise Estimator Constants
 #define MIN_NUMBER_OF_WINDOWS_NOISE_AVERAGED 5
 #define NUMBER_OF_MEDIAN_SPECTRUM 25
+#define MEDIAN_UPDATE_DECIMATION 8
 #define NOISE_ESTIMATION_INTERPOLATION_THRESHOLD (1e-9F)
 #define NOISE_ESTIMATION_SMOOTHING_FACTOR (0.5F)
 #define ADAPTIVE_NOISE_FLOOR_SMOOTHING (0.5F)
