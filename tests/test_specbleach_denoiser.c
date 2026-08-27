@@ -406,6 +406,52 @@ void test_specbleach_run_features(void) {
   printf("✓ Specbleach denoiser features tests passed\n");
 }
 
+void test_specbleach_silence_bypass(void) {
+  printf("Testing specbleach silence bypass with active profile...\n");
+
+  specbleach_denoiser* handle = specbleach_denoiser_initialize(44100, 20.0f);
+  TEST_ASSERT(handle != NULL, "Denoiser initialization should succeed");
+
+  uint32_t profile_size = specbleach_denoiser_get_noise_profile_size(handle);
+  float* profile = (float*)malloc(profile_size * sizeof(float));
+  for (uint32_t i = 0; i < profile_size; i++) {
+    profile[i] = 0.1f;
+  }
+  specbleach_denoiser_load_noise_profile_for_mode(handle, profile, profile_size,
+                                                  1, ROLLING_MEAN);
+
+  SpecbleachDenoiserParameters params = {
+      .learn_noise = SPECBLEACH_LEARN_OFF,
+      .residual_listen = false,
+      .reduction_gain = 0.1f,
+      .smoothing_factor = 0.5f,
+      .whitening_factor = 0.0f,
+      .masking_depth = 0.5f,
+      .tonal_reduction_gain = 1.0f,
+      .aggressiveness = 0.5f,
+  };
+  specbleach_denoiser_load_parameters(handle, &params, sizeof(params));
+
+  // Process completely silent input buffer
+  float silent_in[1024] = {0};
+  float silent_out[1024] = {0};
+  specbleach_denoiser_process(handle, 1024, silent_in, silent_out);
+
+  // Change aggressiveness and process silent again
+  params.aggressiveness = -0.5f;
+  specbleach_denoiser_load_parameters(handle, &params, sizeof(params));
+  specbleach_denoiser_process(handle, 1024, silent_in, silent_out);
+
+  for (int i = 0; i < 1024; i++) {
+    TEST_ASSERT(silent_out[i] == 0.0f,
+                "Silent input must produce silent output");
+  }
+
+  free(profile);
+  specbleach_denoiser_free(handle);
+  printf("✓ Specbleach silence bypass test passed\n");
+}
+
 int main(void) {
   printf("Running specbleach denoiser tests...\n");
 
@@ -415,6 +461,7 @@ int main(void) {
   test_specbleach_mode_switching();
   test_specbleach_reset_noise_profile();
   test_specbleach_run_features();
+  test_specbleach_silence_bypass();
 
   // Getter Coverage (Extra) and NULL Safety
   printf("Testing API Getters and NULL safety for coverage...\n");
