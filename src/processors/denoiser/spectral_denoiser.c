@@ -305,6 +305,7 @@ bool load_reduction_parameters(SpectralProcessorHandle instance,
   }
 
   self->denoise_parameters = parameters;
+  self->aggressiveness = parameters.aggressiveness;
 
   return true;
 }
