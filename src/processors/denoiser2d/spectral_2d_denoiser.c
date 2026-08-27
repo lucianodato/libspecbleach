@@ -466,6 +466,17 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
         memcpy(fft_spectrum, delayed_spectrum, self->fft_size * sizeof(float));
       }
       spectral_circular_buffer_advance(self->circular_buffer);
+
+      // Safely publish noise spectrum to inactive double buffer via SPSC atomic
+      // release
+      int published_idx =
+          atomic_load_explicit(&self->active_noise_idx, memory_order_relaxed);
+      int write_noise_idx = 1 - published_idx;
+      memcpy(self->noise_spectrum_buffers[write_noise_idx],
+             self->noise_spectrum, self->real_spectrum_size * sizeof(float));
+      atomic_store_explicit(&self->active_noise_idx, write_noise_idx,
+                            memory_order_release);
+
       return true;
     }
   }
