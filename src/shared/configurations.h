@@ -178,6 +178,7 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define TONAL_PEAK_MIN_FREQ_HZ 20.0f
 #define TONAL_PEAK_NYQUIST_SAFETY_FACTOR 0.48f
 #define TONAL_DETECTOR_DEQUE_CAPACITY 4096U
+#define TONAL_REDUCER_NEGLIGIBLE_NOISE_THRESHOLD (1e-12F)
 
 // Transient Detector Constants
 #define UPPER_LIMIT (5.F)

@@ -117,11 +117,11 @@ void tonal_reducer_run(TonalReducer* self, const float* noise_spectrum,
       if (noise_spectrum[k] > max_val) {
         max_val = noise_spectrum[k];
       }
-      if (max_val > 1e-12F) {
+      if (max_val > TONAL_REDUCER_NEGLIGIBLE_NOISE_THRESHOLD) {
         break;
       }
     }
-    if (max_val <= 1e-12F) {
+    if (max_val <= TONAL_REDUCER_NEGLIGIBLE_NOISE_THRESHOLD) {
       memset(self->tonal_mask, 0, self->real_spectrum_size * sizeof(float));
       int published_idx =
           atomic_load_explicit(&self->active_mask_idx, memory_order_relaxed);
