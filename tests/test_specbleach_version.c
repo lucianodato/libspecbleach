@@ -35,8 +35,14 @@ static void test_version_string(void) {
   printf("Testing version string...\n");
   const char* version = specbleach_get_version_string();
   TEST_ASSERT(version != NULL, "Version string should not be NULL");
-  TEST_ASSERT(strcmp(version, SPECBLEACH_VERSION_STRING) == 0,
-              "Runtime string should match header macro");
+  // Banner is "libspecbleach X.Y.Z" — check it contains the header version
+  TEST_ASSERT(strstr(version, SPECBLEACH_VERSION_STRING) != NULL,
+              "Runtime banner should contain header version");
+  char expected_banner[64];
+  snprintf(expected_banner, sizeof(expected_banner), "libspecbleach %s",
+           SPECBLEACH_VERSION_STRING);
+  TEST_ASSERT(strcmp(version, expected_banner) == 0,
+              "Runtime banner should match \"libspecbleach X.Y.Z\"");
 }
 
 static void test_version_components_compose_string(void) {
