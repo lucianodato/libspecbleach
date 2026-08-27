@@ -120,6 +120,9 @@ void denoiser_profile_core_update(DenoiserProfileCoreParams params,
                         get_noise_profile(params.noise_profile, STD_DEV),
                         get_noise_profile(params.noise_profile, CV_MASK),
                         params.spectrum_size, params.param_aggressiveness);
+    if (params.aggressiveness) {
+      *params.aggressiveness = params.param_aggressiveness;
+    }
   }
 
   // Apply noise profile offset (threshold scalar shift). When a distinct
