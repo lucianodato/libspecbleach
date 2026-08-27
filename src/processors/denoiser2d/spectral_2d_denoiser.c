@@ -437,6 +437,39 @@ bool spectral_2d_denoiser_run(SpectralProcessorHandle instance,
     return true;
   }
 
+  // Silence bypass: input essentially silent — profile update already done
+  // so aggressiveness/threshold stay responsive, but skip heavy NLM/masking.
+  {
+    float max_val = 0.0f;
+    for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
+      if (reference_spectrum[k] > max_val) {
+        max_val = reference_spectrum[k];
+      }
+      if (max_val > 1e-12F) {
+        break;
+      }
+    }
+    if (max_val <= 1e-12F) {
+      // Keep NLM circular buffer aligned as in idle path
+      spectral_circular_buffer_push(self->circular_buffer, self->layer_fft,
+                                    fft_spectrum);
+      spectral_circular_buffer_push(self->circular_buffer, self->layer_noise,
+                                    self->noise_spectrum);
+      spectral_circular_buffer_push(
+          self->circular_buffer, self->layer_nlm_smoothed, reference_spectrum);
+      nlm_filter_calculate_snr(self->nlm_filter, reference_spectrum,
+                               self->noise_spectrum, self->snr_frame);
+      nlm_filter_push_frame(self->nlm_filter, self->snr_frame);
+      const float* delayed_spectrum = spectral_circular_buffer_retrieve(
+          self->circular_buffer, self->layer_fft, NLM_SEARCH_RANGE_TIME_FUTURE);
+      if (delayed_spectrum) {
+        memcpy(fft_spectrum, delayed_spectrum, self->fft_size * sizeof(float));
+      }
+      spectral_circular_buffer_advance(self->circular_buffer);
+      return true;
+    }
+  }
+
   // 2.1 Transient Detection via Transient Detector across Critical Bands
   // Transient detection runs on a clean signal estimate with scaled-up noise
   // subtraction to avoid false triggering from residual musical noise.

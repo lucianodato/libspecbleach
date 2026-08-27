@@ -362,6 +362,24 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
     return true;
   }
 
+  // Silence bypass: input essentially silent — profile update already done
+  // above so aggressiveness/threshold remain responsive for display, but
+  // skip heavy transient/masking/gain chain.
+  {
+    float max_val = 0.0f;
+    for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
+      if (reference_spectrum[k] > max_val) {
+        max_val = reference_spectrum[k];
+      }
+      if (max_val > 1e-12F) {
+        break;
+      }
+    }
+    if (max_val <= 1e-12F) {
+      return true;
+    }
+  }
+
   // 2.1 Transient Detection via Transient Detector across Critical Bands
   // Transient detection runs on a clean signal estimate with scaled-up noise
   // subtraction to avoid false triggering from residual musical noise.
