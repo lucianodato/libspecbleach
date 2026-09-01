@@ -81,4 +81,4 @@ autoresearch/.env
 
 # Coverage
 .coverage
-*.gcov
+*.gcovTesting/

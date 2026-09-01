@@ -41,7 +41,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  * @endcode
  *
  * The same shape exists for every handle type in the library:
- * make_denoiser, make_2d_denoiser, make_stereo_group, and
+ * make_denoiser, make_stereo_group, and
  * make_delay_line (extras). Handles are movable, never copyable, so a
  * double-free cannot be expressed.
  */
@@ -51,7 +51,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include <memory>
 
-#include "specbleach_2d_denoiser.h"
 #include "specbleach_delay_line.h"
 #include "specbleach_denoiser.h"
 #include "specbleach_stereo.h"
@@ -61,12 +60,6 @@ namespace specbleach {
 struct DenoiserDeleter {
   void operator()(specbleach_denoiser* handle) const noexcept {
     specbleach_denoiser_free(handle);
-  }
-};
-
-struct Denoiser2dDeleter {
-  void operator()(specbleach_2d_denoiser* handle) const noexcept {
-    specbleach_2d_free(handle);
   }
 };
 
@@ -83,8 +76,6 @@ struct DelayLineDeleter {
 };
 
 using DenoiserPtr = std::unique_ptr<specbleach_denoiser, DenoiserDeleter>;
-using Denoiser2dPtr =
-    std::unique_ptr<specbleach_2d_denoiser, Denoiser2dDeleter>;
 using StereoGroupPtr = std::unique_ptr<specbleach_stereo, StereoGroupDeleter>;
 using DelayLinePtr = std::unique_ptr<specbleach_delay_line, DelayLineDeleter>;
 
@@ -95,18 +86,12 @@ inline DenoiserPtr make_denoiser(const uint32_t sample_rate,
       specbleach_denoiser_initialize(sample_rate, frame_size_ms));
 }
 
-/// Creates a single-channel 2D NLM denoiser; null on failure.
-inline Denoiser2dPtr make_2d_denoiser(const uint32_t sample_rate,
-                                      const float frame_size_ms) noexcept {
-  return Denoiser2dPtr(specbleach_2d_initialize(sample_rate, frame_size_ms));
-}
-
 /// Creates a multi-channel engine group (extras); null on failure.
-inline StereoGroupPtr make_stereo_group(
-    const uint32_t sample_rate, const float frame_size_ms,
-    const uint32_t channels, const SpecbleachStereoEngine engine) noexcept {
-  return StereoGroupPtr(specbleach_stereo_initialize(sample_rate, frame_size_ms,
-                                                     channels, engine));
+inline StereoGroupPtr make_stereo_group(const uint32_t sample_rate,
+                                        const float frame_size_ms,
+                                        const uint32_t channels) noexcept {
+  return StereoGroupPtr(
+      specbleach_stereo_initialize(sample_rate, frame_size_ms, channels));
 }
 
 /// Creates an alignment delay line (extras); null on failure.

@@ -23,25 +23,32 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "shared/denoiser_logic/core/noise_profile.h"
 #include "shared/spectral_processor.h"
+#include "specbleach_common.h"
 #include <stdbool.h>
 #include <stdint.h>
 
+/**
+ * Parameters for the unified spectral denoiser. The smoothing strategy is
+ * selected with smoothing_mode and can be changed at runtime (allocation-free,
+ * see load_reduction_parameters).
+ */
 typedef struct DenoiserParameters {
-  float reduction_amount;
-  bool residual_listen;
-  int learn_noise;
-  float smoothing_factor;
-  float whitening_factor;
-  int adaptive_noise;
+  int learn_noise;        /**< Learning mode: 0=disabled, 1=learn all modes */
+  bool residual_listen;   /**< Output residue instead of denoised signal */
+  float reduction_amount; /**< Gain floor / reduction amount (linear) */
+  int smoothing_mode;     /**< 0=temporal (1D), 1=NLM 2D */
+  float smoothing_factor; /**< Temporal smoothing strength / NLM h parameter */
+  float whitening_factor; /**< Whitening factor (0.0 to 1.0) */
+  int adaptive_noise;     /**< Adaptive noise mode: 0=disabled, 1=enabled */
   int noise_estimation_method; /**< 0=SPP-MMSE, 1=Brandt, 2=Martin MS */
-  float masking_depth;
-  float suppression_strength;
-  float aggressiveness;  /**< -1.0 (Median/Min) to 1.0 (Max), 0.0 (Mean) */
-  float tonal_reduction; /**< 0.0 to 1.0 (Phase 3) */
-  int hpss_enable;       /**< 0=disabled, 1=enabled */
+  float masking_depth;        /**< Masking veto/protection depth (0.0 to 1.0) */
+  float suppression_strength; /**< Suppression aggressiveness (0.0 to 1.0) */
+  float aggressiveness;       /**< -1.0 (Median/Min) to 1.0 (Max), 0.0 (Mean) */
+  float tonal_reduction;      /**< 0.0 to 1.0 */
+  int hpss_enable;            /**< 0=disabled, 1=enabled */
   float noise_profile_offset_linear; /**< Linear scalar for noise profile */
   float tonal_noise_profile_offset_linear; /**< Linear scalar at tonal bins */
-  const float* reduction_curve_bias; /**< Per-bin dB bias, NULL = disabled */
+  const float* reduction_curve_bias;       /**< Per-bin dB bias, NULL = off */
   bool reduction_curve_enabled;
 } DenoiserParameters;
 

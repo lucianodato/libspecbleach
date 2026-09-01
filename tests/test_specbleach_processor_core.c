@@ -193,37 +193,24 @@ void test_params_sanitize_functions(void) {
   TEST_FLOAT_CLOSE(sp1.tonal_noise_profile_offset_linear, 3.9811f, 1e-3f);
   TEST_ASSERT(sp1.reduction_curve_bias == NULL, "Sanitize disabled curve bias");
 
-  Specbleach2DDenoiserParameters p2 = {
-      .learn_noise = SPECBLEACH_LEARN_OFF,
-      .residual_listen = true,
-      .reduction_gain = 0.125f,
-      .smoothing_factor = 0.3f,
-      .whitening_factor = 0.5f,
-      .adaptive_noise = true,
-      .noise_estimation_method = SPECBLEACH_NOISE_ESTIMATION_MARTIN,
-      .nlm_masking_protection = 0.8f,
-      .suppression_strength = 1.0f,
-      .aggressiveness = 2.0f,
-      .tonal_reduction_gain = 0.7f,
-      .hpss_enable = true,
-      .noise_profile_scale = 0.2512f,
-      .tonal_noise_profile_scale = 0.631f,
-      .reduction_curve_bias = (const float*)0x1234,
-      .reduction_curve_enabled = true,
-  };
+  SpecbleachDenoiserParameters p_nlm = p1;
+  p_nlm.residual_listen = true;
+  p_nlm.reduction_gain = 0.125f;
+  p_nlm.whitening_factor = 0.5f;
+  p_nlm.masking_depth = 0.8f;
+  p_nlm.smoothing_mode = SB_SMOOTHING_NLM_2D;
 
-  Denoiser2DParameters sp2 = sb_denoiser_2d_params_sanitize(&p2);
-  TEST_ASSERT(sp2.residual_listen == true, "Sanitize 2d residual_listen");
-  TEST_FLOAT_CLOSE(sp2.reduction_amount, 0.125f, 1e-4f);
-  TEST_FLOAT_CLOSE(sp2.whitening_factor, 0.5f, 1e-4f);
-  TEST_FLOAT_CLOSE(sp2.suppression_strength, 1.0f, 1e-4f);
-  TEST_ASSERT(sp2.hpss_enable == 1, "Sanitize 2d hpss_enable");
-  TEST_FLOAT_CLOSE(sp2.noise_profile_offset_linear, 0.2512f, 1e-3f);
-  TEST_FLOAT_CLOSE(sp2.tonal_noise_profile_offset_linear, 0.631f, 1e-3f);
-  TEST_ASSERT(sp2.reduction_curve_bias == NULL,
+  DenoiserParameters sp_nlm = sb_denoiser_params_sanitize(&p_nlm);
+  TEST_ASSERT(sp_nlm.residual_listen == true, "Sanitize nlm residual_listen");
+  TEST_FLOAT_CLOSE(sp_nlm.reduction_amount, 0.125f, 1e-4f);
+  TEST_FLOAT_CLOSE(sp_nlm.whitening_factor, 0.5f, 1e-4f);
+  TEST_FLOAT_CLOSE(sp_nlm.masking_depth, 0.8f, 1e-4f);
+  TEST_ASSERT(sp_nlm.smoothing_mode == (int)SB_SMOOTHING_NLM_2D,
+              "Sanitize keeps NLM smoothing mode");
+  TEST_ASSERT(sp_nlm.reduction_curve_bias == NULL,
               "Sanitize never passes caller curve ptr");
 
-  // Bounds clamping checks for linear parameters
+  // Out-of-range smoothing mode normalizes to temporal
   SpecbleachDenoiserParameters p_min = p1;
   p_min.reduction_gain = -5.0f;
   p_min.noise_profile_scale = -2.0f;
@@ -250,32 +237,11 @@ void test_params_sanitize_functions(void) {
   TEST_FLOAT_CLOSE(sp_max.noise_profile_offset_linear, 100.0f, 1e-3f);
   TEST_FLOAT_CLOSE(sp_max.tonal_noise_profile_offset_linear, 100.0f, 1e-3f);
 
-  Specbleach2DDenoiserParameters p2_min = p2;
-  p2_min.reduction_gain = -5.0f;
-  p2_min.noise_profile_scale = -2.0f;
-  p2_min.tonal_noise_profile_scale = -2.0f;
-  Denoiser2DParameters sp2_min = sb_denoiser_2d_params_sanitize(&p2_min);
-  TEST_FLOAT_CLOSE(sp2_min.reduction_amount, 0.0f, 1e-3f);
-  TEST_FLOAT_CLOSE(sp2_min.noise_profile_offset_linear, 1.0f, 1e-3f);
-  TEST_FLOAT_CLOSE(sp2_min.tonal_noise_profile_offset_linear, 1.0f, 1e-3f);
-
-  Specbleach2DDenoiserParameters p2_scale_low = p2;
-  p2_scale_low.noise_profile_scale = 0.001f;
-  p2_scale_low.tonal_noise_profile_scale = 0.001f;
-  Denoiser2DParameters sp2_scale_low =
-      sb_denoiser_2d_params_sanitize(&p2_scale_low);
-  TEST_FLOAT_CLOSE(sp2_scale_low.noise_profile_offset_linear, 0.01f, 1e-3f);
-  TEST_FLOAT_CLOSE(sp2_scale_low.tonal_noise_profile_offset_linear, 0.01f,
-                   1e-3f);
-
-  Specbleach2DDenoiserParameters p2_max = p2;
-  p2_max.reduction_gain = 5.0f;
-  p2_max.noise_profile_scale = 200.0f;
-  p2_max.tonal_noise_profile_scale = 200.0f;
-  Denoiser2DParameters sp2_max = sb_denoiser_2d_params_sanitize(&p2_max);
-  TEST_FLOAT_CLOSE(sp2_max.reduction_amount, 1.0f, 1e-3f);
-  TEST_FLOAT_CLOSE(sp2_max.noise_profile_offset_linear, 100.0f, 1e-3f);
-  TEST_FLOAT_CLOSE(sp2_max.tonal_noise_profile_offset_linear, 100.0f, 1e-3f);
+  SpecbleachDenoiserParameters p_bad_mode = p1;
+  p_bad_mode.smoothing_mode = (SbSmoothingMode)99;
+  DenoiserParameters sp_bad_mode = sb_denoiser_params_sanitize(&p_bad_mode);
+  TEST_ASSERT(sp_bad_mode.smoothing_mode == (int)SB_SMOOTHING_TEMPORAL,
+              "Sanitize normalizes unknown smoothing mode to temporal");
 
   printf("✓ Params sanitize functions tests passed\n");
 }

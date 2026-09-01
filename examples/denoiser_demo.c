@@ -154,6 +154,9 @@ static void print_usage(const char* prog_name) {
           "  --whitening <val>          Whitening factor (default: 50.0)\n");
   fprintf(stderr,
           "  --smoothing <val>          Smoothing factor (default: 0.0)\n");
+  fprintf(stderr,
+          "  --smoothing-mode <val>     Smoothing mode: 0=temporal, 1=NLM 2D "
+          "(default: 0)\n");
   fprintf(
       stderr,
       "  --masking-depth <val>      Masking depth (0.0-1.0, default: 0.5)\n");
@@ -212,6 +215,7 @@ int main(int argc, char** argv) {
       {"reduction", required_argument, 0, 'r'},
       {"whitening", required_argument, 0, 'w'},
       {"smoothing", required_argument, 0, 's'},
+      {"smoothing-mode", required_argument, 0, 'S'},
       {"masking-depth", required_argument, 0, 'd'},
       {"steering-response", required_argument, 0, 'l'},
       {"adaptive", no_argument, 0, 'a'},
@@ -224,7 +228,7 @@ int main(int argc, char** argv) {
   float frame_size_ms = FRAME_SIZE;
   uint32_t learn_frames = NOISE_FRAMES;
   int opt;
-  while ((opt = getopt_long(argc, argv, "r:w:s:d:l:am:f:n:", long_options,
+  while ((opt = getopt_long(argc, argv, "r:w:s:S:d:l:am:f:n:", long_options,
                             NULL)) != -1) {
     switch (opt) {
       case 'r': {
@@ -252,6 +256,16 @@ int main(int argc, char** argv) {
           return 1;
         }
         parameters.smoothing_factor = smoothing / 100.0f;
+        break;
+      }
+      case 'S': {
+        int mode;
+        if (!parse_int_arg(optarg, &mode, 0, 1)) {
+          print_usage(argv[0]);
+          return 1;
+        }
+        parameters.smoothing_mode =
+            (mode == 1) ? SB_SMOOTHING_NLM_2D : SB_SMOOTHING_TEMPORAL;
         break;
       }
       case 'd':
@@ -286,7 +300,7 @@ int main(int argc, char** argv) {
         }
         break;
       case 'n':
-        if (!parse_uint32_arg(optarg, &learn_frames, 1, UINT32_MAX)) {
+        if (!parse_uint32_arg(optarg, &learn_frames, 0, UINT32_MAX)) {
           print_usage(argv[0]);
           return 1;
         }

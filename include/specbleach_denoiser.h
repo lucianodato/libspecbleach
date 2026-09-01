@@ -71,8 +71,19 @@ typedef struct SpecbleachDenoiserParameters {
   /**
    * Normalized smoothing factor across frames (0.0 to 1.0). Values outside
    * the range are clamped.
+   *
+   * In temporal mode this controls temporal/spatial gain smoothing. In NLM
+   * 2D mode it controls the NLM h parameter and 2D time-frequency artifact
+   * smoothing.
    */
   float smoothing_factor;
+
+  /**
+   * Smoothing strategy used by the processor. Can be changed at runtime;
+   * the library performs an internal allocation-free crossfade and both
+   * modes share the same latency.
+   */
+  SbSmoothingMode smoothing_mode;
 
   /**
    * Normalized whitening factor for residue noise floor (0.0 to 1.0). Values
@@ -92,8 +103,9 @@ typedef struct SpecbleachDenoiserParameters {
   SpecbleachNoiseEstimationMethod noise_estimation_method;
 
   /**
-   * Masking veto depth (0.0 - 1.0): depth of signal energy preservation.
-   * Values outside the range are clamped.
+   * Masking veto/protection depth (0.0 - 1.0): depth of signal energy
+   * preservation. Applies to both smoothing modes. Values outside the range
+   * are clamped.
    */
   float masking_depth;
 

@@ -277,4 +277,11 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 // Masking Veto defaults
 #define USE_TEMPORAL_MASKING_2D_DEFAULT true
 
+/* ------------------------------------------------------------------------- */
+/* --------------- Unified denoiser smoothing configurations ---------------- */
+/* ------------------------------------------------------------------------- */
+
+// Duration of the internal crossfade when switching smoothing modes at runtime
+#define SMOOTHING_TRANSITION_SECONDS (0.030F)
+
 #endif // MODULES_CONFIGURATIONS_H

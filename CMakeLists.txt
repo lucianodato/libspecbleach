@@ -178,7 +178,6 @@ if(SPECBLEACH_BUILD_EXTRAS)
     add_library(libspecbleach_extras
         extras/src/specbleach_delay_line.c
         extras/src/specbleach_stereo.c
-        extras/src/specbleach_profile_migration.c
     )
 
     set_target_properties(libspecbleach_extras PROPERTIES
@@ -292,7 +291,6 @@ if(ENABLE_TESTS)
     add_specbleach_test(test_adaptive_noise_estimator "test_adaptive_noise_estimator.c")
     add_specbleach_test(test_nlm_filter "test_nlm_filter.c")
     add_specbleach_test(test_thread_pool "test_thread_pool.c")
-    add_specbleach_test(test_specbleach_2d_denoiser "test_specbleach_2d_denoiser.c")
     add_specbleach_test(test_suppression_engine "test_suppression_engine.c")
     add_specbleach_test(test_masking_veto "test_masking_veto.c")
     add_specbleach_test(test_transient_detector "test_transient_detector.c")
@@ -314,7 +312,6 @@ if(ENABLE_TESTS)
     if(SPECBLEACH_BUILD_EXTRAS)
         add_specbleach_test(test_specbleach_stereo "test_specbleach_stereo.c")
         target_link_libraries(test_specbleach_stereo PRIVATE libspecbleach_extras)
-        add_specbleach_test(test_profile_migration "test_profile_migration.c")
         add_specbleach_test(test_specbleach_delay_line "test_specbleach_delay_line.c")
         target_link_libraries(test_specbleach_delay_line PRIVATE libspecbleach_extras)
         if(CMAKE_CXX_COMPILER)
@@ -329,7 +326,6 @@ if(ENABLE_TESTS)
             add_test(NAME test_specbleach_cpp_smoke
                      COMMAND test_specbleach_cpp_smoke)
         endif()
-        target_link_libraries(test_profile_migration PRIVATE libspecbleach_extras)
     endif()
 endif()
 

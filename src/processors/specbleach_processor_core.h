@@ -22,20 +22,15 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define SPECBLEACH_PROCESSOR_CORE_H
 
 #include "processors/denoiser/spectral_denoiser.h"
-#include "processors/denoiser2d/spectral_2d_denoiser.h"
 #include "shared/configurations.h"
 #include "shared/denoiser_logic/core/noise_profile.h"
 #include "shared/stft/stft_processor.h"
-#include "specbleach_2d_denoiser.h"
 #include "specbleach_denoiser.h"
 #include <stdbool.h>
 #include <stdint.h>
 
 DenoiserParameters sb_denoiser_params_sanitize(
     const SpecbleachDenoiserParameters* parameters);
-
-Denoiser2DParameters sb_denoiser_2d_params_sanitize(
-    const Specbleach2DDenoiserParameters* parameters);
 
 /**
  * Copies a caller-provided reduction curve bias into an internally owned

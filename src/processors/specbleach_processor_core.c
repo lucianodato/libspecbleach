@@ -37,40 +37,11 @@ DenoiserParameters sb_denoiser_params_sanitize(
           fmaxf(0.0f, fminf(1.0f, parameters->whitening_factor)),
       .adaptive_noise = parameters->adaptive_noise ? 1 : 0,
       .noise_estimation_method = (int)parameters->noise_estimation_method,
+      .smoothing_mode =
+          (int)parameters->smoothing_mode == (int)SB_SMOOTHING_NLM_2D
+              ? (int)SB_SMOOTHING_NLM_2D
+              : (int)SB_SMOOTHING_TEMPORAL,
       .masking_depth = fmaxf(0.0f, fminf(1.0f, parameters->masking_depth)),
-      .suppression_strength =
-          fmaxf(0.0f, fminf(1.0f, parameters->suppression_strength)),
-      .aggressiveness = parameters->aggressiveness,
-      .tonal_reduction =
-          fmaxf(0.0f, fminf(1.0f, parameters->tonal_reduction_gain)),
-      .hpss_enable = parameters->hpss_enable ? 1 : 0,
-      .noise_profile_offset_linear =
-          fmaxf(0.01f, fminf(100.0f, parameters->noise_profile_scale > 0.0f
-                                         ? parameters->noise_profile_scale
-                                         : 1.0f)),
-      .tonal_noise_profile_offset_linear = fmaxf(
-          0.01f, fminf(100.0f, parameters->tonal_noise_profile_scale > 0.0f
-                                   ? parameters->tonal_noise_profile_scale
-                                   : 1.0f)),
-      .reduction_curve_bias = NULL,
-      .reduction_curve_enabled = parameters->reduction_curve_enabled,
-  };
-}
-
-Denoiser2DParameters sb_denoiser_2d_params_sanitize(
-    const Specbleach2DDenoiserParameters* parameters) {
-  return (Denoiser2DParameters){
-      .learn_noise = (int)parameters->learn_noise,
-      .residual_listen = parameters->residual_listen,
-      .reduction_amount = fmaxf(0.0f, fminf(1.0f, parameters->reduction_gain)),
-      .smoothing_factor =
-          fmaxf(0.0f, fminf(1.0f, parameters->smoothing_factor)),
-      .whitening_factor =
-          fmaxf(0.0f, fminf(1.0f, parameters->whitening_factor)),
-      .adaptive_noise = parameters->adaptive_noise ? 1 : 0,
-      .noise_estimation_method = (int)parameters->noise_estimation_method,
-      .nlm_masking_protection =
-          fmaxf(0.0f, fminf(1.0f, parameters->nlm_masking_protection)),
       .suppression_strength =
           fmaxf(0.0f, fminf(1.0f, parameters->suppression_strength)),
       .aggressiveness = parameters->aggressiveness,

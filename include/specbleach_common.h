@@ -50,6 +50,16 @@ typedef enum SpecbleachNoiseEstimationMethod {
 } SpecbleachNoiseEstimationMethod;
 
 /**
+ * Smoothing strategy applied by the unified spectral denoiser.
+ *
+ * Numeric values are part of the public contract.
+ */
+typedef enum SbSmoothingMode {
+  SB_SMOOTHING_TEMPORAL = 0, /**< 1D temporal/spatial gain smoothing */
+  SB_SMOOTHING_NLM_2D = 1,   /**< 2D Non-Local Means patch smoothing */
+} SbSmoothingMode;
+
+/**
  * Inclusive range of valid noise profile mode indexes used by the
  * profile accessors across all denoiser APIs.
  */

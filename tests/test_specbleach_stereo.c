@@ -38,36 +38,23 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 static void test_init_and_free(void) {
   printf("Testing stereo init and free...\n");
 
-  TEST_ASSERT(
-      specbleach_stereo_initialize(0, 46.0f, CHANNELS,
-                                   SPECBLEACH_STEREO_ENGINE_SPECTRAL) == NULL,
-      "sample_rate == 0 rejected");
-  TEST_ASSERT(
-      specbleach_stereo_initialize(44100, 0.0f, CHANNELS,
-                                   SPECBLEACH_STEREO_ENGINE_SPECTRAL) == NULL,
-      "frame_size <= 0 rejected");
-  TEST_ASSERT(specbleach_stereo_initialize(
-                  44100, 46.0f, 0, SPECBLEACH_STEREO_ENGINE_SPECTRAL) == NULL,
+  TEST_ASSERT(specbleach_stereo_initialize(0, 46.0f, CHANNELS) == NULL,
+              "sample_rate == 0 rejected");
+  TEST_ASSERT(specbleach_stereo_initialize(44100, 0.0f, CHANNELS) == NULL,
+              "frame_size <= 0 rejected");
+  TEST_ASSERT(specbleach_stereo_initialize(44100, 46.0f, 0) == NULL,
               "channels == 0 rejected");
   specbleach_stereo_free(NULL);
 
-  specbleach_stereo* stereo = specbleach_stereo_initialize(
-      44100, 46.0f, CHANNELS, SPECBLEACH_STEREO_ENGINE_SPECTRAL);
-  TEST_ASSERT(stereo != NULL, "1D stereo init");
+  specbleach_stereo* stereo =
+      specbleach_stereo_initialize(44100, 46.0f, CHANNELS);
+  TEST_ASSERT(stereo != NULL, "stereo init");
   TEST_ASSERT(specbleach_stereo_get_channel_count(stereo) == CHANNELS,
               "Channel count roundtrip");
-  TEST_ASSERT(
-      specbleach_stereo_get_engine(stereo) == SPECBLEACH_STEREO_ENGINE_SPECTRAL,
-      "Engine roundtrip");
   TEST_ASSERT(specbleach_stereo_get_latency(stereo) > 0, "Latency positive");
   TEST_ASSERT(specbleach_stereo_get_noise_profile_size(stereo) > 0,
               "Profile size positive");
   specbleach_stereo_free(stereo);
-
-  specbleach_stereo* stereo_2d = specbleach_stereo_initialize(
-      44100, 46.0f, CHANNELS, SPECBLEACH_STEREO_ENGINE_NLM_2D);
-  TEST_ASSERT(stereo_2d != NULL, "2D stereo init");
-  specbleach_stereo_free(stereo_2d);
 
   printf("✓ Stereo init and free tests passed\n");
 }
@@ -75,32 +62,26 @@ static void test_init_and_free(void) {
 static void test_parameter_loading(void) {
   printf("Testing stereo parameter loading...\n");
 
-  specbleach_stereo* stereo = specbleach_stereo_initialize(
-      44100, 46.0f, CHANNELS, SPECBLEACH_STEREO_ENGINE_SPECTRAL);
+  specbleach_stereo* stereo =
+      specbleach_stereo_initialize(44100, 46.0f, CHANNELS);
   TEST_ASSERT(stereo != NULL, "init for param tests");
 
   SpecbleachDenoiserParameters params = {0};
   params.learn_noise = SPECBLEACH_LEARN_ALL;
   params.reduction_gain = 0.1f;
 
-  TEST_ASSERT(specbleach_stereo_load_parameters_1d(NULL, &params,
-                                                   sizeof(params)) == false,
-              "NULL instance rejected");
-  TEST_ASSERT(specbleach_stereo_load_parameters_1d(stereo, NULL,
-                                                   sizeof(params)) == false,
-              "NULL parameters rejected");
-  TEST_ASSERT(specbleach_stereo_load_parameters_1d(stereo, &params,
-                                                   sizeof(params) - 4) == false,
+  TEST_ASSERT(
+      specbleach_stereo_load_parameters(NULL, &params, sizeof(params)) == false,
+      "NULL instance rejected");
+  TEST_ASSERT(
+      specbleach_stereo_load_parameters(stereo, NULL, sizeof(params)) == false,
+      "NULL parameters rejected");
+  TEST_ASSERT(specbleach_stereo_load_parameters(stereo, &params,
+                                                sizeof(params) - 4) == false,
               "Wrong size rejected");
   TEST_ASSERT(
-      specbleach_stereo_load_parameters_1d(stereo, &params, sizeof(params)),
-      "Valid 1D parameters accepted");
-
-  // Calling a 2D loader on a 1D group fails (engine mismatch)
-  Specbleach2DDenoiserParameters params_2d = {0};
-  TEST_ASSERT(specbleach_stereo_load_parameters_2d(stereo, &params_2d,
-                                                   sizeof(params_2d)) == false,
-              "Cross-engine loader rejected");
+      specbleach_stereo_load_parameters(stereo, &params, sizeof(params)),
+      "Valid parameters accepted");
 
   specbleach_stereo_free(stereo);
   printf("✓ Stereo parameter loading tests passed\n");
@@ -109,8 +90,8 @@ static void test_parameter_loading(void) {
 static void test_process_and_sync(void) {
   printf("Testing stereo processing and profile sync...\n");
 
-  specbleach_stereo* stereo = specbleach_stereo_initialize(
-      44100, 46.0f, CHANNELS, SPECBLEACH_STEREO_ENGINE_SPECTRAL);
+  specbleach_stereo* stereo =
+      specbleach_stereo_initialize(44100, 46.0f, CHANNELS);
   TEST_ASSERT(stereo != NULL, "init for process tests");
 
   float input[2][BLOCK_SIZE];
@@ -136,7 +117,7 @@ static void test_process_and_sync(void) {
   params.learn_noise = SPECBLEACH_LEARN_ALL;
   params.reduction_gain = 0.1f;
   TEST_ASSERT(
-      specbleach_stereo_load_parameters_1d(stereo, &params, sizeof(params)),
+      specbleach_stereo_load_parameters(stereo, &params, sizeof(params)),
       "learn params loaded");
 
   for (uint32_t block = 0; block < 8; ++block) {
@@ -162,8 +143,8 @@ static void test_process_and_sync(void) {
   SpecbleachDenoiserParameters reduce_params = {0};
   reduce_params.learn_noise = SPECBLEACH_LEARN_ALL;
   reduce_params.reduction_gain = 0.1f;
-  TEST_ASSERT(specbleach_stereo_load_parameters_1d(stereo, &reduce_params,
-                                                   sizeof(reduce_params)),
+  TEST_ASSERT(specbleach_stereo_load_parameters(stereo, &reduce_params,
+                                                sizeof(reduce_params)),
               "re-learn params loaded");
   for (uint32_t block = 0; block < 8; ++block) {
     TEST_ASSERT(
@@ -171,8 +152,8 @@ static void test_process_and_sync(void) {
         "process during re-learn");
   }
   reduce_params.learn_noise = SPECBLEACH_LEARN_OFF;
-  TEST_ASSERT(specbleach_stereo_load_parameters_1d(stereo, &reduce_params,
-                                                   sizeof(reduce_params)),
+  TEST_ASSERT(specbleach_stereo_load_parameters(stereo, &reduce_params,
+                                                sizeof(reduce_params)),
               "reduce params loaded");
   TEST_ASSERT(
       specbleach_stereo_process(stereo, BLOCK_SIZE, input_ptrs, output_ptrs),

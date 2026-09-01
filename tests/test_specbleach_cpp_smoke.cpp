@@ -47,13 +47,7 @@ int main() {
     return 1;
   }
 
-  auto denoiser_2d = specbleach::make_2d_denoiser(48000U, 46.0F);
-  if (!expect(static_cast<bool>(denoiser_2d), "2D denoiser created")) {
-    return 1;
-  }
-
-  auto group = specbleach::make_stereo_group(48000U, 46.0F, 2U,
-                                             SPECBLEACH_STEREO_ENGINE_SPECTRAL);
+  auto group = specbleach::make_stereo_group(48000U, 46.0F, 2U);
   if (!expect(static_cast<bool>(group), "stereo group created")) {
     return 1;
   }
