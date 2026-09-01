@@ -41,9 +41,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  * @endcode
  *
  * The same shape exists for every handle type in the library:
- * make_denoiser, make_stereo_group, and
- * make_delay_line (extras). Handles are movable, never copyable, so a
- * double-free cannot be expressed.
+ * make_denoiser and make_stereo_group (extras). Handles are movable, never
+ * copyable, so a double-free cannot be expressed.
  */
 
 #ifndef SPECBLEACH_HPP
@@ -51,7 +50,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include <memory>
 
-#include "specbleach_delay_line.h"
 #include "specbleach_denoiser.h"
 #include "specbleach_stereo.h"
 
@@ -69,15 +67,8 @@ struct StereoGroupDeleter {
   }
 };
 
-struct DelayLineDeleter {
-  void operator()(specbleach_delay_line* handle) const noexcept {
-    specbleach_delay_line_free(handle);
-  }
-};
-
 using DenoiserPtr = std::unique_ptr<specbleach_denoiser, DenoiserDeleter>;
 using StereoGroupPtr = std::unique_ptr<specbleach_stereo, StereoGroupDeleter>;
-using DelayLinePtr = std::unique_ptr<specbleach_delay_line, DelayLineDeleter>;
 
 /// Creates a single-channel spectral denoiser; null on failure.
 inline DenoiserPtr make_denoiser(const uint32_t sample_rate,
@@ -92,13 +83,6 @@ inline StereoGroupPtr make_stereo_group(const uint32_t sample_rate,
                                         const uint32_t channels) noexcept {
   return StereoGroupPtr(
       specbleach_stereo_initialize(sample_rate, frame_size_ms, channels));
-}
-
-/// Creates an alignment delay line (extras); null on failure.
-inline DelayLinePtr make_delay_line(const uint32_t max_delay_samples,
-                                    const uint32_t channels) noexcept {
-  return DelayLinePtr(
-      specbleach_delay_line_initialize(max_delay_samples, channels));
 }
 
 } // namespace specbleach

@@ -479,11 +479,6 @@ int main(void) {
   float peak_freqs[10];
   specbleach_denoiser_get_tonal_peaks(h, peak_freqs, 10);
 
-  float* dummy_prof = calloc(prof_size, sizeof(float));
-  specbleach_denoiser_get_tonal_peaks_for_profile(h, dummy_prof, prof_size,
-                                                  peak_freqs, 10);
-  free(dummy_prof);
-
   // Process with tonal reduction and HPSS enabled
   float in_buf[1024] = {0};
   float out_buf[1024] = {0};
@@ -565,9 +560,6 @@ int main(void) {
               "NULL active profile");
   TEST_ASSERT(specbleach_denoiser_get_tonal_peaks(NULL, peak_freqs, 10) == 0,
               "NULL tonal peaks");
-  TEST_ASSERT(specbleach_denoiser_get_tonal_peaks_for_profile(
-                  NULL, NULL, 0, peak_freqs, 10) == 0,
-              "NULL tonal peaks for profile");
 
   specbleach_denoiser_free(h);
 

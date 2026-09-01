@@ -301,19 +301,6 @@ SPECBLEACH_API uint32_t specbleach_denoiser_get_tonal_peaks(
     specbleach_denoiser* instance, float* peak_freqs_hz, uint32_t max_peaks);
 
 /**
- * Returns peak frequencies in Hz computed directly from a caller-provided
- * noise profile array. If the internal MEDIAN profile is available, it takes
- * precedence over the caller-provided profile; the caller-provided profile
- * is used only as fallback.
- *
- * Offline/query-only API; must NOT be called from the real-time audio
- * thread.
- */
-SPECBLEACH_API uint32_t specbleach_denoiser_get_tonal_peaks_for_profile(
-    specbleach_denoiser* instance, const float* profile, uint32_t profile_size,
-    float* peak_freqs_hz, uint32_t max_peaks);
-
-/**
  * Returns a pointer to the active morphed noise profile array.
  */
 SPECBLEACH_API const float* specbleach_denoiser_get_active_noise_profile(

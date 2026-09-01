@@ -157,8 +157,8 @@ SpectralProcessorHandle spectral_denoiser_initialize(
   self->real_spectrum_size = (self->fft_size / 2U) + 1U;
   self->hop = self->fft_size / overlap_factor;
   self->sample_rate = sample_rate;
-  self->spectrum_type = SPECTRAL_TYPE_2D;
-  self->gain_calculation_type = GAIN_ESTIMATION_TYPE_2D;
+  self->spectrum_type = SPECTRAL_TYPE;
+  self->gain_calculation_type = GAIN_ESTIMATION_TYPE;
   self->noise_profile = noise_profile;
   self->active_mode = SB_SMOOTHING_TEMPORAL;
   self->pending_mode = SB_SMOOTHING_TEMPORAL;
@@ -280,11 +280,11 @@ SpectralProcessorHandle spectral_denoiser_initialize(
   }
 
   self->masking_veto = masking_veto_initialize(
-      self->fft_size, self->sample_rate, CRITICAL_BANDS_TYPE_2D,
-      self->spectrum_type, false, USE_TEMPORAL_MASKING_2D_DEFAULT);
+      self->fft_size, self->sample_rate, CRITICAL_BANDS_TYPE,
+      self->spectrum_type, false, USE_TEMPORAL_MASKING_DEFAULT);
   self->suppression_engine = suppression_engine_initialize(
-      self->real_spectrum_size, self->sample_rate, CRITICAL_BANDS_TYPE_2D,
-      self->spectrum_type, true, USE_TEMPORAL_MASKING_2D_DEFAULT);
+      self->real_spectrum_size, self->sample_rate, CRITICAL_BANDS_TYPE,
+      self->spectrum_type, true, USE_TEMPORAL_MASKING_DEFAULT);
 
   if (!self->masking_veto || !self->suppression_engine) {
     spectral_denoiser_free(self);
@@ -294,7 +294,7 @@ SpectralProcessorHandle spectral_denoiser_initialize(
   self->noise_floor_manager = noise_floor_manager_initialize(fft_size);
 
   self->critical_bands = critical_bands_initialize(
-      self->sample_rate, self->fft_size, CRITICAL_BANDS_TYPE_2D);
+      self->sample_rate, self->fft_size, CRITICAL_BANDS_TYPE);
   uint32_t num_bands = self->critical_bands
                            ? get_number_of_critical_bands(self->critical_bands)
                            : 0U;

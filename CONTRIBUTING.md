@@ -105,17 +105,14 @@ libspecbleach is designed to grow STFT-based processors (denoisers, dereverberat
    - `load_parameters(handle, const Params*, sizeof)` — always pointer+size.
    - Shared enums live in `specbleach_common.h` only if genuinely common;
      numeric values are contract.
-3. **Wrapper**: `src/processors/specbleach_my_processor.c` modeled on
-   `specbleach_denoiser.c`: private state struct tagged with the public
-   type name, delegate to `SbProcessorCore` + your callback, own any
-   copied-in data (see `sb_curve_bias_copy`) and free it in `_free`.
-4. **Extras wiring** (so integrators get stereo groups immediately):
-   - Add a value to `SpecbleachStereoEngine` and constructor/dispatch arms
-     in `extras/src/specbleach_stereo.c`.
-   - Cross-family profile copying needs **no new pair functions**:
-     `specbleach_stereo_migrate_profiles_from()` is already family-agnostic.
-     Only add standalone `specbleach_migrate_profiles_a_to_b()` helpers on
-     demonstrated need — they grow quadratically with families.
+ 3. **Wrapper**: `src/processors/specbleach_my_processor.c` modeled on
+    `specbleach_denoiser.c`: private state struct tagged with the public
+    type name, own the STFT + noise profile lifetime, delegate to your
+    processing callback, own any copied-in data (see `curve_bias_copy`)
+    and free it in `_free`.
+ 4. **Extras wiring** (so integrators get stereo groups immediately):
+    - Extend `extras/src/specbleach_stereo.c` to forward the new engine's
+      per-channel calls when needed.
 5. **Tests**: 1:1 unit test per module (`tests/test_my_processor.c`),
    registered in CMakeLists; add regression audio references only for
    intentional algorithm changes.

@@ -223,14 +223,11 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define HPSS_SLIDING_SMOOTH_FACTOR 0.50F
 
 /* --------------------------------------------------------------- */
-/* ------------------- 1D Denoiser configurations ---------------- */
+/* ------------------- Denoiser configurations ------------------- */
 #define GAIN_SMOOTHING_MIN_RELEASE_SEC (0.010F)
 #define GAIN_SMOOTHING_MAX_RELEASE_SEC (0.350F)
 #define GAIN_SMOOTHING_MIN_ATTACK_SEC (0.001F)
 #define GAIN_SMOOTHING_MAX_ATTACK_SEC (0.040F)
-
-// HPSS configurations (Defaults to enabled)
-#define HPSS_ENABLE_1D_DEFAULT 1
 
 // STFT configurations
 #define OVERLAP_FACTOR_1D 4
@@ -242,40 +239,14 @@ _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
 #define ZEROPADDING_AMOUNT_1D 0
 
 // Spectral Type
-#define SPECTRAL_TYPE_1D POWER_SPECTRUM
+#define SPECTRAL_TYPE POWER_SPECTRUM
 
 // Noise Scaling strategy
-#define CRITICAL_BANDS_TYPE_1D BARK_SCALE
-#define GAIN_ESTIMATION_TYPE_1D WIENER
+#define CRITICAL_BANDS_TYPE BARK_SCALE
+#define GAIN_ESTIMATION_TYPE WIENER
 
 // Masking Veto defaults
-#define USE_TEMPORAL_MASKING_1D_DEFAULT true
-
-/* ------------------------------------------------------------------ */
-/* ------------------- 2D Denoiser configurations ------------------- */
-/* ------------------------------------------------------------------ */
-
-// HPSS configurations (Defaults to enabled)
-#define HPSS_ENABLE_2D_DEFAULT 1
-
-// STFT configurations
-#define OVERLAP_FACTOR_2D 4
-#define INPUT_WINDOW_TYPE_2D HANN_WINDOW
-#define OUTPUT_WINDOW_TYPE_2D HANN_WINDOW
-
-// Fft configuration
-#define PADDING_CONFIGURATION_2D NO_PADDING
-#define ZEROPADDING_AMOUNT_2D 0
-
-// Spectral Type
-#define SPECTRAL_TYPE_2D POWER_SPECTRUM
-
-// Noise Scaling strategy
-#define CRITICAL_BANDS_TYPE_2D BARK_SCALE
-#define GAIN_ESTIMATION_TYPE_2D WIENER
-
-// Masking Veto defaults
-#define USE_TEMPORAL_MASKING_2D_DEFAULT true
+#define USE_TEMPORAL_MASKING_DEFAULT true
 
 /* ------------------------------------------------------------------------- */
 /* --------------- Unified denoiser smoothing configurations ---------------- */

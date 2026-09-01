@@ -56,11 +56,6 @@ int main() {
     return 1;
   }
 
-  auto delay_line = specbleach::make_delay_line(4800U, 2U);
-  if (!expect(static_cast<bool>(delay_line), "delay line created")) {
-    return 1;
-  }
-
   specbleach::DenoiserPtr moved = std::move(denoiser);
   if (!expect(!denoiser && static_cast<bool>(moved),
               "move transfers ownership; copy is ill-formed")) {

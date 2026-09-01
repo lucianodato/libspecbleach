@@ -176,7 +176,6 @@ option(SPECBLEACH_BUILD_EXTRAS
 
 if(SPECBLEACH_BUILD_EXTRAS)
     add_library(libspecbleach_extras
-        extras/src/specbleach_delay_line.c
         extras/src/specbleach_stereo.c
     )
 
@@ -285,7 +284,6 @@ if(ENABLE_TESTS)
     add_specbleach_test(test_spectral_smoother "test_spectral_smoother.c")
     add_specbleach_test(test_spectral_utils "test_spectral_utils.c")
     add_specbleach_test(test_noise_profile "test_noise_profile.c")
-    add_specbleach_test(test_specbleach_processor_core "test_specbleach_processor_core.c")
     add_specbleach_test(test_specbleach_denoiser "test_specbleach_denoiser.c")
     add_specbleach_test(test_noise_floor_manager "test_noise_floor_manager.c")
     add_specbleach_test(test_adaptive_noise_estimator "test_adaptive_noise_estimator.c")
@@ -312,8 +310,6 @@ if(ENABLE_TESTS)
     if(SPECBLEACH_BUILD_EXTRAS)
         add_specbleach_test(test_specbleach_stereo "test_specbleach_stereo.c")
         target_link_libraries(test_specbleach_stereo PRIVATE libspecbleach_extras)
-        add_specbleach_test(test_specbleach_delay_line "test_specbleach_delay_line.c")
-        target_link_libraries(test_specbleach_delay_line PRIVATE libspecbleach_extras)
         if(CMAKE_CXX_COMPILER)
             add_executable(test_specbleach_cpp_smoke
                 "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_specbleach_cpp_smoke.cpp")

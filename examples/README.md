@@ -8,7 +8,7 @@ then steal its structure — they are written to be copied.
 | Your situation | Read | Uses |
 | :--- | :--- | :--- |
 | Mono processing, offline or simple pipeline | [`denoiser_demo.c`](denoiser_demo.c) | Core API only (`specbleach_denoiser.h`) |
-| Stereo/surround, engine switching, "what the plugin does" | [`stereo_denoiser_demo.c`](stereo_denoiser_demo.c) | Extras layer (`specbleach_stereo.h`, `specbleach_delay_line.h`, `specbleach_profile_migration.h`) |
+| Stereo/surround, smoothing-mode switching, "what the plugin does" | [`stereo_denoiser_demo.c`](stereo_denoiser_demo.c) | Extras layer (`specbleach_stereo.h`) |
 | Real-time application with GUI-driven learn/switch | `stereo_denoiser_demo.c` **plus** the [Noise Repellent plugin source](https://github.com/lucianodato/noise-repellent/blob/master/Source/PluginProcessor.cpp) | Extras + threading patterns |
 
 Both demos process audio files via libsndfile so they are runnable and
@@ -45,7 +45,7 @@ specbleach_denoiser_free(denoiser);
 ```
 
 For multi-channel, wrap steps in a group instead:
-`specbleach_stereo_initialize(sr, ms, channels, ENGINE)` then load/process
+`specbleach_stereo_initialize(sr, ms, channels)` then load/process
 once for all channels (deinterleaved pointer arrays).
 
 ## Building the examples
@@ -55,7 +55,7 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release \
       -DENABLE_EXAMPLES=ON -DSPECBLEACH_BUILD_EXTRAS=ON
 cmake --build build --config Release
 
-./build/stereo_denoiser_demo --switch-engine noisy.wav clean.wav
+./build/stereo_denoiser_demo --switch-smoothing noisy.wav clean.wav
 ```
 
 Linking from your own project:
@@ -70,57 +70,19 @@ find_package(libspecbleach 0.4 REQUIRED COMPONENTS extras)
 target_link_libraries(myapp PRIVATE libspecbleach::extras)
 ```
 
-## Switching between processors
+## Switching smoothing modes
 
-The engine families expose different opaque handles and report different
-algorithmic latencies (e.g., spectral vs. 2D NLM). Switching between them at
-runtime is YOUR policy as the host application; extras deliberately provides
-no switch widget because no in-library blend can hide the moment your host
-re-anchors its delay compensation. The two recipes below are both proven in
-production use.
-
-**Recipe A — structural alignment (seamless, costs latency):**
-
-1. Wrap the shorter-latency family in a permanent delay ring so BOTH
-   families always emit at `max(latency_a, latency_b)` samples of delay.
-2. Report that constant maximum to your host and never change it.
-3. Switch by rendering both families and applying an equal-power crossfade
-   (`w_old = cos(t*pi/2)`, `w_new = sin(t*pi/2)`, t = fade progress) over
-   40-100 ms. Streams are time-aligned, so the blend is artifact-free.
-
-Costs: every session runs at the slower family's latency even when only the
-fast one is active.
-
-**Recipe B — mute-and-warm (native latency, brief silence):** this is what
-the Noise Repellent plugin ships.
-
-1. Ramp output down (~100 ms), then mute completely.
-2. While muted, render ONLY the target family silently for ~700 ms so its
-   internal history buffers warm up.
-3. Move your reported latency to the target's native value while silent —
-   and deliver the notification from a message thread, never mid-callback
-   (hosts like Reaper suspend/resume plugins on synchronous latency-change
-   notifications).
-4. Wait for old buffered tails to drain through the host before reporting a
-   latency DECREASE; then ramp back up over ~100 ms.
-
-Costs: ~1 second of muted audio per switch; rewards: native latencies and
-single-engine CPU in steady state.
-
-In both recipes run profile migration (`specbleach_stereo_migrate_profiles_from`)
-before the target renders, or it starts deaf.
-
-For Recipe A's alignment stage there is a ready-made building block:
-`specbleach_delay_line.h` is a policy-free multi-channel single-tap
-delay line (real-time safe process, any block interleaving). Size it to
-the latency difference, park the shorter-latency family in it, report
-max(latency) once, and crossfade.
+There is only ONE denoiser family. `SpecbleachDenoiserParameters::smoothing_mode`
+selects the temporal (1D) or NLM 2D smoothing strategy, and the library owns
+the runtime transition: it crossfades internally over
+`SMOOTHING_TRANSITION_SECONDS` (30 ms) with zero allocations on the audio
+thread. Both modes report the same constant latency, so hosts never need to
+re-anchor delay compensation. Switching is just a parameter reload.
 
 C++ integrators: `specbleach.hpp` provides header-only RAII
-ownership for every handle type (`make_denoiser`, `make_stereo_group`,
-`make_delay_line`, ...). It wraps lifetime management only and has no
-framework dependencies, so it suits JUCE, raw VST3/CLAP/LV2, DAW
-codebases, and standalone apps alike.
+ownership for every handle type (`make_denoiser`, `make_stereo_group`).
+It wraps lifetime management only and has no framework dependencies, so it
+suits JUCE, raw VST3/CLAP/LV2, DAW codebases, and standalone apps alike.
 
 ## Pitfalls these examples exist to prevent
 
@@ -130,19 +92,16 @@ codebases, and standalone apps alike.
 2. **Each channel learns independently.** Do not average stereo inputs into
    one engine; use `specbleach_stereo`, which keeps per-channel profiles and
    can fallback-fill gaps with `specbleach_stereo_sync_profiles()`.
-3. **Engine switches need profile migration**, otherwise the new family
-   starts deaf. Call `specbleach_stereo_migrate_profiles_from()` before the
-   target renders (see "Switching between processors" above).
-4. **Latency reports belong on a message thread.** Hosts compensate delay
+3. **Latency reports belong on a message thread.** Hosts compensate delay
    based on what you tell them, and several hosts restart plugin processing
-   when the reported value changes synchronously mid-callback.
-5. **Keep control work off the audio thread.** `process()` is real-time
-   safe; parameter loads, profile migration/sync, and serialization are
-   not.
-6. **Wrong-size parameter loads fail cleanly by design.** Always pass
+   when the reported value changes synchronously mid-callback. (Smoothing
+   mode switches never change latency, so this only applies at prepare time.)
+4. **Keep control work off the audio thread.** `process()` is real-time
+   safe; parameter loads and profile sync/serialization are not.
+5. **Wrong-size parameter loads fail cleanly by design.** Always pass
    `sizeof(the_exact_struct)`; this protects you across library upgrades.
-7. **Mixing handle types does not compile** — that is intentional. Each
-   engine family has its own opaque type; if it compiles, it is correct.
+6. **Mixing handle types does not compile** — that is intentional. Each
+   handle type has its own opaque type; if it compiles, it is correct.
 
 ## Further reference
 
