@@ -23,7 +23,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "shared/denoiser_logic/core/noise_profile.h"
 #include "shared/spectral_processor.h"
-#include "specbleach_common.h"
+#include "specbleach_denoiser.h"
 #include <stdbool.h>
 #include <stdint.h>
 

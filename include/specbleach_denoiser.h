@@ -28,8 +28,48 @@ extern "C" {
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "specbleach_common.h"
 #include "specbleach_export.h"
+
+/**
+ * Noise profile learning mode.
+ *
+ * Numeric values are part of the public contract. Do not change them:
+ * persisted state in downstream applications depends on them.
+ */
+typedef enum SpecbleachLearnMode {
+  SPECBLEACH_LEARN_OFF =
+      0, /**< Learning disabled, reduce using stored profile */
+  SPECBLEACH_LEARN_ALL = 1, /**< Learn all profile types simultaneously */
+} SpecbleachLearnMode;
+
+/**
+ * Adaptive noise estimation method.
+ *
+ * Numeric values are part of the public contract. Do not change them:
+ * persisted state in downstream applications depends on them.
+ */
+typedef enum SpecbleachNoiseEstimationMethod {
+  SPECBLEACH_NOISE_ESTIMATION_SPP_MMSE = 0, /**< SPP-MMSE (unbiased) */
+  SPECBLEACH_NOISE_ESTIMATION_BRANDT = 1,   /**< Brandt trimmed mean */
+  SPECBLEACH_NOISE_ESTIMATION_MARTIN = 2,   /**< Martin minimum statistics */
+} SpecbleachNoiseEstimationMethod;
+
+/**
+ * Smoothing strategy applied by the unified spectral denoiser.
+ *
+ * Numeric values are part of the public contract.
+ */
+typedef enum SbSmoothingMode {
+  SB_SMOOTHING_TEMPORAL = 0, /**< 1D temporal/spatial gain smoothing */
+  SB_SMOOTHING_NLM_2D = 1,   /**< 2D Non-Local Means patch smoothing */
+} SbSmoothingMode;
+
+/**
+ * Inclusive range of valid noise profile mode indexes used by the
+ * profile accessors across all denoiser APIs.
+ */
+#define SPECBLEACH_PROFILE_MODE_FIRST 1
+#define SPECBLEACH_PROFILE_MODE_LAST 4
 
 /**
  * Opaque handle to a single-channel spectral denoiser instance.
