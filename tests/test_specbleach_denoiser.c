@@ -452,6 +452,92 @@ void test_specbleach_silence_bypass(void) {
   printf("✓ Specbleach silence bypass test passed\n");
 }
 
+void test_specbleach_smoothing_transition_and_validation(void) {
+  printf("Testing smoothing mode transitions and API validation...\n");
+
+  // Invalid initialization arguments
+  TEST_ASSERT(specbleach_denoiser_initialize(0, 20.0f) == NULL,
+              "Zero sample rate must fail initialization");
+  TEST_ASSERT(specbleach_denoiser_initialize(44100, 0.0f) == NULL,
+              "Zero frame size must fail initialization");
+
+  specbleach_denoiser* handle = specbleach_denoiser_initialize(44100, 20.0f);
+  TEST_ASSERT(handle != NULL, "Denoiser initialization should succeed");
+
+  // Process with NULL buffers must be rejected
+  float in_buf[1024];
+  float out_buf[1024];
+  for (int i = 0; i < 1024; ++i) {
+    in_buf[i] = 0.1f * ((float)(i % 64) / 64.0f);
+  }
+  TEST_ASSERT(specbleach_denoiser_process(handle, 1024, NULL, out_buf) == false,
+              "NULL input must be rejected");
+  TEST_ASSERT(specbleach_denoiser_process(handle, 1024, in_buf, NULL) == false,
+              "NULL output must be rejected");
+
+  SpecbleachDenoiserParameters params = (SpecbleachDenoiserParameters){
+      .learn_noise = SPECBLEACH_LEARN_OFF,
+      .reduction_gain = 0.3f,
+      .smoothing_factor = 0.5f,
+      .smoothing_mode = SB_SMOOTHING_NLM_2D,
+  };
+  TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &params,
+                                                  sizeof(params)) == true,
+              "Loading parameters should succeed");
+
+  // Wrong parameter struct size must be rejected
+  TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &params,
+                                                  sizeof(params) - 8) == false,
+              "Wrong parameters size must be rejected");
+
+  // Load a profile so both chains run with real data
+  uint32_t profile_size = specbleach_denoiser_get_noise_profile_size(handle);
+  TEST_ASSERT(profile_size > 0, "Profile size should be valid");
+  float* profile = (float*)malloc(profile_size * sizeof(float));
+  TEST_ASSERT(profile != NULL, "Profile allocation should succeed");
+  for (uint32_t i = 0; i < profile_size; i++) {
+    profile[i] = 0.1f;
+  }
+  TEST_ASSERT(specbleach_denoiser_load_noise_profile_for_mode(
+                  handle, profile, profile_size, 10, ROLLING_MEAN) == true,
+              "Loading noise profile should succeed");
+
+  // Process in NLM mode to establish the active chain
+  for (int f = 0; f < 5; ++f) {
+    specbleach_denoiser_process(handle, 1024, in_buf, out_buf);
+  }
+
+  // Switch to TEMPORAL at runtime: exercises the crossfade transition
+  // machinery and the temporal smoothing chain
+  params.smoothing_mode = SB_SMOOTHING_TEMPORAL;
+  TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &params,
+                                                  sizeof(params)) == true,
+              "Loading temporal mode should succeed");
+  for (int f = 0; f < 15; ++f) {
+    specbleach_denoiser_process(handle, 1024, in_buf, out_buf);
+    TEST_ASSERT(specbleach_denoiser_get_latency(handle) > 0,
+                "Latency must stay positive during transition");
+  }
+  for (int i = 0; i < 1024; ++i) {
+    TEST_ASSERT(out_buf[i] == out_buf[i] && out_buf[i] < 100.0f,
+                "Output must be finite during/after transition");
+  }
+
+  // Transient getters with a valid handle
+  (void)specbleach_denoiser_is_transient_detected(handle);
+  (void)specbleach_denoiser_get_transient_intensity(handle);
+
+  // Transient accessors with NULL handle
+  TEST_ASSERT(specbleach_denoiser_is_transient_detected(NULL) == false,
+              "NULL transient detected must be false");
+  TEST_ASSERT(specbleach_denoiser_get_transient_intensity(NULL) == 0.0f,
+              "NULL transient intensity must be 0");
+
+  free(profile);
+  specbleach_denoiser_free(handle);
+  printf("✓ Smoothing transition and validation test passed\n");
+}
+
 int main(void) {
   printf("Running specbleach denoiser tests...\n");
 
@@ -462,6 +548,7 @@ int main(void) {
   test_specbleach_reset_noise_profile();
   test_specbleach_run_features();
   test_specbleach_silence_bypass();
+  test_specbleach_smoothing_transition_and_validation();
 
   // Getter Coverage (Extra) and NULL Safety
   printf("Testing API Getters and NULL safety for coverage...\n");

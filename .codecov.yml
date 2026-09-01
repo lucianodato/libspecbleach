@@ -10,6 +10,6 @@ coverage:
         threshold: 1%
 
 ignore:
-  - "thirdparty/**/*"
-  - "tests/**/*"
-  - "examples/**/*"
+  - "thirdparty/**"
+  - "tests/**"
+  - "examples/**"
