@@ -111,8 +111,8 @@ libspecbleach is designed to grow STFT-based processors (denoisers, dereverberat
     processing callback, own any copied-in data (see `curve_bias_copy`)
     and free it in `_free`.
  4. **Extras wiring** (so integrators get stereo groups immediately):
-    - Extend `extras/src/specbleach_stereo.c` to forward the new engine's
-      per-channel calls when needed.
+   - Extend `extras/src/specbleach_stereo.c` to forward the new engine's
+     per-channel calls when needed.
 5. **Tests**: 1:1 unit test per module (`tests/test_my_processor.c`),
    registered in CMakeLists; add regression audio references only for
    intentional algorithm changes.

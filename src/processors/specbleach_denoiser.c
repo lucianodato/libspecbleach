@@ -56,7 +56,7 @@ static DenoiserParameters sanitize_denoiser_parameters(
       .masking_depth = fmaxf(0.0f, fminf(1.0f, parameters->masking_depth)),
       .suppression_strength =
           fmaxf(0.0f, fminf(1.0f, parameters->suppression_strength)),
-      .aggressiveness = parameters->aggressiveness,
+      .aggressiveness = fmaxf(-1.0f, fminf(1.0f, parameters->aggressiveness)),
       .tonal_reduction =
           fmaxf(0.0f, fminf(1.0f, parameters->tonal_reduction_gain)),
       .hpss_enable = parameters->hpss_enable ? 1 : 0,

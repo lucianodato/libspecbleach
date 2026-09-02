@@ -36,12 +36,17 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 int main(void) {
   printf("Testing spectral denoiser internal API validation...\n");
 
-  // Invalid initialization arguments
-  TEST_ASSERT(spectral_denoiser_initialize(0U, 2048U, 4U, NULL) == NULL,
+  // Valid noise profile for a 2048-point FFT (real spectrum size is 1025)
+  NoiseProfile* profile = noise_profile_initialize(1025U);
+  TEST_ASSERT(profile != NULL, "Noise profile allocation should succeed");
+
+  // Invalid initialization arguments: each invalid field isolated with a
+  // valid profile
+  TEST_ASSERT(spectral_denoiser_initialize(0U, 2048U, 4U, profile) == NULL,
               "Zero sample rate must fail");
-  TEST_ASSERT(spectral_denoiser_initialize(44100U, 0U, 4U, NULL) == NULL,
+  TEST_ASSERT(spectral_denoiser_initialize(44100U, 0U, 4U, profile) == NULL,
               "Zero fft size must fail");
-  TEST_ASSERT(spectral_denoiser_initialize(44100U, 2048U, 0U, NULL) == NULL,
+  TEST_ASSERT(spectral_denoiser_initialize(44100U, 2048U, 0U, profile) == NULL,
               "Zero overlap must fail");
   TEST_ASSERT(spectral_denoiser_initialize(44100U, 2048U, 4U, NULL) == NULL,
               "NULL noise profile must fail");
@@ -67,9 +72,7 @@ int main(void) {
               "NULL peaks must return 0");
   spectral_denoiser_reset_noise_profile(NULL); // must not crash
 
-  // Valid handle: run one block and reset
-  NoiseProfile* profile = noise_profile_initialize(2048U);
-  TEST_ASSERT(profile != NULL, "Noise profile allocation should succeed");
+  // Valid handle: NULL spectrum must fail and reset must be safe
   SpectralProcessorHandle handle =
       spectral_denoiser_initialize(44100U, 2048U, OVERLAP_FACTOR_1D, profile);
   TEST_ASSERT(handle != NULL, "Initialization should succeed");

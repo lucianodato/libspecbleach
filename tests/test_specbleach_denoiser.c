@@ -521,7 +521,7 @@ void test_specbleach_smoothing_transition_and_validation(void) {
                 "Latency must stay positive during transition");
   }
   for (int i = 0; i < 1024; ++i) {
-    TEST_ASSERT(out_buf[i] == out_buf[i] && out_buf[i] < 100.0f,
+    TEST_ASSERT(isfinite(out_buf[i]) && out_buf[i] < 100.0f,
                 "Output must be finite during/after transition");
   }
 

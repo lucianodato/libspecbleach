@@ -300,7 +300,7 @@ int main(int argc, char** argv) {
         }
         break;
       case 'n':
-        if (!parse_uint32_arg(optarg, &learn_frames, 0, UINT32_MAX)) {
+        if (!parse_uint32_arg(optarg, &learn_frames, 1, UINT32_MAX)) {
           print_usage(argv[0]);
           return 1;
         }

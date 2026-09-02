@@ -129,7 +129,34 @@ static int normalize_smoothing_mode(const int mode) {
                                        : SB_SMOOTHING_TEMPORAL;
 }
 
+/**
+ * Bypass alignment: keeps the circular buffer, NLM history and output
+ * rolling during idle/silence stretches so idle→active transitions stay
+ * aligned and the reported look-ahead latency is preserved. Emits the frame
+ * delayed by the configured NLM latency.
+ */
+static void align_bypass_frame(SbSpectralDenoiser* self, float* fft_spectrum,
+                               const float* reference_spectrum) {
+  spectral_circular_buffer_push(self->circular_buffer, self->layer_fft,
+                                fft_spectrum);
+  spectral_circular_buffer_push(self->circular_buffer, self->layer_noise,
+                                self->noise_spectrum);
+  spectral_circular_buffer_push(self->circular_buffer, self->layer_smoothed,
+                                reference_spectrum);
+  nlm_filter_calculate_snr(self->nlm_filter, reference_spectrum,
+                           self->noise_spectrum, self->snr_frame);
+  nlm_filter_push_frame(self->nlm_filter, self->snr_frame);
+  const float* delayed_spectrum = spectral_circular_buffer_retrieve(
+      self->circular_buffer, self->layer_fft,
+      nlm_filter_get_latency_frames(self->nlm_filter));
+  if (delayed_spectrum) {
+    memcpy(fft_spectrum, delayed_spectrum, self->fft_size * sizeof(float));
+  }
+  spectral_circular_buffer_advance(self->circular_buffer);
+}
+
 static bool run_nlm_chain(SbSpectralDenoiser* self, float* fft_spectrum,
+                          const float* smoothed_magnitude,
                           const float* delayed_noise, float* gain_out,
                           float* alpha, float* beta);
 
@@ -444,7 +471,18 @@ bool load_reduction_parameters(SpectralProcessorHandle instance,
       self->in_transition = true;
     }
   } else {
-    self->pending_mode = normalize_smoothing_mode(parameters.smoothing_mode);
+    const int requested = normalize_smoothing_mode(parameters.smoothing_mode);
+    if (requested != self->pending_mode && requested == self->previous_mode) {
+      // Reverting to the mode that is fading out: mirror the in-progress
+      // crossfade around its current blend point so the transition reverses
+      // smoothly toward the original chain without a gain discontinuity
+      const int outgoing = self->pending_mode;
+      self->pending_mode = self->previous_mode;
+      self->previous_mode = outgoing;
+      self->transition_pos = self->transition_frames - self->transition_pos;
+    } else {
+      self->pending_mode = requested;
+    }
   }
 
   // Update NLM h parameter based on smoothing factor
@@ -508,21 +546,7 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
       !is_noise_estimation_available(self->noise_profile, MEDIAN) &&
       !is_noise_estimation_available(self->noise_profile, STD_DEV) &&
       !is_noise_estimation_available(self->noise_profile, CV_MASK)) {
-    spectral_circular_buffer_push(self->circular_buffer, self->layer_fft,
-                                  fft_spectrum);
-    spectral_circular_buffer_push(self->circular_buffer, self->layer_noise,
-                                  self->noise_spectrum);
-    spectral_circular_buffer_push(self->circular_buffer, self->layer_smoothed,
-                                  reference_spectrum);
-    nlm_filter_calculate_snr(self->nlm_filter, reference_spectrum,
-                             self->noise_spectrum, self->snr_frame);
-    nlm_filter_push_frame(self->nlm_filter, self->snr_frame);
-    const float* delayed_spectrum = spectral_circular_buffer_retrieve(
-        self->circular_buffer, self->layer_fft, NLM_SEARCH_RANGE_TIME_FUTURE);
-    if (delayed_spectrum) {
-      memcpy(fft_spectrum, delayed_spectrum, self->fft_size * sizeof(float));
-    }
-    spectral_circular_buffer_advance(self->circular_buffer);
+    align_bypass_frame(self, fft_spectrum, reference_spectrum);
     return true;
   }
 
@@ -540,21 +564,7 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
     }
     if (max_val <= 1e-12F) {
       // Keep circular buffer aligned as in idle path
-      spectral_circular_buffer_push(self->circular_buffer, self->layer_fft,
-                                    fft_spectrum);
-      spectral_circular_buffer_push(self->circular_buffer, self->layer_noise,
-                                    self->noise_spectrum);
-      spectral_circular_buffer_push(self->circular_buffer, self->layer_smoothed,
-                                    reference_spectrum);
-      nlm_filter_calculate_snr(self->nlm_filter, reference_spectrum,
-                               self->noise_spectrum, self->snr_frame);
-      nlm_filter_push_frame(self->nlm_filter, self->snr_frame);
-      const float* delayed_spectrum = spectral_circular_buffer_retrieve(
-          self->circular_buffer, self->layer_fft, NLM_SEARCH_RANGE_TIME_FUTURE);
-      if (delayed_spectrum) {
-        memcpy(fft_spectrum, delayed_spectrum, self->fft_size * sizeof(float));
-      }
-      spectral_circular_buffer_advance(self->circular_buffer);
+      align_bypass_frame(self, fft_spectrum, reference_spectrum);
 
       // Safely publish noise spectrum to inactive double buffer via SPSC
       // atomic release
@@ -632,15 +642,19 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
     nlm_intermediate_noise = self->noise_spectrum;
   }
 
-  // NLM smoothing (runs when NLM is the active or the incoming mode)
+  // NLM smoothing (runs when NLM is the active or the incoming mode). The
+  // smoothed magnitude is captured explicitly so the temporal chain cannot
+  // overwrite the shared alignment layer before the NLM chain consumes it.
   const bool nlm_needed =
       (self->active_mode == SB_SMOOTHING_NLM_2D) ||
       (self->in_transition && self->pending_mode == SB_SMOOTHING_NLM_2D);
+  const float* nlm_smoothed = NULL;
   if (nlm_needed && nlm_filter_process(self->nlm_filter, self->smoothed_snr)) {
     nlm_filter_reconstruct_magnitude(self->nlm_filter, self->smoothed_snr,
                                      nlm_intermediate_noise, self->snr_frame);
     spectral_circular_buffer_push(self->circular_buffer, self->layer_smoothed,
                                   self->snr_frame);
+    nlm_smoothed = self->snr_frame;
   }
 
   // Retrieve unified aligned frames at the common delay
@@ -671,15 +685,15 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
     const float w = (float)self->transition_pos / total; // 0 → 1
 
     if (self->previous_mode == SB_SMOOTHING_NLM_2D) {
-      (void)run_nlm_chain(self, fft_spectrum, delayed_noise, gain_a,
-                          self->alpha, self->beta);
+      (void)run_nlm_chain(self, fft_spectrum, nlm_smoothed, delayed_noise,
+                          gain_a, self->alpha, self->beta);
       run_temporal_chain(self, fft_spectrum, delayed_noise, gain_b,
                          self->alpha_b, self->beta_b);
     } else {
       run_temporal_chain(self, fft_spectrum, delayed_noise, gain_a, self->alpha,
                          self->beta);
-      (void)run_nlm_chain(self, fft_spectrum, delayed_noise, gain_b,
-                          self->alpha_b, self->beta_b);
+      (void)run_nlm_chain(self, fft_spectrum, nlm_smoothed, delayed_noise,
+                          gain_b, self->alpha_b, self->beta_b);
     }
 
     for (uint32_t k = 0U; k < self->fft_size; ++k) {
@@ -692,8 +706,8 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
       self->in_transition = false;
     }
   } else if (self->active_mode == SB_SMOOTHING_NLM_2D) {
-    (void)run_nlm_chain(self, fft_spectrum, delayed_noise, gain_a, self->alpha,
-                        self->beta);
+    (void)run_nlm_chain(self, fft_spectrum, nlm_smoothed, delayed_noise, gain_a,
+                        self->alpha, self->beta);
   } else {
     run_temporal_chain(self, fft_spectrum, delayed_noise, gain_a, self->alpha,
                        self->beta);
@@ -735,14 +749,19 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
 
 /**
  * 2D Non-Local Means chain: NLM-smoothed magnitude feeds suppression, masking
- * veto, gain calculation. The smoothed magnitude is pushed into the alignment
- * buffer at the head of the chain.
+ * veto, gain calculation. The smoothed magnitude produced by this frame's NLM
+ * pass is passed in explicitly; when the NLM pass did not run or failed, the
+ * last smoothed magnitude in the alignment buffer (or the delayed frame) is
+ * used as an explicit fallback.
  */
 static bool run_nlm_chain(SbSpectralDenoiser* self, float* fft_spectrum,
+                          const float* smoothed_magnitude,
                           const float* delayed_noise, float* gain_out,
                           float* alpha, float* beta) {
-  const float* smoothed_magnitude = spectral_circular_buffer_retrieve(
-      self->circular_buffer, self->layer_smoothed, 0U);
+  if (!smoothed_magnitude) {
+    smoothed_magnitude = spectral_circular_buffer_retrieve(
+        self->circular_buffer, self->layer_smoothed, 0U);
+  }
   if (!smoothed_magnitude) {
     smoothed_magnitude = fft_spectrum;
   }
