@@ -115,13 +115,13 @@ int main(void) {
 
   // FFT Transform (internal)
   fft_transform_free(NULL);
-  FftTransform* ft = fft_transform_initialize(fft_size, NO_PADDING, 0);
+  FftTransform* ft = fft_transform_initialize(fft_size, PAD_TO_VALID_SIZE, 0);
   fft_transform_free(ft);
 
   // STFT Processor
   stft_processor_free(NULL);
   StftProcessor* stft_p =
-      stft_processor_initialize(sample_rate, 10.0f, overlap_factor, NO_PADDING,
+      stft_processor_initialize(sample_rate, 10.0f, overlap_factor, PAD_TO_VALID_SIZE,
                                 0, HANN_WINDOW, HANN_WINDOW);
   stft_processor_free(stft_p);
 

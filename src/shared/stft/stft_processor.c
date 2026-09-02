@@ -65,6 +65,11 @@ StftProcessor* stft_processor_initialize(const uint32_t sample_rate,
   self->fft_size = get_fft_size(self->fft_transform);
   self->overlap_factor = overlap_factor;
   self->hop = self->frame_size / self->overlap_factor;
+  if (self->hop == 0U) {
+    // Frame smaller than the overlap factor: no valid hop exists.
+    stft_processor_free(self);
+    return NULL;
+  }
   self->input_latency = self->frame_size;
 
   self->output_accumulator =

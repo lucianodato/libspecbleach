@@ -181,7 +181,7 @@ static bool allocate_pffft(FftTransform* self) {
 
 static uint32_t calculate_fft_size(FftTransform* self) {
   switch (self->padding_type) {
-    case NO_PADDING: {
+    case PAD_TO_VALID_SIZE: {
       self->padding_amount = 0;
       return get_next_valid_fft_size(self->frame_size);
     }

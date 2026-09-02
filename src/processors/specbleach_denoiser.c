@@ -30,11 +30,15 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 typedef struct specbleach_denoiser { // NOLINT(readability-identifier-naming)
   uint32_t hop;
   uint32_t sample_rate;
+  float frame_size_ms;
+  uint32_t frame_size_samples;
+  uint32_t fft_size;
   StftProcessor* stft_processor;
   NoiseProfile* noise_profile;
   SpectralProcessorHandle spectral_denoiser;
   float* reduction_curve_copy;
   uint32_t reduction_curve_capacity;
+  SpecbleachError last_error;
 } SbDenoiserInstance;
 
 static DenoiserParameters sanitize_denoiser_parameters(
@@ -50,9 +54,9 @@ static DenoiserParameters sanitize_denoiser_parameters(
       .adaptive_noise = parameters->adaptive_noise ? 1 : 0,
       .noise_estimation_method = (int)parameters->noise_estimation_method,
       .smoothing_mode =
-          (int)parameters->smoothing_mode == (int)SB_SMOOTHING_NLM_2D
-              ? (int)SB_SMOOTHING_NLM_2D
-              : (int)SB_SMOOTHING_TEMPORAL,
+          (int)parameters->smoothing_mode == (int)SPECBLEACH_SMOOTHING_NLM_2D
+              ? (int)SPECBLEACH_SMOOTHING_NLM_2D
+              : (int)SPECBLEACH_SMOOTHING_TEMPORAL,
       .masking_depth = fmaxf(0.0f, fminf(1.0f, parameters->masking_depth)),
       .suppression_strength =
           fmaxf(0.0f, fminf(1.0f, parameters->suppression_strength)),
@@ -93,9 +97,66 @@ static const float* curve_bias_copy(float** buffer, uint32_t* capacity,
   return *buffer;
 }
 
-specbleach_denoiser* specbleach_denoiser_initialize(const uint32_t sample_rate,
-                                                    float frame_size) {
-  if (sample_rate == 0 || frame_size <= 0.0f) {
+SpecbleachDenoiserParameters specbleach_denoiser_get_default_parameters(void) {
+  SpecbleachDenoiserParameters p;
+  memset(&p, 0, sizeof(p));
+  p.learn_noise = SPECBLEACH_LEARN_OFF;
+  p.residual_listen = false;
+  p.reduction_gain = 0.1f;
+  p.smoothing_factor = 0.5f;
+  p.smoothing_mode = SPECBLEACH_SMOOTHING_TEMPORAL;
+  p.whitening_factor = 0.0f;
+  p.adaptive_noise = false;
+  p.noise_estimation_method = SPECBLEACH_NOISE_ESTIMATION_SPP_MMSE;
+  p.masking_depth = 0.5f;
+  p.suppression_strength = 1.0f;
+  p.aggressiveness = 0.0f;
+  p.tonal_reduction_gain = 0.1f;
+  p.hpss_enable = false;
+  p.noise_profile_scale = 1.0f;
+  p.reduction_curve_bias = NULL;
+  p.reduction_curve_enabled = false;
+  p.reduction_curve_size = 0;
+  p.tonal_noise_profile_scale = 1.0f;
+  return p;
+}
+
+static bool rebuild_engines(SbDenoiserInstance* self) {
+  if (self->spectral_denoiser) {
+    spectral_denoiser_free(self->spectral_denoiser);
+    self->spectral_denoiser = NULL;
+  }
+  if (self->noise_profile) {
+    noise_profile_free(self->noise_profile);
+    self->noise_profile = NULL;
+  }
+  if (self->stft_processor) {
+    stft_processor_free(self->stft_processor);
+    self->stft_processor = NULL;
+  }
+  self->stft_processor = stft_processor_initialize(
+      self->sample_rate, self->frame_size_ms, OVERLAP_FACTOR,
+      PADDING_CONFIGURATION, ZEROPADDING_AMOUNT, INPUT_WINDOW_TYPE,
+      OUTPUT_WINDOW_TYPE);
+  if (!self->stft_processor) {
+    return false;
+  }
+  const uint32_t fft_size = get_stft_fft_size(self->stft_processor);
+  self->fft_size = fft_size;
+  self->hop = get_stft_hop_size(self->stft_processor);
+  self->noise_profile = noise_profile_initialize(
+      get_stft_real_spectrum_size(self->stft_processor));
+  if (!self->noise_profile) {
+    return false;
+  }
+  self->spectral_denoiser = spectral_denoiser_initialize(
+      self->sample_rate, fft_size, OVERLAP_FACTOR, self->noise_profile);
+  return self->spectral_denoiser != NULL;
+}
+
+specbleach_denoiser* specbleach_denoiser_initialize(uint32_t sample_rate,
+                                                    float frame_size_ms) {
+  if (sample_rate == 0 || frame_size_ms <= 0.0f) {
     return NULL;
   }
 
@@ -106,16 +167,20 @@ specbleach_denoiser* specbleach_denoiser_initialize(const uint32_t sample_rate,
   }
 
   self->sample_rate = sample_rate;
+  self->frame_size_ms = frame_size_ms;
+  self->frame_size_samples =
+      (uint32_t)((frame_size_ms / 1000.0f) * (float)sample_rate);
+  self->last_error = SPECBLEACH_OK;
   self->stft_processor = stft_processor_initialize(
-      sample_rate, frame_size, OVERLAP_FACTOR_1D, PADDING_CONFIGURATION_1D,
-      ZEROPADDING_AMOUNT_1D, INPUT_WINDOW_TYPE_1D, OUTPUT_WINDOW_TYPE_1D);
+      sample_rate, frame_size_ms, OVERLAP_FACTOR, PADDING_CONFIGURATION,
+      ZEROPADDING_AMOUNT, INPUT_WINDOW_TYPE, OUTPUT_WINDOW_TYPE);
 
   if (!self->stft_processor) {
     specbleach_denoiser_free(self);
     return NULL;
   }
 
-  const uint32_t fft_size = get_stft_fft_size(self->stft_processor);
+  self->fft_size = get_stft_fft_size(self->stft_processor);
   self->hop = get_stft_hop_size(self->stft_processor);
 
   self->noise_profile = noise_profile_initialize(
@@ -126,7 +191,7 @@ specbleach_denoiser* specbleach_denoiser_initialize(const uint32_t sample_rate,
   }
 
   self->spectral_denoiser = spectral_denoiser_initialize(
-      self->sample_rate, fft_size, OVERLAP_FACTOR_1D, self->noise_profile);
+      self->sample_rate, self->fft_size, OVERLAP_FACTOR, self->noise_profile);
 
   if (!self->spectral_denoiser) {
     specbleach_denoiser_free(self);
@@ -159,8 +224,8 @@ void specbleach_denoiser_free(specbleach_denoiser* instance) {
   free(self);
 }
 
-uint32_t specbleach_denoiser_get_latency(specbleach_denoiser* instance) {
-  SbDenoiserInstance* self = instance;
+uint32_t specbleach_denoiser_get_latency(const specbleach_denoiser* instance) {
+  const SbDenoiserInstance* self = instance;
 
   if (!self || !self->stft_processor) {
     return 0;
@@ -175,23 +240,54 @@ uint32_t specbleach_denoiser_get_latency(specbleach_denoiser* instance) {
 }
 
 bool specbleach_denoiser_process(specbleach_denoiser* instance,
-                                 const uint32_t number_of_samples,
+                                 uint32_t number_of_samples,
                                  const float* input, float* output) {
-  if (!instance || number_of_samples == 0 || !input || !output) {
+  SbDenoiserInstance* self = instance;
+  if (!instance || !input || !output) {
+    if (self) {
+      self->last_error = SPECBLEACH_ERR_NULL_ARG;
+    }
     return false;
   }
-
-  SbDenoiserInstance* self = instance;
+  if (number_of_samples == 0) {
+    self->last_error = SPECBLEACH_ERR_EMPTY;
+    return false;
+  }
 
   stft_processor_run(self->stft_processor, number_of_samples, input, output,
                      &spectral_denoiser_run, self->spectral_denoiser);
 
+  self->last_error = SPECBLEACH_OK;
   return true;
 }
 
+uint32_t specbleach_denoiser_get_sample_rate(
+    const specbleach_denoiser* instance) {
+  const SbDenoiserInstance* self = instance;
+  return self ? self->sample_rate : 0;
+}
+
+uint32_t specbleach_denoiser_get_frame_size(
+    const specbleach_denoiser* instance) {
+  const SbDenoiserInstance* self = instance;
+  return self ? self->frame_size_samples : 0;
+}
+
+uint32_t specbleach_denoiser_get_fft_size(
+    const specbleach_denoiser* instance) {
+  const SbDenoiserInstance* self = instance;
+  return self ? self->fft_size : 0;
+}
+
+uint32_t specbleach_denoiser_get_hop_size(
+    const specbleach_denoiser* instance) {
+  const SbDenoiserInstance* self = instance;
+  return self ? self->hop : 0;
+}
+
 uint32_t specbleach_denoiser_get_noise_profile_size(
-    specbleach_denoiser* instance) {
-  SbDenoiserInstance* self = instance;
+    const specbleach_denoiser* instance) {
+  const SbDenoiserInstance* self = instance;
   return (self && self->noise_profile)
              ? get_noise_profile_size(self->noise_profile)
              : 0;
@@ -199,73 +295,165 @@ uint32_t specbleach_denoiser_get_noise_profile_size(
 
 bool specbleach_denoiser_load_noise_profile_for_mode(
     specbleach_denoiser* instance, const float* restored_profile,
-    const uint32_t profile_size, const uint32_t block_count, const int mode) {
+    const uint32_t profile_size, const uint32_t block_count,
+    const SpecbleachProfileMode mode) {
   SbDenoiserInstance* self = instance;
-  if (!self || !self->noise_profile || !restored_profile || mode < 1 ||
-      mode > 4) {
+  if (!self || !self->noise_profile || !restored_profile) {
+    if (self) {
+      self->last_error = SPECBLEACH_ERR_NULL_ARG;
+    }
+    return false;
+  }
+  if (mode < SPECBLEACH_PROFILE_MODE_FIRST ||
+      mode > SPECBLEACH_PROFILE_MODE_LAST) {
+    self->last_error = SPECBLEACH_ERR_INVALID_MODE;
     return false;
   }
 
   if (profile_size != get_noise_profile_size(self->noise_profile)) {
+    self->last_error = SPECBLEACH_ERR_SIZE_MISMATCH;
     return false;
   }
 
-  return set_noise_profile(self->noise_profile, mode, restored_profile,
-                           profile_size, block_count);
+  const bool ok = set_noise_profile(self->noise_profile, (int)mode,
+                                    restored_profile, profile_size,
+                                    block_count);
+  self->last_error = ok ? SPECBLEACH_OK : SPECBLEACH_ERR_NO_MEMORY;
+  return ok;
 }
 
-bool specbleach_denoiser_reset_noise_profile(specbleach_denoiser* instance) {
+bool specbleach_denoiser_load_noise_profile_resampled(
+    specbleach_denoiser* instance, const float* restored_profile,
+    const uint32_t source_size, const uint32_t block_count,
+    const SpecbleachProfileMode mode) {
+  SbDenoiserInstance* self = instance;
+  if (!self || !self->noise_profile || !restored_profile || source_size == 0) {
+    if (self) {
+      self->last_error = SPECBLEACH_ERR_NULL_ARG;
+    }
+    return false;
+  }
+  if (mode < SPECBLEACH_PROFILE_MODE_FIRST ||
+      mode > SPECBLEACH_PROFILE_MODE_LAST) {
+    self->last_error = SPECBLEACH_ERR_INVALID_MODE;
+    return false;
+  }
+  const uint32_t native_size = get_noise_profile_size(self->noise_profile);
+  if (source_size == native_size) {
+    return specbleach_denoiser_load_noise_profile_for_mode(
+        instance, restored_profile, source_size, block_count, mode);
+  }
+  float* tmp = (float*)malloc(native_size * sizeof(float));
+  if (!tmp) {
+    self->last_error = SPECBLEACH_ERR_NO_MEMORY;
+    return false;
+  }
+  // ponytail: linear interpolation, caller's curve if higher quality needed
+  for (uint32_t i = 0; i < native_size; ++i) {
+    const float pos =
+        (native_size == 1)
+            ? 0.0f
+            : ((float)i * (float)(source_size - 1) / (float)(native_size - 1));
+    const uint32_t lo = (uint32_t)pos;
+    const uint32_t hi = lo + 1 < source_size ? lo + 1 : lo;
+    const float frac = pos - (float)lo;
+    tmp[i] = restored_profile[lo] * (1.0f - frac) + restored_profile[hi] * frac;
+  }
+  const bool ok = specbleach_denoiser_load_noise_profile_for_mode(
+      instance, tmp, native_size, block_count, mode);
+  free(tmp);
+  return ok;
+}
+
+void specbleach_denoiser_reset_noise_profile(specbleach_denoiser* instance) {
   SbDenoiserInstance* self = instance;
   if (!self) {
-    return false;
+    return;
   }
   if (self->spectral_denoiser) {
     spectral_denoiser_reset_noise_profile(self->spectral_denoiser);
   }
-  return self->noise_profile ? reset_noise_profile(self->noise_profile) : false;
+  if (self->noise_profile) {
+    reset_noise_profile(self->noise_profile);
+  }
+  self->last_error = SPECBLEACH_OK;
+}
+
+bool specbleach_denoiser_reset_dsp_state(specbleach_denoiser* instance) {
+  SbDenoiserInstance* self = instance;
+  if (!self) {
+    return false;
+  }
+  const bool ok = rebuild_engines(self);
+  self->last_error = ok ? SPECBLEACH_OK : SPECBLEACH_ERR_NO_MEMORY;
+  return ok;
 }
 
 uint32_t specbleach_denoiser_get_noise_profile_block_count_for_mode(
-    specbleach_denoiser* instance, int mode) {
-  SbDenoiserInstance* self = instance;
-  if (!self || !self->noise_profile || mode < 1 || mode > 4) {
+    const specbleach_denoiser* instance, SpecbleachProfileMode mode) {
+  const SbDenoiserInstance* self = instance;
+  if (!self || !self->noise_profile || mode < SPECBLEACH_PROFILE_MODE_FIRST ||
+      mode > SPECBLEACH_PROFILE_MODE_LAST) {
     return 0;
   }
-  return get_noise_profile_block_count(self->noise_profile, mode);
+  return get_noise_profile_block_count(self->noise_profile, (int)mode);
 }
 
-float* specbleach_denoiser_get_noise_profile_for_mode(
-    specbleach_denoiser* instance, int mode) {
-  SbDenoiserInstance* self = instance;
-  if (!self || !self->noise_profile || mode < 1 || mode > 4) {
+const float* specbleach_denoiser_get_noise_profile_for_mode(
+    const specbleach_denoiser* instance, SpecbleachProfileMode mode) {
+  const SbDenoiserInstance* self = instance;
+  if (!self || !self->noise_profile || mode < SPECBLEACH_PROFILE_MODE_FIRST ||
+      mode > SPECBLEACH_PROFILE_MODE_LAST) {
     return NULL;
   }
-  return get_noise_profile(self->noise_profile, mode);
+  return get_noise_profile(self->noise_profile, (int)mode);
 }
 
 bool specbleach_denoiser_noise_profile_available_for_mode(
-    specbleach_denoiser* instance, int mode) {
-  SbDenoiserInstance* self = instance;
-  if (!self || !self->noise_profile || mode < 1 || mode > 4) {
+    const specbleach_denoiser* instance, SpecbleachProfileMode mode) {
+  const SbDenoiserInstance* self = instance;
+  if (!self || !self->noise_profile || mode < SPECBLEACH_PROFILE_MODE_FIRST ||
+      mode > SPECBLEACH_PROFILE_MODE_LAST) {
     return false;
   }
-  return is_noise_estimation_available(self->noise_profile, mode);
+  return is_noise_estimation_available(self->noise_profile, (int)mode);
+}
+
+bool specbleach_denoiser_has_any_profile(
+    const specbleach_denoiser* instance) {
+  const SbDenoiserInstance* self = instance;
+  if (!self || !self->noise_profile) {
+    return false;
+  }
+  for (int mode = SPECBLEACH_PROFILE_MODE_FIRST;
+       mode <= SPECBLEACH_PROFILE_MODE_LAST; ++mode) {
+    if (is_noise_estimation_available(self->noise_profile, mode)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 bool specbleach_denoiser_load_parameters(
     specbleach_denoiser* instance,
     const SpecbleachDenoiserParameters* parameters,
-    const uint32_t parameters_size) {
-  if (!instance || !parameters ||
-      parameters_size != sizeof(SpecbleachDenoiserParameters)) {
+    uint32_t parameters_size) {
+  SbDenoiserInstance* self = instance;
+  if (!instance || !parameters) {
+    if (self) {
+      self->last_error = SPECBLEACH_ERR_NULL_ARG;
+    }
     return false;
   }
-
-  SbDenoiserInstance* self = instance;
+  if (parameters_size != sizeof(SpecbleachDenoiserParameters)) {
+    self->last_error = SPECBLEACH_ERR_ABI_MISMATCH;
+    return false;
+  }
 
   const uint32_t profile_size = get_noise_profile_size(self->noise_profile);
   if (parameters->reduction_curve_enabled &&
       parameters->reduction_curve_size != profile_size) {
+    self->last_error = SPECBLEACH_ERR_SIZE_MISMATCH;
     return false;
   }
 
@@ -274,6 +462,7 @@ bool specbleach_denoiser_load_parameters(
       profile_size, parameters->reduction_curve_enabled,
       parameters->reduction_curve_bias);
   if (parameters->reduction_curve_enabled && !owned_bias) {
+    self->last_error = SPECBLEACH_ERR_NO_MEMORY;
     return false;
   }
 
@@ -281,42 +470,76 @@ bool specbleach_denoiser_load_parameters(
       sanitize_denoiser_parameters(parameters);
   denoise_parameters.reduction_curve_bias = owned_bias;
 
-  return load_reduction_parameters(self->spectral_denoiser, denoise_parameters);
+  const bool ok =
+      load_reduction_parameters(self->spectral_denoiser, denoise_parameters);
+  self->last_error = ok ? SPECBLEACH_OK : SPECBLEACH_ERR_NO_MEMORY;
+  return ok;
 }
 
-const float* specbleach_denoiser_get_tonal_mask(specbleach_denoiser* instance) {
-  SbDenoiserInstance* self = instance;
+const float* specbleach_denoiser_get_tonal_mask(
+    const specbleach_denoiser* instance) {
+  const SbDenoiserInstance* self = instance;
   return self ? spectral_denoiser_get_tonal_mask(self->spectral_denoiser)
               : NULL;
 }
 
-uint32_t specbleach_denoiser_get_tonal_peaks(specbleach_denoiser* instance,
-                                             float* peak_freqs_hz,
-                                             uint32_t max_peaks) {
-  SbDenoiserInstance* self = instance;
+uint32_t specbleach_denoiser_get_tonal_peaks(
+    const specbleach_denoiser* instance, float* peak_freqs_hz,
+    uint32_t max_peaks) {
+  const SbDenoiserInstance* self = instance;
   return self ? spectral_denoiser_get_peaks(self->spectral_denoiser,
                                             peak_freqs_hz, max_peaks)
               : 0;
 }
 
 const float* specbleach_denoiser_get_active_noise_profile(
-    specbleach_denoiser* instance) {
-  SbDenoiserInstance* self = instance;
+    const specbleach_denoiser* instance) {
+  const SbDenoiserInstance* self = instance;
   return self ? spectral_denoiser_get_active_noise_profile(
                     self->spectral_denoiser)
               : NULL;
 }
 
-bool specbleach_denoiser_is_transient_detected(specbleach_denoiser* instance) {
-  SbDenoiserInstance* self = instance;
+bool specbleach_denoiser_is_transient_detected(
+    const specbleach_denoiser* instance) {
+  const SbDenoiserInstance* self = instance;
   return self ? spectral_denoiser_is_transient_detected(self->spectral_denoiser)
               : false;
 }
 
 float specbleach_denoiser_get_transient_intensity(
-    specbleach_denoiser* instance) {
-  SbDenoiserInstance* self = instance;
+    const specbleach_denoiser* instance) {
+  const SbDenoiserInstance* self = instance;
   return self ? spectral_denoiser_get_transient_intensity(
                     self->spectral_denoiser)
               : 0.0f;
+}
+
+SpecbleachError specbleach_denoiser_get_last_error(
+    const specbleach_denoiser* instance) {
+  const SbDenoiserInstance* self = instance;
+  return self ? self->last_error : SPECBLEACH_ERR_NULL_ARG;
+}
+
+const char* specbleach_denoiser_get_last_error_string(SpecbleachError error) {
+  switch (error) {
+  case SPECBLEACH_OK:
+    return "ok";
+  case SPECBLEACH_ERR_NULL_ARG:
+    return "null argument";
+  case SPECBLEACH_ERR_ABI_MISMATCH:
+    return "parameter size mismatch (ABI)";
+  case SPECBLEACH_ERR_SIZE_MISMATCH:
+    return "profile/curve size mismatch";
+  case SPECBLEACH_ERR_INVALID_MODE:
+    return "invalid profile mode";
+  case SPECBLEACH_ERR_INVALID_CHANNEL:
+    return "invalid channel";
+  case SPECBLEACH_ERR_NO_MEMORY:
+    return "out of memory";
+  case SPECBLEACH_ERR_EMPTY:
+    return "empty block";
+  default:
+    return "unknown error";
+  }
 }

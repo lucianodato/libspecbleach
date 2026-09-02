@@ -265,7 +265,7 @@ int main(int argc, char** argv) {
           return 1;
         }
         parameters.smoothing_mode =
-            (mode == 1) ? SB_SMOOTHING_NLM_2D : SB_SMOOTHING_TEMPORAL;
+            (mode == 1) ? SPECBLEACH_SMOOTHING_NLM_2D : SPECBLEACH_SMOOTHING_TEMPORAL;
         break;
       }
       case 'd':

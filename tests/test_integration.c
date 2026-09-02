@@ -337,7 +337,7 @@ void test_2d_denoiser(void) {
       .learn_noise = SPECBLEACH_LEARN_ALL, // Learn mode
       .reduction_gain = 0.1f,
       .smoothing_factor = 0.5f, // NLM h parameter
-      .smoothing_mode = SB_SMOOTHING_NLM_2D,
+      .smoothing_mode = SPECBLEACH_SMOOTHING_NLM_2D,
       .whitening_factor = 0.0f,
       .residual_listen = false,
   };
@@ -387,12 +387,13 @@ void test_2d_denoiser(void) {
   uint32_t profile_size = specbleach_denoiser_get_noise_profile_size(handle);
   TEST_ASSERT(profile_size > 0, "Profile size should be positive");
 
-  float* profile =
+  const float* profile =
       specbleach_denoiser_get_noise_profile_for_mode(handle, ROLLING_MEAN);
   TEST_ASSERT(profile != NULL, "Should be able to get noise profile");
 
   // Test reset
-  TEST_ASSERT(specbleach_denoiser_reset_noise_profile(handle),
+  specbleach_denoiser_reset_noise_profile(handle);
+  TEST_ASSERT(true,
               "Reset should succeed");
   TEST_ASSERT(!specbleach_denoiser_noise_profile_available_for_mode(
                   handle, ROLLING_MEAN),
@@ -427,7 +428,7 @@ void test_runtime_mode_switch(void) {
       .learn_noise = SPECBLEACH_LEARN_ALL,
       .reduction_gain = 0.1f,
       .smoothing_factor = 0.5f,
-      .smoothing_mode = SB_SMOOTHING_TEMPORAL,
+      .smoothing_mode = SPECBLEACH_SMOOTHING_TEMPORAL,
   };
   TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &parameters,
                                                   sizeof(parameters)),
@@ -440,7 +441,7 @@ void test_runtime_mode_switch(void) {
 
   // Switch to NLM 2D mid-stream and keep processing
   parameters.learn_noise = SPECBLEACH_LEARN_OFF;
-  parameters.smoothing_mode = SB_SMOOTHING_NLM_2D;
+  parameters.smoothing_mode = SPECBLEACH_SMOOTHING_NLM_2D;
   TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &parameters,
                                                   sizeof(parameters)),
               "Load NLM parameters");

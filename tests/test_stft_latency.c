@@ -30,7 +30,7 @@ int main(void) {
   // Initialize STFT processor
   StftProcessor* processor =
       stft_processor_initialize(sample_rate, stft_frame_size, overlap_factor,
-                                NO_PADDING, 0, HANN_WINDOW, HANN_WINDOW);
+                                PAD_TO_VALID_SIZE, 0, HANN_WINDOW, HANN_WINDOW);
 
   assert(processor != NULL);
 

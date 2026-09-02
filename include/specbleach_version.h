@@ -32,8 +32,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  * called before any instance is created.
  */
 
-#ifndef SPECBLEACH_VERSION_H
-#define SPECBLEACH_VERSION_H
+#ifndef SPECBLEACH_VERSION_H_INCLUDED
+#define SPECBLEACH_VERSION_H_INCLUDED
 
 #include "specbleach_export.h"
 
@@ -62,8 +62,16 @@ extern "C" {
 #define SPECBLEACH_VERSION_STRING "0.4.0"
 
 /**
- * Returns the runtime version string, identical to
- * SPECBLEACH_VERSION_STRING. The returned pointer is static and owned by
+ * Composite numeric version for #if comparisons, e.g.
+ * #if SPECBLEACH_VERSION_NUMBER >= 400.
+ */
+#define SPECBLEACH_VERSION_NUMBER                                                  \
+  (SPECBLEACH_VERSION_MAJOR * 10000 + SPECBLEACH_VERSION_MINOR * 100 +             \
+   SPECBLEACH_VERSION_PATCH)
+
+/**
+ * Returns the runtime version banner ("libspecbleach " +
+ * SPECBLEACH_VERSION_STRING). The returned pointer is static and owned by
  * the library; callers must not free or modify it.
  */
 SPECBLEACH_API const char* specbleach_get_version_string(void);
@@ -72,4 +80,4 @@ SPECBLEACH_API const char* specbleach_get_version_string(void);
 }
 #endif
 
-#endif /* SPECBLEACH_VERSION_H */
+#endif /* SPECBLEACH_VERSION_H_INCLUDED */

@@ -42,7 +42,7 @@ void test_spectral_smoother(void) {
 
   // 1. Invalid Initialization (fft_size == 0)
   const SpectralSmoother* invalid_ss =
-      spectral_smoothing_initialize(0, 44100, OVERLAP_FACTOR_1D, FIXED);
+      spectral_smoothing_initialize(0, 44100, OVERLAP_FACTOR, FIXED);
   TEST_ASSERT(invalid_ss == NULL, "Initialization with fft_size=0 should fail");
 
   // 2. Free NULL instance (safety check)

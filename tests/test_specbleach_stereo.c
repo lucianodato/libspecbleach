@@ -131,7 +131,7 @@ static void test_process_and_sync(void) {
               "transient intensity within range");
 
   // Reset clears availability again
-  TEST_ASSERT(specbleach_stereo_reset_profiles(stereo), "profiles reset");
+  specbleach_stereo_reset_profiles(stereo); // void, NULL-safe
   TEST_ASSERT(!specbleach_stereo_profile_available_for_channel(stereo, 0, 1),
               "mode 1 unavailable after reset");
 
@@ -181,12 +181,13 @@ static void test_process_and_sync(void) {
   // Per-channel forwarders behave
   const uint32_t profile_size =
       specbleach_stereo_get_noise_profile_size(stereo);
-  float* ch0_profile =
-      specbleach_stereo_get_noise_profile_for_channel(stereo, 0, 1);
+  const float* ch0_profile =
+      specbleach_stereo_get_noise_profile_for_channel(
+          stereo, 0, SPECBLEACH_PROFILE_ROLLING_MEAN);
   TEST_ASSERT(ch0_profile != NULL, "ch0 profile pointer valid");
-  TEST_ASSERT(
-      specbleach_stereo_get_profile_block_count_for_channel(stereo, 0, 1) > 0,
-      "ch0 block count positive");
+  TEST_ASSERT(specbleach_stereo_get_profile_block_count_for_channel(
+                  stereo, 0, SPECBLEACH_PROFILE_ROLLING_MEAN) > 0,
+              "ch0 block count positive");
 
   // Loading ch0's profile into ch1 explicitly must succeed
   TEST_ASSERT(

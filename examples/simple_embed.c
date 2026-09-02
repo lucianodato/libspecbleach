@@ -68,8 +68,10 @@ int main(void) {
   // Report algorithmic latency to your host for delay compensation
   printf("Latency: %u samples\n", specbleach_denoiser_get_latency(denoiser));
 
-  // 2. CONFIGURE (learning on)
-  SpecbleachDenoiserParameters parameters = {0};
+  // 2. CONFIGURE (learning on): start from the safe baseline and
+  // override only what this example needs
+  SpecbleachDenoiserParameters parameters =
+      specbleach_denoiser_get_default_parameters();
   parameters.learn_noise = SPECBLEACH_LEARN_ALL;
   parameters.reduction_gain = 0.1f; // -20 dB
   if (!specbleach_denoiser_load_parameters(denoiser, &parameters,

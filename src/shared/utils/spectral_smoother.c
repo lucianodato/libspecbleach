@@ -53,7 +53,7 @@ SpectralSmoother* spectral_smoothing_initialize(uint32_t fft_size,
   self->fft_size = fft_size;
   self->sample_rate = (sample_rate > 0U) ? sample_rate : 44100U;
   self->overlap_factor =
-      (overlap_factor > 0U) ? overlap_factor : OVERLAP_FACTOR_1D;
+      (overlap_factor > 0U) ? overlap_factor : OVERLAP_FACTOR;
   self->real_spectrum_size = (fft_size / 2U) + 1U;
   self->type = type;
 

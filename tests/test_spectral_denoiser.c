@@ -74,7 +74,7 @@ int main(void) {
 
   // Valid handle: NULL spectrum must fail and reset must be safe
   SpectralProcessorHandle handle =
-      spectral_denoiser_initialize(44100U, 2048U, OVERLAP_FACTOR_1D, profile);
+      spectral_denoiser_initialize(44100U, 2048U, OVERLAP_FACTOR, profile);
   TEST_ASSERT(handle != NULL, "Initialization should succeed");
 
   TEST_ASSERT(spectral_denoiser_run(handle, NULL) == false,

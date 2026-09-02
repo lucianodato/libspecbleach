@@ -81,8 +81,9 @@ the runtime transition: it crossfades internally over
 thread. Both modes report the same constant latency, so hosts never need to
 re-anchor delay compensation. Switching is just a parameter reload.
 
-C++ integrators: `specbleach.hpp` provides header-only RAII
-ownership for every handle type (`make_denoiser`, `make_stereo_group`).
+C++ integrators: `<specbleach.hpp>` provides header-only RAII ownership
+for the core handle (`make_denoiser`); `<specbleach_stereo.hpp>` adds the
+extras group (`make_stereo_group`).
 It wraps lifetime management only and has no framework dependencies, so it
 suits JUCE, raw VST3/CLAP/LV2, DAW codebases, and standalone apps alike.
 

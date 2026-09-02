@@ -140,7 +140,7 @@ void test_specbleach_load_noise_profile_with_mode(void) {
               "Should have 10 blocks averaged");
 
   // Get the profile back and verify it matches
-  float* retrieved_profile =
+  const float* retrieved_profile =
       specbleach_denoiser_get_noise_profile_for_mode(handle, 1);
   TEST_ASSERT(retrieved_profile != NULL, "Should get valid profile");
 
@@ -241,9 +241,9 @@ void test_specbleach_mode_switching(void) {
               "Mode 3 should have 15 blocks");
 
   // Check profile values
-  float* retrieved1 = specbleach_denoiser_get_noise_profile_for_mode(handle, 1);
-  float* retrieved2 = specbleach_denoiser_get_noise_profile_for_mode(handle, 2);
-  float* retrieved3 = specbleach_denoiser_get_noise_profile_for_mode(handle, 3);
+  const float* retrieved1 = specbleach_denoiser_get_noise_profile_for_mode(handle, 1);
+  const float* retrieved2 = specbleach_denoiser_get_noise_profile_for_mode(handle, 2);
+  const float* retrieved3 = specbleach_denoiser_get_noise_profile_for_mode(handle, 3);
 
   TEST_ASSERT(retrieved1 != NULL && retrieved2 != NULL && retrieved3 != NULL,
               "All profiles should be retrievable");
@@ -299,9 +299,8 @@ void test_specbleach_reset_noise_profile(void) {
       specbleach_denoiser_noise_profile_available_for_mode(handle, 1) == true,
       "Profile should be available before reset");
 
-  // Reset profile
-  TEST_ASSERT(specbleach_denoiser_reset_noise_profile(handle) == true,
-              "Reset should succeed");
+  // Reset profile (void: NULL-safe no-op, cannot fail on valid handle)
+  specbleach_denoiser_reset_noise_profile(handle);
 
   // Verify all profiles are reset
   for (int mode = 1; mode <= 4; mode++) {
@@ -481,7 +480,7 @@ void test_specbleach_smoothing_transition_and_validation(void) {
       .learn_noise = SPECBLEACH_LEARN_OFF,
       .reduction_gain = 0.3f,
       .smoothing_factor = 0.5f,
-      .smoothing_mode = SB_SMOOTHING_NLM_2D,
+      .smoothing_mode = SPECBLEACH_SMOOTHING_NLM_2D,
   };
   TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &params,
                                                   sizeof(params)) == true,
@@ -511,7 +510,7 @@ void test_specbleach_smoothing_transition_and_validation(void) {
 
   // Switch to TEMPORAL at runtime: exercises the crossfade transition
   // machinery and the temporal smoothing chain
-  params.smoothing_mode = SB_SMOOTHING_TEMPORAL;
+  params.smoothing_mode = SPECBLEACH_SMOOTHING_TEMPORAL;
   TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &params,
                                                   sizeof(params)) == true,
               "Loading temporal mode should succeed");
@@ -531,7 +530,7 @@ void test_specbleach_smoothing_transition_and_validation(void) {
 
   // Transient during NLM mode: transient-mask loops in the NLM chain
   params.hpss_enable = true;
-  params.smoothing_mode = SB_SMOOTHING_NLM_2D;
+  params.smoothing_mode = SPECBLEACH_SMOOTHING_NLM_2D;
   TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &params,
                                                   sizeof(params)) == true,
               "Loading NLM with HPSS should succeed");
@@ -721,7 +720,8 @@ int main(void) {
   TEST_ASSERT(specbleach_denoiser_noise_profile_available_for_mode(
                   NULL, ROLLING_MEAN) == false,
               "NULL available");
-  TEST_ASSERT(specbleach_denoiser_reset_noise_profile(NULL) == false,
+  specbleach_denoiser_reset_noise_profile(NULL); // must not crash
+  TEST_ASSERT(true,
               "NULL reset");
   SpecbleachDenoiserParameters null_params = {0};
   TEST_ASSERT(specbleach_denoiser_load_parameters(NULL, &null_params,
