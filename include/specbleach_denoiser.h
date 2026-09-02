@@ -85,8 +85,10 @@ typedef struct specbleach_denoiser specbleach_denoiser;
 /**
  * Parameters for the spectral denoiser.
  *
- * Thread safety contract for the whole header: unless explicitly stated
- * otherwise, functions taking a handle may be called from any thread, but
+ * Real-time contract for the whole header: every function is classified as
+ * either "RT-safe" (no allocations, no locks, no I/O — callable from a
+ * real-time audio callback thread) or "setup-only" (may allocate, block, or
+ * copy — call it from a control/setup thread only). Unless stated otherwise,
  * calls on the SAME instance must never run concurrently with each other or
  * with specbleach_denoiser_process().
  */
@@ -218,6 +220,8 @@ typedef struct SpecbleachDenoiserParameters {
  * Sample rate can be anything from 4000 Hz to 192 kHz. Recommended frame
  * size range is between 20 ms and 100 ms.
  *
+ * Thread safety: setup-only (allocates). Never call from an audio thread.
+ *
  * @return A new instance or NULL on allocation failure. Free it with
  * specbleach_denoiser_free().
  */
@@ -227,6 +231,8 @@ SPECBLEACH_API specbleach_denoiser* specbleach_denoiser_initialize(
 /**
  * Frees an instance created by specbleach_denoiser_initialize().
  * Passing NULL is a no-op. The handle is invalid after this call.
+ *
+ * Thread safety: setup-only (deallocates). Never call from an audio thread.
  */
 SPECBLEACH_API void specbleach_denoiser_free(specbleach_denoiser* instance);
 
@@ -241,7 +247,7 @@ SPECBLEACH_API void specbleach_denoiser_free(specbleach_denoiser* instance);
  * between separately compiled binaries; any other value fails cleanly
  * instead of reading out-of-bounds memory.
  *
- * Not guaranteed to be allocation-free on the FIRST call after enabling
+ * Thread safety: setup-only. May allocate on the FIRST call after enabling
  * reduction_curve_enabled (the internal copy buffer is allocated then);
  * subsequent calls reuse that buffer. Load parameters once during setup if
  * strict audio-thread allocation freedom is required.
@@ -256,7 +262,12 @@ SPECBLEACH_API bool specbleach_denoiser_load_parameters(
 /**
  * Processes a buffer of samples in place-capable buffers.
  *
- * Real-time safe: contains no allocations, locks, or I/O.
+ * Thread safety: RT-safe (no allocations, locks, or I/O). Safe for the
+ * real-time audio callback thread.
+ *
+ * Buffer contract: input/output are plain float arrays of
+ * number_of_samples length (mono, non-interleaved). Any block size is
+ * accepted - internal buffering handles alignment. Output may alias input.
  *
  * @return true on success, false on NULL arguments or an empty block.
  */
@@ -268,18 +279,27 @@ SPECBLEACH_API bool specbleach_denoiser_process(specbleach_denoiser* instance,
 /**
  * Returns the algorithmic latency in samples introduced by the instance.
  * Hosts should report this value for delay compensation.
+ *
+ * Thread safety: RT-safe (read-only query). The value is stable for the
+ * lifetime of the instance; query it once at prepare time. Smoothing mode
+ * switches never change it.
  */
 SPECBLEACH_API uint32_t
 specbleach_denoiser_get_latency(specbleach_denoiser* instance);
 
 /**
  * Returns the size of the noise profile spectrum in bins.
+ *
+ * Thread safety: RT-safe (read-only query).
  */
 SPECBLEACH_API uint32_t
 specbleach_denoiser_get_noise_profile_size(specbleach_denoiser* instance);
 
 /**
  * Loads a custom noise profile for a specific mode.
+ *
+ * Thread safety: setup-only (copies profile data). Never call from an
+ * audio thread.
  *
  * @param mode One of [SPECBLEACH_PROFILE_MODE_FIRST,
  * SPECBLEACH_PROFILE_MODE_LAST].
@@ -291,6 +311,8 @@ SPECBLEACH_API bool specbleach_denoiser_load_noise_profile_for_mode(
 
 /**
  * Resets the internal noise profile of the instance.
+ *
+ * Thread safety: setup-only. Never call from an audio thread.
  */
 SPECBLEACH_API bool specbleach_denoiser_reset_noise_profile(
     specbleach_denoiser* instance);
@@ -298,6 +320,8 @@ SPECBLEACH_API bool specbleach_denoiser_reset_noise_profile(
 /**
  * Returns the number of blocks used for the noise profile calculation for a
  * specific mode.
+ *
+ * Thread safety: RT-safe (read-only query).
  */
 SPECBLEACH_API uint32_t
 specbleach_denoiser_get_noise_profile_block_count_for_mode(
@@ -309,12 +333,17 @@ specbleach_denoiser_get_noise_profile_block_count_for_mode(
  * only for a NULL instance or an out-of-range mode. Use
  * specbleach_denoiser_noise_profile_available_for_mode() to check whether
  * learning has completed and the profile has been populated.
+ *
+ * Thread safety: RT-safe (read-only query). The returned pointer points to
+ * live internal state and must not be written to or retained past free().
  */
 SPECBLEACH_API float* specbleach_denoiser_get_noise_profile_for_mode(
     specbleach_denoiser* instance, int mode);
 
 /**
  * Returns whether a noise profile has been calculated for a specific mode.
+ *
+ * Thread safety: RT-safe (read-only query).
  */
 SPECBLEACH_API bool specbleach_denoiser_noise_profile_available_for_mode(
     specbleach_denoiser* instance, int mode);
@@ -324,6 +353,9 @@ SPECBLEACH_API bool specbleach_denoiser_noise_profile_available_for_mode(
  * processing. Array size matches
  * specbleach_denoiser_get_noise_profile_size(instance). Values range from
  * 0.0 (broadband) to 1.0 (pure tone).
+ *
+ * Thread safety: RT-safe (read-only query). Pointer points to live internal
+ * state; valid until the instance is freed.
  */
 SPECBLEACH_API const float* specbleach_denoiser_get_tonal_mask(
     specbleach_denoiser* instance);
@@ -335,6 +367,8 @@ SPECBLEACH_API const float* specbleach_denoiser_get_tonal_mask(
  * Offline/query-only API; must NOT be called from the real-time audio
  * thread.
  *
+ * Thread safety: setup-only.
+ *
  * @return Number of peak frequencies written.
  */
 SPECBLEACH_API uint32_t specbleach_denoiser_get_tonal_peaks(
@@ -342,12 +376,17 @@ SPECBLEACH_API uint32_t specbleach_denoiser_get_tonal_peaks(
 
 /**
  * Returns a pointer to the active morphed noise profile array.
+ *
+ * Thread safety: RT-safe (read-only query). Pointer points to live internal
+ * state; valid until the instance is freed.
  */
 SPECBLEACH_API const float* specbleach_denoiser_get_active_noise_profile(
     specbleach_denoiser* instance);
 
 /**
  * Returns true if a transient was detected in the last processed frame.
+ *
+ * Thread safety: RT-safe (read-only query).
  */
 SPECBLEACH_API bool specbleach_denoiser_is_transient_detected(
     specbleach_denoiser* instance);
@@ -355,6 +394,8 @@ SPECBLEACH_API bool specbleach_denoiser_is_transient_detected(
 /**
  * Returns the detected transient intensity [0.0, 1.0] from the last
  * processed frame.
+ *
+ * Thread safety: RT-safe (read-only query).
  */
 SPECBLEACH_API float specbleach_denoiser_get_transient_intensity(
     specbleach_denoiser* instance);
