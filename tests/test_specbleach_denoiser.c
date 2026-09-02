@@ -452,6 +452,177 @@ void test_specbleach_silence_bypass(void) {
   printf("✓ Specbleach silence bypass test passed\n");
 }
 
+void test_specbleach_smoothing_transition_and_validation(void) {
+  printf("Testing smoothing mode transitions and API validation...\n");
+
+  // Invalid initialization arguments
+  TEST_ASSERT(specbleach_denoiser_initialize(0, 20.0f) == NULL,
+              "Zero sample rate must fail initialization");
+  TEST_ASSERT(specbleach_denoiser_initialize(44100, 0.0f) == NULL,
+              "Zero frame size must fail initialization");
+
+  specbleach_denoiser* handle = specbleach_denoiser_initialize(44100, 20.0f);
+  TEST_ASSERT(handle != NULL, "Denoiser initialization should succeed");
+
+  // Process with NULL buffers must be rejected
+  float in_buf[1024];
+  float out_buf[1024];
+  float transient_like[1024];
+  for (int i = 0; i < 1024; ++i) {
+    in_buf[i] = 0.1f * ((float)(i % 64) / 64.0f);
+    transient_like[i] = (i % 2 == 0) ? 0.9f : -0.9f; // sharp alternating onset
+  }
+  TEST_ASSERT(specbleach_denoiser_process(handle, 1024, NULL, out_buf) == false,
+              "NULL input must be rejected");
+  TEST_ASSERT(specbleach_denoiser_process(handle, 1024, in_buf, NULL) == false,
+              "NULL output must be rejected");
+
+  SpecbleachDenoiserParameters params = (SpecbleachDenoiserParameters){
+      .learn_noise = SPECBLEACH_LEARN_OFF,
+      .reduction_gain = 0.3f,
+      .smoothing_factor = 0.5f,
+      .smoothing_mode = SB_SMOOTHING_NLM_2D,
+  };
+  TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &params,
+                                                  sizeof(params)) == true,
+              "Loading parameters should succeed");
+
+  // Wrong parameter struct size must be rejected
+  TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &params,
+                                                  sizeof(params) - 8) == false,
+              "Wrong parameters size must be rejected");
+
+  // Load a profile so both chains run with real data
+  uint32_t profile_size = specbleach_denoiser_get_noise_profile_size(handle);
+  TEST_ASSERT(profile_size > 0, "Profile size should be valid");
+  float* profile = (float*)malloc(profile_size * sizeof(float));
+  TEST_ASSERT(profile != NULL, "Profile allocation should succeed");
+  for (uint32_t i = 0; i < profile_size; i++) {
+    profile[i] = 0.1f;
+  }
+  TEST_ASSERT(specbleach_denoiser_load_noise_profile_for_mode(
+                  handle, profile, profile_size, 10, ROLLING_MEAN) == true,
+              "Loading noise profile should succeed");
+
+  // Process in NLM mode to establish the active chain
+  for (int f = 0; f < 5; ++f) {
+    specbleach_denoiser_process(handle, 1024, in_buf, out_buf);
+  }
+
+  // Switch to TEMPORAL at runtime: exercises the crossfade transition
+  // machinery and the temporal smoothing chain
+  params.smoothing_mode = SB_SMOOTHING_TEMPORAL;
+  TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &params,
+                                                  sizeof(params)) == true,
+              "Loading temporal mode should succeed");
+  for (int f = 0; f < 15; ++f) {
+    specbleach_denoiser_process(handle, 1024, in_buf, out_buf);
+    TEST_ASSERT(specbleach_denoiser_get_latency(handle) > 0,
+                "Latency must stay positive during transition");
+  }
+  for (int i = 0; i < 1024; ++i) {
+    TEST_ASSERT(isfinite(out_buf[i]) && out_buf[i] < 100.0f,
+                "Output must be finite during/after transition");
+  }
+
+  // Transient getters with a valid handle
+  (void)specbleach_denoiser_is_transient_detected(handle);
+  (void)specbleach_denoiser_get_transient_intensity(handle);
+
+  // Transient during NLM mode: transient-mask loops in the NLM chain
+  params.hpss_enable = true;
+  params.smoothing_mode = SB_SMOOTHING_NLM_2D;
+  TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &params,
+                                                  sizeof(params)) == true,
+              "Loading NLM with HPSS should succeed");
+  for (int f = 0; f < 15; ++f) {
+    specbleach_denoiser_process(handle, 1024, transient_like, out_buf);
+  }
+  params.hpss_enable = false;
+
+  // Profile with mismatched size must be rejected
+  TEST_ASSERT(specbleach_denoiser_load_noise_profile_for_mode(
+                  handle, profile, profile_size + 1, 10, ROLLING_MEAN) == false,
+              "Wrong profile size must be rejected");
+
+  // Reduction curve with mismatched size must be rejected
+  uint32_t bad_size = specbleach_denoiser_get_noise_profile_size(handle);
+  float* bad_curve = calloc(bad_size, sizeof(float));
+  params.reduction_curve_enabled = true;
+  params.reduction_curve_bias = bad_curve;
+  params.reduction_curve_size = bad_size > 0 ? bad_size - 1 : 0;
+  TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &params,
+                                                  sizeof(params)) == false,
+              "Wrong curve size must be rejected");
+
+  // Out-of-range scales fall back to safe defaults through the sanitizers
+  params.reduction_curve_enabled = false;
+  params.reduction_curve_bias = NULL;
+  params.reduction_curve_size = 0;
+  params.noise_profile_scale = 0.0f;
+  params.tonal_noise_profile_scale = 0.0f;
+  TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &params,
+                                                  sizeof(params)) == true,
+              "Zero scales must be sanitized");
+  free(bad_curve);
+
+  // Transient accessors with NULL handle
+  TEST_ASSERT(specbleach_denoiser_is_transient_detected(NULL) == false,
+              "NULL transient detected must be false");
+  TEST_ASSERT(specbleach_denoiser_get_transient_intensity(NULL) == 0.0f,
+              "NULL transient intensity must be 0");
+
+  free(profile);
+  specbleach_denoiser_free(handle);
+  printf("✓ Smoothing transition and validation test passed\n");
+}
+
+void test_specbleach_adaptive_method_switch(void) {
+  printf("Testing adaptive estimation method re-initialization...\n");
+
+  specbleach_denoiser* handle = specbleach_denoiser_initialize(44100, 20.0f);
+  TEST_ASSERT(handle != NULL, "Denoiser initialization should succeed");
+
+  float in_buf[1024];
+  float out_buf[1024];
+  for (int i = 0; i < 1024; ++i) {
+    in_buf[i] = 0.1f;
+  }
+
+  SpecbleachDenoiserParameters params = (SpecbleachDenoiserParameters){
+      .learn_noise = SPECBLEACH_LEARN_OFF,
+      .adaptive_noise = true,
+      .noise_estimation_method = SPECBLEACH_NOISE_ESTIMATION_SPP_MMSE,
+      .reduction_gain = 0.2f,
+  };
+  TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &params,
+                                                  sizeof(params)) == true,
+              "Loading adaptive SPP-MMSE should succeed");
+  for (int f = 0; f < 5; ++f) {
+    specbleach_denoiser_process(handle, 1024, in_buf, out_buf);
+  }
+
+  // Switching method must re-initialize the adaptive estimator
+  params.noise_estimation_method = SPECBLEACH_NOISE_ESTIMATION_MARTIN;
+  TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &params,
+                                                  sizeof(params)) == true,
+              "Switching to Martin must succeed");
+  for (int f = 0; f < 5; ++f) {
+    specbleach_denoiser_process(handle, 1024, in_buf, out_buf);
+  }
+
+  params.noise_estimation_method = SPECBLEACH_NOISE_ESTIMATION_BRANDT;
+  TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &params,
+                                                  sizeof(params)) == true,
+              "Switching to Brandt must succeed");
+  for (int f = 0; f < 5; ++f) {
+    specbleach_denoiser_process(handle, 1024, in_buf, out_buf);
+  }
+
+  specbleach_denoiser_free(handle);
+  printf("✓ Adaptive method switch test passed\n");
+}
+
 int main(void) {
   printf("Running specbleach denoiser tests...\n");
 
@@ -462,6 +633,8 @@ int main(void) {
   test_specbleach_reset_noise_profile();
   test_specbleach_run_features();
   test_specbleach_silence_bypass();
+  test_specbleach_smoothing_transition_and_validation();
+  test_specbleach_adaptive_method_switch();
 
   // Getter Coverage (Extra) and NULL Safety
   printf("Testing API Getters and NULL safety for coverage...\n");
@@ -478,11 +651,6 @@ int main(void) {
   specbleach_denoiser_get_active_noise_profile(h);
   float peak_freqs[10];
   specbleach_denoiser_get_tonal_peaks(h, peak_freqs, 10);
-
-  float* dummy_prof = calloc(prof_size, sizeof(float));
-  specbleach_denoiser_get_tonal_peaks_for_profile(h, dummy_prof, prof_size,
-                                                  peak_freqs, 10);
-  free(dummy_prof);
 
   // Process with tonal reduction and HPSS enabled
   float in_buf[1024] = {0};
@@ -565,9 +733,6 @@ int main(void) {
               "NULL active profile");
   TEST_ASSERT(specbleach_denoiser_get_tonal_peaks(NULL, peak_freqs, 10) == 0,
               "NULL tonal peaks");
-  TEST_ASSERT(specbleach_denoiser_get_tonal_peaks_for_profile(
-                  NULL, NULL, 0, peak_freqs, 10) == 0,
-              "NULL tonal peaks for profile");
 
   specbleach_denoiser_free(h);
 

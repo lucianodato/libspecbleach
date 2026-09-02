@@ -24,7 +24,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "specbleach_2d_denoiser.h"
 #include "specbleach_denoiser.h"
 #include "specbleach_export.h"
 
@@ -42,21 +41,13 @@ extern "C" {
  */
 
 /**
- * Selects which engine family the instances wrap.
- */
-typedef enum SpecbleachStereoEngine {
-  SPECBLEACH_STEREO_ENGINE_SPECTRAL = 0, /**< STFT spectral denoiser (1D) */
-  SPECBLEACH_STEREO_ENGINE_NLM_2D = 1,   /**< 2D Non-Local Means denoiser */
-} SpecbleachStereoEngine;
-
-/**
  * Opaque handle to a multi-channel engine group.
  */
 typedef struct specbleach_stereo
     specbleach_stereo; // NOLINT(readability-identifier-naming)
 
 /**
- * Creates one engine instance per channel.
+ * Creates one unified spectral denoiser instance per channel.
  *
  * @param channels Number of channels (1 supported too; useful for
  * symmetric code paths).
@@ -64,8 +55,7 @@ typedef struct specbleach_stereo
  * specbleach_stereo_free().
  */
 SPECBLEACH_API specbleach_stereo* specbleach_stereo_initialize(
-    uint32_t sample_rate, float frame_size, uint32_t channels,
-    SpecbleachStereoEngine engine);
+    uint32_t sample_rate, float frame_size, uint32_t channels);
 
 /**
  * Frees the instance and every underlying engine. NULL is a no-op.
@@ -75,21 +65,17 @@ SPECBLEACH_API void specbleach_stereo_free(specbleach_stereo* instance);
 /**
  * Loads parameters on every channel.
  *
- * These are strongly typed per engine family: calling the 1D loader with a
- * 2D group (or vice versa) is a compile-time error. parameters_size must be
- * exactly the matching sizeof and guards against ABI drift between
- * separately compiled binaries.
+ * parameters_size must be exactly sizeof(SpecbleachDenoiserParameters) and
+ * guards against ABI drift between separately compiled binaries.
  *
- * See the engine headers for allocation caveats related to
+ * See the engine header for allocation caveats related to
  * reduction_curve_bias (each channel owns its copy; first enabled load may
- * allocate).
+ * allocate). The smoothing_mode field can be changed at runtime; the
+ * library performs the internal seamless crossfade.
  */
-SPECBLEACH_API bool specbleach_stereo_load_parameters_1d(
+SPECBLEACH_API bool specbleach_stereo_load_parameters(
     specbleach_stereo* instance, const SpecbleachDenoiserParameters* parameters,
     uint32_t parameters_size);
-SPECBLEACH_API bool specbleach_stereo_load_parameters_2d(
-    specbleach_stereo* instance,
-    const Specbleach2DDenoiserParameters* parameters, uint32_t parameters_size);
 
 /**
  * Processes all channels. Buffers are deinterleaved: input[i] / output[i]
@@ -108,13 +94,8 @@ SPECBLEACH_API uint32_t
 specbleach_stereo_get_channel_count(const specbleach_stereo* instance);
 
 /**
- * Returns the engine family passed at initialization.
- */
-SPECBLEACH_API SpecbleachStereoEngine
-specbleach_stereo_get_engine(const specbleach_stereo* instance);
-
-/**
  * Returns the algorithmic latency in samples (identical for every channel).
+ * Constant across smoothing mode changes.
  */
 SPECBLEACH_API uint32_t
 specbleach_stereo_get_latency(const specbleach_stereo* instance);
@@ -132,19 +113,6 @@ specbleach_stereo_get_latency(const specbleach_stereo* instance);
  */
 SPECBLEACH_API bool specbleach_stereo_sync_profiles(
     specbleach_stereo* instance);
-
-/**
- * Copies noise profiles from another engine family's group into this one,
- * channel by channel (e.g., before switching a spectral group for a 2D NLM
- * group). Both groups must share the same channel count and profile size.
- *
- * Not real-time safe.
- *
- * @return true if every channel was migrated successfully. Fails cleanly
- * when the source group has not learned anything yet.
- */
-SPECBLEACH_API bool specbleach_stereo_migrate_profiles_from(
-    specbleach_stereo* instance, const specbleach_stereo* source);
 
 /**
  * Resets stored noise profiles on every channel.
@@ -172,13 +140,6 @@ SPECBLEACH_API uint32_t specbleach_stereo_get_profile_block_count_for_channel(
  */
 SPECBLEACH_API uint32_t
 specbleach_stereo_get_noise_profile_size(const specbleach_stereo* instance);
-
-/**
- * Aggregated transient detection across channels (true if ANY channel
- * detected a transient in the last processed block).
- */
-SPECBLEACH_API bool specbleach_stereo_is_transient_detected(
-    specbleach_stereo* instance);
 
 /**
  * Returns the maximum transient intensity [0.0, 1.0] across channels from

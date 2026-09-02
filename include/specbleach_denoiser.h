@@ -28,8 +28,48 @@ extern "C" {
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "specbleach_common.h"
 #include "specbleach_export.h"
+
+/**
+ * Noise profile learning mode.
+ *
+ * Numeric values are part of the public contract. Do not change them:
+ * persisted state in downstream applications depends on them.
+ */
+typedef enum SpecbleachLearnMode {
+  SPECBLEACH_LEARN_OFF =
+      0, /**< Learning disabled, reduce using stored profile */
+  SPECBLEACH_LEARN_ALL = 1, /**< Learn all profile types simultaneously */
+} SpecbleachLearnMode;
+
+/**
+ * Adaptive noise estimation method.
+ *
+ * Numeric values are part of the public contract. Do not change them:
+ * persisted state in downstream applications depends on them.
+ */
+typedef enum SpecbleachNoiseEstimationMethod {
+  SPECBLEACH_NOISE_ESTIMATION_SPP_MMSE = 0, /**< SPP-MMSE (unbiased) */
+  SPECBLEACH_NOISE_ESTIMATION_BRANDT = 1,   /**< Brandt trimmed mean */
+  SPECBLEACH_NOISE_ESTIMATION_MARTIN = 2,   /**< Martin minimum statistics */
+} SpecbleachNoiseEstimationMethod;
+
+/**
+ * Smoothing strategy applied by the unified spectral denoiser.
+ *
+ * Numeric values are part of the public contract.
+ */
+typedef enum SbSmoothingMode {
+  SB_SMOOTHING_TEMPORAL = 0, /**< 1D temporal/spatial gain smoothing */
+  SB_SMOOTHING_NLM_2D = 1,   /**< 2D Non-Local Means patch smoothing */
+} SbSmoothingMode;
+
+/**
+ * Inclusive range of valid noise profile mode indexes used by the
+ * profile accessors across all denoiser APIs.
+ */
+#define SPECBLEACH_PROFILE_MODE_FIRST 1
+#define SPECBLEACH_PROFILE_MODE_LAST 4
 
 /**
  * Opaque handle to a single-channel spectral denoiser instance.
@@ -71,8 +111,19 @@ typedef struct SpecbleachDenoiserParameters {
   /**
    * Normalized smoothing factor across frames (0.0 to 1.0). Values outside
    * the range are clamped.
+   *
+   * In temporal mode this controls temporal/spatial gain smoothing. In NLM
+   * 2D mode it controls the NLM h parameter and 2D time-frequency artifact
+   * smoothing.
    */
   float smoothing_factor;
+
+  /**
+   * Smoothing strategy used by the processor. Can be changed at runtime;
+   * the library performs an internal allocation-free crossfade and both
+   * modes share the same latency.
+   */
+  SbSmoothingMode smoothing_mode;
 
   /**
    * Normalized whitening factor for residue noise floor (0.0 to 1.0). Values
@@ -92,8 +143,9 @@ typedef struct SpecbleachDenoiserParameters {
   SpecbleachNoiseEstimationMethod noise_estimation_method;
 
   /**
-   * Masking veto depth (0.0 - 1.0): depth of signal energy preservation.
-   * Values outside the range are clamped.
+   * Masking veto/protection depth (0.0 - 1.0): depth of signal energy
+   * preservation. Applies to both smoothing modes. Values outside the range
+   * are clamped.
    */
   float masking_depth;
 
@@ -287,19 +339,6 @@ SPECBLEACH_API const float* specbleach_denoiser_get_tonal_mask(
  */
 SPECBLEACH_API uint32_t specbleach_denoiser_get_tonal_peaks(
     specbleach_denoiser* instance, float* peak_freqs_hz, uint32_t max_peaks);
-
-/**
- * Returns peak frequencies in Hz computed directly from a caller-provided
- * noise profile array. If the internal MEDIAN profile is available, it takes
- * precedence over the caller-provided profile; the caller-provided profile
- * is used only as fallback.
- *
- * Offline/query-only API; must NOT be called from the real-time audio
- * thread.
- */
-SPECBLEACH_API uint32_t specbleach_denoiser_get_tonal_peaks_for_profile(
-    specbleach_denoiser* instance, const float* profile, uint32_t profile_size,
-    float* peak_freqs_hz, uint32_t max_peaks);
 
 /**
  * Returns a pointer to the active morphed noise profile array.

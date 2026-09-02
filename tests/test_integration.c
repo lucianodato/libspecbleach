@@ -12,7 +12,6 @@
 // Include internal headers for testing
 
 // Include the public API
-#include "specbleach_2d_denoiser.h"
 
 #define ROLLING_MEAN 1
 
@@ -22,6 +21,7 @@
 void test_spectral_denoiser(void);
 void test_adaptive_denoiser(void);
 void test_2d_denoiser(void);
+void test_runtime_mode_switch(void);
 void test_different_noise_levels(void);
 void test_library_info(void);
 void generate_test_audio(float* buffer, size_t length, float signal_freq,
@@ -257,6 +257,7 @@ int main(void) {
   test_adaptive_denoiser();
 
   test_2d_denoiser();
+  test_runtime_mode_switch();
   test_library_info();
 
   printf("\n✅ All integration tests passed!\n");
@@ -313,7 +314,7 @@ void test_adaptive_denoiser(void) {
 }
 
 void test_2d_denoiser(void) {
-  printf("Testing 2D NLM denoiser integration...\n");
+  printf("Testing 2D NLM smoothing mode integration...\n");
 
   float* input_buffer = calloc(BLOCK_SIZE, sizeof(float));
   float* output_buffer = calloc(BLOCK_SIZE, sizeof(float));
@@ -322,41 +323,43 @@ void test_2d_denoiser(void) {
   generate_test_audio(input_buffer, BLOCK_SIZE, 1000.0f, 0.1f);
 
   float frame_size_ms = 20.0f;
-  specbleach_2d_denoiser* handle =
-      specbleach_2d_initialize(SAMPLE_RATE, frame_size_ms);
-  TEST_ASSERT(handle != NULL, "Failed to initialize 2D denoiser");
+  specbleach_denoiser* handle =
+      specbleach_denoiser_initialize(SAMPLE_RATE, frame_size_ms);
+  TEST_ASSERT(handle != NULL, "Failed to initialize unified denoiser");
 
   // Test latency reporting (should include NLM look-ahead)
-  uint32_t latency = specbleach_2d_get_latency(handle);
-  printf("  2D Denoiser latency: %u samples\n", latency);
-  TEST_ASSERT(latency > 0, "2D denoiser should report latency");
+  uint32_t latency = specbleach_denoiser_get_latency(handle);
+  printf("  unified denoiser latency: %u samples\n", latency);
+  TEST_ASSERT(latency > 0, "unified denoiser should report latency");
 
   // Configure for noise learning
-  Specbleach2DDenoiserParameters parameters = {
+  SpecbleachDenoiserParameters parameters = {
       .learn_noise = SPECBLEACH_LEARN_ALL, // Learn mode
       .reduction_gain = 0.1f,
       .smoothing_factor = 0.5f, // NLM h parameter
+      .smoothing_mode = SB_SMOOTHING_NLM_2D,
       .whitening_factor = 0.0f,
       .residual_listen = false,
   };
 
-  TEST_ASSERT(
-      specbleach_2d_load_parameters(handle, &parameters, sizeof(parameters)),
-      "Load 2D learn parameters should succeed");
+  TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &parameters,
+                                                  sizeof(parameters)),
+              "Load NLM learn parameters should succeed");
 
   // Process first blocks in learn mode
-  specbleach_2d_process(handle, FRAME_SIZE * 10, input_buffer, output_buffer);
+  specbleach_denoiser_process(handle, FRAME_SIZE * 10, input_buffer,
+                              output_buffer);
 
   // Check that noise profile is available
-  TEST_ASSERT(
-      specbleach_2d_noise_profile_available_for_mode(handle, ROLLING_MEAN),
-      "Noise profile should be available after learning");
+  TEST_ASSERT(specbleach_denoiser_noise_profile_available_for_mode(
+                  handle, ROLLING_MEAN),
+              "Noise profile should be available after learning");
 
   // Switch to reduction mode
   parameters.learn_noise = SPECBLEACH_LEARN_OFF;
-  TEST_ASSERT(
-      specbleach_2d_load_parameters(handle, &parameters, sizeof(parameters)),
-      "Load 2D reduction parameters should succeed");
+  TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &parameters,
+                                                  sizeof(parameters)),
+              "Load NLM reduction parameters should succeed");
 
   // Process remaining blocks
   size_t processed_samples = FRAME_SIZE * 10;
@@ -366,9 +369,9 @@ void test_2d_denoiser(void) {
       block_size = (uint32_t)(BLOCK_SIZE - processed_samples);
     }
 
-    bool result = specbleach_2d_process(handle, block_size,
-                                        input_buffer + processed_samples,
-                                        output_buffer + processed_samples);
+    bool result = specbleach_denoiser_process(
+        handle, block_size, input_buffer + processed_samples,
+        output_buffer + processed_samples);
     TEST_ASSERT(result == true, "Processing failed");
 
     processed_samples += (size_t)block_size;
@@ -377,27 +380,91 @@ void test_2d_denoiser(void) {
   // Calculate RMS values
   float input_rms = calculate_rms(input_buffer, BLOCK_SIZE);
   float output_rms = calculate_rms(output_buffer, BLOCK_SIZE);
-  printf("  2D Denoiser - Input RMS: %.4f, Output RMS: %.4f\n", input_rms,
+  printf("  unified denoiser - Input RMS: %.4f, Output RMS: %.4f\n", input_rms,
          output_rms);
 
   // Test noise profile API
-  uint32_t profile_size = specbleach_2d_get_noise_profile_size(handle);
+  uint32_t profile_size = specbleach_denoiser_get_noise_profile_size(handle);
   TEST_ASSERT(profile_size > 0, "Profile size should be positive");
 
   float* profile =
-      specbleach_2d_get_noise_profile_for_mode(handle, ROLLING_MEAN);
+      specbleach_denoiser_get_noise_profile_for_mode(handle, ROLLING_MEAN);
   TEST_ASSERT(profile != NULL, "Should be able to get noise profile");
 
   // Test reset
-  TEST_ASSERT(specbleach_2d_reset_noise_profile(handle),
+  TEST_ASSERT(specbleach_denoiser_reset_noise_profile(handle),
               "Reset should succeed");
-  TEST_ASSERT(
-      !specbleach_2d_noise_profile_available_for_mode(handle, ROLLING_MEAN),
-      "Profile should not be available after reset");
+  TEST_ASSERT(!specbleach_denoiser_noise_profile_available_for_mode(
+                  handle, ROLLING_MEAN),
+              "Profile should not be available after reset");
 
-  specbleach_2d_free(handle);
+  specbleach_denoiser_free(handle);
   free(input_buffer);
   free(output_buffer);
 
-  printf("✓ 2D NLM denoiser integration test passed\n");
+  printf("✓ 2D NLM smoothing mode integration test passed\n");
+}
+
+// Runtime smoothing mode switch: profile persists, latency constant,
+// processing continues seamlessly
+void test_runtime_mode_switch(void) {
+  printf("Testing runtime smoothing mode switch...\n");
+
+  float* input_buffer = calloc(BLOCK_SIZE, sizeof(float));
+  float* output_buffer = calloc(BLOCK_SIZE, sizeof(float));
+  TEST_ASSERT(input_buffer && output_buffer, "Failed to allocate test buffers");
+
+  generate_test_audio(input_buffer, BLOCK_SIZE, 1000.0f, 0.1f);
+
+  specbleach_denoiser* handle =
+      specbleach_denoiser_initialize(SAMPLE_RATE, 20.0f);
+  TEST_ASSERT(handle != NULL, "Failed to initialize denoiser");
+
+  const uint32_t latency_temporal = specbleach_denoiser_get_latency(handle);
+  TEST_ASSERT(latency_temporal > 0, "Latency must include common delay");
+
+  SpecbleachDenoiserParameters parameters = {
+      .learn_noise = SPECBLEACH_LEARN_ALL,
+      .reduction_gain = 0.1f,
+      .smoothing_factor = 0.5f,
+      .smoothing_mode = SB_SMOOTHING_TEMPORAL,
+  };
+  TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &parameters,
+                                                  sizeof(parameters)),
+              "Load learn parameters");
+  specbleach_denoiser_process(handle, FRAME_SIZE * 10, input_buffer,
+                              output_buffer);
+  TEST_ASSERT(specbleach_denoiser_noise_profile_available_for_mode(
+                  handle, ROLLING_MEAN),
+              "Profile available after learning");
+
+  // Switch to NLM 2D mid-stream and keep processing
+  parameters.learn_noise = SPECBLEACH_LEARN_OFF;
+  parameters.smoothing_mode = SB_SMOOTHING_NLM_2D;
+  TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &parameters,
+                                                  sizeof(parameters)),
+              "Load NLM parameters");
+  size_t processed = FRAME_SIZE * 10;
+  while (processed < BLOCK_SIZE) {
+    TEST_ASSERT(specbleach_denoiser_process(handle, FRAME_SIZE,
+                                            input_buffer + processed,
+                                            output_buffer + processed),
+                "process after mode switch");
+    processed += FRAME_SIZE;
+  }
+
+  // Profile must have survived the switch
+  TEST_ASSERT(specbleach_denoiser_noise_profile_available_for_mode(
+                  handle, ROLLING_MEAN),
+              "Profile persists across smoothing mode switch");
+
+  // Latency must be unchanged by the mode switch
+  TEST_ASSERT(specbleach_denoiser_get_latency(handle) == latency_temporal,
+              "Latency constant across smoothing mode switch");
+
+  specbleach_denoiser_free(handle);
+  free(input_buffer);
+  free(output_buffer);
+
+  printf("✓ Runtime smoothing mode switch test passed\n");
 }
