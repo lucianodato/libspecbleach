@@ -29,6 +29,7 @@ typedef struct CriticalBands CriticalBands;
 typedef enum CriticalBandType {
   BARK_SCALE = 0,
   OPUS_SCALE = 1,
+  ERB_SCALE = 2,
 } CriticalBandType;
 
 typedef struct CriticalBandIndexes {

@@ -435,6 +435,22 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define SMOOTHING_TRANSITION_SECONDS (0.030F)
 #define SMOOTHING_TRANSITION_MIN_FRAMES 4U
 
+/* --------------------------------------------------------------- */
+/* ------------------- DSAF-MP (time denoiser) ------------------- */
+// Zero-latency minimum-phase delayless subband adaptive filter
+#define DSAF_FIR_TAPS 256U // M: synthesized FIR length (power of two)
+#define DSAF_FFT_SIZE 512U // N_fft: analysis/cepstral transform size
+#define DSAF_CEPSTRAL_EPSILON                                                  \
+  (1e-6F)                         // log/exp clamp for cepstral factorization
+#define DSAF_MIN_GAIN_DB (-24.0F) // Default attenuation floor G_min
+#define DSAF_A_PRIORI_SNR_ALPHA (0.98F) // Decision-directed smoothing alpha
+#define DSAF_CLEAN_POWER_DECAY (0.98F)  // Clean-speech power estimate decay
+#define DSAF_ERB_GAIN_SMOOTHING (0.5F)  // Boundary smoothing for band expansion
+#define DSAF_HF_TAPER_RATIO (0.05F) // Top fraction of bins tapered toward unity
+#define DSAF_ASYMMETRIC_TAPER_START (0.5F)      // Fraction of taps before taper
+#define DSAF_WORKER_POLL_US (500)               // Worker idle poll interval
+#define DSAF_RING_CAPACITY (DSAF_FFT_SIZE * 4U) // SPSC hop ring capacity
+
 /* --------------------------------------------------------------------- */
 /* 8. Core plumbing: numeric floors and circular-buffer capacity.         */
 /* --------------------------------------------------------------------- */
