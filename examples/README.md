@@ -20,16 +20,19 @@ and the demos call out exactly where the real-time differences are.
 ## The 60-second version
 
 ```c
+#include <math.h>
 #include <specbleach_denoiser.h>
 
 // 1. CREATE — one instance per channel; frame_size_ms = STFT window (20-100)
 specbleach_denoiser* denoiser =
     specbleach_denoiser_initialize(sample_rate, 46.0f);
 
-// 2. CONFIGURE — library copies everything, including curve bias arrays
-SpecbleachDenoiserParameters p = {0};
+// 2. CONFIGURE — start from documented-safe defaults, override what you need.
+//    Never "= {0}": zero-initialized reduction_gain means MAXIMUM reduction.
+//    The library copies everything on load, including curve bias arrays.
+SpecbleachDenoiserParameters p = specbleach_denoiser_get_default_parameters();
 p.learn_noise = SPECBLEACH_LEARN_ALL;
-p.reduction_gain = powf(10.0f, -20.0f / 20.0f);   // -20 dB
+p.reduction_gain = powf(10.0f, -20.0f / 20.0f);   // -20 dB gain floor
 specbleach_denoiser_load_parameters(denoiser, &p, sizeof(p));
 
 // 3. LEARN — feed blocks containing only noise; each channel learns its own
@@ -60,22 +63,19 @@ cmake --build build --config Release
 ./build/stereo_denoiser_demo --switch-smoothing noisy.wav clean.wav
 ```
 
-Linking from your own project:
-
-```bash
-pkg-config --cflags --libs specbleach          # core only
-pkg-config --cflags --libs specbleach-extras   # core + extras layer
-```
+Linking from your own project (installed package):
 
 ```cmake
-find_package(libspecbleach 0.4 REQUIRED COMPONENTS extras)
-target_link_libraries(myapp PRIVATE libspecbleach::extras)
+find_package(libspecbleach 0.4 REQUIRED)                   # core only
+find_package(libspecbleach 0.4 REQUIRED COMPONENTS extras) # + stereo layer
+target_link_libraries(myapp PRIVATE libspecbleach::libspecbleach)
+target_link_libraries(myapp PRIVATE libspecbleach::libspecbleach_extras)
 ```
 
 ## Switching smoothing modes
 
-There is only ONE denoiser family. `SpecbleachDenoiserParameters::smoothing_mode`
-selects the temporal (1D) or NLM 2D smoothing strategy, and the library owns
+There is only ONE denoiser family. The `smoothing_mode` field of
+`SpecbleachDenoiserParameters` selects the temporal (1D) or NLM 2D smoothing strategy, and the library owns
 the runtime transition: it crossfades internally over
 `SMOOTHING_TRANSITION_SECONDS` (30 ms) with zero allocations on the audio
 thread. Both modes report the same constant latency, so hosts never need to
@@ -90,7 +90,8 @@ suits JUCE, raw VST3/CLAP/LV2, DAW codebases, and standalone apps alike.
 ## Pitfalls these examples exist to prevent
 
 1. **Profiles are not ready until learning turns OFF.** Capture modes are
-   finalized on the learn → off transition, not while learning. Both demos
+   finalized on the learn → off transition, not while learning — and only
+   fully usable after at least one block is processed afterwards. Both demos
    reload parameters with `SPECBLEACH_LEARN_OFF` before reducing.
 2. **Each channel learns independently.** Do not average stereo inputs into
    one engine; use `specbleach_stereo`, which keeps per-channel profiles and
@@ -102,7 +103,9 @@ suits JUCE, raw VST3/CLAP/LV2, DAW codebases, and standalone apps alike.
 4. **Keep control work off the audio thread.** `process()` is real-time
    safe; parameter loads and profile sync/serialization are not.
 5. **Wrong-size parameter loads fail cleanly by design.** Always pass
-   `sizeof(the_exact_struct)`; this protects you across library upgrades.
+   `sizeof(the_exact_struct)` (or `SPECBLEACH_PARAMETERS_SIZE`); this protects
+   you across library upgrades. Prefer `specbleach_denoiser_get_default_parameters()`
+   over `= {0}` for the same reason.
 6. **Mixing handle types does not compile** — that is intentional. Each
    handle type has its own opaque type; if it compiles, it is correct.
 
