@@ -33,6 +33,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "specbleach_error.h"
 #include "specbleach_export.h"
 
 #ifdef __cplusplus
@@ -92,22 +93,6 @@ typedef enum SpecbleachProfileMode {
  */
 #define SPECBLEACH_PROFILE_MODE_FIRST 1
 #define SPECBLEACH_PROFILE_MODE_LAST 4
-
-/**
- * Machine-readable failure reason for the last fallible call on an instance.
- * Query with specbleach_denoiser_get_last_error(); human-readable form via
- * specbleach_denoiser_get_last_error_string(). RT-safe to read.
- */
-typedef enum SpecbleachError {
-  SPECBLEACH_OK = 0,               /**< Last call succeeded */
-  SPECBLEACH_ERR_NULL_ARG = 1,     /**< NULL instance/buffer argument */
-  SPECBLEACH_ERR_ABI_MISMATCH = 2, /**< parameters_size != sizeof(parameters) */
-  SPECBLEACH_ERR_SIZE_MISMATCH = 3,   /**< profile/curve size mismatch */
-  SPECBLEACH_ERR_INVALID_MODE = 4,    /**< mode outside FIRST..LAST */
-  SPECBLEACH_ERR_INVALID_CHANNEL = 5, /**< channel >= channel count (stereo) */
-  SPECBLEACH_ERR_NO_MEMORY = 6,       /**< internal (re)allocation failed */
-  SPECBLEACH_ERR_EMPTY = 7, /**< Empty block (number_of_samples == 0) */
-} SpecbleachError;
 
 /**
  * Opaque handle to a single-channel spectral denoiser instance.

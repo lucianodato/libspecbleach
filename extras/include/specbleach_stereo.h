@@ -30,6 +30,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdint.h>
 
 #include "specbleach_denoiser.h"
+#include "specbleach_error.h"
 #include "specbleach_export.h"
 
 /* NOTE: this header depends on the core include dir via the PUBLIC link
