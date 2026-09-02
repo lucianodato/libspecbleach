@@ -381,8 +381,8 @@ SPECBLEACH_API uint32_t specbleach_stereo_get_tonal_peaks_for_channel(
     uint32_t max_peaks);
 
 /**
- * Failure reason for the last fallible stereo call (channel 0's error when
- * the failure is per-channel). RT-safe to read.
+ * Failure reason for the last fallible stereo call (first failing channel's
+ * error when the failure is per-channel). RT-safe to read.
  */
 SPECBLEACH_API SpecbleachError
 specbleach_stereo_get_last_error(const specbleach_stereo* instance);

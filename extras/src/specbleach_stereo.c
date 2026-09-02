@@ -90,16 +90,19 @@ bool specbleach_stereo_load_parameters(
   }
 
   bool result = true;
+  SpecbleachError first_error = SPECBLEACH_OK;
   for (uint32_t ch = 0; ch < self->channels; ++ch) {
     if (!specbleach_denoiser_load_parameters(
             (specbleach_denoiser*)self->instances[ch], parameters,
             parameters_size)) {
+      if (result) {
+        first_error = specbleach_denoiser_get_last_error(
+            (specbleach_denoiser*)self->instances[ch]);
+      }
       result = false;
     }
   }
-  self->last_error = result ? SPECBLEACH_OK
-                            : specbleach_denoiser_get_last_error(
-                                  (specbleach_denoiser*)self->instances[0]);
+  self->last_error = result ? SPECBLEACH_OK : first_error;
   return result;
 }
 
@@ -263,15 +266,18 @@ bool specbleach_stereo_reset_dsp_state(specbleach_stereo* instance) {
   }
 
   bool result = true;
+  SpecbleachError first_error = SPECBLEACH_OK;
   for (uint32_t ch = 0; ch < self->channels; ++ch) {
     if (!specbleach_denoiser_reset_dsp_state(
             (specbleach_denoiser*)self->instances[ch])) {
+      if (result) {
+        first_error = specbleach_denoiser_get_last_error(
+            (specbleach_denoiser*)self->instances[ch]);
+      }
       result = false;
     }
   }
-  self->last_error = result ? SPECBLEACH_OK
-                            : specbleach_denoiser_get_last_error(
-                                  (specbleach_denoiser*)self->instances[0]);
+  self->last_error = result ? SPECBLEACH_OK : first_error;
   return result;
 }
 

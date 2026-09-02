@@ -156,7 +156,15 @@ static bool rebuild_engines(SbDenoiserInstance* self) {
 
 specbleach_denoiser* specbleach_denoiser_initialize(uint32_t sample_rate,
                                                     float frame_size_ms) {
-  if (sample_rate == 0 || frame_size_ms <= 0.0f) {
+  if (sample_rate == 0 || !isfinite(frame_size_ms) ||
+      frame_size_ms <= 0.0f) {
+    return NULL;
+  }
+
+  const double frame_samples =
+      ((double)frame_size_ms / 1000.0) * (double)sample_rate;
+  if (!isfinite(frame_samples) || frame_samples < 1.0 ||
+      frame_samples > (double)UINT32_MAX) {
     return NULL;
   }
 
@@ -168,8 +176,7 @@ specbleach_denoiser* specbleach_denoiser_initialize(uint32_t sample_rate,
 
   self->sample_rate = sample_rate;
   self->frame_size_ms = frame_size_ms;
-  self->frame_size_samples =
-      (uint32_t)((frame_size_ms / 1000.0f) * (float)sample_rate);
+  self->frame_size_samples = (uint32_t)frame_samples;
   self->last_error = SPECBLEACH_OK;
   self->stft_processor = stft_processor_initialize(
       sample_rate, frame_size_ms, OVERLAP_FACTOR, PADDING_CONFIGURATION,
@@ -450,6 +457,12 @@ bool specbleach_denoiser_load_parameters(
   if (parameters->reduction_curve_enabled &&
       parameters->reduction_curve_size != profile_size) {
     self->last_error = SPECBLEACH_ERR_SIZE_MISMATCH;
+    return false;
+  }
+
+  if (parameters->reduction_curve_enabled &&
+      parameters->reduction_curve_bias == NULL) {
+    self->last_error = SPECBLEACH_ERR_NULL_ARG;
     return false;
   }
 

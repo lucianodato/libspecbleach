@@ -586,7 +586,8 @@ specbleach_denoiser_get_tonal_peaks(const specbleach_denoiser* instance,
  * Returns a pointer to the active morphed noise profile array.
  *
  * Thread safety: RT-safe (read-only query). Pointer points to live internal
- * state; valid until the instance is freed.
+ * state; valid until the instance is freed or the DSP state is reset via
+ * specbleach_denoiser_reset_dsp_state().
  *
  * @param instance Instance handle.
  * @return Read-only profile pointer, or NULL for a NULL instance.

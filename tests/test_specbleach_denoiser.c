@@ -718,7 +718,7 @@ void test_specbleach_redesigned_api_coverage(void) {
                                                   sizeof(defaults)) == true,
               "Default params should load");
 
-  // Enabled curve without bias buffer reports NO_MEMORY
+  // Enabled curve without bias buffer reports NULL_ARG
   uint32_t profile_size = specbleach_denoiser_get_noise_profile_size(handle);
   SpecbleachDenoiserParameters bad_curve = defaults;
   bad_curve.reduction_curve_enabled = true;
@@ -728,8 +728,8 @@ void test_specbleach_redesigned_api_coverage(void) {
                                                   sizeof(bad_curve)) == false,
               "Curve without bias should fail");
   TEST_ASSERT(
-      specbleach_denoiser_get_last_error(handle) == SPECBLEACH_ERR_NO_MEMORY,
-      "Last error should be NO_MEMORY");
+      specbleach_denoiser_get_last_error(handle) == SPECBLEACH_ERR_NULL_ARG,
+      "Last error should be NULL_ARG");
 
   // Every error code has a message
   TEST_ASSERT(strcmp(specbleach_denoiser_get_last_error_string(SPECBLEACH_OK),
