@@ -65,8 +65,8 @@ extern "C" {
  * Composite numeric version for #if comparisons, e.g.
  * #if SPECBLEACH_VERSION_NUMBER >= 400.
  */
-#define SPECBLEACH_VERSION_NUMBER                                                  \
-  (SPECBLEACH_VERSION_MAJOR * 10000 + SPECBLEACH_VERSION_MINOR * 100 +             \
+#define SPECBLEACH_VERSION_NUMBER                                              \
+  (SPECBLEACH_VERSION_MAJOR * 10000 + SPECBLEACH_VERSION_MINOR * 100 +         \
    SPECBLEACH_VERSION_PATCH)
 
 /**

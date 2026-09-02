@@ -126,7 +126,7 @@ typedef struct SbSpectralDenoiser {
 
 static int normalize_smoothing_mode(const int mode) {
   return (mode == SPECBLEACH_SMOOTHING_NLM_2D) ? SPECBLEACH_SMOOTHING_NLM_2D
-                                              : SPECBLEACH_SMOOTHING_TEMPORAL;
+                                               : SPECBLEACH_SMOOTHING_TEMPORAL;
 }
 
 /**
@@ -645,9 +645,9 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
   // NLM smoothing (runs when NLM is the active or the incoming mode). The
   // smoothed magnitude is captured explicitly so the temporal chain cannot
   // overwrite the shared alignment layer before the NLM chain consumes it.
-  const bool nlm_needed =
-      (self->active_mode == SPECBLEACH_SMOOTHING_NLM_2D) ||
-      (self->in_transition && self->pending_mode == SPECBLEACH_SMOOTHING_NLM_2D);
+  const bool nlm_needed = (self->active_mode == SPECBLEACH_SMOOTHING_NLM_2D) ||
+                          (self->in_transition &&
+                           self->pending_mode == SPECBLEACH_SMOOTHING_NLM_2D);
   const float* nlm_smoothed = NULL;
   if (nlm_needed && nlm_filter_process(self->nlm_filter, self->smoothed_snr)) {
     nlm_filter_reconstruct_magnitude(self->nlm_filter, self->smoothed_snr,

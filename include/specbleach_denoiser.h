@@ -99,14 +99,14 @@ typedef enum SpecbleachProfileMode {
  * specbleach_denoiser_get_last_error_string(). RT-safe to read.
  */
 typedef enum SpecbleachError {
-  SPECBLEACH_OK = 0,          /**< Last call succeeded */
-  SPECBLEACH_ERR_NULL_ARG = 1, /**< NULL instance/buffer argument */
+  SPECBLEACH_OK = 0,               /**< Last call succeeded */
+  SPECBLEACH_ERR_NULL_ARG = 1,     /**< NULL instance/buffer argument */
   SPECBLEACH_ERR_ABI_MISMATCH = 2, /**< parameters_size != sizeof(parameters) */
-  SPECBLEACH_ERR_SIZE_MISMATCH = 3, /**< profile/curve size mismatch */
-  SPECBLEACH_ERR_INVALID_MODE = 4, /**< mode outside FIRST..LAST */
+  SPECBLEACH_ERR_SIZE_MISMATCH = 3,   /**< profile/curve size mismatch */
+  SPECBLEACH_ERR_INVALID_MODE = 4,    /**< mode outside FIRST..LAST */
   SPECBLEACH_ERR_INVALID_CHANNEL = 5, /**< channel >= channel count (stereo) */
-  SPECBLEACH_ERR_NO_MEMORY = 6, /**< internal (re)allocation failed */
-  SPECBLEACH_ERR_EMPTY = 7,   /**< Empty block (number_of_samples == 0) */
+  SPECBLEACH_ERR_NO_MEMORY = 6,       /**< internal (re)allocation failed */
+  SPECBLEACH_ERR_EMPTY = 7, /**< Empty block (number_of_samples == 0) */
 } SpecbleachError;
 
 /**
@@ -490,8 +490,8 @@ SPECBLEACH_API bool specbleach_denoiser_load_noise_profile_resampled(
  *
  * @param instance Instance handle (NULL is a no-op).
  */
-SPECBLEACH_API void
-specbleach_denoiser_reset_noise_profile(specbleach_denoiser* instance);
+SPECBLEACH_API void specbleach_denoiser_reset_noise_profile(
+    specbleach_denoiser* instance);
 
 /**
  * Flushes all DSP history (STFT overlap buffers, NLM history, smoothers,
@@ -506,8 +506,8 @@ specbleach_denoiser_reset_noise_profile(specbleach_denoiser* instance);
  * @param instance Instance handle.
  * @return true on success, false on NULL instance or rebuild failure.
  */
-SPECBLEACH_API bool
-specbleach_denoiser_reset_dsp_state(specbleach_denoiser* instance);
+SPECBLEACH_API bool specbleach_denoiser_reset_dsp_state(
+    specbleach_denoiser* instance);
 
 /**
  * Returns the number of blocks used for the noise profile calculation for a
@@ -561,8 +561,8 @@ SPECBLEACH_API bool specbleach_denoiser_noise_profile_available_for_mode(
  * @param instance Instance handle.
  * @return true if at least one mode has a profile.
  */
-SPECBLEACH_API bool
-specbleach_denoiser_has_any_profile(const specbleach_denoiser* instance);
+SPECBLEACH_API bool specbleach_denoiser_has_any_profile(
+    const specbleach_denoiser* instance);
 
 /**
  * Returns a pointer to the tonal mask array detected during spectral
@@ -593,9 +593,9 @@ SPECBLEACH_API const float* specbleach_denoiser_get_tonal_mask(
  * @return Number of peak frequencies written (0 = none found or NULL
  * instance).
  */
-SPECBLEACH_API uint32_t specbleach_denoiser_get_tonal_peaks(
-    const specbleach_denoiser* instance, float* peak_freqs_hz,
-    uint32_t max_peaks);
+SPECBLEACH_API uint32_t
+specbleach_denoiser_get_tonal_peaks(const specbleach_denoiser* instance,
+                                    float* peak_freqs_hz, uint32_t max_peaks);
 
 /**
  * Returns a pointer to the active morphed noise profile array.
@@ -653,8 +653,8 @@ specbleach_denoiser_get_last_error(const specbleach_denoiser* instance);
  * @param error Error code.
  * @return Short English description ("ok", "null argument", ...).
  */
-SPECBLEACH_API const char*
-specbleach_denoiser_get_last_error_string(SpecbleachError error);
+SPECBLEACH_API const char* specbleach_denoiser_get_last_error_string(
+    SpecbleachError error);
 
 #ifdef __cplusplus
 }

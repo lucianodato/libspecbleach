@@ -181,9 +181,8 @@ static void test_process_and_sync(void) {
   // Per-channel forwarders behave
   const uint32_t profile_size =
       specbleach_stereo_get_noise_profile_size(stereo);
-  const float* ch0_profile =
-      specbleach_stereo_get_noise_profile_for_channel(
-          stereo, 0, SPECBLEACH_PROFILE_ROLLING_MEAN);
+  const float* ch0_profile = specbleach_stereo_get_noise_profile_for_channel(
+      stereo, 0, SPECBLEACH_PROFILE_ROLLING_MEAN);
   TEST_ASSERT(ch0_profile != NULL, "ch0 profile pointer valid");
   TEST_ASSERT(specbleach_stereo_get_profile_block_count_for_channel(
                   stereo, 0, SPECBLEACH_PROFILE_ROLLING_MEAN) > 0,

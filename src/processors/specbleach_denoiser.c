@@ -240,8 +240,8 @@ uint32_t specbleach_denoiser_get_latency(const specbleach_denoiser* instance) {
 }
 
 bool specbleach_denoiser_process(specbleach_denoiser* instance,
-                                 uint32_t number_of_samples,
-                                 const float* input, float* output) {
+                                 uint32_t number_of_samples, const float* input,
+                                 float* output) {
   SbDenoiserInstance* self = instance;
   if (!instance || !input || !output) {
     if (self) {
@@ -273,14 +273,12 @@ uint32_t specbleach_denoiser_get_frame_size(
   return self ? self->frame_size_samples : 0;
 }
 
-uint32_t specbleach_denoiser_get_fft_size(
-    const specbleach_denoiser* instance) {
+uint32_t specbleach_denoiser_get_fft_size(const specbleach_denoiser* instance) {
   const SbDenoiserInstance* self = instance;
   return self ? self->fft_size : 0;
 }
 
-uint32_t specbleach_denoiser_get_hop_size(
-    const specbleach_denoiser* instance) {
+uint32_t specbleach_denoiser_get_hop_size(const specbleach_denoiser* instance) {
   const SbDenoiserInstance* self = instance;
   return self ? self->hop : 0;
 }
@@ -315,9 +313,9 @@ bool specbleach_denoiser_load_noise_profile_for_mode(
     return false;
   }
 
-  const bool ok = set_noise_profile(self->noise_profile, (int)mode,
-                                    restored_profile, profile_size,
-                                    block_count);
+  const bool ok =
+      set_noise_profile(self->noise_profile, (int)mode, restored_profile,
+                        profile_size, block_count);
   self->last_error = ok ? SPECBLEACH_OK : SPECBLEACH_ERR_NO_MEMORY;
   return ok;
 }
@@ -419,8 +417,7 @@ bool specbleach_denoiser_noise_profile_available_for_mode(
   return is_noise_estimation_available(self->noise_profile, (int)mode);
 }
 
-bool specbleach_denoiser_has_any_profile(
-    const specbleach_denoiser* instance) {
+bool specbleach_denoiser_has_any_profile(const specbleach_denoiser* instance) {
   const SbDenoiserInstance* self = instance;
   if (!self || !self->noise_profile) {
     return false;
@@ -436,8 +433,7 @@ bool specbleach_denoiser_has_any_profile(
 
 bool specbleach_denoiser_load_parameters(
     specbleach_denoiser* instance,
-    const SpecbleachDenoiserParameters* parameters,
-    uint32_t parameters_size) {
+    const SpecbleachDenoiserParameters* parameters, uint32_t parameters_size) {
   SbDenoiserInstance* self = instance;
   if (!instance || !parameters) {
     if (self) {
@@ -523,23 +519,23 @@ SpecbleachError specbleach_denoiser_get_last_error(
 
 const char* specbleach_denoiser_get_last_error_string(SpecbleachError error) {
   switch (error) {
-  case SPECBLEACH_OK:
-    return "ok";
-  case SPECBLEACH_ERR_NULL_ARG:
-    return "null argument";
-  case SPECBLEACH_ERR_ABI_MISMATCH:
-    return "parameter size mismatch (ABI)";
-  case SPECBLEACH_ERR_SIZE_MISMATCH:
-    return "profile/curve size mismatch";
-  case SPECBLEACH_ERR_INVALID_MODE:
-    return "invalid profile mode";
-  case SPECBLEACH_ERR_INVALID_CHANNEL:
-    return "invalid channel";
-  case SPECBLEACH_ERR_NO_MEMORY:
-    return "out of memory";
-  case SPECBLEACH_ERR_EMPTY:
-    return "empty block";
-  default:
-    return "unknown error";
+    case SPECBLEACH_OK:
+      return "ok";
+    case SPECBLEACH_ERR_NULL_ARG:
+      return "null argument";
+    case SPECBLEACH_ERR_ABI_MISMATCH:
+      return "parameter size mismatch (ABI)";
+    case SPECBLEACH_ERR_SIZE_MISMATCH:
+      return "profile/curve size mismatch";
+    case SPECBLEACH_ERR_INVALID_MODE:
+      return "invalid profile mode";
+    case SPECBLEACH_ERR_INVALID_CHANNEL:
+      return "invalid channel";
+    case SPECBLEACH_ERR_NO_MEMORY:
+      return "out of memory";
+    case SPECBLEACH_ERR_EMPTY:
+      return "empty block";
+    default:
+      return "unknown error";
   }
 }

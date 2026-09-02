@@ -393,8 +393,7 @@ void test_2d_denoiser(void) {
 
   // Test reset
   specbleach_denoiser_reset_noise_profile(handle);
-  TEST_ASSERT(true,
-              "Reset should succeed");
+  TEST_ASSERT(true, "Reset should succeed");
   TEST_ASSERT(!specbleach_denoiser_noise_profile_available_for_mode(
                   handle, ROLLING_MEAN),
               "Profile should not be available after reset");
