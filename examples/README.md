@@ -7,13 +7,15 @@ then steal its structure — they are written to be copied.
 
 | Your situation | Read | Uses |
 | :--- | :--- | :--- |
+| Embedding the library anywhere, no file I/O | [`simple_embed.c`](simple_embed.c) | Core API, zero dependencies |
 | Mono processing, offline or simple pipeline | [`denoiser_demo.c`](denoiser_demo.c) | Core API only (`specbleach_denoiser.h`) |
 | Stereo/surround, smoothing-mode switching, "what the plugin does" | [`stereo_denoiser_demo.c`](stereo_denoiser_demo.c) | Extras layer (`specbleach_stereo.h`) |
 | Real-time application with GUI-driven learn/switch | `stereo_denoiser_demo.c` **plus** the [Noise Repellent plugin source](https://github.com/lucianodato/noise-repellent/blob/master/Source/PluginProcessor.cpp) | Extras + threading patterns |
 
-Both demos process audio files via libsndfile so they are runnable and
+Both file demos process audio via libsndfile so they are runnable and
 verifiable; everything except file I/O maps 1:1 to real-time callback code,
 and the demos call out exactly where the real-time differences are.
+`simple_embed.c` has no external dependencies at all.
 
 ## The 60-second version
 

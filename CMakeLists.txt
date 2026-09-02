@@ -206,6 +206,16 @@ endif()
 # ==============================================================================
 # 7. Examples & Tests
 # ==============================================================================
+if(ENABLE_EXAMPLES)
+    # Zero-dependency embed example: no libsndfile required
+    add_executable(simple_embed "${CMAKE_CURRENT_SOURCE_DIR}/examples/simple_embed.c")
+    target_include_directories(simple_embed PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    target_link_libraries(simple_embed PRIVATE libspecbleach)
+    if(MATH_LIB)
+        target_link_libraries(simple_embed PRIVATE ${MATH_LIB})
+    endif()
+endif()
+
 if(ENABLE_EXAMPLES AND TARGET PkgConfig::SNDFILE)
     add_executable(denoiser_demo "${CMAKE_CURRENT_SOURCE_DIR}/examples/denoiser_demo.c")
     target_include_directories(denoiser_demo PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/src)

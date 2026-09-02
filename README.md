@@ -14,6 +14,7 @@ C library for audio noise reduction and other spectral effects.
 - [Build](#build)
 - [Installation](#installation)
 - [Build Options](#build-options)
+- [Quick Integration](#quick-integration)
 - [Usage Examples](#usage-examples)
 - [Development](#development)
 - [Contributing](#contributing)
@@ -106,6 +107,43 @@ cmake -B build \
 
 cmake --build build --config Release --parallel
 ```
+
+## Quick Integration
+
+```c
+#include <specbleach_denoiser.h>
+
+// 1. CREATE — one instance per channel; frame_size_ms = STFT window (20-100)
+specbleach_denoiser* denoiser =
+    specbleach_denoiser_initialize(sample_rate, 46.0f);
+
+// Report latency to your host for delay compensation (stable after init)
+uint32_t latency = specbleach_denoiser_get_latency(denoiser);
+
+// 2. CONFIGURE — library copies everything
+SpecbleachDenoiserParameters p = {0};
+p.learn_noise = SPECBLEACH_LEARN_ALL;
+p.reduction_gain = 0.1f;                          // -20 dB
+specbleach_denoiser_load_parameters(denoiser, &p, sizeof(p));
+
+// 3. LEARN — feed blocks containing only noise (RT-safe call)
+specbleach_denoiser_process(denoiser, nframes, in, out);
+
+// 4. FINALIZE — profiles are only usable after learning turns OFF
+p.learn_noise = SPECBLEACH_LEARN_OFF;
+specbleach_denoiser_load_parameters(denoiser, &p, sizeof(p));
+
+// 5. REDUCE — same call shape forever after; any block size (RT-safe)
+specbleach_denoiser_process(denoiser, nframes, in, out);
+
+// 6. CLEANUP (setup thread only, not RT-safe)
+specbleach_denoiser_free(denoiser);
+```
+
+Buffers are plain planar float arrays of `nframes` length; output may alias
+input. `_process` is real-time safe (no allocations, locks, or I/O);
+parameter loads and create/destroy are not. A complete zero-dependency
+example lives in [`examples/simple_embed.c`](examples/simple_embed.c).
 
 ## Usage Examples
 
