@@ -48,4 +48,8 @@ void spectral_smoothing_apply_spatial(float* data, uint32_t size);
 void spectral_smoothing_apply_simple_temporal(float* current, float* memory,
                                               uint32_t size, float smoothing);
 
+/* Init-time only: use the true STFT hop (frame/overlap) for dt. */
+void spectral_smoothing_set_hop_samples(SpectralSmoother* self,
+                                        uint32_t hop_samples);
+
 #endif /* SPECTRAL_SMOOTHER_H */

@@ -21,6 +21,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "shared/denoiser_logic/estimators/noise_estimator.h"
 #include "shared/configurations.h"
 #include "shared/denoiser_logic/core/noise_profile.h"
+#include "shared/frame_rate_norm.h"
 #include "shared/utils/spectral_circular_buffer.h"
 #include "shared/utils/spectral_smoother.h"
 #include "shared/utils/spectral_utils.h"
@@ -34,6 +35,8 @@ struct NoiseEstimator {
   SbSpectralCircularBuffer* median_buffer;
   uint32_t layer_median;
   uint32_t median_update_counter;
+  uint32_t median_blocks;
+  uint32_t median_decim;
 
   float* welford_mean;
   float* welford_m2;
@@ -55,7 +58,9 @@ NoiseEstimator* noise_estimation_initialize(const uint32_t fft_size,
 
   self->noise_profile = noise_profile;
   self->median_buffer =
-      spectral_circular_buffer_create(NUMBER_OF_MEDIAN_SPECTRUM);
+      spectral_circular_buffer_create(NUMBER_OF_MEDIAN_SPECTRUM_MAX);
+  self->median_blocks = NUMBER_OF_MEDIAN_SPECTRUM;
+  self->median_decim = MEDIAN_UPDATE_DECIMATION;
 
   if (!self->median_buffer) {
     noise_estimation_free(self);
@@ -133,12 +138,12 @@ static void update_median(NoiseEstimator* self, float* noise_profile,
   // Finalize always recomputes from the last 25 frames, so precision is
   // bit-identical while per-frame CPU drops by ~8x.
   self->median_update_counter++;
-  if ((self->median_update_counter % MEDIAN_UPDATE_DECIMATION) != 0U) {
+  if ((self->median_update_counter % self->median_decim) != 0U) {
     return;
   }
 
-  const uint32_t blocks = NUMBER_OF_MEDIAN_SPECTRUM;
-  const float* history_frames[NUMBER_OF_MEDIAN_SPECTRUM];
+  const uint32_t blocks = self->median_blocks;
+  const float* history_frames[NUMBER_OF_MEDIAN_SPECTRUM_MAX];
 
   for (uint32_t i = 0; i < blocks; i++) {
     history_frames[i] = spectral_circular_buffer_retrieve(
@@ -233,12 +238,12 @@ void noise_estimation_finalize(NoiseEstimator* self,
   }
 
   if (noise_estimator_type == MEDIAN) {
-    // Recompute exact median from the last 25 frames regardless of
+    // Recompute exact median from the last N frames regardless of
     // decimation counter so finalize precision is bit-identical.
     float* median_profile = get_noise_profile(self->noise_profile, MEDIAN);
     if (median_profile) {
-      const uint32_t blocks = NUMBER_OF_MEDIAN_SPECTRUM;
-      const float* history_frames[NUMBER_OF_MEDIAN_SPECTRUM];
+      const uint32_t blocks = self->median_blocks;
+      const float* history_frames[NUMBER_OF_MEDIAN_SPECTRUM_MAX];
       for (uint32_t i = 0; i < blocks; i++) {
         history_frames[i] = spectral_circular_buffer_retrieve(
             self->median_buffer, self->layer_median, i + 1);
@@ -261,4 +266,16 @@ void noise_estimation_finalize(NoiseEstimator* self,
     smooth_spectrum(noise_profile, self->real_spectrum_size,
                     NOISE_ESTIMATION_SMOOTHING_FACTOR);
   }
+}
+
+void noise_estimation_set_hop_sec(NoiseEstimator* self, float hop_sec) {
+  if (!self || !(hop_sec > 0.0F)) {
+    return;
+  }
+  uint32_t blocks = sb_frames_for_ms(MEDIAN_WINDOW_MS, hop_sec, 8U,
+                                     NUMBER_OF_MEDIAN_SPECTRUM_MAX);
+  uint32_t decim = sb_frames_for_ms(MEDIAN_UPDATE_MS, hop_sec, 2U,
+                                    NUMBER_OF_MEDIAN_SPECTRUM_MAX);
+  self->median_blocks = blocks;
+  self->median_decim = decim;
 }

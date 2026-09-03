@@ -35,6 +35,10 @@ void test_brandt_initialization(void) {
       brandt_noise_estimator_initialize(real_size, duration, sr, fft_size);
   TEST_ASSERT(est != NULL, "Initialization should succeed");
 
+  brandt_noise_estimator_set_hop_sec(NULL, 0.0115F); // must not crash
+  brandt_noise_estimator_set_hop_sec(est, 0.0115F);
+  brandt_noise_estimator_set_hop_sec(est, 0.0F); // edge: ignored
+
   brandt_noise_estimator_free(est);
   brandt_noise_estimator_free(NULL); // Should be safe
   printf("✓ Brandt initialization tests passed\n");

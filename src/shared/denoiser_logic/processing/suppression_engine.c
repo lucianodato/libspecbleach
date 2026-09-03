@@ -105,6 +105,13 @@ void suppression_engine_free(SuppressionEngine* self) {
   free(self);
 }
 
+void suppression_engine_set_hop_sec(SuppressionEngine* self, float hop_sec) {
+  if (!self || !(hop_sec > 0.0F)) {
+    return;
+  }
+  masking_estimation_set_hop_sec(self->masking_estimation, hop_sec);
+}
+
 static void calculate_berouti_per_bin(SuppressionEngine* self,
                                       const float* reference_spectrum,
                                       const float* noise_spectrum,

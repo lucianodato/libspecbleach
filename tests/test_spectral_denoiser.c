@@ -50,6 +50,8 @@ int main(void) {
               "Zero overlap must fail");
   TEST_ASSERT(spectral_denoiser_initialize(44100U, 2048U, 4U, NULL) == NULL,
               "NULL noise profile must fail");
+  TEST_ASSERT(spectral_denoiser_initialize(44100U, 3U, 4U, profile) == NULL,
+              "Sub-hop FFT (zero hop) must fail");
 
   // NULL-handle guards
   float spectrum[1026] = {0};
@@ -76,6 +78,15 @@ int main(void) {
   SpectralProcessorHandle handle =
       spectral_denoiser_initialize(44100U, 2048U, OVERLAP_FACTOR, profile);
   TEST_ASSERT(handle != NULL, "Initialization should succeed");
+
+  // Explicit true-hop init must agree with the derived-hop init
+  SpectralProcessorHandle hop_handle = spectral_denoiser_initialize_with_hop(
+      44100U, 2048U, OVERLAP_FACTOR, 2048U / OVERLAP_FACTOR, profile);
+  TEST_ASSERT(hop_handle != NULL, "With-hop initialization should succeed");
+  TEST_ASSERT(spectral_denoiser_get_latency_frames(hop_handle) ==
+                  spectral_denoiser_get_latency_frames(handle),
+              "Explicit and derived hop must agree");
+  spectral_denoiser_free(hop_handle);
 
   TEST_ASSERT(spectral_denoiser_run(handle, NULL) == false,
               "NULL spectrum with valid handle must fail");

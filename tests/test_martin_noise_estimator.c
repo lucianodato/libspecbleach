@@ -34,6 +34,10 @@ void test_martin_initialization(void) {
       martin_noise_estimator_initialize(real_size, sr, fft_size);
   TEST_ASSERT(est != NULL, "Initialization should succeed");
 
+  martin_noise_estimator_set_hop_sec(NULL, 0.0115F); // must not crash
+  martin_noise_estimator_set_hop_sec(est, 0.0115F);
+  martin_noise_estimator_set_hop_sec(est, 0.0F); // edge: ignored
+
   martin_noise_estimator_free(est);
   martin_noise_estimator_free(NULL); // Should be safe
   printf("✓ Martin initialization tests passed\n");

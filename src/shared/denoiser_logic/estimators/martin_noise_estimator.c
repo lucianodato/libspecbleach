@@ -20,6 +20,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "shared/denoiser_logic/estimators/martin_noise_estimator.h"
 #include "shared/configurations.h"
+#include "shared/frame_rate_norm.h"
 #include <float.h>
 #include <math.h>
 #include <stdlib.h>
@@ -35,6 +36,8 @@ struct MartinNoiseEstimator {
 
   uint32_t frame_count;  // Current frame index within the sub-window
   uint32_t subwin_index; // Current sub-window index in history
+  uint32_t subwin_len;   // Frames per sub-window (frame-rate normalized)
+  float smooth_alpha;    // PSD smoothing alpha (frame-rate normalized)
 
   bool is_first_frame;
 };
@@ -65,6 +68,8 @@ MartinNoiseEstimator* martin_noise_estimator_initialize(
   self->is_first_frame = true;
   self->frame_count = 0;
   self->subwin_index = 0;
+  self->subwin_len = MARTIN_SUBWIN_LEN;
+  self->smooth_alpha = MARTIN_SMOOTH_ALPHA;
 
   return self;
 }
@@ -119,8 +124,8 @@ bool martin_noise_estimator_run(MartinNoiseEstimator* self,
 
   // 1. Update smoothed PSD
   for (uint32_t k = 0; k < self->noise_spectrum_size; k++) {
-    self->smoothed_psd[k] = (MARTIN_SMOOTH_ALPHA * self->smoothed_psd[k]) +
-                            ((1.0F - MARTIN_SMOOTH_ALPHA) * spectrum[k]);
+    self->smoothed_psd[k] = (self->smooth_alpha * self->smoothed_psd[k]) +
+                            ((1.0F - self->smooth_alpha) * spectrum[k]);
   }
 
   // 2. Track minimum in current sub-window
@@ -131,7 +136,7 @@ bool martin_noise_estimator_run(MartinNoiseEstimator* self,
   }
 
   // 3. Check if sub-window is complete
-  if (self->frame_count >= MARTIN_SUBWIN_LEN) {
+  if (self->frame_count >= self->subwin_len) {
     // Store sub-window minimum in history
     for (uint32_t k = 0; k < self->noise_spectrum_size; k++) {
       self->subwin_history[((size_t)k * MARTIN_SUBWIN_COUNT) +
@@ -206,4 +211,14 @@ void martin_noise_estimator_apply_floor(MartinNoiseEstimator* self,
       }
     }
   }
+}
+
+void martin_noise_estimator_set_hop_sec(MartinNoiseEstimator* self,
+                                        float hop_sec) {
+  if (!self || !(hop_sec > 0.0F)) {
+    return;
+  }
+  self->smooth_alpha =
+      sb_alpha_retuned(MARTIN_SMOOTH_ALPHA, LEGACY_REF_HOP_SEC, hop_sec);
+  self->subwin_len = sb_frames_for_ms(MARTIN_SUBWIN_MS, hop_sec, 2U, 64U);
 }

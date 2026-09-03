@@ -46,11 +46,15 @@ int main(void) {
   spectral_smoothing_free(NULL);
   SpectralSmoother* ss = spectral_smoothing_initialize(fft_size, sample_rate,
                                                        overlap_factor, FIXED);
+  spectral_smoothing_set_hop_samples(NULL, hop);
+  spectral_smoothing_set_hop_samples(ss, hop);
   spectral_smoothing_free(ss);
 
   // Transient Detector
   transient_detector_free(NULL);
   TransientDetector* td = transient_detector_initialize(fft_size);
+  transient_detector_set_hop_sec(NULL, 0.0058f);
+  transient_detector_set_hop_sec(td, 0.0058f);
   transient_detector_free(td);
 
   // Critical Bands
@@ -63,6 +67,8 @@ int main(void) {
   masking_estimation_free(NULL);
   MaskingEstimator* me = masking_estimation_initialize(
       fft_size, sample_rate, OPUS_SCALE, POWER_SPECTRUM, true, true);
+  masking_estimation_set_hop_sec(NULL, 0.0058f);
+  masking_estimation_set_hop_sec(me, 0.0058f);
   masking_estimation_free(me);
 
   // Absolute Hearing Thresholds
@@ -73,13 +79,22 @@ int main(void) {
 
   // Adaptive Noise Estimators
   adaptive_estimator_free(NULL);
+  adaptive_estimator_set_hop_sec(NULL, 0.0058f);
   AdaptiveNoiseEstimator* mar = adaptive_estimator_initialize(
       real_spectrum_size, sample_rate, fft_size, MARTIN_METHOD);
+  adaptive_estimator_set_hop_sec(mar, 0.0f); // edge: ignored
+  adaptive_estimator_set_hop_sec(mar, 0.0058f);
   adaptive_estimator_free(mar);
 
   AdaptiveNoiseEstimator* spp = adaptive_estimator_initialize(
       real_spectrum_size, sample_rate, fft_size, SPP_MMSE_METHOD);
+  adaptive_estimator_set_hop_sec(spp, 0.0058f);
   adaptive_estimator_free(spp);
+
+  AdaptiveNoiseEstimator* brd = adaptive_estimator_initialize(
+      real_spectrum_size, sample_rate, fft_size, BRANDT_METHOD);
+  adaptive_estimator_set_hop_sec(brd, 0.0058f);
+  adaptive_estimator_free(brd);
 
   // Noise Profile
   noise_profile_free(NULL);
@@ -88,6 +103,9 @@ int main(void) {
   // Noise Estimator (requires noise profile)
   noise_estimation_free(NULL);
   NoiseEstimator* ne = noise_estimation_initialize(fft_size, np);
+  noise_estimation_set_hop_sec(NULL, 0.0058f);
+  noise_estimation_set_hop_sec(ne, 0.0058f);
+  noise_estimation_set_hop_sec(ne, -1.0f); // edge: ignored
   noise_estimation_free(ne);
 
   noise_profile_free(np);
@@ -144,6 +162,8 @@ int main(void) {
   suppression_engine_free(NULL);
   SuppressionEngine* se = suppression_engine_initialize(
       real_spectrum_size, sample_rate, OPUS_SCALE, POWER_SPECTRUM, true, true);
+  suppression_engine_set_hop_sec(NULL, 0.0058f);
+  suppression_engine_set_hop_sec(se, 0.0058f);
   suppression_engine_free(se);
 
   // Internal Processors

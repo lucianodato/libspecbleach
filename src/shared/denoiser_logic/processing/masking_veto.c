@@ -20,6 +20,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "shared/denoiser_logic/processing/masking_veto.h"
 #include "shared/configurations.h"
+#include "shared/frame_rate_norm.h"
 #include "shared/utils/critical_bands.h"
 #include "shared/utils/masking_estimator.h"
 #include "shared/utils/spectral_smoother.h"
@@ -31,6 +32,7 @@ struct MaskingVeto {
   uint32_t real_spectrum_size;
   MaskingEstimator* masking_estimator;
   CriticalBands* critical_bands_helper;
+  float smooth;
   float* clean_signal_estimation;
   float* stable_clean_signal;
   float* masking_thresholds;
@@ -81,6 +83,7 @@ MaskingVeto* masking_veto_initialize(uint32_t fft_size, uint32_t sample_rate,
   self->future_clean_estimation_buf =
       (float*)calloc(self->real_spectrum_size, sizeof(float));
   self->sample_rate = sample_rate;
+  self->smooth = MASKING_VETO_SMOOTHING;
 
   if (!self->clean_signal_estimation || !self->stable_clean_signal ||
       !self->masking_thresholds || !self->band_audibility ||
@@ -135,10 +138,12 @@ void masking_veto_apply(MaskingVeto* self, const float* smoothed_spectrum,
         0.0F);
 
     // Stabilize the clean signal estimation (prevents gargle in spreading
-    // skirts)
+    // skirts). self->smooth is the memory (recurrent) weight, retuned per
+    // hop to preserve the time constant -- same convention as the temporal
+    // smoother below.
     self->stable_clean_signal[k] =
-        (MASKING_VETO_SMOOTHING * current_clean) +
-        ((1.0F - MASKING_VETO_SMOOTHING) * self->stable_clean_signal[k]);
+        ((1.0F - self->smooth) * current_clean) +
+        (self->smooth * self->stable_clean_signal[k]);
     self->clean_signal_estimation[k] = self->stable_clean_signal[k];
   }
 
@@ -229,7 +234,7 @@ void masking_veto_apply(MaskingVeto* self, const float* smoothed_spectrum,
   // Smooth the protection metric to prevent rapid switching
   spectral_smoothing_apply_simple_temporal(self->band_audibility,
                                            self->band_audibility_memory,
-                                           num_bands, MASKING_VETO_SMOOTHING);
+                                           num_bands, self->smooth);
 
   // Spectral Stabilization:
   // Smooth protection ACROSS bands to prevent sharp spectral edges.
@@ -287,4 +292,13 @@ void masking_veto_apply(MaskingVeto* self, const float* smoothed_spectrum,
     const float veto_amount = bin_protection * bin_snr_scale * depth;
     alpha[k] = fmaxf(ALPHA_MIN, alpha[k] * (1.0F - veto_amount));
   }
+}
+
+void masking_veto_set_hop_sec(MaskingVeto* self, float hop_sec) {
+  if (!self || !(hop_sec > 0.0F)) {
+    return;
+  }
+  self->smooth =
+      sb_alpha_retuned(MASKING_VETO_SMOOTHING, LEGACY_REF_HOP_SEC, hop_sec);
+  masking_estimation_set_hop_sec(self->masking_estimator, hop_sec);
 }

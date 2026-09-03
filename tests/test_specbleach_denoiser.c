@@ -668,8 +668,11 @@ void test_specbleach_redesigned_api_coverage(void) {
   TEST_ASSERT(hop == frame / 4, "Hop should be frame / overlap 4");
   TEST_ASSERT(specbleach_denoiser_get_hop_size(NULL) == 0,
               "NULL hop should be 0");
-  TEST_ASSERT(specbleach_denoiser_get_latency(handle) == frame + 4 * hop,
-              "Latency should be frame plus NLM look-ahead");
+  // NLM look-ahead is ms-anchored (#152): 20ms frame -> ~5ms hop ->
+  // round(128ms/5ms) = 26 (symmetric restoration context; 46ms default is
+  // 11). Latency in ms is sample-rate independent.
+  TEST_ASSERT(specbleach_denoiser_get_latency(handle) == frame + 26 * hop,
+              "Latency should be frame plus ms-anchored NLM look-ahead");
 
   // No profile available before learning
   TEST_ASSERT(specbleach_denoiser_has_any_profile(NULL) == false,

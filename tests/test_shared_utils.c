@@ -121,6 +121,41 @@ void test_masking_estimator(void) {
       compute_masking_thresholds(me, spectrum, spectrum, masking_thresholds),
       "Compute masking thresholds should succeed");
 
+  masking_estimation_set_hop_sec(NULL, 0.0058F); // must not crash
+  masking_estimation_set_hop_sec(me, 0.0058F);
+
+  /* The setter must change behavior, not just state: two fresh instances
+   * with extreme hops must produce different second-frame thresholds
+   * (forward decay applies to previous_thresholds). Fails if no-op. */
+  MaskingEstimator* me_short = masking_estimation_initialize(
+      fft_size, sample_rate, OPUS_SCALE, POWER_SPECTRUM, true, true);
+  MaskingEstimator* me_long = masking_estimation_initialize(
+      fft_size, sample_rate, OPUS_SCALE, POWER_SPECTRUM, true, true);
+  TEST_ASSERT(me_short != NULL && me_long != NULL,
+              "Hop-variant estimators must initialize");
+  masking_estimation_set_hop_sec(me_short, 0.002F);
+  masking_estimation_set_hop_sec(me_long, 0.200F);
+  float th_short[513] = {0.0f};
+  float th_long[513] = {0.0f};
+  for (int pass = 0; pass < 2; pass++) {
+    TEST_ASSERT(
+        compute_masking_thresholds(me_short, spectrum, spectrum, th_short),
+        "Short-hop masking run must succeed");
+    TEST_ASSERT(
+        compute_masking_thresholds(me_long, spectrum, spectrum, th_long),
+        "Long-hop masking run must succeed");
+  }
+  int differing = 0;
+  for (int i = 0; i < 513; i++) {
+    if (fabsf(th_short[i] - th_long[i]) > 1e-6f) {
+      differing++;
+    }
+  }
+  TEST_ASSERT(differing > 0,
+              "Hop duration must affect temporal masking thresholds");
+  masking_estimation_free(me_short);
+  masking_estimation_free(me_long);
+
   // Check that masking thresholds are reasonable
   for (int i = 0; i < 513; i++) {
     TEST_ASSERT(masking_thresholds[i] >= 0.0f,

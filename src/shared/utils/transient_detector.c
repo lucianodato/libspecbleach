@@ -20,6 +20,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "transient_detector.h"
 #include "../configurations.h"
+#include "../frame_rate_norm.h"
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,6 +29,7 @@ struct TransientDetector {
   uint32_t num_items;
   float* smoothed_items;
   float alpha;
+  float decay_alpha;
   bool initialized;
 };
 
@@ -48,6 +50,7 @@ TransientDetector* transient_detector_initialize(const uint32_t num_items) {
   }
 
   self->alpha = TRANSIENT_SMOOTH_ALPHA;
+  self->decay_alpha = 0.50F;
   self->initialized = false;
 
   return self;
@@ -132,11 +135,10 @@ bool transient_detector_process(TransientDetector* self,
     transient_energy += weight * current;
 
     // Asymmetric background floor adaptation:
-    // - On attack (current > smoothed): adapt floor slower (alpha = 0.85) to
-    // preserve onset contrast
-    // - On decay/sustain (current <= smoothed): track smoothly downwards (alpha
-    // = 0.50) without lagging
-    float adapt_alpha = (current > smoothed) ? self->alpha : 0.50F;
+    // - On attack (current > smoothed): adapt floor slower to preserve onset
+    //   contrast; - On decay/sustain: track smoothly downwards without lagging.
+    // Both alphas are frame-rate normalized via set_hop_sec (init-time only).
+    float adapt_alpha = (current > smoothed) ? self->alpha : self->decay_alpha;
     self->smoothed_items[j] = (self->smoothed_items[j] * adapt_alpha) +
                               (current * (1.0F - adapt_alpha));
   }
@@ -199,4 +201,13 @@ bool transient_detector_process(TransientDetector* self,
   // fricative false triggers
   return (intensity >= 0.25f ||
           (max_weight >= 0.70f && high_bands_count >= 2U));
+}
+
+void transient_detector_set_hop_sec(TransientDetector* self, float hop_sec) {
+  if (!self || !(hop_sec > 0.0F)) {
+    return;
+  }
+  self->alpha =
+      sb_alpha_retuned(TRANSIENT_SMOOTH_ALPHA, LEGACY_REF_HOP_SEC, hop_sec);
+  self->decay_alpha = sb_alpha_retuned(0.50F, LEGACY_REF_HOP_SEC, hop_sec);
 }

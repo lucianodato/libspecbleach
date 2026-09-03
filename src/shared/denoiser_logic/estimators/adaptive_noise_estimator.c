@@ -202,3 +202,20 @@ void adaptive_estimator_update_seed(AdaptiveNoiseEstimator* self,
     self->ops.update_seed(self->internal_estimator, seed_profile);
   }
 }
+
+void adaptive_estimator_set_hop_sec(AdaptiveNoiseEstimator* self,
+                                    float hop_sec) {
+  if (!self || !self->internal_estimator || !(hop_sec > 0.0F)) {
+    return;
+  }
+  if (self->method == SPP_MMSE_METHOD) {
+    spp_mmse_noise_estimator_set_hop_sec(
+        (SppMmseNoiseEstimator*)self->internal_estimator, hop_sec);
+  } else if (self->method == BRANDT_METHOD) {
+    brandt_noise_estimator_set_hop_sec(
+        (BrandtNoiseEstimator*)self->internal_estimator, hop_sec);
+  } else {
+    martin_noise_estimator_set_hop_sec(
+        (MartinNoiseEstimator*)self->internal_estimator, hop_sec);
+  }
+}

@@ -77,4 +77,7 @@ void masking_veto_apply(MaskingVeto* self, const float* smoothed_spectrum,
                         const float* future_spectrum, float* alpha,
                         float depth);
 
+/* Init-time only: retune smoothing + true-hop decays. */
+void masking_veto_set_hop_sec(MaskingVeto* self, float hop_sec);
+
 #endif // SHARED_DENOISER_LOGIC_MASKING_VETO_H

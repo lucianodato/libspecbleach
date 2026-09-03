@@ -37,4 +37,7 @@ bool compute_masking_thresholds(MaskingEstimator* self, const float* spectrum,
                                 const float* future_spectrum,
                                 float* masking_thresholds);
 
+/* Init-time only: recompute decays from the true hop (frame/overlap/sr). */
+void masking_estimation_set_hop_sec(MaskingEstimator* self, float hop_sec);
+
 #endif

@@ -20,6 +20,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "shared/denoiser_logic/estimators/spp_mmse_noise_estimator.h"
 #include "shared/configurations.h"
+#include "shared/frame_rate_norm.h"
 #include <float.h>
 #include <math.h>
 #include <stdlib.h>
@@ -29,6 +30,8 @@ struct SppMmseNoiseEstimator {
   uint32_t noise_spectrum_size;
   float* spp_previous_noise_psd;
   float* spp_smoothed_spp;
+  float alpha_pow;
+  float smooth_spp;
   bool is_first_frame;
 };
 
@@ -83,6 +86,8 @@ SppMmseNoiseEstimator* spp_mmse_noise_estimator_initialize(
   }
 
   self->is_first_frame = true;
+  self->alpha_pow = SPP_ALPHA_POW;
+  self->smooth_spp = SPP_SMOOTH_SPP;
   return self;
 }
 
@@ -138,11 +143,12 @@ bool spp_mmse_noise_estimator_run(SppMmseNoiseEstimator* self,
       float mmse_noise_estimate = compute_mmse_noise_estimate(
           spp_h1, spp_h0, spectrum[k], self->spp_previous_noise_psd[k]);
 
-      noise_spectrum[k] = (SPP_ALPHA_POW * self->spp_previous_noise_psd[k]) +
-                          ((1.F - SPP_ALPHA_POW) * mmse_noise_estimate);
+      noise_spectrum[k] = (self->alpha_pow * self->spp_previous_noise_psd[k]) +
+                          ((1.F - self->alpha_pow) * mmse_noise_estimate);
 
-      self->spp_smoothed_spp[k] = (SPP_SMOOTH_SPP * self->spp_smoothed_spp[k]) +
-                                  (SPP_CURRENT_SPP * spp_h1);
+      self->spp_smoothed_spp[k] =
+          (self->smooth_spp * self->spp_smoothed_spp[k]) +
+          ((1.F - self->smooth_spp) * spp_h1);
 
       self->spp_previous_noise_psd[k] = noise_spectrum[k];
     }
@@ -191,4 +197,15 @@ void spp_mmse_noise_estimator_apply_floor(SppMmseNoiseEstimator* self,
       self->spp_previous_noise_psd[k] = floor_val;
     }
   }
+}
+
+void spp_mmse_noise_estimator_set_hop_sec(SppMmseNoiseEstimator* self,
+                                          float hop_sec) {
+  if (!self || !(hop_sec > 0.0F)) {
+    return;
+  }
+  self->alpha_pow =
+      sb_alpha_retuned(SPP_ALPHA_POW, LEGACY_REF_HOP_SEC, hop_sec);
+  self->smooth_spp =
+      sb_alpha_retuned(SPP_SMOOTH_SPP, LEGACY_REF_HOP_SEC, hop_sec);
 }

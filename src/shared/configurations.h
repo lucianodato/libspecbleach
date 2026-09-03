@@ -66,7 +66,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 // Noise Estimator Constants
 #define MIN_NUMBER_OF_WINDOWS_NOISE_AVERAGED 5
 #define NUMBER_OF_MEDIAN_SPECTRUM 25
+#define NUMBER_OF_MEDIAN_SPECTRUM_MAX 64U
+#define MEDIAN_WINDOW_MS (287.5F) // 25 frames * 11.5ms Lukin hop
 #define MEDIAN_UPDATE_DECIMATION 8
+#define MEDIAN_UPDATE_MS (92.0F) // 8 frames * 11.5ms Lukin hop
 #define NOISE_ESTIMATION_INTERPOLATION_THRESHOLD (1e-9F)
 #define NOISE_ESTIMATION_SMOOTHING_FACTOR (0.5F)
 #define ADAPTIVE_NOISE_FLOOR_SMOOTHING (0.5F)
@@ -78,8 +81,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define ESTIMATOR_SILENCE_THRESHOLD (1e-10F) // Roughly -100dB in power
 
 // Martin (2001) Constants
-#define MARTIN_SUBWIN_COUNT 8 // Number of sub-windows
-#define MARTIN_SUBWIN_LEN 12  // Sub-window length (96/8)
+#define MARTIN_SUBWIN_COUNT 8     // Number of sub-windows
+#define MARTIN_SUBWIN_LEN 12      // Sub-window length (96/8)
+#define MARTIN_SUBWIN_MS (138.0F) // 12 frames * 11.5ms Lukin hop
 #define MARTIN_BIAS_CORR 1.5F // Conservative bias correction for min tracking
 #define MARTIN_SMOOTH_ALPHA 0.8F // Baseline smoothing for PSD
 
@@ -104,6 +108,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define BRANDT_ESTIMATOR_MIN_DURATION_MS                                       \
   (0.1F) // Safety floor for duration calcs
 #define BRANDT_ESTIMATOR_STATS_UPDATE_INTERVAL_FRAMES 4U
+#define BRANDT_ESTIMATOR_STATS_UPDATE_MS (46.0F) // 4 frames * 11.5ms Lukin hop
 
 // Noise Profile Offset
 #define NOISE_PROFILE_OFFSET_DEFAULT_DB 0.0f
@@ -160,11 +165,32 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 /* --------------------------------------------------------------------- */
 
 // NLM (Lukin Algorithm B) Parameters
+// Time geometry is fixed in ms and recomputed per frame size (see
+// frame_rate_norm.h) so temporal smear stays constant across 23-93ms frames.
+// Patch size follows Lukin & Todd AES123 (~46ms frame, 75% overlap,
+// hop ~11.5ms: PATCH 8 == 92ms). Search context is symmetric (128ms past /
+// 128ms future): this is a restoration-oriented choice, not the paper's
+// live-constrained mapping — future lookahead is the highest-value context
+// for musical-noise suppression, and latency is not a product constraint
+// (noise-repellent targets restoration/mix/mastering, not live input).
 #define NLM_PATCH_SIZE 8U
 #define NLM_PASTE_BLOCK_SIZE 8U
 #define NLM_SEARCH_RANGE_FREQ 8U
 #define NLM_SEARCH_RANGE_TIME_PAST 16U
 #define NLM_SEARCH_RANGE_TIME_FUTURE 4U
+#define NLM_PATCH_TIME_MS (92.0F)
+#define NLM_SEARCH_PAST_MS (128.0F)
+#define NLM_SEARCH_FUTURE_MS (128.0F)
+#define NLM_SEARCH_FREQ_HZ (170.0F)
+#define NLM_PASTE_FREQ_HZ (170.0F)
+// Vectorized-distance patch ceiling (matches the frame_rate_norm.h fallback
+// clamp 4..16) and pointer-cache halo (half of the ceiling each side).
+#define NLM_MAX_PATCH_FRAMES 16U
+#define NLM_HALO_FRAMES 8U
+// Reference hops: legacy 50ms-frame tuning anchor (12.5ms hop) for tau
+// conversion of per-frame IIRs; Lukin hop (~11.5ms) for NLM geometry.
+#define LEGACY_REF_HOP_SEC (0.0125F)
+#define LUKIN_REF_HOP_SEC (0.0115F)
 #define NLM_DEFAULT_H_PARAMETER 1.0F
 #define NLM_MAX_H_PARAMETER 5.0F
 #define NLM_MIN_WEIGHT 1e-10F
@@ -234,10 +260,12 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 // Johnston SFM (Spectral Flatness Measure) constants
 #define SFM_MIN_DB (-60.0F) // Minimum expected SFM (highly tonal)
 #define SFM_MAX_DB (0.0F)   // Maximum expected SFM (random noise)
-// Temporal Masking Constants
-#define FORWARD_MASKING_TAU_LOW_MS (0.100F)  // 100ms decay for low frequencies
-#define FORWARD_MASKING_TAU_HIGH_MS (0.025F) // 25ms decay for high frequencies
-#define BACKWARD_MASKING_TAU_MS (0.010F)     // 10ms decay for pre-masking
+// Temporal Masking Constants (seconds; the _SEC suffix is load-bearing:
+// hop_sec is seconds, so decays are expf(-hop_sec / tau_sec))
+// Frequency-dependent forward masking (Low: 100ms, High: 25ms)
+#define FORWARD_MASKING_TAU_LOW_SEC (0.100F)  // 100ms decay for low frequencies
+#define FORWARD_MASKING_TAU_HIGH_SEC (0.025F) // 25ms decay for high frequencies
+#define BACKWARD_MASKING_TAU_SEC (0.010F)     // 10ms decay for pre-masking
 
 // Schroeder Slope Adaptation Constants
 #define S_LEVEL_REF_DB 40.0F // Reference level for slope adaptation (dB SPL)
@@ -263,6 +291,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 // Duration of the internal crossfade when switching smoothing modes at runtime
 #define SMOOTHING_TRANSITION_SECONDS (0.030F)
+#define SMOOTHING_TRANSITION_MIN_FRAMES 4U
 
 /* --------------------------------------------------------------------- */
 /* 8. Core plumbing: numeric floors and circular-buffer capacity.         */

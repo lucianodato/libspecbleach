@@ -148,8 +148,9 @@ static bool rebuild_engines(SbDenoiserInstance* self) {
   if (!self->noise_profile) {
     return false;
   }
-  self->spectral_denoiser = spectral_denoiser_initialize(
-      self->sample_rate, fft_size, OVERLAP_FACTOR, self->noise_profile);
+  self->spectral_denoiser = spectral_denoiser_initialize_with_hop(
+      self->sample_rate, fft_size, OVERLAP_FACTOR, self->hop,
+      self->noise_profile);
   return self->spectral_denoiser != NULL;
 }
 
@@ -194,8 +195,9 @@ specbleach_denoiser* specbleach_denoiser_initialize(uint32_t sample_rate,
     return NULL;
   }
 
-  self->spectral_denoiser = spectral_denoiser_initialize(
-      self->sample_rate, self->fft_size, OVERLAP_FACTOR, self->noise_profile);
+  self->spectral_denoiser = spectral_denoiser_initialize_with_hop(
+      self->sample_rate, self->fft_size, OVERLAP_FACTOR, self->hop,
+      self->noise_profile);
 
   if (!self->spectral_denoiser) {
     specbleach_denoiser_free(self);

@@ -55,6 +55,11 @@ void test_masking_veto_logic(void) {
   masking_veto_apply(NULL, smoothed, noise, NULL, alpha, 1.0F);
   masking_veto_apply(mv, NULL, noise, NULL, alpha, 1.0F);
 
+  // 5. Frame-rate normalization guards
+  masking_veto_set_hop_sec(NULL, 0.0115F); // must not crash
+  masking_veto_set_hop_sec(mv, 0.0115F);
+  masking_veto_set_hop_sec(mv, 0.0F); // edge: ignored
+
   masking_veto_free(mv);
   printf("✓ Masking Veto tests passed\n");
 }

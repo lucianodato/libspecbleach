@@ -91,6 +91,8 @@ void test_suppression_engine_branches(void) {
   // 6. NULL guards
   suppression_engine_calculate(NULL, ref, noise, params, alpha, beta);
   suppression_engine_calculate(se, NULL, noise, params, alpha, beta);
+  suppression_engine_set_hop_sec(NULL, 0.0115F); // must not crash
+  suppression_engine_set_hop_sec(se, 0.0115F);
 
   suppression_engine_free(se);
   printf("✓ Suppression Engine tests passed\n");

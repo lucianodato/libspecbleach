@@ -30,6 +30,10 @@ void test_spp_initialization(void) {
       spp_mmse_noise_estimator_initialize(real_size, 44100, 512);
   TEST_ASSERT(est != NULL, "Initialization should succeed");
 
+  spp_mmse_noise_estimator_set_hop_sec(NULL, 0.0115F); // must not crash
+  spp_mmse_noise_estimator_set_hop_sec(est, 0.0115F);
+  spp_mmse_noise_estimator_set_hop_sec(est, -1.0F); // edge: ignored
+
   spp_mmse_noise_estimator_free(est);
   spp_mmse_noise_estimator_free(NULL);
   printf("✓ SPP-MMSE initialization tests passed\n");
