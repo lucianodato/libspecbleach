@@ -448,8 +448,7 @@ bool specbleach_denoiser_load_parameters(
       sanitize_denoiser_parameters(parameters);
   denoise_parameters.reduction_curve_bias = owned_bias;
 
-  return load_reduction_parameters(self->spectral_denoiser,
-                                   denoise_parameters);
+  return load_reduction_parameters(self->spectral_denoiser, denoise_parameters);
 }
 
 const float* specbleach_denoiser_get_tonal_mask(
