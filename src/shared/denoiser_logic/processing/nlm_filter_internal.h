@@ -52,8 +52,9 @@ struct NlmFilter {
   float distance_threshold_actual;
 
   // Pre-computed frame pointer cache (populated once per process call)
-  // Indexed by [time_past + 8 + dt] where dt ranges from
-  // -search_range_time_past - 8 to +search_range_time_future + 8
+  // Indexed by [time_past + NLM_HALO_FRAMES + dt] where dt ranges from
+  // -search_range_time_past - NLM_HALO_FRAMES to
+  // +search_range_time_future + NLM_HALO_FRAMES
   // (halo = max patch half-size 16/2, covers patch <= 16).
   float** frame_ptrs;
   uint32_t total_time_span; // search_time_past + search_time_future + 1 + 8
@@ -99,29 +100,27 @@ static inline SB_UNUSED float* get_frame(NlmFilter* self,
 }
 
 // Pre-compute all frame pointers for the current processing window.
-// After this call, frame_ptrs[search_time_past + 8 + dt] gives the frame
-// at relative offset dt (where dt ranges from -past-8 to +future+8).
+// After this call, frame_ptrs[search_time_past + NLM_HALO_FRAMES + dt] gives
+// the frame at relative offset dt (where dt ranges from -past-halo to
+// +future+halo).
 static inline SB_UNUSED void populate_frame_ptrs(NlmFilter* self) {
   const int32_t past = (int32_t)self->config.search_range_time_past;
   const int32_t future = (int32_t)self->config.search_range_time_future;
 
-  // Halo of 8 frames covers the 16x16 patch comparison
-  for (int32_t dt = -past - 8; dt <= future + 8; dt++) {
-    self->frame_ptrs[past + 8 + dt] = get_frame(self, dt);
+  // Halo of NLM_HALO_FRAMES covers the 16x16 patch comparison
+  for (int32_t dt = -past - (int32_t)NLM_HALO_FRAMES;
+       dt <= future + (int32_t)NLM_HALO_FRAMES; dt++) {
+    self->frame_ptrs[past + (int32_t)NLM_HALO_FRAMES + dt] =
+        get_frame(self, dt);
   }
 }
 
 // O(1) frame lookup using pre-computed pointer cache.
-// dt ranges from -search_time_past - 8 to +search_time_future + 8.
+// dt ranges from -search_time_past - halo to +search_time_future + halo.
 static inline SB_UNUSED float* cached_get_frame(NlmFilter* self, int32_t dt) {
-  return self
-      ->frame_ptrs[(int32_t)self->config.search_range_time_past + 8 + dt];
+  return self->frame_ptrs[(int32_t)self->config.search_range_time_past +
+                          (int32_t)NLM_HALO_FRAMES + dt];
 }
-
-// Max patch edge supported by the vectorized distance below. Matches the
-// frame_rate_norm.h fallback clamp (4..16); halo in populate_frame_ptrs
-// covers half of this (8 frames each side).
-#define SB_NLM_MAX_PATCH 16U
 
 // Chunked single-row SSD over n contiguous bins (8-wide + 4-wide + scalar
 // tail). Safe (in-bounds) segments only; edges use the clamped scalar path.
@@ -285,9 +284,9 @@ static inline SB_UNUSED void nlm_process_block_range(void* raw_ctx,
 
     sb_vec8_t target_vecs[8];
     // Flat preloaded target patch for the generalized (non-8) path:
-    // patch_size rows x SB_NLM_MAX_PATCH stride, 1KB max on stack.
-    float target_patch[SB_NLM_MAX_PATCH * SB_NLM_MAX_PATCH];
-    float* tgt_rows[SB_NLM_MAX_PATCH];
+    // patch_size rows x NLM_MAX_PATCH_FRAMES stride, 1KB max on stack.
+    float target_patch[NLM_MAX_PATCH_FRAMES * NLM_MAX_PATCH_FRAMES];
+    float* tgt_rows[NLM_MAX_PATCH_FRAMES];
 
     bool safe_block = (block_center >= half_patch_size) &&
                       (block_center + half_patch_size <= spectrum_size);
@@ -303,12 +302,12 @@ static inline SB_UNUSED void nlm_process_block_range(void* raw_ctx,
           target_vecs[r] = sb_set8(0.0f);
         }
       }
-    } else if (safe_block && patch_size <= SB_NLM_MAX_PATCH) {
+    } else if (safe_block && patch_size <= NLM_MAX_PATCH_FRAMES) {
       for (uint32_t r = 0; r < patch_size; r++) {
         int32_t t_offset = (int32_t)r - (int32_t)half_patch_size;
         const float* row_ptr = cached_get_frame(filter, t_offset) +
                                (block_center - half_patch_size);
-        float* dst = &target_patch[(size_t)r * SB_NLM_MAX_PATCH];
+        float* dst = &target_patch[(size_t)r * NLM_MAX_PATCH_FRAMES];
         memcpy(dst, row_ptr, patch_size * sizeof(float));
         tgt_rows[r] = dst;
       }
@@ -317,12 +316,12 @@ static inline SB_UNUSED void nlm_process_block_range(void* raw_ctx,
     for (int32_t dt = -search_time_past; dt <= search_time_future; dt++) {
       float* cand_rows[8] = {NULL};
       // Candidate row pointers for the generalized path (any patch <= 16).
-      float* cand_rows_n[SB_NLM_MAX_PATCH] = {NULL};
+      float* cand_rows_n[NLM_MAX_PATCH_FRAMES] = {NULL};
       if (patch_size == 8) {
         for (int r = 0; r < 8; r++) {
           cand_rows[r] = cached_get_frame(filter, dt + r - 4);
         }
-      } else if (patch_size <= SB_NLM_MAX_PATCH) {
+      } else if (patch_size <= NLM_MAX_PATCH_FRAMES) {
         for (uint32_t r = 0; r < patch_size; r++) {
           cand_rows_n[r] = cached_get_frame(
               filter, dt + (int32_t)r - (int32_t)half_patch_size);
@@ -350,10 +349,10 @@ static inline SB_UNUSED void nlm_process_block_range(void* raw_ctx,
           };
           distance = sb_vec8_patch_ssd(target_vecs, cand_row_ptrs);
         } else if (patch_size != 8 && safe_bounds && safe_block &&
-                   patch_size <= SB_NLM_MAX_PATCH && cand_rows_n[0]) {
+                   patch_size <= NLM_MAX_PATCH_FRAMES && cand_rows_n[0]) {
           const uint32_t cand_f_start = cand_center - half_patch_size;
-          float* cand_ptrs[SB_NLM_MAX_PATCH];
-          float* tgt_ptrs[SB_NLM_MAX_PATCH];
+          float* cand_ptrs[NLM_MAX_PATCH_FRAMES];
+          float* tgt_ptrs[NLM_MAX_PATCH_FRAMES];
           for (uint32_t r = 0; r < patch_size; r++) {
             cand_ptrs[r] = cand_rows_n[r] + cand_f_start;
             tgt_ptrs[r] = tgt_rows[r];

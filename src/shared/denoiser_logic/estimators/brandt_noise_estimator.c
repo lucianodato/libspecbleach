@@ -30,6 +30,7 @@ struct BrandtNoiseEstimator {
   uint32_t history_size;
   uint32_t history_index; // Circular buffer write head
   uint32_t stats_interval;
+  float history_duration_ms; // For true-hop history rebuild (init-time only)
 
   float* history_buffer;      // Size: spectrum_size * history_size
   float* sort_buffer;         // Scratch space for sorting (Size: history_size)
@@ -69,6 +70,7 @@ BrandtNoiseEstimator* brandt_noise_estimator_initialize(
 
   self->spectrum_size = spectrum_size;
   self->percentile = percentile;
+  self->history_duration_ms = history_duration_ms;
 
   // Calculate history size from duration. hop == frame/OVERLAP_FACTOR;
   // the old *0.5 (50% overlap) assumption is fixed to /OVERLAP_FACTOR here.
@@ -366,4 +368,40 @@ void brandt_noise_estimator_set_hop_sec(BrandtNoiseEstimator* self,
   uint32_t interval =
       sb_frames_for_ms(BRANDT_ESTIMATOR_STATS_UPDATE_MS, hop_sec, 1U, 16U);
   self->stats_interval = interval;
+
+  // Rebuild history storage for the true hop when it differs from the
+  // fft-derived approximation used at init. Init-time only: never called
+  // from the audio thread (spectral_denoiser calls it during setup).
+  float hop_ms = hop_sec * 1000.0F;
+  if (hop_ms < BRANDT_ESTIMATOR_MIN_DURATION_MS) {
+    hop_ms = BRANDT_ESTIMATOR_MIN_DURATION_MS;
+  }
+  uint32_t history_size = (uint32_t)(self->history_duration_ms / hop_ms);
+  if (history_size < BRANDT_ESTIMATOR_MIN_HISTORY_FRAMES) {
+    history_size = BRANDT_ESTIMATOR_MIN_HISTORY_FRAMES;
+  }
+  if (history_size == self->history_size) {
+    return;
+  }
+  float* history_buffer =
+      (float*)calloc((size_t)self->spectrum_size * history_size, sizeof(float));
+  float* sort_buffer = (float*)calloc(history_size, sizeof(float));
+  if (!history_buffer || !sort_buffer) {
+    free(history_buffer);
+    free(sort_buffer);
+    return; // keep existing storage on allocation failure
+  }
+  free(self->history_buffer);
+  free(self->sort_buffer);
+  self->history_buffer = history_buffer;
+  self->sort_buffer = sort_buffer;
+  self->history_size = history_size;
+  self->history_index = 0U;
+  self->trim_count = (uint32_t)((float)history_size * self->percentile);
+  if (self->trim_count < 1U) {
+    self->trim_count = 1U;
+  }
+  if (self->trim_count > history_size) {
+    self->trim_count = history_size;
+  }
 }

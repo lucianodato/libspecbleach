@@ -183,6 +183,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define NLM_SEARCH_FUTURE_MS (128.0F)
 #define NLM_SEARCH_FREQ_HZ (170.0F)
 #define NLM_PASTE_FREQ_HZ (170.0F)
+// Vectorized-distance patch ceiling (matches the frame_rate_norm.h fallback
+// clamp 4..16) and pointer-cache halo (half of the ceiling each side).
+#define NLM_MAX_PATCH_FRAMES 16U
+#define NLM_HALO_FRAMES 8U
 // Reference hops: legacy 50ms-frame tuning anchor (12.5ms hop) for tau
 // conversion of per-frame IIRs; Lukin hop (~11.5ms) for NLM geometry.
 #define LEGACY_REF_HOP_SEC (0.0125F)
@@ -256,10 +260,12 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 // Johnston SFM (Spectral Flatness Measure) constants
 #define SFM_MIN_DB (-60.0F) // Minimum expected SFM (highly tonal)
 #define SFM_MAX_DB (0.0F)   // Maximum expected SFM (random noise)
-// Temporal Masking Constants
-#define FORWARD_MASKING_TAU_LOW_MS (0.100F)  // 100ms decay for low frequencies
-#define FORWARD_MASKING_TAU_HIGH_MS (0.025F) // 25ms decay for high frequencies
-#define BACKWARD_MASKING_TAU_MS (0.010F)     // 10ms decay for pre-masking
+// Temporal Masking Constants (seconds; the _SEC suffix is load-bearing:
+// hop_sec is seconds, so decays are expf(-hop_sec / tau_sec))
+// Frequency-dependent forward masking (Low: 100ms, High: 25ms)
+#define FORWARD_MASKING_TAU_LOW_SEC (0.100F)  // 100ms decay for low frequencies
+#define FORWARD_MASKING_TAU_HIGH_SEC (0.025F) // 25ms decay for high frequencies
+#define BACKWARD_MASKING_TAU_SEC (0.010F)     // 10ms decay for pre-masking
 
 // Schroeder Slope Adaptation Constants
 #define S_LEVEL_REF_DB 40.0F // Reference level for slope adaptation (dB SPL)

@@ -161,13 +161,13 @@ MaskingEstimator* masking_estimation_initialize(
   for (uint32_t j = 0U; j < self->number_critical_bands; j++) {
     const float bark = fminf((float)j, 24.0F);
     const float weight = bark / 24.0F; // 0 to 1
-    const float tau = ((1.0F - weight) * FORWARD_MASKING_TAU_LOW_MS) +
-                      (weight * FORWARD_MASKING_TAU_HIGH_MS);
+    const float tau = ((1.0F - weight) * FORWARD_MASKING_TAU_LOW_SEC) +
+                      (weight * FORWARD_MASKING_TAU_HIGH_SEC);
     self->forward_decays[j] = expf(-hop_time / tau);
   }
 
   // Backward masking (10ms) remains constant across frequency
-  self->backward_decay = expf(-hop_time / BACKWARD_MASKING_TAU_MS);
+  self->backward_decay = expf(-hop_time / BACKWARD_MASKING_TAU_SEC);
 
   return self;
 }
@@ -179,11 +179,11 @@ void masking_estimation_set_hop_sec(MaskingEstimator* self, float hop_sec) {
   for (uint32_t j = 0U; j < self->number_critical_bands; j++) {
     const float bark = fminf((float)j, 24.0F);
     const float weight = bark / 24.0F;
-    const float tau = ((1.0F - weight) * FORWARD_MASKING_TAU_LOW_MS) +
-                      (weight * FORWARD_MASKING_TAU_HIGH_MS);
+    const float tau = ((1.0F - weight) * FORWARD_MASKING_TAU_LOW_SEC) +
+                      (weight * FORWARD_MASKING_TAU_HIGH_SEC);
     self->forward_decays[j] = expf(-hop_sec / tau);
   }
-  self->backward_decay = expf(-hop_sec / BACKWARD_MASKING_TAU_MS);
+  self->backward_decay = expf(-hop_sec / BACKWARD_MASKING_TAU_SEC);
 }
 
 void masking_estimation_free(MaskingEstimator* self) {

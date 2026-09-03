@@ -282,7 +282,8 @@ static SpectralProcessorHandle spectral_denoiser_initialize_inner(
 
   // Frame-rate normalization: fixed-ms / fixed-Hz geometry + per-hop alphas.
   const float hop_sec = self->hop_sec;
-  const float frame_ms = hop_sec * 4000.0F; // hop = frame/4
+  // hop = frame/overlap_factor (exact with explicit hop, fft-derived legacy)
+  const float frame_ms = hop_sec * (float)overlap_factor * 1000.0F;
   const float bin_hz = sb_bin_hz(self->sample_rate, self->fft_size);
   const SbNlmGeometry nlm_geo =
       sb_nlm_geometry_for_frame_ms(frame_ms, hop_sec, bin_hz);

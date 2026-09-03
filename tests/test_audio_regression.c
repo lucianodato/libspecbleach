@@ -622,15 +622,17 @@ void test_frame_size_invariance(void) {
       continue;
     }
     onsets++;
-    /* Peak energy near onset (within 2 hops). */
+    /* Peak energy near onset. Same window (2x the coarser hop) for both runs
+     * so pk_e_23 and pk_e_93 are directly comparable. */
+    const int pk_win = 2 * hop_93;
     double pk23 = 0.0, pk93 = 0.0;
-    for (int j = t; j < t + 2 * hop_23 && j < end; j++) {
+    for (int j = t; j < t + pk_win && j < end; j++) {
       double v = out_23[j + lat_23];
       if (v * v > pk23) {
         pk23 = v * v;
       }
     }
-    for (int j = t; j < t + 2 * hop_93 && j < end; j++) {
+    for (int j = t; j < t + pk_win && j < end; j++) {
       double v = out_93[j + lat_93];
       if (v * v > pk93) {
         pk93 = v * v;

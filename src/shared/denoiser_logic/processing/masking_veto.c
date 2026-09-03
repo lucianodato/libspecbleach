@@ -138,10 +138,12 @@ void masking_veto_apply(MaskingVeto* self, const float* smoothed_spectrum,
         0.0F);
 
     // Stabilize the clean signal estimation (prevents gargle in spreading
-    // skirts)
+    // skirts). self->smooth is the memory (recurrent) weight, retuned per
+    // hop to preserve the time constant -- same convention as the temporal
+    // smoother below.
     self->stable_clean_signal[k] =
-        (self->smooth * current_clean) +
-        ((1.0F - self->smooth) * self->stable_clean_signal[k]);
+        ((1.0F - self->smooth) * current_clean) +
+        (self->smooth * self->stable_clean_signal[k]);
     self->clean_signal_estimation[k] = self->stable_clean_signal[k];
   }
 

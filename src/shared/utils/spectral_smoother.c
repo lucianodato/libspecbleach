@@ -20,7 +20,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "spectral_smoother.h"
 #include "shared/configurations.h"
-#include "shared/frame_rate_norm.h"
 #include "shared/utils/spectral_utils.h"
 #include <math.h>
 #include <stdlib.h>
