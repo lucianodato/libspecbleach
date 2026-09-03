@@ -30,7 +30,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdint.h>
 
 #include "specbleach_denoiser.h"
-#include "specbleach_error.h"
 #include "specbleach_export.h"
 
 /* NOTE: this header depends on the core include dir via the PUBLIC link
@@ -148,54 +147,6 @@ SPECBLEACH_API uint32_t
 specbleach_stereo_get_channel_count(const specbleach_stereo* instance);
 
 /**
- * Returns the sample rate passed at initialization (identical for every
- * channel).
- *
- * Thread safety: RT-safe (read-only query).
- *
- * @param instance Instance handle.
- * @return Sample rate in Hz, or 0 for NULL.
- */
-SPECBLEACH_API uint32_t
-specbleach_stereo_get_sample_rate(const specbleach_stereo* instance);
-
-/**
- * Returns the effective STFT frame size in samples (identical for every
- * channel). See specbleach_denoiser_initialize() for the ms-to-samples
- * mapping.
- *
- * Thread safety: RT-safe (read-only query).
- *
- * @param instance Instance handle.
- * @return Frame size in samples, or 0 for NULL.
- */
-SPECBLEACH_API uint32_t
-specbleach_stereo_get_frame_size(const specbleach_stereo* instance);
-
-/**
- * Returns the effective FFT size in samples (identical for every
- * channel).
- *
- * Thread safety: RT-safe (read-only query).
- *
- * @param instance Instance handle.
- * @return FFT size in samples, or 0 for NULL.
- */
-SPECBLEACH_API uint32_t
-specbleach_stereo_get_fft_size(const specbleach_stereo* instance);
-
-/**
- * Returns the STFT hop size in samples (identical for every channel).
- *
- * Thread safety: RT-safe (read-only query).
- *
- * @param instance Instance handle.
- * @return Hop size in samples, or 0 for NULL.
- */
-SPECBLEACH_API uint32_t
-specbleach_stereo_get_hop_size(const specbleach_stereo* instance);
-
-/**
  * Returns the algorithmic latency in samples (identical for every channel).
  * Constant across smoothing mode changes; query once at prepare time for
  * host delay compensation.
@@ -233,18 +184,6 @@ SPECBLEACH_API bool specbleach_stereo_sync_profiles(
  * @param instance Instance handle (NULL is a no-op).
  */
 SPECBLEACH_API void specbleach_stereo_reset_profiles(
-    specbleach_stereo* instance);
-
-/**
- * Flushes DSP history on every channel (see
- * specbleach_denoiser_reset_dsp_state()). Preserves loaded parameters.
- *
- * Thread safety: setup-only. Never call from an audio thread.
- *
- * @param instance Instance handle.
- * @return true if every channel reset, false on NULL/rebuild failure.
- */
-SPECBLEACH_API bool specbleach_stereo_reset_dsp_state(
     specbleach_stereo* instance);
 
 /**
@@ -321,23 +260,6 @@ SPECBLEACH_API uint32_t
 specbleach_stereo_get_noise_profile_size(const specbleach_stereo* instance);
 
 /**
- * Returns true if any channel detected a transient in the last block.
- *
- * Thread safety: RT-safe (read-only query).
- */
-SPECBLEACH_API bool specbleach_stereo_is_transient_detected(
-    const specbleach_stereo* instance);
-
-/**
- * Returns true if the given channel detected a transient in the last
- * block. False also covers out-of-range channels.
- *
- * Thread safety: RT-safe (read-only query).
- */
-SPECBLEACH_API bool specbleach_stereo_is_transient_detected_for_channel(
-    const specbleach_stereo* instance, uint32_t channel);
-
-/**
  * Returns the maximum transient intensity [0.0, 1.0] across channels from
  * the last processed block.
  *
@@ -348,15 +270,6 @@ SPECBLEACH_API bool specbleach_stereo_is_transient_detected_for_channel(
  */
 SPECBLEACH_API float specbleach_stereo_get_transient_intensity(
     const specbleach_stereo* instance);
-
-/**
- * Returns the read-only tonal mask for a channel (NULL on OOB). Array size
- * is specbleach_stereo_get_noise_profile_size(); values 0.0..1.0.
- *
- * Thread safety: RT-safe (read-only query).
- */
-SPECBLEACH_API const float* specbleach_stereo_get_tonal_mask_for_channel(
-    const specbleach_stereo* instance, uint32_t channel);
 
 /**
  * Returns the read-only active (morphed) noise profile for a channel
@@ -379,13 +292,6 @@ specbleach_stereo_get_active_noise_profile_for_channel(
 SPECBLEACH_API uint32_t specbleach_stereo_get_tonal_peaks_for_channel(
     const specbleach_stereo* instance, uint32_t channel, float* peak_freqs_hz,
     uint32_t max_peaks);
-
-/**
- * Failure reason for the last fallible stereo call (first failing channel's
- * error when the failure is per-channel). RT-safe to read.
- */
-SPECBLEACH_API SpecbleachError
-specbleach_stereo_get_last_error(const specbleach_stereo* instance);
 
 #ifdef __cplusplus
 }

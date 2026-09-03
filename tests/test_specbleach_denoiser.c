@@ -677,21 +677,16 @@ void test_specbleach_redesigned_api_coverage(void) {
   TEST_ASSERT(specbleach_denoiser_has_any_profile(handle) == false,
               "Fresh instance should have no profile");
 
-  // Process and parameter error paths report through last_error
+  // Process and parameter failure paths report false (no error codes;
+  // fallible calls fail fast with bool)
   float in_buf[256] = {0};
   float out_buf[256] = {0};
   TEST_ASSERT(specbleach_denoiser_process(NULL, 256, in_buf, out_buf) == false,
               "NULL instance should fail");
   TEST_ASSERT(specbleach_denoiser_process(handle, 256, NULL, out_buf) == false,
               "NULL input should fail");
-  TEST_ASSERT(
-      specbleach_denoiser_get_last_error(handle) == SPECBLEACH_ERR_NULL_ARG,
-      "Last error should be NULL_ARG");
   TEST_ASSERT(specbleach_denoiser_process(handle, 0, in_buf, out_buf) == false,
               "Empty block should fail");
-  TEST_ASSERT(
-      specbleach_denoiser_get_last_error(handle) == SPECBLEACH_ERR_EMPTY,
-      "Last error should be EMPTY");
   TEST_ASSERT(specbleach_denoiser_load_parameters(NULL, &defaults,
                                                   sizeof(defaults)) == false,
               "NULL instance params should fail");
@@ -701,9 +696,6 @@ void test_specbleach_redesigned_api_coverage(void) {
   TEST_ASSERT(specbleach_denoiser_load_parameters(
                   handle, &defaults, sizeof(defaults) - 1) == false,
               "ABI-mismatched params should fail");
-  TEST_ASSERT(
-      specbleach_denoiser_get_last_error(handle) == SPECBLEACH_ERR_ABI_MISMATCH,
-      "Last error should be ABI_MISMATCH");
 
   // Non-positive profile scales fall back to 1.0x
   SpecbleachDenoiserParameters flat_scales = defaults;
@@ -727,49 +719,6 @@ void test_specbleach_redesigned_api_coverage(void) {
   TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &bad_curve,
                                                   sizeof(bad_curve)) == false,
               "Curve without bias should fail");
-  TEST_ASSERT(
-      specbleach_denoiser_get_last_error(handle) == SPECBLEACH_ERR_NULL_ARG,
-      "Last error should be NULL_ARG");
-
-  // Every error code has a message
-  TEST_ASSERT(strcmp(specbleach_denoiser_get_last_error_string(SPECBLEACH_OK),
-                     "ok") == 0,
-              "OK string should match");
-  TEST_ASSERT(
-      strcmp(specbleach_denoiser_get_last_error_string(SPECBLEACH_ERR_NULL_ARG),
-             "null argument") == 0,
-      "NULL_ARG string should match");
-  TEST_ASSERT(strcmp(specbleach_denoiser_get_last_error_string(
-                         SPECBLEACH_ERR_ABI_MISMATCH),
-                     "parameter size mismatch (ABI)") == 0,
-              "ABI string should match");
-  TEST_ASSERT(strcmp(specbleach_denoiser_get_last_error_string(
-                         SPECBLEACH_ERR_SIZE_MISMATCH),
-                     "profile/curve size mismatch") == 0,
-              "SIZE string should match");
-  TEST_ASSERT(strcmp(specbleach_denoiser_get_last_error_string(
-                         SPECBLEACH_ERR_INVALID_MODE),
-                     "invalid profile mode") == 0,
-              "MODE string should match");
-  TEST_ASSERT(strcmp(specbleach_denoiser_get_last_error_string(
-                         SPECBLEACH_ERR_INVALID_CHANNEL),
-                     "invalid channel") == 0,
-              "CHANNEL string should match");
-  TEST_ASSERT(strcmp(specbleach_denoiser_get_last_error_string(
-                         SPECBLEACH_ERR_NO_MEMORY),
-                     "out of memory") == 0,
-              "MEMORY string should match");
-  TEST_ASSERT(
-      strcmp(specbleach_denoiser_get_last_error_string(SPECBLEACH_ERR_EMPTY),
-             "empty block") == 0,
-      "EMPTY string should match");
-  TEST_ASSERT(
-      strcmp(specbleach_denoiser_get_last_error_string((SpecbleachError)99),
-             "unknown error") == 0,
-      "Unknown code string should match");
-  TEST_ASSERT(
-      specbleach_denoiser_get_last_error(NULL) == SPECBLEACH_ERR_NULL_ARG,
-      "NULL last error should be NULL_ARG");
 
   // Resampled load: same size delegates, other sizes interpolate
   float* native_profile = (float*)malloc(profile_size * sizeof(float));
@@ -798,29 +747,20 @@ void test_specbleach_redesigned_api_coverage(void) {
   TEST_ASSERT(specbleach_denoiser_load_noise_profile_resampled(
                   handle, NULL, profile_size, 1, ROLLING_MEAN) == false,
               "NULL resampled source should fail");
-  TEST_ASSERT(
-      specbleach_denoiser_get_last_error(handle) == SPECBLEACH_ERR_NULL_ARG,
-      "Last error should be NULL_ARG");
   TEST_ASSERT(specbleach_denoiser_load_noise_profile_resampled(
                   handle, native_profile, 0, 1, ROLLING_MEAN) == false,
               "Empty resampled source should fail");
   TEST_ASSERT(specbleach_denoiser_load_noise_profile_resampled(
                   handle, native_profile, profile_size, 1, 0) == false,
               "Mode 0 resampled load should fail");
-  TEST_ASSERT(
-      specbleach_denoiser_get_last_error(handle) == SPECBLEACH_ERR_INVALID_MODE,
-      "Last error should be INVALID_MODE");
   TEST_ASSERT(specbleach_denoiser_load_noise_profile_resampled(
                   handle, native_profile, profile_size, 1, 5) == false,
               "Mode 5 resampled load should fail");
 
-  // NULL source with a live instance reports through the instance
+  // NULL source with a live instance fails
   TEST_ASSERT(specbleach_denoiser_load_noise_profile_for_mode(
                   handle, NULL, profile_size, 1, ROLLING_MEAN) == false,
               "NULL for_mode source should fail");
-  TEST_ASSERT(
-      specbleach_denoiser_get_last_error(handle) == SPECBLEACH_ERR_NULL_ARG,
-      "Last error should be NULL_ARG");
 
   // DSP-state reset rebuilds engines and keeps processing
   TEST_ASSERT(specbleach_denoiser_reset_dsp_state(NULL) == false,
@@ -831,8 +771,6 @@ void test_specbleach_redesigned_api_coverage(void) {
               "Reset should clear profiles");
   TEST_ASSERT(specbleach_denoiser_process(handle, 256, in_buf, out_buf) == true,
               "Process should work after reset");
-  TEST_ASSERT(specbleach_denoiser_get_last_error(handle) == SPECBLEACH_OK,
-              "Last error should be OK after process");
 
   free(native_profile);
   free(half_profile);
