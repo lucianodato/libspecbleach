@@ -47,6 +47,7 @@ void test_spectral_smoother(void) {
 
   // 2. Free NULL instance (safety check)
   spectral_smoothing_free(NULL);
+  spectral_smoothing_set_hop_samples(NULL, 256U); // must not crash
 
   // Test initialization with default fallbacks (sample_rate=0,
   // overlap_factor=0)
@@ -70,6 +71,7 @@ void test_spectral_smoother(void) {
     SpectralSmoother* ss = spectral_smoothing_initialize(
         fft_size, 44100, custom_overlap, (TimeSmoothingType)type);
     TEST_ASSERT(ss != NULL, "Spectral smoother initialization should succeed");
+    spectral_smoothing_set_hop_samples(ss, fft_size / custom_overlap);
 
     float gains[1024] = {0.0f};
     for (uint32_t i = 0; i < num_bins; i++) {

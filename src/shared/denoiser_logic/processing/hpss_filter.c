@@ -20,7 +20,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "hpss_filter.h"
 #include "shared/configurations.h"
-#include "shared/frame_rate_norm.h"
 #include "shared/utils/simd_utils.h"
 #include <math.h>
 #include <stdlib.h>
@@ -30,7 +29,6 @@ struct HpssFilter {
   HpssConfig config;
   bool is_enabled;
   bool is_initialized;
-  float smooth;
 
   float* prev_h; // Previous frame harmonic magnitude estimate H_{t-1, k}
   float* h;      // Current frame harmonic magnitude estimate H_{t, k}
@@ -50,7 +48,6 @@ HpssFilter* hpss_filter_initialize(HpssConfig config) {
   self->config = config;
   self->is_enabled = true;
   self->is_initialized = false;
-  self->smooth = HPSS_SLIDING_SMOOTH_FACTOR;
 
   self->prev_h = (float*)calloc(config.real_spectrum_size, sizeof(float));
   self->h = (float*)calloc(config.real_spectrum_size, sizeof(float));
@@ -127,8 +124,8 @@ bool hpss_filter_process(HpssFilter* self, const float* current_magnitude,
   // 1. Initialize H and P for current frame
   for (uint32_t k = 0U; k < spectrum_size; ++k) {
     float mag = current_magnitude[k];
-    self->h[k] = self->smooth * mag;
-    self->p[k] = self->smooth * mag;
+    self->h[k] = HPSS_SLIDING_SMOOTH_FACTOR * mag;
+    self->p[k] = HPSS_SLIDING_SMOOTH_FACTOR * mag;
   }
 
   // 2. Sliding HPSS Iterations (Ono / Tachibana ISMIR 2008)
@@ -150,14 +147,15 @@ bool hpss_filter_process(HpssFilter* self, const float* current_magnitude,
       // Percussive reference from adjacent frequency bins
       float p_prev = (k > 0U) ? self->p[k - 1U] : self->p[k];
       float p_next = (k + 1U < spectrum_size) ? self->p[k + 1U] : self->p[k];
-      float p_ref = self->smooth * (p_prev + p_next);
+      float p_ref = HPSS_SLIDING_SMOOTH_FACTOR * (p_prev + p_next);
 
       // Auxiliary function update (Wiener-style soft masks)
       float h_sq = h_ref * h_ref;
       float p_sq = p_ref * p_ref;
       float denom = h_sq + p_sq;
 
-      float w_h = (denom > SPECTRAL_EPSILON) ? (h_sq / denom) : self->smooth;
+      float w_h = (denom > SPECTRAL_EPSILON) ? (h_sq / denom)
+                                             : HPSS_SLIDING_SMOOTH_FACTOR;
       float w_p = 1.0f - w_h;
 
       self->h[k] = w_h * mag;
@@ -186,18 +184,11 @@ bool hpss_filter_process(HpssFilter* self, const float* current_magnitude,
     }
 
     // Update state for next frame with exponential temporal tracking
-    self->prev_h[k] = self->smooth * (self->prev_h[k] + current_magnitude[k]);
+    self->prev_h[k] =
+        HPSS_SLIDING_SMOOTH_FACTOR * (self->prev_h[k] + current_magnitude[k]);
   }
 
   sb_simd_restore_state(simd_state);
 
   return true;
-}
-
-void hpss_filter_set_hop_sec(HpssFilter* self, float hop_sec) {
-  if (!self || !(hop_sec > 0.0F)) {
-    return;
-  }
-  self->smooth =
-      sb_alpha_retuned(HPSS_SLIDING_SMOOTH_FACTOR, LEGACY_REF_HOP_SEC, hop_sec);
 }

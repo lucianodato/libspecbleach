@@ -365,8 +365,5 @@ void brandt_noise_estimator_set_hop_sec(BrandtNoiseEstimator* self,
   }
   uint32_t interval =
       sb_frames_for_ms(BRANDT_ESTIMATOR_STATS_UPDATE_MS, hop_sec, 1U, 16U);
-  if (interval < 1U) {
-    interval = 1U;
-  }
   self->stats_interval = interval;
 }

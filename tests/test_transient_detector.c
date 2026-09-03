@@ -35,6 +35,10 @@ int main(void) {
   TransientDetector* td = transient_detector_initialize(num_bands);
   TEST_ASSERT(td != NULL, "TransientDetector initialization should succeed");
 
+  transient_detector_set_hop_sec(NULL, 0.0115F); // must not crash
+  transient_detector_set_hop_sec(td, 0.0115F);
+  transient_detector_set_hop_sec(td, 0.0F); // edge: ignored
+
   float steady_energies[24];
   float onset_weights[24];
   for (int i = 0; i < 24; i++) {

@@ -276,12 +276,6 @@ void noise_estimation_set_hop_sec(NoiseEstimator* self, float hop_sec) {
                                      NUMBER_OF_MEDIAN_SPECTRUM_MAX);
   uint32_t decim = sb_frames_for_ms(MEDIAN_UPDATE_MS, hop_sec, 2U,
                                     NUMBER_OF_MEDIAN_SPECTRUM_MAX);
-  if (blocks < 1U) {
-    blocks = 1U;
-  }
-  if (decim < 1U) {
-    decim = 1U;
-  }
   self->median_blocks = blocks;
   self->median_decim = decim;
 }

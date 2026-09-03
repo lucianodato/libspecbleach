@@ -121,6 +121,9 @@ void test_masking_estimator(void) {
       compute_masking_thresholds(me, spectrum, spectrum, masking_thresholds),
       "Compute masking thresholds should succeed");
 
+  masking_estimation_set_hop_sec(NULL, 0.0058F); // must not crash
+  masking_estimation_set_hop_sec(me, 0.0058F);
+
   // Check that masking thresholds are reasonable
   for (int i = 0; i < 513; i++) {
     TEST_ASSERT(masking_thresholds[i] >= 0.0f,
