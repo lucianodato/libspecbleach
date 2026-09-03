@@ -24,7 +24,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 typedef struct specbleach_stereo { // NOLINT(readability-identifier-naming)
   uint32_t channels;
   void** instances; /* one opaque engine handle per channel */
-  SpecbleachError last_error;
 } SpecbleachStereoState;
 
 specbleach_stereo* specbleach_stereo_initialize(uint32_t sample_rate,
@@ -39,8 +38,6 @@ specbleach_stereo* specbleach_stereo_initialize(uint32_t sample_rate,
   if (!self) {
     return NULL;
   }
-  self->last_error = SPECBLEACH_OK;
-
   self->channels = channels;
   self->instances = calloc((size_t)channels, sizeof(void*));
   if (!self->instances) {
@@ -90,19 +87,13 @@ bool specbleach_stereo_load_parameters(
   }
 
   bool result = true;
-  SpecbleachError first_error = SPECBLEACH_OK;
   for (uint32_t ch = 0; ch < self->channels; ++ch) {
     if (!specbleach_denoiser_load_parameters(
             (specbleach_denoiser*)self->instances[ch], parameters,
             parameters_size)) {
-      if (result) {
-        first_error = specbleach_denoiser_get_last_error(
-            (specbleach_denoiser*)self->instances[ch]);
-      }
       result = false;
     }
   }
-  self->last_error = result ? SPECBLEACH_OK : first_error;
   return result;
 }
 
@@ -112,29 +103,20 @@ bool specbleach_stereo_process(specbleach_stereo* instance,
   SpecbleachStereoState* self = instance;
 
   if (!self || number_of_samples == 0 || !input || !output) {
-    if (self) {
-      self->last_error = (!self) ? SPECBLEACH_ERR_NULL_ARG
-                         : number_of_samples == 0 ? SPECBLEACH_ERR_EMPTY
-                                                  : SPECBLEACH_ERR_NULL_ARG;
-    }
     return false;
   }
 
   for (uint32_t ch = 0; ch < self->channels; ++ch) {
     if (!input[ch] || !output[ch]) {
-      self->last_error = SPECBLEACH_ERR_NULL_ARG;
       return false;
     }
     if (!specbleach_denoiser_process((specbleach_denoiser*)self->instances[ch],
                                      number_of_samples, input[ch],
                                      output[ch])) {
-      self->last_error = specbleach_denoiser_get_last_error(
-          (specbleach_denoiser*)self->instances[ch]);
       return false;
     }
   }
 
-  self->last_error = SPECBLEACH_OK;
   return true;
 }
 
@@ -142,46 +124,6 @@ uint32_t specbleach_stereo_get_channel_count(
     const specbleach_stereo* instance) {
   const SpecbleachStereoState* self = instance;
   return self ? self->channels : 0;
-}
-
-uint32_t specbleach_stereo_get_sample_rate(
-    const specbleach_stereo* instance) {
-  const SpecbleachStereoState* self = instance;
-  if (!self || self->channels == 0) {
-    return 0;
-  }
-  return specbleach_denoiser_get_sample_rate(
-      (const specbleach_denoiser*)self->instances[0]);
-}
-
-uint32_t specbleach_stereo_get_frame_size(
-    const specbleach_stereo* instance) {
-  const SpecbleachStereoState* self = instance;
-  if (!self || self->channels == 0) {
-    return 0;
-  }
-  return specbleach_denoiser_get_frame_size(
-      (const specbleach_denoiser*)self->instances[0]);
-}
-
-uint32_t specbleach_stereo_get_fft_size(
-    const specbleach_stereo* instance) {
-  const SpecbleachStereoState* self = instance;
-  if (!self || self->channels == 0) {
-    return 0;
-  }
-  return specbleach_denoiser_get_fft_size(
-      (const specbleach_denoiser*)self->instances[0]);
-}
-
-uint32_t specbleach_stereo_get_hop_size(
-    const specbleach_stereo* instance) {
-  const SpecbleachStereoState* self = instance;
-  if (!self || self->channels == 0) {
-    return 0;
-  }
-  return specbleach_denoiser_get_hop_size(
-      (const specbleach_denoiser*)self->instances[0]);
 }
 
 uint32_t specbleach_stereo_get_latency(const specbleach_stereo* instance) {
@@ -255,30 +197,6 @@ void specbleach_stereo_reset_profiles(specbleach_stereo* instance) {
     specbleach_denoiser_reset_noise_profile(
         (specbleach_denoiser*)self->instances[ch]);
   }
-  self->last_error = SPECBLEACH_OK;
-}
-
-bool specbleach_stereo_reset_dsp_state(specbleach_stereo* instance) {
-  SpecbleachStereoState* self = instance;
-
-  if (!self) {
-    return false;
-  }
-
-  bool result = true;
-  SpecbleachError first_error = SPECBLEACH_OK;
-  for (uint32_t ch = 0; ch < self->channels; ++ch) {
-    if (!specbleach_denoiser_reset_dsp_state(
-            (specbleach_denoiser*)self->instances[ch])) {
-      if (result) {
-        first_error = specbleach_denoiser_get_last_error(
-            (specbleach_denoiser*)self->instances[ch]);
-      }
-      result = false;
-    }
-  }
-  self->last_error = result ? SPECBLEACH_OK : first_error;
-  return result;
 }
 
 const float* specbleach_stereo_get_noise_profile_for_channel(
@@ -301,19 +219,12 @@ bool specbleach_stereo_load_noise_profile_for_channel(
   SpecbleachStereoState* self = instance;
 
   if (!self || channel >= self->channels) {
-    if (self) {
-      self->last_error = SPECBLEACH_ERR_INVALID_CHANNEL;
-    }
     return false;
   }
 
-  const bool ok = specbleach_denoiser_load_noise_profile_for_mode(
+  return specbleach_denoiser_load_noise_profile_for_mode(
       (specbleach_denoiser*)self->instances[channel], profile, profile_size,
       block_count, mode);
-  self->last_error = ok ? SPECBLEACH_OK
-                        : specbleach_denoiser_get_last_error(
-                              (specbleach_denoiser*)self->instances[channel]);
-  return ok;
 }
 
 bool specbleach_stereo_load_noise_profile_resampled_for_channel(
@@ -323,19 +234,12 @@ bool specbleach_stereo_load_noise_profile_resampled_for_channel(
   SpecbleachStereoState* self = instance;
 
   if (!self || channel >= self->channels) {
-    if (self) {
-      self->last_error = SPECBLEACH_ERR_INVALID_CHANNEL;
-    }
     return false;
   }
 
-  const bool ok = specbleach_denoiser_load_noise_profile_resampled(
+  return specbleach_denoiser_load_noise_profile_resampled(
       (specbleach_denoiser*)self->instances[channel], profile, source_size,
       block_count, mode);
-  self->last_error = ok ? SPECBLEACH_OK
-                        : specbleach_denoiser_get_last_error(
-                              (specbleach_denoiser*)self->instances[channel]);
-  return ok;
 }
 
 bool specbleach_stereo_profile_available_for_channel(
@@ -388,35 +292,6 @@ uint32_t specbleach_stereo_get_noise_profile_size(
       (const specbleach_denoiser*)self->instances[0]);
 }
 
-bool specbleach_stereo_is_transient_detected(
-    const specbleach_stereo* instance) {
-  const SpecbleachStereoState* self = instance;
-
-  if (!self) {
-    return false;
-  }
-
-  for (uint32_t ch = 0; ch < self->channels; ++ch) {
-    if (specbleach_denoiser_is_transient_detected(
-            (const specbleach_denoiser*)self->instances[ch])) {
-      return true;
-    }
-  }
-  return false;
-}
-
-bool specbleach_stereo_is_transient_detected_for_channel(
-    const specbleach_stereo* instance, const uint32_t channel) {
-  const SpecbleachStereoState* self = instance;
-
-  if (!self || channel >= self->channels) {
-    return false;
-  }
-
-  return specbleach_denoiser_is_transient_detected(
-      (const specbleach_denoiser*)self->instances[channel]);
-}
-
 float specbleach_stereo_get_transient_intensity(
     const specbleach_stereo* instance) {
   const SpecbleachStereoState* self = instance;
@@ -434,18 +309,6 @@ float specbleach_stereo_get_transient_intensity(
     }
   }
   return maximum;
-}
-
-const float* specbleach_stereo_get_tonal_mask_for_channel(
-    const specbleach_stereo* instance, const uint32_t channel) {
-  const SpecbleachStereoState* self = instance;
-
-  if (!self || channel >= self->channels) {
-    return NULL;
-  }
-
-  return specbleach_denoiser_get_tonal_mask(
-      (const specbleach_denoiser*)self->instances[channel]);
 }
 
 const float* specbleach_stereo_get_active_noise_profile_for_channel(
@@ -472,10 +335,4 @@ uint32_t specbleach_stereo_get_tonal_peaks_for_channel(
   return specbleach_denoiser_get_tonal_peaks(
       (const specbleach_denoiser*)self->instances[channel], peak_freqs_hz,
       max_peaks);
-}
-
-SpecbleachError specbleach_stereo_get_last_error(
-    const specbleach_stereo* instance) {
-  const SpecbleachStereoState* self = instance;
-  return self ? self->last_error : SPECBLEACH_ERR_NULL_ARG;
 }

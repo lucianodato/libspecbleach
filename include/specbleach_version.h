@@ -62,14 +62,6 @@ extern "C" {
 #define SPECBLEACH_VERSION_STRING "0.4.0"
 
 /**
- * Composite numeric version for #if comparisons, e.g.
- * #if SPECBLEACH_VERSION_NUMBER >= 400.
- */
-#define SPECBLEACH_VERSION_NUMBER                                              \
-  (SPECBLEACH_VERSION_MAJOR * 10000 + SPECBLEACH_VERSION_MINOR * 100 +         \
-   SPECBLEACH_VERSION_PATCH)
-
-/**
  * Returns the runtime version banner ("libspecbleach " +
  * SPECBLEACH_VERSION_STRING). The returned pointer is static and owned by
  * the library; callers must not free or modify it.
