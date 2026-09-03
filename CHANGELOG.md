@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 - **Dead stereo API surface**: Removed nine `specbleach_stereo_*` functions with zero callers (`get_sample_rate`, `get_frame_size`, `get_fft_size`, `get_hop_size`, `reset_dsp_state`, `is_transient_detected`, `is_transient_detected_for_channel`, `get_tonal_mask_for_channel`, `get_last_error`) along with the now write-only `last_error` bookkeeping, and the unused `SPECBLEACH_VERSION_NUMBER` macro. The mono `specbleach_denoiser_*` equivalents remain the supported path.
+- **Error-code API**: Removed `specbleach_denoiser_get_last_error()`, `specbleach_denoiser_get_last_error_string()`, the `SpecbleachError` bookkeeping they served, and the now-unreferenced `specbleach_error.h` header. Fallible calls uniformly fail fast with `bool`; tests assert the `false` paths directly.
 
 ### Added
 - **Internal Thread Pool**: Added `SbThreadPool` (`src/shared/utils/thread_pool.h`), a fixed-size worker pool with semaphore-based dispatch and static contiguous partitioning, powering multi-threaded NLM 2D smoothing without any external threading runtime. Thread count is configurable per instance via `NlmFilterConfig::num_threads` (default `NLM_NUM_THREADS_DEFAULT`).

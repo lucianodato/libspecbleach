@@ -33,7 +33,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "specbleach_error.h"
 #include "specbleach_export.h"
 
 #ifdef __cplusplus
@@ -326,7 +325,7 @@ SPECBLEACH_API void specbleach_denoiser_free(specbleach_denoiser* instance);
  *
  * @return true if the parameters were loaded, false on NULL arguments, a
  * mismatched parameters_size, a reduction_curve_size mismatch, or an
- * allocation failure. See specbleach_denoiser_get_last_error().
+ * allocation failure.
  */
 SPECBLEACH_API bool specbleach_denoiser_load_parameters(
     specbleach_denoiser* instance,
@@ -617,30 +616,6 @@ SPECBLEACH_API bool specbleach_denoiser_is_transient_detected(
  */
 SPECBLEACH_API float specbleach_denoiser_get_transient_intensity(
     const specbleach_denoiser* instance);
-
-/**
- * Returns the failure reason for the last fallible call on this instance
- * (load/process/profile APIs). Cleared to SPECBLEACH_OK on every success.
- *
- * Thread safety: RT-safe (read-only query).
- *
- * @param instance Instance handle (NULL yields SPECBLEACH_ERR_NULL_ARG).
- * @return Last error code.
- */
-SPECBLEACH_API SpecbleachError
-specbleach_denoiser_get_last_error(const specbleach_denoiser* instance);
-
-/**
- * Human-readable form of a SpecbleachError code. The pointer is static;
- * do not free it.
- *
- * Thread safety: thread-safe, callable without an instance.
- *
- * @param error Error code.
- * @return Short English description ("ok", "null argument", ...).
- */
-SPECBLEACH_API const char* specbleach_denoiser_get_last_error_string(
-    SpecbleachError error);
 
 #ifdef __cplusplus
 }
