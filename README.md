@@ -93,7 +93,7 @@ You can configure the build using `-Doption=VALUE`:
 > [!IMPORTANT]
 > **Performance Note for Packagers & Users**: The advanced "2D Denoising" (NLM) feature is computationally intensive and relies heavily on SIMD vectorization and multi-core parallelization through a **built-in worker pool** (no external threading runtime required).
 >
-> The pool is created during `specbleach_2d_initialize` and dispatches work with static, contiguous partitioning, keeping output deterministic across runs. Thread count defaults to 4 (see `NLM_NUM_THREADS_DEFAULT` in `src/shared/configurations.h`) and can be tuned per instance through `NlmFilterConfig::num_threads`.
+> The pool is created internally when the NLM smoother is initialized (owned by the spectral denoiser) and dispatches work with static, contiguous partitioning, keeping output deterministic across runs. Thread count defaults to 4 (see `NLM_NUM_THREADS_DEFAULT` in `src/shared/configurations.h`) and can be tuned per instance through `NlmFilterConfig::num_threads`.
 >
 > You **MUST** configure with `-DCMAKE_BUILD_TYPE=Release` (or the compiler's equivalent optimization settings) for real-time performance. Debug or unoptimized builds will result in high CPU load.
 
@@ -120,8 +120,8 @@ specbleach_denoiser* denoiser =
 // Report latency to your host for delay compensation (stable after init)
 uint32_t latency = specbleach_denoiser_get_latency(denoiser);
 
-// 2. CONFIGURE — library copies everything
-SpecbleachDenoiserParameters p = {0};
+// 2. CONFIGURE — start from safe defaults; library copies everything
+SpecbleachDenoiserParameters p = specbleach_denoiser_get_default_parameters();
 p.learn_noise = SPECBLEACH_LEARN_ALL;
 p.reduction_gain = 0.1f;                          // -20 dB
 specbleach_denoiser_load_parameters(denoiser, &p, sizeof(p));

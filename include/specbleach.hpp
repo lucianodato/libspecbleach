@@ -20,38 +20,34 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 /**
  * @file specbleach.hpp
- * @brief Header-only C++ ownership wrappers for the libspecbleach C API.
+ * @brief Header-only C++ ownership wrapper for the core single-channel API.
  *
- * This header is deliberately framework-agnostic (standard library only):
- * it serves JUCE plugin authors and raw-VST3/CLAP/LV2 developers,
- * DAW/editor codebases, and standalone audio applications equally. It
- * wraps OWNERSHIP only — RAII lifetime management via std::unique_ptr —
- * and adds nothing else: no threading policy, no buffers, no framework
- * types. All processing calls remain the plain C functions, which are
- * safe to call directly on the owned handles.
+ * Framework-agnostic (standard library only): wraps OWNERSHIP only — RAII
+ * lifetime via std::unique_ptr — and adds nothing else: no threading
+ * policy, no buffers, no framework types. All processing calls remain the
+ * plain C functions in specbleach_denoiser.h, safe to call on .get().
  *
  * Usage:
  * @code
  *   #include <specbleach.hpp>
  *
  *   auto denoiser = specbleach::make_denoiser(48000U, 46.0F);
- *   if (!denoiser) { / * handle allocation failure * / }
+ *   if (!denoiser) { // handle allocation failure }
  *   specbleach_denoiser_process(denoiser.get(), nframes, in, out);
  *   // freed automatically, exception-safe, non-copyable by construction
  * @endcode
  *
- * The same shape exists for every handle type in the library:
- * make_denoiser and make_stereo_group (extras). Handles are movable, never
- * copyable, so a double-free cannot be expressed.
+ * Multi-channel users: #include <specbleach_stereo.hpp> instead (it pulls
+ * this header in and adds make_stereo_group).
  */
 
-#ifndef SPECBLEACH_HPP
-#define SPECBLEACH_HPP
+#ifndef SPECBLEACH_HPP_INCLUDED
+#define SPECBLEACH_HPP_INCLUDED
 
+#include <cstdint>
 #include <memory>
 
 #include "specbleach_denoiser.h"
-#include "specbleach_stereo.h"
 
 namespace specbleach {
 
@@ -61,14 +57,7 @@ struct DenoiserDeleter {
   }
 };
 
-struct StereoGroupDeleter {
-  void operator()(specbleach_stereo* handle) const noexcept {
-    specbleach_stereo_free(handle);
-  }
-};
-
 using DenoiserPtr = std::unique_ptr<specbleach_denoiser, DenoiserDeleter>;
-using StereoGroupPtr = std::unique_ptr<specbleach_stereo, StereoGroupDeleter>;
 
 /// Creates a single-channel spectral denoiser; null on failure.
 inline DenoiserPtr make_denoiser(const uint32_t sample_rate,
@@ -77,14 +66,6 @@ inline DenoiserPtr make_denoiser(const uint32_t sample_rate,
       specbleach_denoiser_initialize(sample_rate, frame_size_ms));
 }
 
-/// Creates a multi-channel engine group (extras); null on failure.
-inline StereoGroupPtr make_stereo_group(const uint32_t sample_rate,
-                                        const float frame_size_ms,
-                                        const uint32_t channels) noexcept {
-  return StereoGroupPtr(
-      specbleach_stereo_initialize(sample_rate, frame_size_ms, channels));
-}
-
 } // namespace specbleach
 
-#endif /* SPECBLEACH_HPP */
+#endif /* SPECBLEACH_HPP_INCLUDED */

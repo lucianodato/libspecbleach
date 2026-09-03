@@ -28,13 +28,17 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 enum ZeroPaddingType {
   NEXT_POWER_OF_TWO = 0,
   FIXED_AMOUNT = 1,
-  NO_PADDING = 2,
+  // Smallest PFFFT-valid size >= frame, frame centered, the rest zero-padded.
+  // This IS padding (up to the next valid size) — the name states the policy,
+  // not the absence of it. Padding never affects latency (latency =
+  // frame_size + NLM look-ahead, constant across smoothing modes).
+  PAD_TO_VALID_SIZE = 2,
 };
 
 // Compile-time validation of enum values
 _Static_assert(NEXT_POWER_OF_TWO == 0, "NEXT_POWER_OF_TWO must be 0");
 _Static_assert(FIXED_AMOUNT == 1, "FIXED_AMOUNT must be 1");
-_Static_assert(NO_PADDING == 2, "NO_PADDING must be 2");
+_Static_assert(PAD_TO_VALID_SIZE == 2, "PAD_TO_VALID_SIZE must be 2");
 
 typedef enum ZeroPaddingType ZeroPaddingType;
 

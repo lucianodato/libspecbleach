@@ -24,7 +24,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  * Deliberately avoids assertions that vanish under NDEBUG.
  */
 
-#include <specbleach.hpp>
+#include <specbleach_stereo.hpp>
 
 #include <cstdio>
 #include <utility>

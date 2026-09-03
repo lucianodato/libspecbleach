@@ -140,7 +140,7 @@ void test_specbleach_load_noise_profile_with_mode(void) {
               "Should have 10 blocks averaged");
 
   // Get the profile back and verify it matches
-  float* retrieved_profile =
+  const float* retrieved_profile =
       specbleach_denoiser_get_noise_profile_for_mode(handle, 1);
   TEST_ASSERT(retrieved_profile != NULL, "Should get valid profile");
 
@@ -241,9 +241,12 @@ void test_specbleach_mode_switching(void) {
               "Mode 3 should have 15 blocks");
 
   // Check profile values
-  float* retrieved1 = specbleach_denoiser_get_noise_profile_for_mode(handle, 1);
-  float* retrieved2 = specbleach_denoiser_get_noise_profile_for_mode(handle, 2);
-  float* retrieved3 = specbleach_denoiser_get_noise_profile_for_mode(handle, 3);
+  const float* retrieved1 =
+      specbleach_denoiser_get_noise_profile_for_mode(handle, 1);
+  const float* retrieved2 =
+      specbleach_denoiser_get_noise_profile_for_mode(handle, 2);
+  const float* retrieved3 =
+      specbleach_denoiser_get_noise_profile_for_mode(handle, 3);
 
   TEST_ASSERT(retrieved1 != NULL && retrieved2 != NULL && retrieved3 != NULL,
               "All profiles should be retrievable");
@@ -299,9 +302,8 @@ void test_specbleach_reset_noise_profile(void) {
       specbleach_denoiser_noise_profile_available_for_mode(handle, 1) == true,
       "Profile should be available before reset");
 
-  // Reset profile
-  TEST_ASSERT(specbleach_denoiser_reset_noise_profile(handle) == true,
-              "Reset should succeed");
+  // Reset profile (void: NULL-safe no-op, cannot fail on valid handle)
+  specbleach_denoiser_reset_noise_profile(handle);
 
   // Verify all profiles are reset
   for (int mode = 1; mode <= 4; mode++) {
@@ -481,7 +483,7 @@ void test_specbleach_smoothing_transition_and_validation(void) {
       .learn_noise = SPECBLEACH_LEARN_OFF,
       .reduction_gain = 0.3f,
       .smoothing_factor = 0.5f,
-      .smoothing_mode = SB_SMOOTHING_NLM_2D,
+      .smoothing_mode = SPECBLEACH_SMOOTHING_NLM_2D,
   };
   TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &params,
                                                   sizeof(params)) == true,
@@ -511,7 +513,7 @@ void test_specbleach_smoothing_transition_and_validation(void) {
 
   // Switch to TEMPORAL at runtime: exercises the crossfade transition
   // machinery and the temporal smoothing chain
-  params.smoothing_mode = SB_SMOOTHING_TEMPORAL;
+  params.smoothing_mode = SPECBLEACH_SMOOTHING_TEMPORAL;
   TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &params,
                                                   sizeof(params)) == true,
               "Loading temporal mode should succeed");
@@ -531,7 +533,7 @@ void test_specbleach_smoothing_transition_and_validation(void) {
 
   // Transient during NLM mode: transient-mask loops in the NLM chain
   params.hpss_enable = true;
-  params.smoothing_mode = SB_SMOOTHING_NLM_2D;
+  params.smoothing_mode = SPECBLEACH_SMOOTHING_NLM_2D;
   TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &params,
                                                   sizeof(params)) == true,
               "Loading NLM with HPSS should succeed");
@@ -623,6 +625,221 @@ void test_specbleach_adaptive_method_switch(void) {
   printf("✓ Adaptive method switch test passed\n");
 }
 
+void test_specbleach_redesigned_api_coverage(void) {
+  printf("Testing redesigned API coverage...\n");
+
+  // Init validation: zero/negative parameters and sub-hop frame must fail
+  TEST_ASSERT(specbleach_denoiser_initialize(0, 20.0f) == NULL,
+              "Zero sample rate should fail");
+  TEST_ASSERT(specbleach_denoiser_initialize(44100, 0.0f) == NULL,
+              "Zero frame size should fail");
+  TEST_ASSERT(specbleach_denoiser_initialize(44100, -5.0f) == NULL,
+              "Negative frame size should fail");
+  TEST_ASSERT(specbleach_denoiser_initialize(44100, 0.01f) == NULL,
+              "Sub-hop frame size should fail");
+
+  // Default parameters carry safe, documented values
+  SpecbleachDenoiserParameters defaults =
+      specbleach_denoiser_get_default_parameters();
+  TEST_ASSERT(defaults.learn_noise == SPECBLEACH_LEARN_OFF,
+              "Default should not learn");
+  TEST_ASSERT(defaults.smoothing_mode == SPECBLEACH_SMOOTHING_TEMPORAL,
+              "Default smoothing should be temporal");
+  TEST_ASSERT(defaults.reduction_curve_bias == NULL,
+              "Default curve bias should be NULL");
+
+  specbleach_denoiser* handle = specbleach_denoiser_initialize(44100, 20.0f);
+  TEST_ASSERT(handle != NULL, "Denoiser initialization should succeed");
+
+  // Geometry getters on a live instance and NULL
+  TEST_ASSERT(specbleach_denoiser_get_sample_rate(handle) == 44100,
+              "Sample rate getter should match");
+  TEST_ASSERT(specbleach_denoiser_get_sample_rate(NULL) == 0,
+              "NULL sample rate should be 0");
+  uint32_t frame = specbleach_denoiser_get_frame_size(handle);
+  TEST_ASSERT(frame == 882, "20 ms at 44.1 kHz should be 882 samples");
+  TEST_ASSERT(specbleach_denoiser_get_frame_size(NULL) == 0,
+              "NULL frame size should be 0");
+  uint32_t fft = specbleach_denoiser_get_fft_size(handle);
+  TEST_ASSERT(fft >= frame && fft % 32 == 0, "FFT should pad frame to 32x");
+  TEST_ASSERT(specbleach_denoiser_get_fft_size(NULL) == 0,
+              "NULL FFT size should be 0");
+  uint32_t hop = specbleach_denoiser_get_hop_size(handle);
+  TEST_ASSERT(hop == frame / 4, "Hop should be frame / overlap 4");
+  TEST_ASSERT(specbleach_denoiser_get_hop_size(NULL) == 0,
+              "NULL hop should be 0");
+  TEST_ASSERT(specbleach_denoiser_get_latency(handle) == frame + 4 * hop,
+              "Latency should be frame plus NLM look-ahead");
+
+  // No profile available before learning
+  TEST_ASSERT(specbleach_denoiser_has_any_profile(NULL) == false,
+              "NULL should have no profile");
+  TEST_ASSERT(specbleach_denoiser_has_any_profile(handle) == false,
+              "Fresh instance should have no profile");
+
+  // Process and parameter error paths report through last_error
+  float in_buf[256] = {0};
+  float out_buf[256] = {0};
+  TEST_ASSERT(specbleach_denoiser_process(NULL, 256, in_buf, out_buf) == false,
+              "NULL instance should fail");
+  TEST_ASSERT(specbleach_denoiser_process(handle, 256, NULL, out_buf) == false,
+              "NULL input should fail");
+  TEST_ASSERT(
+      specbleach_denoiser_get_last_error(handle) == SPECBLEACH_ERR_NULL_ARG,
+      "Last error should be NULL_ARG");
+  TEST_ASSERT(specbleach_denoiser_process(handle, 0, in_buf, out_buf) == false,
+              "Empty block should fail");
+  TEST_ASSERT(
+      specbleach_denoiser_get_last_error(handle) == SPECBLEACH_ERR_EMPTY,
+      "Last error should be EMPTY");
+  TEST_ASSERT(specbleach_denoiser_load_parameters(NULL, &defaults,
+                                                  sizeof(defaults)) == false,
+              "NULL instance params should fail");
+  TEST_ASSERT(specbleach_denoiser_load_parameters(handle, NULL,
+                                                  sizeof(defaults)) == false,
+              "NULL params should fail");
+  TEST_ASSERT(specbleach_denoiser_load_parameters(
+                  handle, &defaults, sizeof(defaults) - 1) == false,
+              "ABI-mismatched params should fail");
+  TEST_ASSERT(
+      specbleach_denoiser_get_last_error(handle) == SPECBLEACH_ERR_ABI_MISMATCH,
+      "Last error should be ABI_MISMATCH");
+
+  // Non-positive profile scales fall back to 1.0x
+  SpecbleachDenoiserParameters flat_scales = defaults;
+  flat_scales.noise_profile_scale = 0.0f;
+  flat_scales.tonal_noise_profile_scale = -1.0f;
+  TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &flat_scales,
+                                                  sizeof(flat_scales)) == true,
+              "Non-positive scales should fall back");
+
+  // Positive profile scales take the direct path
+  TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &defaults,
+                                                  sizeof(defaults)) == true,
+              "Default params should load");
+
+  // Enabled curve without bias buffer reports NULL_ARG
+  uint32_t profile_size = specbleach_denoiser_get_noise_profile_size(handle);
+  SpecbleachDenoiserParameters bad_curve = defaults;
+  bad_curve.reduction_curve_enabled = true;
+  bad_curve.reduction_curve_bias = NULL;
+  bad_curve.reduction_curve_size = profile_size;
+  TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &bad_curve,
+                                                  sizeof(bad_curve)) == false,
+              "Curve without bias should fail");
+  TEST_ASSERT(
+      specbleach_denoiser_get_last_error(handle) == SPECBLEACH_ERR_NULL_ARG,
+      "Last error should be NULL_ARG");
+
+  // Every error code has a message
+  TEST_ASSERT(strcmp(specbleach_denoiser_get_last_error_string(SPECBLEACH_OK),
+                     "ok") == 0,
+              "OK string should match");
+  TEST_ASSERT(
+      strcmp(specbleach_denoiser_get_last_error_string(SPECBLEACH_ERR_NULL_ARG),
+             "null argument") == 0,
+      "NULL_ARG string should match");
+  TEST_ASSERT(strcmp(specbleach_denoiser_get_last_error_string(
+                         SPECBLEACH_ERR_ABI_MISMATCH),
+                     "parameter size mismatch (ABI)") == 0,
+              "ABI string should match");
+  TEST_ASSERT(strcmp(specbleach_denoiser_get_last_error_string(
+                         SPECBLEACH_ERR_SIZE_MISMATCH),
+                     "profile/curve size mismatch") == 0,
+              "SIZE string should match");
+  TEST_ASSERT(strcmp(specbleach_denoiser_get_last_error_string(
+                         SPECBLEACH_ERR_INVALID_MODE),
+                     "invalid profile mode") == 0,
+              "MODE string should match");
+  TEST_ASSERT(strcmp(specbleach_denoiser_get_last_error_string(
+                         SPECBLEACH_ERR_INVALID_CHANNEL),
+                     "invalid channel") == 0,
+              "CHANNEL string should match");
+  TEST_ASSERT(strcmp(specbleach_denoiser_get_last_error_string(
+                         SPECBLEACH_ERR_NO_MEMORY),
+                     "out of memory") == 0,
+              "MEMORY string should match");
+  TEST_ASSERT(
+      strcmp(specbleach_denoiser_get_last_error_string(SPECBLEACH_ERR_EMPTY),
+             "empty block") == 0,
+      "EMPTY string should match");
+  TEST_ASSERT(
+      strcmp(specbleach_denoiser_get_last_error_string((SpecbleachError)99),
+             "unknown error") == 0,
+      "Unknown code string should match");
+  TEST_ASSERT(
+      specbleach_denoiser_get_last_error(NULL) == SPECBLEACH_ERR_NULL_ARG,
+      "NULL last error should be NULL_ARG");
+
+  // Resampled load: same size delegates, other sizes interpolate
+  float* native_profile = (float*)malloc(profile_size * sizeof(float));
+  TEST_ASSERT(native_profile != NULL, "Profile allocation should succeed");
+  for (uint32_t i = 0; i < profile_size; i++) {
+    native_profile[i] = 0.1f + ((float)i * 0.001f);
+  }
+  TEST_ASSERT(
+      specbleach_denoiser_load_noise_profile_resampled(
+          handle, native_profile, profile_size, 8, ROLLING_MEAN) == true,
+      "Same-size resampled load should succeed");
+  TEST_ASSERT(specbleach_denoiser_has_any_profile(handle) == true,
+              "Profile should exist after load");
+  uint32_t half_size = profile_size / 2;
+  float* half_profile = (float*)malloc(half_size * sizeof(float));
+  TEST_ASSERT(half_profile != NULL, "Half profile allocation should succeed");
+  for (uint32_t i = 0; i < half_size; i++) {
+    half_profile[i] = 0.2f + ((float)i * 0.002f);
+  }
+  TEST_ASSERT(specbleach_denoiser_load_noise_profile_resampled(
+                  handle, half_profile, half_size, 4, ROLLING_MEAN) == true,
+              "Half-size resampled load should succeed");
+  TEST_ASSERT(specbleach_denoiser_load_noise_profile_resampled(
+                  NULL, native_profile, profile_size, 1, ROLLING_MEAN) == false,
+              "NULL resampled load should fail");
+  TEST_ASSERT(specbleach_denoiser_load_noise_profile_resampled(
+                  handle, NULL, profile_size, 1, ROLLING_MEAN) == false,
+              "NULL resampled source should fail");
+  TEST_ASSERT(
+      specbleach_denoiser_get_last_error(handle) == SPECBLEACH_ERR_NULL_ARG,
+      "Last error should be NULL_ARG");
+  TEST_ASSERT(specbleach_denoiser_load_noise_profile_resampled(
+                  handle, native_profile, 0, 1, ROLLING_MEAN) == false,
+              "Empty resampled source should fail");
+  TEST_ASSERT(specbleach_denoiser_load_noise_profile_resampled(
+                  handle, native_profile, profile_size, 1, 0) == false,
+              "Mode 0 resampled load should fail");
+  TEST_ASSERT(
+      specbleach_denoiser_get_last_error(handle) == SPECBLEACH_ERR_INVALID_MODE,
+      "Last error should be INVALID_MODE");
+  TEST_ASSERT(specbleach_denoiser_load_noise_profile_resampled(
+                  handle, native_profile, profile_size, 1, 5) == false,
+              "Mode 5 resampled load should fail");
+
+  // NULL source with a live instance reports through the instance
+  TEST_ASSERT(specbleach_denoiser_load_noise_profile_for_mode(
+                  handle, NULL, profile_size, 1, ROLLING_MEAN) == false,
+              "NULL for_mode source should fail");
+  TEST_ASSERT(
+      specbleach_denoiser_get_last_error(handle) == SPECBLEACH_ERR_NULL_ARG,
+      "Last error should be NULL_ARG");
+
+  // DSP-state reset rebuilds engines and keeps processing
+  TEST_ASSERT(specbleach_denoiser_reset_dsp_state(NULL) == false,
+              "NULL reset should fail");
+  TEST_ASSERT(specbleach_denoiser_reset_dsp_state(handle) == true,
+              "Reset should succeed");
+  TEST_ASSERT(specbleach_denoiser_has_any_profile(handle) == false,
+              "Reset should clear profiles");
+  TEST_ASSERT(specbleach_denoiser_process(handle, 256, in_buf, out_buf) == true,
+              "Process should work after reset");
+  TEST_ASSERT(specbleach_denoiser_get_last_error(handle) == SPECBLEACH_OK,
+              "Last error should be OK after process");
+
+  free(native_profile);
+  free(half_profile);
+  specbleach_denoiser_free(handle);
+  printf("✓ Redesigned API coverage tests passed\n");
+}
+
 int main(void) {
   printf("Running specbleach denoiser tests...\n");
 
@@ -635,6 +852,7 @@ int main(void) {
   test_specbleach_silence_bypass();
   test_specbleach_smoothing_transition_and_validation();
   test_specbleach_adaptive_method_switch();
+  test_specbleach_redesigned_api_coverage();
 
   // Getter Coverage (Extra) and NULL Safety
   printf("Testing API Getters and NULL safety for coverage...\n");
@@ -721,8 +939,8 @@ int main(void) {
   TEST_ASSERT(specbleach_denoiser_noise_profile_available_for_mode(
                   NULL, ROLLING_MEAN) == false,
               "NULL available");
-  TEST_ASSERT(specbleach_denoiser_reset_noise_profile(NULL) == false,
-              "NULL reset");
+  specbleach_denoiser_reset_noise_profile(NULL); // must not crash
+  TEST_ASSERT(true, "NULL reset");
   SpecbleachDenoiserParameters null_params = {0};
   TEST_ASSERT(specbleach_denoiser_load_parameters(NULL, &null_params,
                                                   sizeof(null_params)) == false,

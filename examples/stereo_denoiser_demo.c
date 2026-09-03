@@ -255,7 +255,7 @@ int main(int argc, char** argv) {
     SpecbleachDenoiserParameters params = {0};
     params.learn_noise = SPECBLEACH_LEARN_ALL;
     params.reduction_gain = powf(10.0f, -options.reduction_db / 20.0f);
-    params.smoothing_mode = SB_SMOOTHING_TEMPORAL;
+    params.smoothing_mode = SPECBLEACH_SMOOTHING_TEMPORAL;
     params.hpss_enable = true;
 
     if (!specbleach_stereo_load_parameters(group, &params, sizeof(params))) {
@@ -325,7 +325,7 @@ int main(int argc, char** argv) {
             absolute_frame >= total_frames / 2U) {
           printf("Switching smoothing mode at t=%.1fs\n",
                  (double)absolute_frame / sample_rate);
-          params.smoothing_mode = SB_SMOOTHING_NLM_2D;
+          params.smoothing_mode = SPECBLEACH_SMOOTHING_NLM_2D;
           if (!specbleach_stereo_load_parameters(group, &params,
                                                  sizeof(params))) {
             success = false;

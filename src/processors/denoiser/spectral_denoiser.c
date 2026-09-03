@@ -125,8 +125,8 @@ typedef struct SbSpectralDenoiser {
 } SbSpectralDenoiser;
 
 static int normalize_smoothing_mode(const int mode) {
-  return (mode == SB_SMOOTHING_NLM_2D) ? SB_SMOOTHING_NLM_2D
-                                       : SB_SMOOTHING_TEMPORAL;
+  return (mode == SPECBLEACH_SMOOTHING_NLM_2D) ? SPECBLEACH_SMOOTHING_NLM_2D
+                                               : SPECBLEACH_SMOOTHING_TEMPORAL;
 }
 
 /**
@@ -187,9 +187,9 @@ SpectralProcessorHandle spectral_denoiser_initialize(
   self->spectrum_type = SPECTRAL_TYPE;
   self->gain_calculation_type = GAIN_ESTIMATION_TYPE;
   self->noise_profile = noise_profile;
-  self->active_mode = SB_SMOOTHING_TEMPORAL;
-  self->pending_mode = SB_SMOOTHING_TEMPORAL;
-  self->previous_mode = SB_SMOOTHING_TEMPORAL;
+  self->active_mode = SPECBLEACH_SMOOTHING_TEMPORAL;
+  self->pending_mode = SPECBLEACH_SMOOTHING_TEMPORAL;
+  self->previous_mode = SPECBLEACH_SMOOTHING_TEMPORAL;
 
   self->snr_frame = (float*)calloc(self->real_spectrum_size, sizeof(float));
   self->smoothed_snr = (float*)calloc(self->real_spectrum_size, sizeof(float));
@@ -645,9 +645,9 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
   // NLM smoothing (runs when NLM is the active or the incoming mode). The
   // smoothed magnitude is captured explicitly so the temporal chain cannot
   // overwrite the shared alignment layer before the NLM chain consumes it.
-  const bool nlm_needed =
-      (self->active_mode == SB_SMOOTHING_NLM_2D) ||
-      (self->in_transition && self->pending_mode == SB_SMOOTHING_NLM_2D);
+  const bool nlm_needed = (self->active_mode == SPECBLEACH_SMOOTHING_NLM_2D) ||
+                          (self->in_transition &&
+                           self->pending_mode == SPECBLEACH_SMOOTHING_NLM_2D);
   const float* nlm_smoothed = NULL;
   if (nlm_needed && nlm_filter_process(self->nlm_filter, self->smoothed_snr)) {
     nlm_filter_reconstruct_magnitude(self->nlm_filter, self->smoothed_snr,
@@ -684,7 +684,7 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
     const float total = (float)self->transition_frames;
     const float w = (float)self->transition_pos / total; // 0 → 1
 
-    if (self->previous_mode == SB_SMOOTHING_NLM_2D) {
+    if (self->previous_mode == SPECBLEACH_SMOOTHING_NLM_2D) {
       (void)run_nlm_chain(self, fft_spectrum, nlm_smoothed, delayed_noise,
                           gain_a, self->alpha, self->beta);
       run_temporal_chain(self, fft_spectrum, delayed_noise, gain_b,
@@ -705,7 +705,7 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
       self->active_mode = self->pending_mode;
       self->in_transition = false;
     }
-  } else if (self->active_mode == SB_SMOOTHING_NLM_2D) {
+  } else if (self->active_mode == SPECBLEACH_SMOOTHING_NLM_2D) {
     (void)run_nlm_chain(self, fft_spectrum, nlm_smoothed, delayed_noise, gain_a,
                         self->alpha, self->beta);
   } else {

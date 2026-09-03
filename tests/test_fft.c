@@ -25,7 +25,8 @@ void test_fft_lifecycle(void) {
   printf("Testing FFT lifecycle...\n");
 
   uint32_t frame_size = 512;
-  FftTransform* fft = fft_transform_initialize(frame_size, NO_PADDING, 0);
+  FftTransform* fft =
+      fft_transform_initialize(frame_size, PAD_TO_VALID_SIZE, 0);
   TEST_ASSERT(fft != NULL, "FFT initialization should succeed");
   TEST_ASSERT(get_fft_size(fft) == 512, "FFT size should be 512");
   TEST_ASSERT(get_fft_real_spectrum_size(fft) == 257,
@@ -55,7 +56,8 @@ void test_fft_load_store(void) {
   printf("Testing FFT load/store...\n");
 
   uint32_t frame_size = 128;
-  FftTransform* fft = fft_transform_initialize(frame_size, NO_PADDING, 0);
+  FftTransform* fft =
+      fft_transform_initialize(frame_size, PAD_TO_VALID_SIZE, 0);
 
   float input[128];
   float output[128];
@@ -80,7 +82,8 @@ void test_fft_computation(void) {
   printf("Testing FFT computation (Forward/Backward)...\n");
 
   uint32_t frame_size = 1024;
-  FftTransform* fft = fft_transform_initialize(frame_size, NO_PADDING, 0);
+  FftTransform* fft =
+      fft_transform_initialize(frame_size, PAD_TO_VALID_SIZE, 0);
 
   float input[1024];
   float output[1024];
@@ -111,7 +114,8 @@ void test_fft_edge_cases(void) {
   fft_transform_free(NULL); // Should not crash
 
   uint32_t frame_size = 256;
-  FftTransform* fft = fft_transform_initialize(frame_size, NO_PADDING, 0);
+  FftTransform* fft =
+      fft_transform_initialize(frame_size, PAD_TO_VALID_SIZE, 0);
   float input[256] = {0.0f};
   float output[256] = {0.0f};
 
@@ -144,7 +148,7 @@ void test_fft_edge_cases(void) {
               "fft_accumulate_output_samples should fail with NULL output");
 
   // Test initialize_bins and zero argument
-  TEST_ASSERT(fft_transform_initialize(0, NO_PADDING, 0) == NULL,
+  TEST_ASSERT(fft_transform_initialize(0, PAD_TO_VALID_SIZE, 0) == NULL,
               "initialize(0) should return NULL");
   TEST_ASSERT(fft_transform_initialize_bins(0) == NULL,
               "initialize_bins(0) should return NULL");
@@ -152,8 +156,9 @@ void test_fft_edge_cases(void) {
               "initialize_bins(UINT32_MAX) should return NULL");
   TEST_ASSERT(fft_transform_initialize_bins(UINT32_MAX - 10U) == NULL,
               "initialize_bins(UINT32_MAX - 10) should return NULL");
-  TEST_ASSERT(fft_transform_initialize(UINT32_MAX, NO_PADDING, 0) == NULL,
-              "initialize(UINT32_MAX) should return NULL");
+  TEST_ASSERT(
+      fft_transform_initialize(UINT32_MAX, PAD_TO_VALID_SIZE, 0) == NULL,
+      "initialize(UINT32_MAX) should return NULL");
   TEST_ASSERT(
       fft_transform_initialize(UINT32_MAX - 10U, FIXED_AMOUNT, 20U) == NULL,
       "initialize with overflow padding should return NULL");
@@ -175,7 +180,7 @@ void test_fft_edge_cases(void) {
   TEST_FLOAT_CLOSE(acc[0], 3.0f, 1e-6f);
 
   // Test invalid / small padding sizes
-  FftTransform* fft_small = fft_transform_initialize(16, NO_PADDING, 0);
+  FftTransform* fft_small = fft_transform_initialize(16, PAD_TO_VALID_SIZE, 0);
   TEST_ASSERT(fft_small != NULL, "small frame size initializes to valid size");
   TEST_ASSERT(get_fft_size(fft_small) >= 32, "minimum size is 32");
   fft_transform_free(fft_small);
