@@ -50,4 +50,9 @@ void martin_noise_estimator_update_seed(MartinNoiseEstimator* self,
 void martin_noise_estimator_apply_floor(MartinNoiseEstimator* self,
                                         const float* floor_profile);
 
+/* Init-time only: retune time constants for the current hop duration.
+ * Preserves legacy behavior when hop_sec <= 0. */
+void martin_noise_estimator_set_hop_sec(MartinNoiseEstimator* self,
+                                        float hop_sec);
+
 #endif

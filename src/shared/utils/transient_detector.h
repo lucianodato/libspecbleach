@@ -44,4 +44,7 @@ bool transient_detector_process(TransientDetector* self,
                                 const float* band_energies,
                                 float* onset_weights, float* out_intensity);
 
+/* Init-time only: retune attack/decay alphas for the current hop duration. */
+void transient_detector_set_hop_sec(TransientDetector* self, float hop_sec);
+
 #endif

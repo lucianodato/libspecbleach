@@ -20,6 +20,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "spectral_smoother.h"
 #include "shared/configurations.h"
+#include "shared/frame_rate_norm.h"
 #include "shared/utils/spectral_utils.h"
 #include <math.h>
 #include <stdlib.h>
@@ -29,6 +30,7 @@ struct SpectralSmoother {
   uint32_t fft_size;
   uint32_t sample_rate;
   uint32_t overlap_factor;
+  uint32_t hop_samples; // True hop (frame/overlap); 0 = derive from fft
   uint32_t real_spectrum_size;
   TimeSmoothingType type;
 
@@ -54,6 +56,7 @@ SpectralSmoother* spectral_smoothing_initialize(uint32_t fft_size,
   self->sample_rate = (sample_rate > 0U) ? sample_rate : 44100U;
   self->overlap_factor =
       (overlap_factor > 0U) ? overlap_factor : OVERLAP_FACTOR;
+  self->hop_samples = 0U;
   self->real_spectrum_size = (fft_size / 2U) + 1U;
   self->type = type;
 
@@ -110,8 +113,11 @@ bool spectral_smoothing_run(SpectralSmoother* self,
       GAIN_SMOOTHING_MIN_ATTACK_SEC +
       (p * (GAIN_SMOOTHING_MAX_ATTACK_SEC - GAIN_SMOOTHING_MIN_ATTACK_SEC));
 
-  float dt = ((float)self->fft_size / (float)self->overlap_factor) /
-             (float)self->sample_rate;
+  const uint32_t hop =
+      (self->hop_samples > 0U)
+          ? self->hop_samples
+          : (self->fft_size / self->overlap_factor);
+  float dt = (float)hop / (float)self->sample_rate;
   float alpha_release = expf(-dt / tau_release_sec);
   float alpha_attack_base = expf(-dt / tau_attack_sec);
 
@@ -140,8 +146,7 @@ bool spectral_smoothing_run(SpectralSmoother* self,
   return true;
 }
 
-void spectral_smoothing_apply_spatial(float* data, uint32_t size) {
-  if (!data || size < 2U) {
+void spectral_smoothing_apply_spatial(float* data, uint32_t size) {  if (!data || size < 2U) {
     return;
   }
 
@@ -166,4 +171,12 @@ void spectral_smoothing_apply_simple_temporal(float* current, float* memory,
     current[i] = (smoothing * memory[i]) + ((1.0F - smoothing) * current[i]);
     memory[i] = current[i];
   }
+}
+
+void spectral_smoothing_set_hop_samples(SpectralSmoother* self,
+                                        uint32_t hop_samples) {
+  if (!self) {
+    return;
+  }
+  self->hop_samples = hop_samples;
 }

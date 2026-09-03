@@ -52,8 +52,9 @@ struct NlmFilter {
   float distance_threshold_actual;
 
   // Pre-computed frame pointer cache (populated once per process call)
-  // Indexed by [time_past + 4 + dt] where dt ranges from
-  // -search_range_time_past - 4 to +search_range_time_future + 4
+  // Indexed by [time_past + 8 + dt] where dt ranges from
+  // -search_range_time_past - 8 to +search_range_time_future + 8
+  // (halo = max patch half-size 16/2, covers patch <= 16).
   float** frame_ptrs;
   uint32_t total_time_span; // search_time_past + search_time_future + 1 + 8
 
@@ -98,23 +99,66 @@ static inline SB_UNUSED float* get_frame(NlmFilter* self,
 }
 
 // Pre-compute all frame pointers for the current processing window.
-// After this call, frame_ptrs[search_time_past + 4 + dt] gives the frame
-// at relative offset dt (where dt ranges from -past-4 to +future+4).
+// After this call, frame_ptrs[search_time_past + 8 + dt] gives the frame
+// at relative offset dt (where dt ranges from -past-8 to +future+8).
 static inline SB_UNUSED void populate_frame_ptrs(NlmFilter* self) {
   const int32_t past = (int32_t)self->config.search_range_time_past;
   const int32_t future = (int32_t)self->config.search_range_time_future;
 
-  // We need a halo of 4 frames for the 8x8 patch comparison
-  for (int32_t dt = -past - 4; dt <= future + 4; dt++) {
-    self->frame_ptrs[past + 4 + dt] = get_frame(self, dt);
+  // Halo of 8 frames covers the 16x16 patch comparison
+  for (int32_t dt = -past - 8; dt <= future + 8; dt++) {
+    self->frame_ptrs[past + 8 + dt] = get_frame(self, dt);
   }
 }
 
 // O(1) frame lookup using pre-computed pointer cache.
-// dt ranges from -search_time_past - 4 to +search_time_future + 4.
+// dt ranges from -search_time_past - 8 to +search_time_future + 8.
 static inline SB_UNUSED float* cached_get_frame(NlmFilter* self, int32_t dt) {
   return self
-      ->frame_ptrs[(int32_t)self->config.search_range_time_past + 4 + dt];
+      ->frame_ptrs[(int32_t)self->config.search_range_time_past + 8 + dt];
+}
+
+// Max patch edge supported by the vectorized distance below. Matches the
+// frame_rate_norm.h fallback clamp (4..16); halo in populate_frame_ptrs
+// covers half of this (8 frames each side).
+#define SB_NLM_MAX_PATCH 16U
+
+// Chunked single-row SSD over n contiguous bins (8-wide + 4-wide + scalar
+// tail). Safe (in-bounds) segments only; edges use the clamped scalar path.
+static inline SB_UNUSED float sb_row_ssd_n(const float* a, const float* b,
+                                           uint32_t n) {
+  float ssd = 0.0F;
+  uint32_t i = 0U;
+  if (n >= 8U) {
+    sb_acc8_t acc = sb_acc8_zero();
+    for (; i + 8U <= n; i += 8U) {
+      acc = sb_acc8_add_ssd(acc, sb_load8(a + i), sb_load8(b + i));
+    }
+    ssd += sb_acc8_hsum(acc);
+  }
+  if (i + 4U <= n) {
+    ssd += sb_vec4_ssd(sb_load4(a + i), sb_load4(b + i));
+    i += 4U;
+  }
+  for (; i < n; i++) {
+    float diff = a[i] - b[i];
+    ssd += diff * diff;
+  }
+  return ssd;
+}
+
+// Full-patch SSD between preloaded target rows and candidate frame rows.
+// tgt_rows/cand_rows hold patch_size row pointers; each row spans
+// patch_size contiguous bins. Chunked 8/4/1 per row; for patch_size == 4
+// this matches the old per-row vec4 path bit-for-bit.
+static inline SB_UNUSED float sb_patch_ssd_n(float* const* tgt_rows,
+                                             float* const* cand_rows,
+                                             uint32_t patch_size) {
+  float ssd = 0.0F;
+  for (uint32_t r = 0U; r < patch_size; r++) {
+    ssd += sb_row_ssd_n(tgt_rows[r], cand_rows[r], patch_size);
+  }
+  return ssd;
 }
 
 // Helper: compute squared Euclidean distance between two patches
@@ -134,6 +178,35 @@ static inline SB_UNUSED float compute_patch_distance(NlmFilter* self,
       (candidate_freq >= half_patch) &&
       (candidate_freq + patch_size - half_patch <= spectrum_size);
 
+  if (safe_bounds && patch_size == 8) {
+    // Legacy fast path (kept bit-identical for the default 46ms option).
+    for (uint32_t dt = 0; dt < patch_size; dt++) {
+      int32_t t_target = target_time + (int32_t)dt - (int32_t)half_patch;
+      int32_t t_cand = candidate_time + (int32_t)dt - (int32_t)half_patch;
+
+      const float* target_frame = get_frame(self, t_target);
+      const float* cand_frame = get_frame(self, t_cand);
+      distance +=
+          sb_vec8_ssd(sb_load8(target_frame + (target_freq - half_patch)),
+                      sb_load8(cand_frame + (candidate_freq - half_patch)));
+    }
+    return distance;
+  }
+
+  if (safe_bounds) {
+    for (uint32_t dt = 0; dt < patch_size; dt++) {
+      int32_t t_target = target_time + (int32_t)dt - (int32_t)half_patch;
+      int32_t t_cand = candidate_time + (int32_t)dt - (int32_t)half_patch;
+
+      const float* target_frame = get_frame(self, t_target);
+      const float* cand_frame = get_frame(self, t_cand);
+      distance += sb_row_ssd_n(target_frame + (target_freq - half_patch),
+                               cand_frame + (candidate_freq - half_patch),
+                               patch_size);
+    }
+    return distance;
+  }
+
   for (uint32_t dt = 0; dt < patch_size; dt++) {
     int32_t t_target = target_time + (int32_t)dt - (int32_t)half_patch;
     int32_t t_cand = candidate_time + (int32_t)dt - (int32_t)half_patch;
@@ -141,28 +214,16 @@ static inline SB_UNUSED float compute_patch_distance(NlmFilter* self,
     const float* target_frame = get_frame(self, t_target);
     const float* cand_frame = get_frame(self, t_cand);
 
-    if (safe_bounds && patch_size == 8) {
-      distance +=
-          sb_vec8_ssd(sb_load8(target_frame + (target_freq - half_patch)),
-                      sb_load8(cand_frame + (candidate_freq - half_patch)));
+    for (uint32_t df = 0; df < patch_size; df++) {
+      uint32_t f_target = clamp_index(
+          (int32_t)target_freq + (int32_t)df - (int32_t)half_patch,
+          spectrum_size);
+      uint32_t f_cand = clamp_index(
+          (int32_t)candidate_freq + (int32_t)df - (int32_t)half_patch,
+          spectrum_size);
 
-    } else if (safe_bounds && patch_size == 4) {
-      distance +=
-          sb_vec4_ssd(sb_load4(target_frame + (target_freq - half_patch)),
-                      sb_load4(cand_frame + (candidate_freq - half_patch)));
-
-    } else {
-      for (uint32_t df = 0; df < patch_size; df++) {
-        uint32_t f_target = clamp_index(
-            (int32_t)target_freq + (int32_t)df - (int32_t)half_patch,
-            spectrum_size);
-        uint32_t f_cand = clamp_index(
-            (int32_t)candidate_freq + (int32_t)df - (int32_t)half_patch,
-            spectrum_size);
-
-        float diff = target_frame[f_target] - cand_frame[f_cand];
-        distance += diff * diff;
-      }
+      float diff = target_frame[f_target] - cand_frame[f_cand];
+      distance += diff * diff;
     }
   }
 
@@ -223,6 +284,10 @@ static inline SB_UNUSED void nlm_process_block_range(void* raw_ctx,
     }
 
     sb_vec8_t target_vecs[8];
+    // Flat preloaded target patch for the generalized (non-8) path:
+    // patch_size rows x SB_NLM_MAX_PATCH stride, 1KB max on stack.
+    float target_patch[SB_NLM_MAX_PATCH * SB_NLM_MAX_PATCH];
+    float* tgt_rows[SB_NLM_MAX_PATCH];
 
     bool safe_block = (block_center >= half_patch_size) &&
                       (block_center + half_patch_size <= spectrum_size);
@@ -238,13 +303,29 @@ static inline SB_UNUSED void nlm_process_block_range(void* raw_ctx,
           target_vecs[r] = sb_set8(0.0f);
         }
       }
+    } else if (safe_block && patch_size <= SB_NLM_MAX_PATCH) {
+      for (uint32_t r = 0; r < patch_size; r++) {
+        int32_t t_offset = (int32_t)r - (int32_t)half_patch_size;
+        const float* row_ptr = cached_get_frame(filter, t_offset) +
+                               (block_center - half_patch_size);
+        float* dst = &target_patch[r * SB_NLM_MAX_PATCH];
+        memcpy(dst, row_ptr, patch_size * sizeof(float));
+        tgt_rows[r] = dst;
+      }
     }
 
     for (int32_t dt = -search_time_past; dt <= search_time_future; dt++) {
       float* cand_rows[8] = {NULL};
+      // Candidate row pointers for the generalized path (any patch <= 16).
+      float* cand_rows_n[SB_NLM_MAX_PATCH] = {NULL};
       if (patch_size == 8) {
         for (int r = 0; r < 8; r++) {
           cand_rows[r] = cached_get_frame(filter, dt + r - 4);
+        }
+      } else if (patch_size <= SB_NLM_MAX_PATCH) {
+        for (uint32_t r = 0; r < patch_size; r++) {
+          cand_rows_n[r] = cached_get_frame(
+              filter, dt + (int32_t)r - (int32_t)half_patch_size);
         }
       }
 
@@ -268,6 +349,16 @@ static inline SB_UNUSED void nlm_process_block_range(void* raw_ctx,
               cand_rows[6] + cand_f_start, cand_rows[7] + cand_f_start,
           };
           distance = sb_vec8_patch_ssd(target_vecs, cand_row_ptrs);
+        } else if (patch_size != 8 && safe_bounds && safe_block &&
+                   patch_size <= SB_NLM_MAX_PATCH && cand_rows_n[0]) {
+          const uint32_t cand_f_start = cand_center - half_patch_size;
+          float* cand_ptrs[SB_NLM_MAX_PATCH];
+          float* tgt_ptrs[SB_NLM_MAX_PATCH];
+          for (uint32_t r = 0; r < patch_size; r++) {
+            cand_ptrs[r] = cand_rows_n[r] + cand_f_start;
+            tgt_ptrs[r] = tgt_rows[r];
+          }
+          distance = sb_patch_ssd_n(tgt_ptrs, cand_ptrs, patch_size);
         } else {
           distance =
               compute_patch_distance(filter, 0, block_center, dt, cand_center);

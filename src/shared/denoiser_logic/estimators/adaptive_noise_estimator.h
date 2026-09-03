@@ -62,4 +62,8 @@ void adaptive_estimator_apply_floor(AdaptiveNoiseEstimator* self,
 void adaptive_estimator_update_seed(AdaptiveNoiseEstimator* self,
                                     const float* seed_profile);
 
+/* Init-time only: forward hop duration to the internal estimator. */
+void adaptive_estimator_set_hop_sec(AdaptiveNoiseEstimator* self,
+                                    float hop_sec);
+
 #endif

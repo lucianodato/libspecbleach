@@ -20,6 +20,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "shared/denoiser_logic/estimators/brandt_noise_estimator.h"
 #include "shared/configurations.h"
+#include "shared/frame_rate_norm.h"
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,6 +29,7 @@ struct BrandtNoiseEstimator {
   uint32_t spectrum_size;
   uint32_t history_size;
   uint32_t history_index; // Circular buffer write head
+  uint32_t stats_interval;
 
   float* history_buffer;      // Size: spectrum_size * history_size
   float* sort_buffer;         // Scratch space for sorting (Size: history_size)
@@ -68,13 +70,14 @@ BrandtNoiseEstimator* brandt_noise_estimator_initialize(
   self->spectrum_size = spectrum_size;
   self->percentile = percentile;
 
-  // Calculate history size from duration
+  // Calculate history size from duration. hop == frame/OVERLAP_FACTOR;
+  // the old *0.5 (50% overlap) assumption is fixed to /OVERLAP_FACTOR here.
   float ms_per_frame = (float)fft_size * 1000.0f / (float)sample_rate;
   // Overlap consideration: Usually frame step is hop_size.
   // Assuming hop = fft_size/2 or similar? The caller usually provides
   // parameters. If exact duration needed, we might need hop_size.
-  // Assuming standard 50% overlap for calculation roughly:
-  float frame_duration = ms_per_frame * 0.5f; // Rough approximation of step
+  // Fixed 4x-overlap conversion (was 50% approximation):
+  float frame_duration = ms_per_frame / (float)OVERLAP_FACTOR;
   if (frame_duration < BRANDT_ESTIMATOR_MIN_DURATION_MS) {
     frame_duration = BRANDT_ESTIMATOR_MIN_DURATION_MS;
   }
@@ -114,6 +117,7 @@ BrandtNoiseEstimator* brandt_noise_estimator_initialize(
 
   self->is_first_frame = true;
   self->active_frame_count = 0;
+  self->stats_interval = BRANDT_ESTIMATOR_STATS_UPDATE_INTERVAL_FRAMES;
   return self;
 }
 
@@ -227,10 +231,13 @@ bool brandt_noise_estimator_run(BrandtNoiseEstimator* self,
   }
   self->history_index = (current_idx + 1) % self->history_size;
 
-  // Subsample expensive statistical update every 4 frames (or on first frame)
+  // Subsample expensive statistical update every N frames (or on first frame)
+  const uint32_t stats_interval =
+      (self->stats_interval > 0U)
+          ? self->stats_interval
+          : BRANDT_ESTIMATOR_STATS_UPDATE_INTERVAL_FRAMES;
   bool update_stats = self->is_first_frame ||
-                      ((self->active_frame_count %
-                        BRANDT_ESTIMATOR_STATS_UPDATE_INTERVAL_FRAMES) == 0);
+                      ((self->active_frame_count % stats_interval) == 0);
   self->active_frame_count++;
 
   if (update_stats) {
@@ -336,8 +343,7 @@ void brandt_noise_estimator_apply_floor(BrandtNoiseEstimator* self,
 
 void brandt_noise_estimator_set_history_duration(
     const BrandtNoiseEstimator* self, float history_duration_ms,
-    uint32_t sample_rate, uint32_t fft_size) {
-  if (!self) {
+    uint32_t sample_rate, uint32_t fft_size) {  if (!self) {
     return;
   }
 
@@ -349,4 +355,17 @@ void brandt_noise_estimator_set_history_duration(
   (void)history_duration_ms;
   (void)sample_rate;
   (void)fft_size;
+}
+
+void brandt_noise_estimator_set_hop_sec(BrandtNoiseEstimator* self,
+                                        float hop_sec) {
+  if (!self || !(hop_sec > 0.0F)) {
+    return;
+  }
+  uint32_t interval =
+      sb_frames_for_ms(BRANDT_ESTIMATOR_STATS_UPDATE_MS, hop_sec, 1U, 16U);
+  if (interval < 1U) {
+    interval = 1U;
+  }
+  self->stats_interval = interval;
 }

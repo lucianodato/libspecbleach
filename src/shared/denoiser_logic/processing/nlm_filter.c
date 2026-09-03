@@ -118,7 +118,7 @@ NlmFilter* nlm_filter_initialize(NlmFilterConfig config) {
   }
 
   self->total_time_span = self->config.search_range_time_past +
-                          self->config.search_range_time_future + 1 + 8;
+                          self->config.search_range_time_future + 1 + 16;
   self->frame_ptrs = (float**)calloc(self->total_time_span, sizeof(float*));
   if (!self->frame_ptrs) {
     nlm_filter_free(self);

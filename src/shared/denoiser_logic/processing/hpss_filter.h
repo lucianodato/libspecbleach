@@ -40,6 +40,9 @@ void hpss_filter_set_enabled(HpssFilter* self, bool enabled);
 // Sliding HPSS is causal with 0 lookahead delay frames
 uint32_t hpss_filter_get_latency_frames(const HpssFilter* self);
 
+/* Init-time only: retune temporal smoothing for the current hop duration. */
+void hpss_filter_set_hop_sec(HpssFilter* self, float hop_sec);
+
 /**
  * Process a spectral magnitude frame with Sliding HPSS (Ono / Tachibana).
  * Decomposes current_magnitude into harmonic and percussive components.

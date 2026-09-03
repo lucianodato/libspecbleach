@@ -20,6 +20,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "masking_estimator.h"
 #include "../configurations.h"
+#include "../frame_rate_norm.h"
 #include "shared/utils/absolute_hearing_thresholds.h"
 #include "shared/utils/critical_bands.h"
 #include <math.h>
@@ -151,7 +152,9 @@ MaskingEstimator* masking_estimation_initialize(
     return NULL;
   }
 
-  // Temporal masking decay constants
+  // Temporal masking decay constants. hop_time must be the TRUE hop
+  // (frame/overlap/sr); call masking_estimation_set_hop_sec() after init when
+  // the true hop is known (FFT-padded sizes overestimate it slightly).
   const float hop_time = (float)fft_size / (4.0F * (float)sample_rate);
 
   // Frequency-dependent forward masking (Low: 100ms, High: 25ms)
@@ -167,6 +170,20 @@ MaskingEstimator* masking_estimation_initialize(
   self->backward_decay = expf(-hop_time / BACKWARD_MASKING_TAU_MS);
 
   return self;
+}
+
+void masking_estimation_set_hop_sec(MaskingEstimator* self, float hop_sec) {
+  if (!self || !(hop_sec > 0.0F) || !self->forward_decays) {
+    return;
+  }
+  for (uint32_t j = 0U; j < self->number_critical_bands; j++) {
+    const float bark = fminf((float)j, 24.0F);
+    const float weight = bark / 24.0F;
+    const float tau = ((1.0F - weight) * FORWARD_MASKING_TAU_LOW_MS) +
+                      (weight * FORWARD_MASKING_TAU_HIGH_MS);
+    self->forward_decays[j] = expf(-hop_sec / tau);
+  }
+  self->backward_decay = expf(-hop_sec / BACKWARD_MASKING_TAU_MS);
 }
 
 void masking_estimation_free(MaskingEstimator* self) {

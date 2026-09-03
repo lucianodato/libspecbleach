@@ -20,6 +20,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "spectral_denoiser.h"
 #include "shared/configurations.h"
+#include "shared/frame_rate_norm.h"
 #include "shared/denoiser_logic/core/denoiser_post_process.h"
 #include "shared/denoiser_logic/core/denoiser_profile_core.h"
 #include "shared/denoiser_logic/core/noise_floor_manager.h"
@@ -107,6 +108,7 @@ typedef struct SbSpectralDenoiser {
   float* smoothed_magnitude; // Temporal pre-subtraction smoothed magnitude
   bool is_transient_detected;
   float transient_intensity;
+  float hop_sec; // True hop in seconds (frame/overlap/sr); 0 = legacy derive
 
   // Smoothing mode state (written by load_parameters, read by process; the
   // load/process concurrency contract forbids concurrent calls on the same
@@ -165,9 +167,15 @@ static void run_temporal_chain(SbSpectralDenoiser* self,
                                const float* delayed_noise, float* gain_out,
                                float* alpha, float* beta);
 
-SpectralProcessorHandle spectral_denoiser_initialize(
+SpectralProcessorHandle spectral_denoiser_initialize_with_hop(
     const uint32_t sample_rate, const uint32_t fft_size,
-    const uint32_t overlap_factor, NoiseProfile* noise_profile) {
+    const uint32_t overlap_factor, const uint32_t hop_samples,
+    NoiseProfile* noise_profile);
+
+static SpectralProcessorHandle spectral_denoiser_initialize_inner(
+    const uint32_t sample_rate, const uint32_t fft_size,
+    const uint32_t overlap_factor, const uint32_t hop_override,
+    NoiseProfile* noise_profile) {
 
   if (!noise_profile || sample_rate == 0 || fft_size == 0 ||
       overlap_factor == 0) {
@@ -182,7 +190,13 @@ SpectralProcessorHandle spectral_denoiser_initialize(
 
   self->fft_size = fft_size;
   self->real_spectrum_size = (self->fft_size / 2U) + 1U;
-  self->hop = self->fft_size / overlap_factor;
+  self->hop = (hop_override > 0U) ? hop_override
+                                  : (self->fft_size / overlap_factor);
+  if (self->hop == 0U) {
+    spectral_denoiser_free(self);
+    return NULL;
+  }
+  self->hop_sec = sb_hop_sec(self->hop, sample_rate);
   self->sample_rate = sample_rate;
   self->spectrum_type = SPECTRAL_TYPE;
   self->gain_calculation_type = GAIN_ESTIMATION_TYPE;
@@ -271,16 +285,22 @@ SpectralProcessorHandle spectral_denoiser_initialize(
     return NULL;
   }
 
+  // Frame-rate normalization: fixed-ms / fixed-Hz geometry + per-hop alphas.
+  const float hop_sec = self->hop_sec;
+  const float frame_ms = hop_sec * 4000.0F; // hop = frame/4
+  const float bin_hz = sb_bin_hz(self->sample_rate, self->fft_size);
+  const SbNlmGeometry nlm_geo =
+      sb_nlm_geometry_for_frame_ms(frame_ms, hop_sec, bin_hz);
+
   // NLM filter (2D smoothing strategy)
   NlmFilterConfig nlm_config = {
       .spectrum_size = self->real_spectrum_size,
-      .time_buffer_size =
-          NLM_SEARCH_RANGE_TIME_PAST + NLM_SEARCH_RANGE_TIME_FUTURE + 1,
-      .patch_size = NLM_PATCH_SIZE,
-      .paste_block_size = NLM_PASTE_BLOCK_SIZE,
-      .search_range_freq = NLM_SEARCH_RANGE_FREQ,
-      .search_range_time_past = NLM_SEARCH_RANGE_TIME_PAST,
-      .search_range_time_future = NLM_SEARCH_RANGE_TIME_FUTURE,
+      .time_buffer_size = nlm_geo.past + nlm_geo.future + 1,
+      .patch_size = nlm_geo.patch,
+      .paste_block_size = nlm_geo.paste,
+      .search_range_freq = nlm_geo.search_freq,
+      .search_range_time_past = nlm_geo.past,
+      .search_range_time_future = nlm_geo.future,
       .h_parameter = NLM_DEFAULT_H_PARAMETER,
       .distance_threshold = 0.0F, // Use default (4 * h²)
   };
@@ -297,6 +317,7 @@ SpectralProcessorHandle spectral_denoiser_initialize(
     spectral_denoiser_free(self);
     return NULL;
   }
+  spectral_smoothing_set_hop_samples(self->spectrum_smoothing, self->hop);
 
   // Initialize spectral features
   self->spectral_features =
@@ -341,11 +362,37 @@ SpectralProcessorHandle spectral_denoiser_initialize(
     return NULL;
   }
 
-  self->transition_frames = (uint32_t)fmaxf(
+  if (hop_sec > 0.0F) {
+    noise_estimation_set_hop_sec(self->noise_estimator, hop_sec);
+    transient_detector_set_hop_sec(self->transient_detector, hop_sec);
+    masking_veto_set_hop_sec(self->masking_veto, hop_sec);
+    suppression_engine_set_hop_sec(self->suppression_engine, hop_sec);
+  }
+
+  const uint32_t transition_from_sec = (uint32_t)fmaxf(
       1.0F, (SMOOTHING_TRANSITION_SECONDS * (float)self->sample_rate) /
                 (float)self->hop);
+  self->transition_frames = (transition_from_sec < SMOOTHING_TRANSITION_MIN_FRAMES)
+                                ? SMOOTHING_TRANSITION_MIN_FRAMES
+                                : transition_from_sec;
 
   return self;
+}
+
+SpectralProcessorHandle spectral_denoiser_initialize(
+    const uint32_t sample_rate, const uint32_t fft_size,
+    const uint32_t overlap_factor, NoiseProfile* noise_profile) {
+  return spectral_denoiser_initialize_inner(sample_rate, fft_size,
+                                            overlap_factor, 0U, noise_profile);
+}
+
+SpectralProcessorHandle spectral_denoiser_initialize_with_hop(
+    const uint32_t sample_rate, const uint32_t fft_size,
+    const uint32_t overlap_factor, const uint32_t hop_samples,
+    NoiseProfile* noise_profile) {
+  return spectral_denoiser_initialize_inner(sample_rate, fft_size,
+                                            overlap_factor, hop_samples,
+                                            noise_profile);
 }
 
 void spectral_denoiser_free(SpectralProcessorHandle instance) {
@@ -454,6 +501,10 @@ bool load_reduction_parameters(SpectralProcessorHandle instance,
       self->adaptive_estimator = adaptive_estimator_initialize(
           self->real_spectrum_size, self->sample_rate, self->fft_size,
           requested_method);
+      if (self->adaptive_estimator && self->hop_sec > 0.0F) {
+        adaptive_estimator_set_hop_sec(self->adaptive_estimator,
+                                       self->hop_sec);
+      }
       self->last_adaptive_state = 0;
     }
   }

@@ -43,4 +43,8 @@ void spp_mmse_noise_estimator_update_seed(SppMmseNoiseEstimator* self,
 void spp_mmse_noise_estimator_apply_floor(SppMmseNoiseEstimator* self,
                                           const float* floor_profile);
 
+/* Init-time only: retune time constants for the current hop duration. */
+void spp_mmse_noise_estimator_set_hop_sec(SppMmseNoiseEstimator* self,
+                                          float hop_sec);
+
 #endif

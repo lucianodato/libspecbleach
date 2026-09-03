@@ -85,4 +85,8 @@ void brandt_noise_estimator_set_history_duration(
     const BrandtNoiseEstimator* self, float history_duration_ms,
     uint32_t sample_rate, uint32_t fft_size);
 
+/* Init-time only: retune stats update interval for the hop duration. */
+void brandt_noise_estimator_set_hop_sec(BrandtNoiseEstimator* self,
+                                        float hop_sec);
+
 #endif

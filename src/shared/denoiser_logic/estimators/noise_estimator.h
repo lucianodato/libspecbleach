@@ -45,4 +45,7 @@ bool noise_estimation_run(NoiseEstimator* self,
 void noise_estimation_finalize(NoiseEstimator* self,
                                NoiseEstimatorType noise_estimator_type);
 
+/* Init-time only: retune median window / update interval for hop duration. */
+void noise_estimation_set_hop_sec(NoiseEstimator* self, float hop_sec);
+
 #endif // SHARED_DENOISER_LOGIC_NOISE_ESTIMATOR_H
