@@ -156,8 +156,7 @@ static bool rebuild_engines(SbDenoiserInstance* self) {
 
 specbleach_denoiser* specbleach_denoiser_initialize(uint32_t sample_rate,
                                                     float frame_size_ms) {
-  if (sample_rate == 0 || !isfinite(frame_size_ms) ||
-      frame_size_ms <= 0.0f) {
+  if (sample_rate == 0 || !isfinite(frame_size_ms) || frame_size_ms <= 0.0f) {
     return NULL;
   }
 
