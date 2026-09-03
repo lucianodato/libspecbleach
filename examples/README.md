@@ -69,7 +69,7 @@ Linking from your own project (installed package):
 find_package(libspecbleach 0.4 REQUIRED)                   # core only
 find_package(libspecbleach 0.4 REQUIRED COMPONENTS extras) # + stereo layer
 target_link_libraries(myapp PRIVATE libspecbleach::libspecbleach)
-target_link_libraries(myapp PRIVATE libspecbleach::libspecbleach_extras)
+target_link_libraries(myapp PRIVATE libspecbleach::extras)
 ```
 
 ## Switching smoothing modes
