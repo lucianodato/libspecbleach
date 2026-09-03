@@ -22,6 +22,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define SPECBLEACH_FRAME_RATE_NORM_H
 
 #include "shared/configurations.h"
+#include "shared/utils/general_utils.h"
 #include <math.h>
 #include <stdint.h>
 
@@ -29,14 +30,16 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  * Converts legacy frame-count / per-frame-alpha tuning into seconds so
  * behavior is invariant across STFT frame sizes (23-93ms). */
 
-static inline float sb_hop_sec(uint32_t hop_samples, uint32_t sample_rate) {
+static inline SB_UNUSED float sb_hop_sec(uint32_t hop_samples,
+                                         uint32_t sample_rate) {
   if (hop_samples == 0U || sample_rate == 0U) {
     return 0.0F;
   }
   return (float)hop_samples / (float)sample_rate;
 }
 
-static inline float sb_bin_hz(uint32_t sample_rate, uint32_t fft_size) {
+static inline SB_UNUSED float sb_bin_hz(uint32_t sample_rate,
+                                        uint32_t fft_size) {
   if (fft_size == 0U) {
     return 0.0F;
   }
@@ -44,14 +47,15 @@ static inline float sb_bin_hz(uint32_t sample_rate, uint32_t fft_size) {
 }
 
 /* tau <-> alpha for a one-pole per-hop smoother: alpha = exp(-hop/tau). */
-static inline float sb_alpha_from_tau(float tau_sec, float hop_sec) {
+static inline SB_UNUSED float sb_alpha_from_tau(float tau_sec, float hop_sec) {
   if (!(tau_sec > 0.0F) || !(hop_sec > 0.0F)) {
     return 0.0F;
   }
   return expf(-hop_sec / tau_sec);
 }
 
-static inline float sb_tau_from_alpha(float alpha_ref, float hop_ref_sec) {
+static inline SB_UNUSED float sb_tau_from_alpha(float alpha_ref,
+                                                float hop_ref_sec) {
   if (!(alpha_ref > 0.0F) || alpha_ref >= 1.0F || !(hop_ref_sec > 0.0F)) {
     return 0.0F;
   }
@@ -59,8 +63,9 @@ static inline float sb_tau_from_alpha(float alpha_ref, float hop_ref_sec) {
 }
 
 /* alpha_ref tuned at hop_ref -> equivalent alpha at hop_sec. */
-static inline float sb_alpha_retuned(float alpha_ref, float hop_ref_sec,
-                                     float hop_sec) {
+static inline SB_UNUSED float sb_alpha_retuned(float alpha_ref,
+                                               float hop_ref_sec,
+                                               float hop_sec) {
   const float tau = sb_tau_from_alpha(alpha_ref, hop_ref_sec);
   if (!(tau > 0.0F)) {
     return alpha_ref;
@@ -68,8 +73,9 @@ static inline float sb_alpha_retuned(float alpha_ref, float hop_ref_sec,
   return sb_alpha_from_tau(tau, hop_sec);
 }
 
-static inline uint32_t sb_frames_for_ms(float target_ms, float hop_sec,
-                                        uint32_t lo, uint32_t hi) {
+static inline SB_UNUSED uint32_t sb_frames_for_ms(float target_ms,
+                                                  float hop_sec, uint32_t lo,
+                                                  uint32_t hi) {
   if (!(target_ms > 0.0F) || !(hop_sec > 0.0F)) {
     return lo;
   }
@@ -84,8 +90,8 @@ static inline uint32_t sb_frames_for_ms(float target_ms, float hop_sec,
   return n;
 }
 
-static inline uint32_t sb_bins_for_hz(float target_hz, float bin_hz,
-                                      uint32_t lo, uint32_t hi) {
+static inline SB_UNUSED uint32_t sb_bins_for_hz(float target_hz, float bin_hz,
+                                                uint32_t lo, uint32_t hi) {
   if (!(target_hz > 0.0F) || !(bin_hz > 0.0F)) {
     return lo;
   }
@@ -111,9 +117,8 @@ typedef struct SbNlmGeometry {
  * Values == round(ms_target / hop) with symmetric 128ms search context;
  * frozen so init is deterministic and reviewable. Frequency axis is always
  * recomputed from Hz (SR/FFT dependent) and is not tabled. */
-static inline SbNlmGeometry sb_nlm_geometry_for_frame_ms(float frame_ms,
-                                                         float hop_sec,
-                                                         float bin_hz) {
+static inline SB_UNUSED SbNlmGeometry
+sb_nlm_geometry_for_frame_ms(float frame_ms, float hop_sec, float bin_hz) {
   SbNlmGeometry g = {NLM_PATCH_SIZE, NLM_SEARCH_RANGE_TIME_PAST,
                      NLM_SEARCH_RANGE_TIME_FUTURE, NLM_SEARCH_RANGE_FREQ,
                      NLM_PASTE_BLOCK_SIZE};
@@ -139,16 +144,12 @@ static inline SbNlmGeometry sb_nlm_geometry_for_frame_ms(float frame_ms,
     g.past = 6U;
     g.future = 6U;
   } else if (hop_sec > 0.0F) {
-    g.patch =
-        sb_frames_for_ms(NLM_PATCH_TIME_MS, hop_sec, 4U, 16U);
-    g.past =
-        sb_frames_for_ms(NLM_SEARCH_PAST_MS, hop_sec, 8U, 32U);
-    g.future =
-        sb_frames_for_ms(NLM_SEARCH_FUTURE_MS, hop_sec, 8U, 32U);
+    g.patch = sb_frames_for_ms(NLM_PATCH_TIME_MS, hop_sec, 4U, 16U);
+    g.past = sb_frames_for_ms(NLM_SEARCH_PAST_MS, hop_sec, 8U, 32U);
+    g.future = sb_frames_for_ms(NLM_SEARCH_FUTURE_MS, hop_sec, 8U, 32U);
   }
   if (bin_hz > 0.0F) {
-    g.search_freq =
-        sb_bins_for_hz(NLM_SEARCH_FREQ_HZ, bin_hz, 2U, 32U);
+    g.search_freq = sb_bins_for_hz(NLM_SEARCH_FREQ_HZ, bin_hz, 2U, 32U);
     g.paste = sb_bins_for_hz(NLM_PASTE_FREQ_HZ, bin_hz, 2U, 16U);
   }
   /* Paste must stay <= patch for the block algorithm; keep SIMD sizes. */

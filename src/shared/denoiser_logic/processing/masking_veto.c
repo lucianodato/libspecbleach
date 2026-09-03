@@ -105,7 +105,8 @@ MaskingVeto* masking_veto_initialize(uint32_t fft_size, uint32_t sample_rate,
   return self;
 }
 
-void masking_veto_free(MaskingVeto* self) {  if (!self) {
+void masking_veto_free(MaskingVeto* self) {
+  if (!self) {
     return;
   }
 
@@ -295,7 +296,7 @@ void masking_veto_set_hop_sec(MaskingVeto* self, float hop_sec) {
   if (!self || !(hop_sec > 0.0F)) {
     return;
   }
-  self->smooth = sb_alpha_retuned(MASKING_VETO_SMOOTHING, LEGACY_REF_HOP_SEC,
-                                  hop_sec);
+  self->smooth =
+      sb_alpha_retuned(MASKING_VETO_SMOOTHING, LEGACY_REF_HOP_SEC, hop_sec);
   masking_estimation_set_hop_sec(self->masking_estimator, hop_sec);
 }

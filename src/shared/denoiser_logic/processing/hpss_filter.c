@@ -157,8 +157,7 @@ bool hpss_filter_process(HpssFilter* self, const float* current_magnitude,
       float p_sq = p_ref * p_ref;
       float denom = h_sq + p_sq;
 
-      float w_h = (denom > SPECTRAL_EPSILON) ? (h_sq / denom)
-                                             : self->smooth;
+      float w_h = (denom > SPECTRAL_EPSILON) ? (h_sq / denom) : self->smooth;
       float w_p = 1.0f - w_h;
 
       self->h[k] = w_h * mag;
@@ -187,8 +186,7 @@ bool hpss_filter_process(HpssFilter* self, const float* current_magnitude,
     }
 
     // Update state for next frame with exponential temporal tracking
-    self->prev_h[k] =
-        self->smooth * (self->prev_h[k] + current_magnitude[k]);
+    self->prev_h[k] = self->smooth * (self->prev_h[k] + current_magnitude[k]);
   }
 
   sb_simd_restore_state(simd_state);
@@ -200,6 +198,6 @@ void hpss_filter_set_hop_sec(HpssFilter* self, float hop_sec) {
   if (!self || !(hop_sec > 0.0F)) {
     return;
   }
-  self->smooth = sb_alpha_retuned(HPSS_SLIDING_SMOOTH_FACTOR,
-                                  LEGACY_REF_HOP_SEC, hop_sec);
+  self->smooth =
+      sb_alpha_retuned(HPSS_SLIDING_SMOOTH_FACTOR, LEGACY_REF_HOP_SEC, hop_sec);
 }

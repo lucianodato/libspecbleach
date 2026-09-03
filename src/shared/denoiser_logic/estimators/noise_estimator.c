@@ -20,8 +20,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "shared/denoiser_logic/estimators/noise_estimator.h"
 #include "shared/configurations.h"
-#include "shared/frame_rate_norm.h"
 #include "shared/denoiser_logic/core/noise_profile.h"
+#include "shared/frame_rate_norm.h"
 #include "shared/utils/spectral_circular_buffer.h"
 #include "shared/utils/spectral_smoother.h"
 #include "shared/utils/spectral_utils.h"
@@ -272,12 +272,10 @@ void noise_estimation_set_hop_sec(NoiseEstimator* self, float hop_sec) {
   if (!self || !(hop_sec > 0.0F)) {
     return;
   }
-  uint32_t blocks =
-      sb_frames_for_ms(MEDIAN_WINDOW_MS, hop_sec, 8U,
-                       NUMBER_OF_MEDIAN_SPECTRUM_MAX);
-  uint32_t decim =
-      sb_frames_for_ms(MEDIAN_UPDATE_MS, hop_sec, 2U,
-                       NUMBER_OF_MEDIAN_SPECTRUM_MAX);
+  uint32_t blocks = sb_frames_for_ms(MEDIAN_WINDOW_MS, hop_sec, 8U,
+                                     NUMBER_OF_MEDIAN_SPECTRUM_MAX);
+  uint32_t decim = sb_frames_for_ms(MEDIAN_UPDATE_MS, hop_sec, 2U,
+                                    NUMBER_OF_MEDIAN_SPECTRUM_MAX);
   if (blocks < 1U) {
     blocks = 1U;
   }

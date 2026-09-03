@@ -113,10 +113,9 @@ bool spectral_smoothing_run(SpectralSmoother* self,
       GAIN_SMOOTHING_MIN_ATTACK_SEC +
       (p * (GAIN_SMOOTHING_MAX_ATTACK_SEC - GAIN_SMOOTHING_MIN_ATTACK_SEC));
 
-  const uint32_t hop =
-      (self->hop_samples > 0U)
-          ? self->hop_samples
-          : (self->fft_size / self->overlap_factor);
+  const uint32_t hop = (self->hop_samples > 0U)
+                           ? self->hop_samples
+                           : (self->fft_size / self->overlap_factor);
   float dt = (float)hop / (float)self->sample_rate;
   float alpha_release = expf(-dt / tau_release_sec);
   float alpha_attack_base = expf(-dt / tau_attack_sec);
@@ -146,7 +145,8 @@ bool spectral_smoothing_run(SpectralSmoother* self,
   return true;
 }
 
-void spectral_smoothing_apply_spatial(float* data, uint32_t size) {  if (!data || size < 2U) {
+void spectral_smoothing_apply_spatial(float* data, uint32_t size) {
+  if (!data || size < 2U) {
     return;
   }
 

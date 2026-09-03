@@ -81,8 +81,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define ESTIMATOR_SILENCE_THRESHOLD (1e-10F) // Roughly -100dB in power
 
 // Martin (2001) Constants
-#define MARTIN_SUBWIN_COUNT 8 // Number of sub-windows
-#define MARTIN_SUBWIN_LEN 12  // Sub-window length (96/8)
+#define MARTIN_SUBWIN_COUNT 8     // Number of sub-windows
+#define MARTIN_SUBWIN_LEN 12      // Sub-window length (96/8)
 #define MARTIN_SUBWIN_MS (138.0F) // 12 frames * 11.5ms Lukin hop
 #define MARTIN_BIAS_CORR 1.5F // Conservative bias correction for min tracking
 #define MARTIN_SMOOTH_ALPHA 0.8F // Baseline smoothing for PSD

@@ -220,6 +220,5 @@ void martin_noise_estimator_set_hop_sec(MartinNoiseEstimator* self,
   }
   self->smooth_alpha =
       sb_alpha_retuned(MARTIN_SMOOTH_ALPHA, LEGACY_REF_HOP_SEC, hop_sec);
-  self->subwin_len =
-      sb_frames_for_ms(MARTIN_SUBWIN_MS, hop_sec, 2U, 64U);
+  self->subwin_len = sb_frames_for_ms(MARTIN_SUBWIN_MS, hop_sec, 2U, 64U);
 }

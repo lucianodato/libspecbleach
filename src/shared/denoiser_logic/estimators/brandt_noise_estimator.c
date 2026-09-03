@@ -343,7 +343,8 @@ void brandt_noise_estimator_apply_floor(BrandtNoiseEstimator* self,
 
 void brandt_noise_estimator_set_history_duration(
     const BrandtNoiseEstimator* self, float history_duration_ms,
-    uint32_t sample_rate, uint32_t fft_size) {  if (!self) {
+    uint32_t sample_rate, uint32_t fft_size) {
+  if (!self) {
     return;
   }
 

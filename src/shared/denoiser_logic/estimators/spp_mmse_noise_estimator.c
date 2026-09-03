@@ -146,8 +146,9 @@ bool spp_mmse_noise_estimator_run(SppMmseNoiseEstimator* self,
       noise_spectrum[k] = (self->alpha_pow * self->spp_previous_noise_psd[k]) +
                           ((1.F - self->alpha_pow) * mmse_noise_estimate);
 
-      self->spp_smoothed_spp[k] = (self->smooth_spp * self->spp_smoothed_spp[k]) +
-                                  ((1.F - self->smooth_spp) * spp_h1);
+      self->spp_smoothed_spp[k] =
+          (self->smooth_spp * self->spp_smoothed_spp[k]) +
+          ((1.F - self->smooth_spp) * spp_h1);
 
       self->spp_previous_noise_psd[k] = noise_spectrum[k];
     }

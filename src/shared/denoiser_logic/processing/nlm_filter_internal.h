@@ -200,9 +200,9 @@ static inline SB_UNUSED float compute_patch_distance(NlmFilter* self,
 
       const float* target_frame = get_frame(self, t_target);
       const float* cand_frame = get_frame(self, t_cand);
-      distance += sb_row_ssd_n(target_frame + (target_freq - half_patch),
-                               cand_frame + (candidate_freq - half_patch),
-                               patch_size);
+      distance +=
+          sb_row_ssd_n(target_frame + (target_freq - half_patch),
+                       cand_frame + (candidate_freq - half_patch), patch_size);
     }
     return distance;
   }
@@ -215,9 +215,9 @@ static inline SB_UNUSED float compute_patch_distance(NlmFilter* self,
     const float* cand_frame = get_frame(self, t_cand);
 
     for (uint32_t df = 0; df < patch_size; df++) {
-      uint32_t f_target = clamp_index(
-          (int32_t)target_freq + (int32_t)df - (int32_t)half_patch,
-          spectrum_size);
+      uint32_t f_target =
+          clamp_index((int32_t)target_freq + (int32_t)df - (int32_t)half_patch,
+                      spectrum_size);
       uint32_t f_cand = clamp_index(
           (int32_t)candidate_freq + (int32_t)df - (int32_t)half_patch,
           spectrum_size);
@@ -308,7 +308,7 @@ static inline SB_UNUSED void nlm_process_block_range(void* raw_ctx,
         int32_t t_offset = (int32_t)r - (int32_t)half_patch_size;
         const float* row_ptr = cached_get_frame(filter, t_offset) +
                                (block_center - half_patch_size);
-        float* dst = &target_patch[r * SB_NLM_MAX_PATCH];
+        float* dst = &target_patch[(size_t)r * SB_NLM_MAX_PATCH];
         memcpy(dst, row_ptr, patch_size * sizeof(float));
         tgt_rows[r] = dst;
       }

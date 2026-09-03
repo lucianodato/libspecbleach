@@ -532,9 +532,8 @@ static void process_transient_nlm(const float* input, float* output, int length,
     if (processed + block_size > length) {
       block_size = length - processed;
     }
-    TEST_ASSERT(specbleach_denoiser_process(handle, block_size,
-                                            input + processed,
-                                            output + processed),
+    TEST_ASSERT(specbleach_denoiser_process(
+                    handle, block_size, input + processed, output + processed),
                 "Processing failed");
     processed += block_size;
   }
@@ -673,8 +672,9 @@ void test_frame_size_invariance(void) {
   printf("  lat23=%u lat93=%u in=%.6f out23=%.6f out93=%.6f diff=%.6f\n",
          lat_23, lat_93, in_pow, p23, p93, diff_pow);
   printf("  peak23=%.4f peak93=%.4f onsets=%d\n", peak_23, peak_93, onsets);
-  printf("  pre23=%.6f pre93=%.6f tail23=%.6f tail93=%.6f pk23=%.6f pk93=%.6f\n",
-         pre_23, pre_93, tail_23, tail_93, pk_e_23, pk_e_93);
+  printf(
+      "  pre23=%.6f pre93=%.6f tail23=%.6f tail93=%.6f pk23=%.6f pk93=%.6f\n",
+      pre_23, pre_93, tail_23, tail_93, pk_e_23, pk_e_93);
 
   /* Both runs must reduce noise but preserve transient peaks. */
   TEST_ASSERT(p23 < in_pow, "23ms run should reduce noise power");
@@ -691,10 +691,8 @@ void test_frame_size_invariance(void) {
    * Measured: fixed-ms geometry agrees ~1.2x; frame-counted geometry
    * diverges ~2.2x. */
   TEST_ASSERT(pk_e_23 > 0.0 && pk_e_93 > 0.0, "Peak energy must be positive");
-  const double pre_ratio =
-      (pre_93 / pk_e_93) / (pre_23 / pk_e_23);
-  const double tail_ratio =
-      (tail_93 / pk_e_93) / (tail_23 / pk_e_23);
+  const double pre_ratio = (pre_93 / pk_e_93) / (pre_23 / pk_e_23);
+  const double tail_ratio = (tail_93 / pk_e_93) / (tail_23 / pk_e_23);
   printf("  pre_ratio=%.3f tail_ratio=%.3f\n", pre_ratio, tail_ratio);
   TEST_ASSERT(pre_ratio > 1.0 / 1.6 && pre_ratio < 1.6,
               "Pre-echo smear should match within 1.6x across frame sizes");

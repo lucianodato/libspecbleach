@@ -56,7 +56,8 @@ TransientDetector* transient_detector_initialize(const uint32_t num_items) {
   return self;
 }
 
-void transient_detector_free(TransientDetector* self) {  if (!self) {
+void transient_detector_free(TransientDetector* self) {
+  if (!self) {
     return;
   }
 
@@ -206,7 +207,7 @@ void transient_detector_set_hop_sec(TransientDetector* self, float hop_sec) {
   if (!self || !(hop_sec > 0.0F)) {
     return;
   }
-  self->alpha = sb_alpha_retuned(TRANSIENT_SMOOTH_ALPHA, LEGACY_REF_HOP_SEC,
-                                 hop_sec);
+  self->alpha =
+      sb_alpha_retuned(TRANSIENT_SMOOTH_ALPHA, LEGACY_REF_HOP_SEC, hop_sec);
   self->decay_alpha = sb_alpha_retuned(0.50F, LEGACY_REF_HOP_SEC, hop_sec);
 }
