@@ -35,10 +35,11 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "specbleach_denoiser.h"
 
+#include "../src/shared/configurations.h"
+
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
 #define TEST_ASSERT(condition, message)                                        \
   do {                                                                         \
@@ -112,7 +113,7 @@ static Signal make_signal(bool with_comb) {
 }
 
 static void run_engine(SpecbleachSmoothingMode mode, const Signal* in,
-                       float* out) {
+                       float dftt_strength, float* out) {
   specbleach_denoiser* handle =
       specbleach_denoiser_initialize((uint32_t)SAMPLE_RATE, ENGINE_FRAME_MS);
   TEST_ASSERT(handle != NULL, "engine init failed");
@@ -122,6 +123,7 @@ static void run_engine(SpecbleachSmoothingMode mode, const Signal* in,
       .reduction_gain = 0.05F,
       .smoothing_factor = 0.5F,
       .smoothing_mode = mode,
+      .dftt_strength = dftt_strength,
       .whitening_factor = 0.0F,
       .residual_listen = false,
   };
@@ -226,8 +228,8 @@ int main(void) {
   float* out_dftt = (float*)calloc(in.len, sizeof(float));
   TEST_ASSERT(out_nlm && out_dftt, "output allocation failed");
 
-  run_engine(SPECBLEACH_SMOOTHING_NLM_2D, &in, out_nlm);
-  run_engine(SPECBLEACH_SMOOTHING_NLM_2D_DFTT, &in, out_dftt);
+  run_engine(SPECBLEACH_SMOOTHING_NLM_2D, &in, 1.0F, out_nlm);
+  run_engine(SPECBLEACH_SMOOTHING_NLM_2D_DFTT, &in, 1.0F, out_dftt);
 
   const size_t offset =
       (size_t)(WARMUP_SECONDS * (float)SAMPLE_RATE) + ANALYSIS_FFT;
@@ -266,6 +268,37 @@ int main(void) {
   const float comb_delta = fabsf(comb_dftt - comb_nlm);
   TEST_ASSERT(comb_delta <= COMB_TOLERANCE_DB,
               "DFTT must not muffle the comb (comb level within tolerance)");
+
+  /* Strength sweep (#155 plumbing): non-default dftt_strength values must
+   * flow through load_parameters into the kill threshold. Contract, not
+   * exact values: output stays finite, flicker never increases vs NLM, comb
+   * stays preserved (same guard as the default strength). */
+  for (uint32_t s = 0U; s < 2U; s++) {
+    const float strength = (s == 0U) ? 0.5F : 2.0F;
+    TEST_ASSERT(strength > 0.0F && strength < DFTT_STRENGTH_MAX,
+                "sweep strength must be in (0, DFTT_STRENGTH_MAX)");
+    float* out_s = (float*)calloc(in.len, sizeof(float));
+    TEST_ASSERT(out_s != NULL, "strength sweep allocation failed");
+    run_engine(SPECBLEACH_SMOOTHING_NLM_2D_DFTT, &in, strength, out_s);
+    float ok = 1.0F;
+    for (size_t i = offset; i < in.len; i++) {
+      if (!isfinite(out_s[i])) {
+        ok = 0.0F;
+        break;
+      }
+    }
+    TEST_ASSERT(ok > 0.5F, "strength-swept output must be finite");
+    const float flicker_s = speckle_flicker(out_s, in.len, offset);
+    const float comb_s = comb_level(out_s, in.len, offset);
+    const float impr_s = 100.0F * (flicker_nlm - flicker_s) / flicker_nlm;
+    printf("  strength %.1f: flicker %.3f (%.1f%%), comb %.3f\n",
+           (double)strength, (double)flicker_s, (double)impr_s, (double)comb_s);
+    TEST_ASSERT(flicker_s <= flicker_nlm,
+                "strength sweep must not increase flicker vs NLM");
+    TEST_ASSERT(fabsf(comb_s - comb_nlm) <= COMB_TOLERANCE_DB,
+                "strength sweep must preserve comb");
+    free(out_s);
+  }
 
   free(in.data);
   free(out_nlm);

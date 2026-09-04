@@ -169,6 +169,46 @@ static void test_veto_never_exceeds_reference(void) {
   printf("✓ Veto never exceeds reference passed\n");
 }
 
+static void test_odd_dimensions(void) {
+  printf("Testing odd (non-power-of-two) dimensions...\n");
+  /* Non-pow2 time span and block freq exercise the naive strided/scalar DFT
+   * fallback paths (pow2 sizes take the FFT dispatch); the geometry below
+   * mirrors odd Hz/ms-derived configs at other sample rates. */
+  const uint32_t bt = 5U;
+  const uint32_t bf = 10U;
+  DfttFilter* a = dftt_filter_initialize(SPEC_SIZE, bt, bf);
+  DfttFilter* b = dftt_filter_initialize(SPEC_SIZE, bt, bf);
+  TEST_ASSERT(a != NULL && b != NULL, "odd config must init");
+  float noisy[SPEC_SIZE];
+  float smoothed[SPEC_SIZE];
+  float out_a[SPEC_SIZE];
+  float out_b[SPEC_SIZE];
+  for (uint32_t k = 0U; k < SPEC_SIZE; k++) {
+    noisy[k] = 1.5F + 0.3F * sinf(0.21F * (float)k);
+    smoothed[k] = 0.8F + 0.1F * sinf(0.21F * (float)k);
+  }
+  for (uint32_t t = 0U; t < bt; t++) {
+    push_pair(a, noisy, smoothed);
+    push_pair(b, noisy, smoothed);
+  }
+  TEST_ASSERT(dftt_filter_process(a, out_a), "odd config must process");
+  TEST_ASSERT(dftt_filter_process(b, out_b), "odd config must process");
+  for (uint32_t k = 0U; k < SPEC_SIZE; k++) {
+    TEST_ASSERT(isfinite(out_a[k]) && isfinite(out_b[k]),
+                "odd-config output must be finite");
+    TEST_ASSERT(out_a[k] >= -1e-6F, "odd-config output must stay non-negative");
+    TEST_ASSERT(out_a[k] <= smoothed[k] + 1e-6F,
+                "veto must bound odd-config output by the reference");
+    TEST_ASSERT(out_a[k] == out_b[k], "odd config must be deterministic");
+  }
+  dftt_filter_reset(a);
+  TEST_ASSERT(!dftt_filter_is_ready(a), "reset must clear readiness");
+  TEST_ASSERT(!dftt_filter_process(a, out_a), "reset must block process");
+  dftt_filter_free(a);
+  dftt_filter_free(b);
+  printf("✓ Odd dimensions passed\n");
+}
+
 static void test_determinism_and_reset(void) {
   printf("Testing determinism and reset...\n");
   DfttFilter* a = dftt_filter_initialize(SPEC_SIZE, TIME_SPAN, BLOCK_FREQ);
@@ -207,6 +247,7 @@ int main(void) {
   test_empty_reference_veto();
   test_veto_never_exceeds_reference();
   test_determinism_and_reset();
+  test_odd_dimensions();
   printf("\n✅ All DFTT filter tests passed!\n");
   return 0;
 }
