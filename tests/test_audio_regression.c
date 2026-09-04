@@ -498,21 +498,23 @@ int main(void) {
  * before comparing. Pre-echo (future smear) and tail (past smear) around
  * onsets are the discriminating metrics. */
 static void process_transient_nlm(const float* input, float* output, int length,
-                                  float frame_size_ms, uint32_t* latency_out) {
+                                  float frame_size_ms,
+                                  SpecbleachSmoothingMode mode,
+                                  uint32_t* latency_out) {
   specbleach_denoiser* handle =
       specbleach_denoiser_initialize(SAMPLE_RATE, frame_size_ms);
   TEST_ASSERT(handle != NULL, "Failed to initialize denoiser");
 
-  SpecbleachDenoiserParameters parameters = (SpecbleachDenoiserParameters){
-      .learn_noise = SPECBLEACH_LEARN_ALL,
-      .tonal_reduction_gain = 0.0f,
-      .aggressiveness = 0.0f,
-      .reduction_gain = 0.3f,
-      .smoothing_factor = 0.5f,
-      .smoothing_mode = SPECBLEACH_SMOOTHING_NLM_2D,
-      .masking_depth = 0.5f,
-      .residual_listen = false,
-      .whitening_factor = 0.0f};
+  SpecbleachDenoiserParameters parameters =
+      (SpecbleachDenoiserParameters){.learn_noise = SPECBLEACH_LEARN_ALL,
+                                     .tonal_reduction_gain = 0.0f,
+                                     .aggressiveness = 0.0f,
+                                     .reduction_gain = 0.3f,
+                                     .smoothing_factor = 0.5f,
+                                     .smoothing_mode = mode,
+                                     .masking_depth = 0.5f,
+                                     .residual_listen = false,
+                                     .whitening_factor = 0.0f};
 
   TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &parameters,
                                                   sizeof(parameters)),
@@ -545,8 +547,9 @@ static void process_transient_nlm(const float* input, float* output, int length,
   specbleach_denoiser_free(handle);
 }
 
-void test_frame_size_invariance(void) {
-  printf("Testing frame-size invariance (23ms vs 93ms, NLM)...\n");
+static void run_frame_invariance(SpecbleachSmoothingMode mode,
+                                 const char* label) {
+  printf("Testing frame-size invariance (23ms vs 93ms, %s)...\n", label);
 
   /* Longer window than the shared 2s fixtures: several isolated onsets. */
   const int len = SAMPLE_RATE * 4;
@@ -570,8 +573,8 @@ void test_frame_size_invariance(void) {
   }
 
   uint32_t lat_23 = 0, lat_93 = 0;
-  process_transient_nlm(input, out_23, len, 23.0f, &lat_23);
-  process_transient_nlm(input, out_93, len, 93.0f, &lat_93);
+  process_transient_nlm(input, out_23, len, 23.0f, mode, &lat_23);
+  process_transient_nlm(input, out_93, len, 93.0f, mode, &lat_93);
 
   /* Sanity: larger frame => larger latency, both finite. */
   TEST_ASSERT(lat_93 > lat_23, "93ms latency should exceed 23ms latency");
@@ -706,5 +709,15 @@ void test_frame_size_invariance(void) {
   free(out_23);
   free(out_93);
 
-  printf("✓ Frame-size invariance test passed\n");
+  printf("✓ Frame-size invariance test passed (%s)\n", label);
+}
+
+/* The smear-invariance contract must hold for every NLM-family mode: DFTT
+ * tiles are ms/Hz-derived from the same hop/bin resolution as the NLM
+ * geometry (184ms time span / 690Hz block, clamped), so the same 23ms vs
+ * 93ms sweep applies. */
+void test_frame_size_invariance(void) {
+  run_frame_invariance(SPECBLEACH_SMOOTHING_NLM_2D, "NLM");
+  run_frame_invariance(SPECBLEACH_SMOOTHING_NLM_2D_DFTT, "NLM+DFTT");
+  printf("✓ Frame-size invariance (both modes) passed\n");
 }
