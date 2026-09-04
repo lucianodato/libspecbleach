@@ -55,7 +55,13 @@ static DenoiserParameters sanitize_denoiser_parameters(
       .smoothing_mode =
           (int)parameters->smoothing_mode == (int)SPECBLEACH_SMOOTHING_NLM_2D
               ? (int)SPECBLEACH_SMOOTHING_NLM_2D
-              : (int)SPECBLEACH_SMOOTHING_TEMPORAL,
+              : ((int)parameters->smoothing_mode ==
+                         (int)SPECBLEACH_SMOOTHING_NLM_2D_DFTT
+                     ? (int)SPECBLEACH_SMOOTHING_NLM_2D_DFTT
+                     : (int)SPECBLEACH_SMOOTHING_TEMPORAL),
+      .dftt_strength = parameters->dftt_strength > 0.0f
+                           ? fminf(parameters->dftt_strength, DFTT_STRENGTH_MAX)
+                           : 1.0f,
       .masking_depth = fmaxf(0.0f, fminf(1.0f, parameters->masking_depth)),
       .suppression_strength =
           fmaxf(0.0f, fminf(1.0f, parameters->suppression_strength)),

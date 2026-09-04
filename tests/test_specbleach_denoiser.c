@@ -531,6 +531,33 @@ void test_specbleach_smoothing_transition_and_validation(void) {
   (void)specbleach_denoiser_is_transient_detected(handle);
   (void)specbleach_denoiser_get_transient_intensity(handle);
 
+  // TEMPORAL -> NLM+DFTT at runtime (crossfade into the refined map), then
+  // NLM+DFTT -> NLM (intra-family instant flip, no crossfade). DFTT rings
+  // stay warm on every NLM pass so both directions stay finite.
+  params.smoothing_mode = SPECBLEACH_SMOOTHING_NLM_2D_DFTT;
+  TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &params,
+                                                  sizeof(params)) == true,
+              "Loading NLM+DFTT mode should succeed");
+  for (int f = 0; f < 15; ++f) {
+    specbleach_denoiser_process(handle, 1024, in_buf, out_buf);
+    TEST_ASSERT(specbleach_denoiser_get_latency(handle) > 0,
+                "Latency must stay positive in DFTT mode");
+  }
+  for (int i = 0; i < 1024; ++i) {
+    TEST_ASSERT(isfinite(out_buf[i]) && out_buf[i] < 100.0f,
+                "Output must be finite in DFTT mode");
+  }
+  params.smoothing_mode = SPECBLEACH_SMOOTHING_NLM_2D;
+  TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &params,
+                                                  sizeof(params)) == true,
+              "Loading NLM mode should succeed");
+  for (int f = 0; f < 5; ++f) {
+    specbleach_denoiser_process(handle, 1024, in_buf, out_buf);
+  }
+  for (int i = 0; i < 1024; ++i) {
+    TEST_ASSERT(isfinite(out_buf[i]), "Output must be finite after flip back");
+  }
+
   // Transient during NLM mode: transient-mask loops in the NLM chain
   params.hpss_enable = true;
   params.smoothing_mode = SPECBLEACH_SMOOTHING_NLM_2D;
@@ -668,10 +695,10 @@ void test_specbleach_redesigned_api_coverage(void) {
   TEST_ASSERT(hop == frame / 4, "Hop should be frame / overlap 4");
   TEST_ASSERT(specbleach_denoiser_get_hop_size(NULL) == 0,
               "NULL hop should be 0");
-  // NLM look-ahead is ms-anchored (#152): 20ms frame -> ~5ms hop ->
-  // round(128ms/5ms) = 26 (symmetric restoration context; 46ms default is
-  // 11). Latency in ms is sample-rate independent.
-  TEST_ASSERT(specbleach_denoiser_get_latency(handle) == frame + 26 * hop,
+  // NLM look-ahead is ms-anchored (#152, past-heavy per #155): 20ms frame
+  // -> ~5ms hop -> round(46ms/5ms) = 9 (46ms default is 4). Latency in
+  // ms is sample-rate independent.
+  TEST_ASSERT(specbleach_denoiser_get_latency(handle) == frame + 9 * hop,
               "Latency should be frame plus ms-anchored NLM look-ahead");
 
   // No profile available before learning

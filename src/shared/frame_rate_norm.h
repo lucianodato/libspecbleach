@@ -114,8 +114,9 @@ typedef struct SbNlmGeometry {
 } SbNlmGeometry;
 
 /* Listen-validated per-option table for the 5 plugin frame sizes (time axis).
- * Values == round(ms_target / hop) with symmetric 128ms search context;
- * frozen so init is deterministic and reviewable. Frequency axis is always
+ * Values == round(ms_target / hop) with past-heavy 184ms past / 46ms future
+ * search context (Lukin [-16..+4] at the ~11.5ms reference hop); frozen so
+ * init is deterministic and reviewable. Frequency axis is always
  * recomputed from Hz (SR/FFT dependent) and is not tabled. */
 static inline SB_UNUSED SbNlmGeometry
 sb_nlm_geometry_for_frame_ms(float frame_ms, float hop_sec, float bin_hz) {
@@ -125,28 +126,28 @@ sb_nlm_geometry_for_frame_ms(float frame_ms, float hop_sec, float bin_hz) {
   /* Known plugin options: match within 0.6ms tolerance. */
   if (frame_ms > 22.4F && frame_ms < 23.6F) {
     g.patch = 16U;
-    g.past = 22U;
-    g.future = 22U;
+    g.past = 32U;
+    g.future = 8U;
   } else if (frame_ms > 31.4F && frame_ms < 32.6F) {
     g.patch = 12U;
-    g.past = 16U;
-    g.future = 16U;
+    g.past = 23U;
+    g.future = 6U;
   } else if (frame_ms > 45.4F && frame_ms < 46.6F) {
     g.patch = 8U;
-    g.past = 11U;
-    g.future = 11U;
+    g.past = 16U;
+    g.future = 4U;
   } else if (frame_ms > 63.4F && frame_ms < 64.6F) {
     g.patch = 6U;
-    g.past = 8U;
-    g.future = 8U;
+    g.past = 12U;
+    g.future = 3U;
   } else if (frame_ms > 92.4F && frame_ms < 93.6F) {
     g.patch = 4U;
-    g.past = 6U;
-    g.future = 6U;
+    g.past = 8U;
+    g.future = 2U;
   } else if (hop_sec > 0.0F) {
     g.patch = sb_frames_for_ms(NLM_PATCH_TIME_MS, hop_sec, 4U, 16U);
     g.past = sb_frames_for_ms(NLM_SEARCH_PAST_MS, hop_sec, 8U, 32U);
-    g.future = sb_frames_for_ms(NLM_SEARCH_FUTURE_MS, hop_sec, 8U, 32U);
+    g.future = sb_frames_for_ms(NLM_SEARCH_FUTURE_MS, hop_sec, 2U, 32U);
   }
   if (bin_hz > 0.0F) {
     g.search_freq = sb_bins_for_hz(NLM_SEARCH_FREQ_HZ, bin_hz, 2U, 32U);

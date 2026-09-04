@@ -29,6 +29,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "shared/denoiser_logic/processing/gain_calculator.h"
 #include "shared/denoiser_logic/processing/masking_veto.h"
 #include "shared/denoiser_logic/processing/nlm_filter.h"
+
+#include "shared/denoiser_logic/processing/dftt_filter.h"
 #include "shared/denoiser_logic/processing/suppression_engine.h"
 #include "shared/denoiser_logic/processing/tonal_reducer.h"
 #include "shared/frame_rate_norm.h"
@@ -65,6 +67,9 @@ typedef struct SbSpectralDenoiser {
 
   float* snr_frame;                 // Current SNR frame for NLM input
   float* smoothed_snr;              // Smoothed SNR output from NLM
+  float* dftt_snr;                  // Refined SNR output from DFTT post-filter
+  float* snr_delayed;               // Noisy SNR row aligned with NLM output
+                                    // (DFTT ring input)
   float* gain_spectrum;             // Gain spectrum of the active chain
   float* gain_spectrum_b;           // Gain spectrum of the incoming chain
                                     // (transition crossfade only)
@@ -76,6 +81,8 @@ typedef struct SbSpectralDenoiser {
   float* alpha;         // Oversubtraction factors (active chain)
   float* beta;          // Undersubtraction factors (active chain)
   float* alpha_b;       // Oversubtraction factors (transition chain)
+  float* alpha_base;    // Scratch: Berouti base for parallel combine (NLM)
+  float* alpha_tonal;   // Scratch: tonal branch result (NLM parallel)
   float* beta_b;        // Undersubtraction factors (transition chain)
   float* manual_noise_floor; // Manual profile floor
   TonalReducer* tonal_reducer;
@@ -93,6 +100,7 @@ typedef struct SbSpectralDenoiser {
   NoiseEstimator* noise_estimator;
   AdaptiveNoiseEstimator* adaptive_estimator;
   NlmFilter* nlm_filter;
+  DfttFilter* dftt_filter;
   SpectralSmoother* spectrum_smoothing;
   SpectralFeatures* spectral_features;
   MaskingVeto* masking_veto;
@@ -126,9 +134,19 @@ typedef struct SbSpectralDenoiser {
   bool was_learning;
 } SbSpectralDenoiser;
 
+static bool is_nlm_family(const int mode) {
+  return mode == SPECBLEACH_SMOOTHING_NLM_2D ||
+         mode == SPECBLEACH_SMOOTHING_NLM_2D_DFTT;
+}
+
 static int normalize_smoothing_mode(const int mode) {
-  return (mode == SPECBLEACH_SMOOTHING_NLM_2D) ? SPECBLEACH_SMOOTHING_NLM_2D
-                                               : SPECBLEACH_SMOOTHING_TEMPORAL;
+  if (mode == SPECBLEACH_SMOOTHING_NLM_2D) {
+    return SPECBLEACH_SMOOTHING_NLM_2D;
+  }
+  if (mode == SPECBLEACH_SMOOTHING_NLM_2D_DFTT) {
+    return SPECBLEACH_SMOOTHING_NLM_2D_DFTT;
+  }
+  return SPECBLEACH_SMOOTHING_TEMPORAL;
 }
 
 /**
@@ -202,6 +220,8 @@ static SpectralProcessorHandle spectral_denoiser_initialize_inner(
 
   self->snr_frame = (float*)calloc(self->real_spectrum_size, sizeof(float));
   self->smoothed_snr = (float*)calloc(self->real_spectrum_size, sizeof(float));
+  self->dftt_snr = (float*)calloc(self->real_spectrum_size, sizeof(float));
+  self->snr_delayed = (float*)calloc(self->real_spectrum_size, sizeof(float));
   self->gain_spectrum = (float*)calloc(self->fft_size, sizeof(float));
   self->gain_spectrum_b = (float*)calloc(self->fft_size, sizeof(float));
   self->noise_spectrum =
@@ -214,6 +234,8 @@ static SpectralProcessorHandle spectral_denoiser_initialize_inner(
   self->alpha = (float*)calloc(self->real_spectrum_size, sizeof(float));
   self->beta = (float*)calloc(self->real_spectrum_size, sizeof(float));
   self->alpha_b = (float*)calloc(self->real_spectrum_size, sizeof(float));
+  self->alpha_base = (float*)calloc(self->real_spectrum_size, sizeof(float));
+  self->alpha_tonal = (float*)calloc(self->real_spectrum_size, sizeof(float));
   self->beta_b = (float*)calloc(self->real_spectrum_size, sizeof(float));
   self->manual_noise_floor =
       (float*)calloc(self->real_spectrum_size, sizeof(float));
@@ -222,12 +244,13 @@ static SpectralProcessorHandle spectral_denoiser_initialize_inner(
   self->clean_magnitude =
       (float*)calloc(self->real_spectrum_size, sizeof(float));
 
-  if (!self->snr_frame || !self->smoothed_snr || !self->gain_spectrum ||
-      !self->gain_spectrum_b || !self->noise_spectrum ||
-      !self->noise_spectrum_buffers[0] || !self->noise_spectrum_buffers[1] ||
-      !self->alpha || !self->beta || !self->alpha_b || !self->beta_b ||
-      !self->manual_noise_floor || !self->smoothed_magnitude ||
-      !self->clean_magnitude) {
+  if (!self->snr_frame || !self->smoothed_snr || !self->dftt_snr ||
+      !self->snr_delayed || !self->gain_spectrum || !self->gain_spectrum_b ||
+      !self->noise_spectrum || !self->noise_spectrum_buffers[0] ||
+      !self->noise_spectrum_buffers[1] || !self->alpha || !self->beta ||
+      !self->alpha_b || !self->beta_b || !self->alpha_base ||
+      !self->alpha_tonal || !self->manual_noise_floor ||
+      !self->smoothed_magnitude || !self->clean_magnitude) {
     spectral_denoiser_free(self);
     return NULL;
   }
@@ -302,6 +325,20 @@ static SpectralProcessorHandle spectral_denoiser_initialize_inner(
   };
   self->nlm_filter = nlm_filter_initialize(nlm_config);
   if (!self->nlm_filter) {
+    spectral_denoiser_free(self);
+    return NULL;
+  }
+
+  // DFTT post-filter (paper S4.2 lite): past-only time span in ms so it adds
+  // no latency on top of the NLM look-ahead; freq block in Hz so the
+  // analysis stays invariant across frame sizes.
+  const uint32_t dftt_span = sb_frames_for_ms(
+      DFTT_TIME_MS, hop_sec, DFTT_MIN_TIME_FRAMES, DFTT_MAX_TIME_FRAMES);
+  const uint32_t dftt_block = sb_bins_for_hz(
+      DFTT_BLOCK_FREQ_HZ, bin_hz, DFTT_MIN_BLOCK_FREQ, DFTT_MAX_BLOCK_FREQ);
+  self->dftt_filter =
+      dftt_filter_initialize(self->real_spectrum_size, dftt_span, dftt_block);
+  if (!self->dftt_filter) {
     spectral_denoiser_free(self);
     return NULL;
   }
@@ -407,6 +444,9 @@ void spectral_denoiser_free(SpectralProcessorHandle instance) {
   if (self->nlm_filter) {
     nlm_filter_free(self->nlm_filter);
   }
+  if (self->dftt_filter) {
+    dftt_filter_free(self->dftt_filter);
+  }
   if (self->spectrum_smoothing) {
     spectral_smoothing_free(self->spectrum_smoothing);
   }
@@ -447,6 +487,8 @@ void spectral_denoiser_free(SpectralProcessorHandle instance) {
 
   free(self->snr_frame);
   free(self->smoothed_snr);
+  free(self->dftt_snr);
+  free(self->snr_delayed);
   free(self->gain_spectrum);
   free(self->gain_spectrum_b);
   free(self->noise_spectrum);
@@ -459,6 +501,8 @@ void spectral_denoiser_free(SpectralProcessorHandle instance) {
   free(self->alpha);
   free(self->beta);
   free(self->alpha_b);
+  free(self->alpha_base);
+  free(self->alpha_tonal);
   free(self->beta_b);
   if (self->manual_noise_floor) {
     free(self->manual_noise_floor);
@@ -507,14 +551,22 @@ bool load_reduction_parameters(SpectralProcessorHandle instance,
   self->parameters = parameters;
 
   // Runtime smoothing mode switching (allocation-free): the outgoing mode is
-  // crossfaded against the incoming one over SMOOTHING_TRANSITION_SECONDS
+  // crossfaded against the incoming one over SMOOTHING_TRANSITION_SECONDS.
+  // Within the NLM family (NLM <-> NLM+DFTT) the switch is instant: both
+  // sides share NLM history, latency and DFTT rings (pushed on every NLM
+  // pass), so only the map source flips — no crossfade needed.
   if (!self->in_transition) {
     const int requested = normalize_smoothing_mode(parameters.smoothing_mode);
     if (requested != self->active_mode) {
-      self->previous_mode = self->active_mode;
-      self->pending_mode = requested;
-      self->transition_pos = 0U;
-      self->in_transition = true;
+      if (is_nlm_family(requested) && is_nlm_family(self->active_mode)) {
+        self->active_mode = requested;
+        self->pending_mode = requested;
+      } else {
+        self->previous_mode = self->active_mode;
+        self->pending_mode = requested;
+        self->transition_pos = 0U;
+        self->in_transition = true;
+      }
     }
   } else {
     const int requested = normalize_smoothing_mode(parameters.smoothing_mode);
@@ -537,6 +589,11 @@ bool load_reduction_parameters(SpectralProcessorHandle instance,
         self->nlm_filter, (parameters.smoothing_factor > 0.0F)
                               ? (0.5F + (parameters.smoothing_factor * 4.5F))
                               : 0.0F);
+  }
+
+  // Update DFTT refinement strength (reduction-depth coupling, live)
+  if (self->dftt_filter) {
+    dftt_filter_set_strength(self->dftt_filter, parameters.dftt_strength);
   }
 
   return true;
@@ -682,26 +739,21 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
 
   const uint32_t nlm_delay = nlm_filter_get_latency_frames(self->nlm_filter);
 
-  const float* nlm_intermediate_noise = spectral_circular_buffer_retrieve(
-      self->circular_buffer, self->layer_noise, nlm_delay);
-  if (!nlm_intermediate_noise) {
-    nlm_intermediate_noise = self->noise_spectrum;
-  }
-
   // NLM smoothing (runs when NLM is the active or the incoming mode). The
   // smoothed magnitude is captured explicitly so the temporal chain cannot
   // overwrite the shared alignment layer before the NLM chain consumes it.
-  const bool nlm_needed = (self->active_mode == SPECBLEACH_SMOOTHING_NLM_2D) ||
-                          (self->in_transition &&
-                           self->pending_mode == SPECBLEACH_SMOOTHING_NLM_2D);
-  const float* nlm_smoothed = NULL;
-  if (nlm_needed && nlm_filter_process(self->nlm_filter, self->smoothed_snr)) {
-    nlm_filter_reconstruct_magnitude(self->nlm_filter, self->smoothed_snr,
-                                     nlm_intermediate_noise, self->snr_frame);
-    spectral_circular_buffer_push(self->circular_buffer, self->layer_smoothed,
-                                  self->snr_frame);
-    nlm_smoothed = self->snr_frame;
-  }
+  const bool nlm_needed =
+      is_nlm_family(self->active_mode) ||
+      (self->in_transition && is_nlm_family(self->pending_mode));
+  // DFTT refinement follows the DFTT mode: the active chain, or the incoming
+  // side of a temporal crossfade. Rings are pushed on every NLM pass so they
+  // stay warm for instant intra-family flips.
+  const bool use_dftt =
+      (self->active_mode == SPECBLEACH_SMOOTHING_NLM_2D_DFTT) ||
+      (self->in_transition &&
+       self->pending_mode == SPECBLEACH_SMOOTHING_NLM_2D_DFTT);
+  const bool nlm_ran =
+      nlm_needed && nlm_filter_process(self->nlm_filter, self->smoothed_snr);
 
   // Retrieve unified aligned frames at the common delay
   const float* delayed_spectrum = spectral_circular_buffer_retrieve(
@@ -714,6 +766,37 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
   }
   if (!delayed_noise) {
     delayed_noise = self->noise_spectrum;
+  }
+
+  const float* nlm_smoothed = NULL;
+  if (nlm_ran) {
+    // DFTT post-filter (paper S4.2): the noisy SNR row aligned with the
+    // NLM-emitted frame — recomputed from the delayed frames so both ring
+    // inputs describe the same tile — is refined while the NLM output sets
+    // the suppression threshold. Falls back to the raw NLM output until the
+    // DFTT history is full, or when the active mode is NLM-only.
+    const float* post_nlm = self->smoothed_snr;
+    if (self->dftt_filter) {
+      // Same feature extraction as the current-frame SNR (line ~730), but on
+      // the delayed frame NLM just emitted, so both DFTT ring inputs describe
+      // the same tile. Reuses the shared spectral_features scratch (the
+      // temporal chain recomputes it on the same delayed frame anyway).
+      float* delayed_reference =
+          get_spectral_feature(self->spectral_features, delayed_spectrum,
+                               self->fft_size, self->spectrum_type);
+      nlm_filter_calculate_snr(self->nlm_filter, delayed_reference,
+                               delayed_noise, self->snr_delayed);
+      dftt_filter_push(self->dftt_filter, self->snr_delayed,
+                       self->smoothed_snr);
+      if (use_dftt && dftt_filter_process(self->dftt_filter, self->dftt_snr)) {
+        post_nlm = self->dftt_snr;
+      }
+    }
+    nlm_filter_reconstruct_magnitude(self->nlm_filter, post_nlm, delayed_noise,
+                                     self->snr_frame);
+    spectral_circular_buffer_push(self->circular_buffer, self->layer_smoothed,
+                                  self->snr_frame);
+    nlm_smoothed = self->snr_frame;
   }
 
   // Align output to delayed frame for post-processing
@@ -730,7 +813,7 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
     const float total = (float)self->transition_frames;
     const float w = (float)self->transition_pos / total; // 0 → 1
 
-    if (self->previous_mode == SPECBLEACH_SMOOTHING_NLM_2D) {
+    if (is_nlm_family(self->previous_mode)) {
       (void)run_nlm_chain(self, fft_spectrum, nlm_smoothed, delayed_noise,
                           gain_a, self->alpha, self->beta);
       run_temporal_chain(self, fft_spectrum, delayed_noise, gain_b,
@@ -751,7 +834,7 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
       self->active_mode = self->pending_mode;
       self->in_transition = false;
     }
-  } else if (self->active_mode == SPECBLEACH_SMOOTHING_NLM_2D) {
+  } else if (is_nlm_family(self->active_mode)) {
     (void)run_nlm_chain(self, fft_spectrum, nlm_smoothed, delayed_noise, gain_a,
                         self->alpha, self->beta);
   } else {
@@ -820,15 +903,29 @@ static bool run_nlm_chain(SbSpectralDenoiser* self, float* fft_spectrum,
   suppression_engine_calculate(self->suppression_engine, smoothed_magnitude,
                                delayed_noise, suppression_params, alpha, beta);
 
-  // 3.2 Detect tonal components and boost alpha at tonal bins
+  // 3.2 + 3.3 Parallel branches from the same Berouti base: the tonal
+  // branch adds suppression where the noise profile is tonal, the veto
+  // branch lifts toward 1.0 where noise is psychoacoustically masked.
+  // Each branch modulates the base independently with its own per-bin
+  // weight (tonal mask strength / NMR protection), then the two deltas
+  // are combined once: alpha = base + boost - preservation. No blanket
+  // caps, no depth scaling, no post-hoc gain blur — each stage contributes
+  // exactly what its own confidence supports.
+  memcpy(self->alpha_base, alpha, self->real_spectrum_size * sizeof(float));
+  memcpy(self->alpha_tonal, alpha, self->real_spectrum_size * sizeof(float));
   tonal_reducer_run(self->tonal_reducer, delayed_noise,
                     get_noise_profile(self->noise_profile, CV_MASK),
                     is_noise_estimation_available(self->noise_profile, CV_MASK),
-                    alpha, self->parameters.tonal_reduction);
-
-  // 3.3 Apply psychoacoustic veto to preserve psychoacoustically masked signal
+                    self->alpha_tonal, self->parameters.tonal_reduction);
   masking_veto_apply(self->masking_veto, smoothed_magnitude, delayed_noise,
                      fft_spectrum, alpha, self->parameters.masking_depth);
+  for (uint32_t k = 0U; k < self->real_spectrum_size; ++k) {
+    const float boost = self->alpha_tonal[k] - self->alpha_base[k];
+    const float preservation = self->alpha_base[k] - alpha[k];
+    float combined = self->alpha_base[k] + boost - preservation;
+    combined = fminf(combined, ALPHA_MAX_TONAL);
+    alpha[k] = fmaxf(ALPHA_MIN, combined);
+  }
 
   // 3.4. Transient Protection:
   // Strictly on frequencies where transient was detected, drop alpha to

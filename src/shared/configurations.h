@@ -168,21 +168,42 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 // Time geometry is fixed in ms and recomputed per frame size (see
 // frame_rate_norm.h) so temporal smear stays constant across 23-93ms frames.
 // Patch size follows Lukin & Todd AES123 (~46ms frame, 75% overlap,
-// hop ~11.5ms: PATCH 8 == 92ms). Search context is symmetric (128ms past /
-// 128ms future): this is a restoration-oriented choice, not the paper's
-// live-constrained mapping — future lookahead is the highest-value context
-// for musical-noise suppression, and latency is not a product constraint
-// (noise-repellent targets restoration/mix/mastering, not live input).
+// hop ~11.5ms: PATCH 8 == 92ms). Search context is past-heavy per the paper's
+// [-16..+4] mapping (184ms past / 46ms future at the Lukin hop): this cuts
+// NLM lookahead latency vs a symmetric context and favors post- over
+// pre-echoes of noise. Paste follows the paper's 4x4 block (~80Hz freq
+// stride, time resolution is one frame per NLM pass).
 #define NLM_PATCH_SIZE 8U
 #define NLM_PASTE_BLOCK_SIZE 8U
 #define NLM_SEARCH_RANGE_FREQ 8U
 #define NLM_SEARCH_RANGE_TIME_PAST 16U
 #define NLM_SEARCH_RANGE_TIME_FUTURE 4U
 #define NLM_PATCH_TIME_MS (92.0F)
-#define NLM_SEARCH_PAST_MS (128.0F)
-#define NLM_SEARCH_FUTURE_MS (128.0F)
+#define NLM_SEARCH_PAST_MS (184.0F)
+#define NLM_SEARCH_FUTURE_MS (46.0F)
 #define NLM_SEARCH_FREQ_HZ (170.0F)
-#define NLM_PASTE_FREQ_HZ (170.0F)
+#define NLM_PASTE_FREQ_HZ (80.0F)
+// DFTT post-NLM cleanup (Lukin & Todd AES123 S4.2): overlapping tiles of the
+// SNR map undergo a 2D DFT; per-coefficient Wiener gain with the threshold
+// set from the speckle residual between the noisy and the NLM-smoothed tile
+// (white in the tile-DFT/quefrency domain). The NLM tile is the structure
+// prior: comb/quefrency structure passes at ~1 by construction, isolated
+// speckle absent from it is suppressed. Tiles are freq-elongated per the
+// paper (DFTT_BLOCK_FREQ_HZ wide, hop = block / DFTT_FREQ_OVERLAP) with a
+// past-only time span of DFTT_TIME_MS so no extra latency is introduced and
+// the analysis stays invariant across frame sizes.
+#define DFTT_BLOCK_FREQ_HZ (690.0F)
+#define DFTT_MIN_BLOCK_FREQ (8U)
+#define DFTT_MAX_BLOCK_FREQ (32U)
+#define DFTT_TIME_MS (184.0F)
+#define DFTT_MIN_TIME_FRAMES (4U)
+#define DFTT_MAX_TIME_FRAMES (16U)
+#define DFTT_FREQ_OVERLAP (4U)
+#define DFTT_SILENCE_EPS (1e-9F)
+#define DFTT_KILL_K 32.0F
+// Wiener threshold as a multiple of the tile's white speckle power
+// (sigma2); runtime-tunable via dftt_strength (reduction-depth coupling)
+#define DFTT_STRENGTH_MAX (4.0F)
 // Vectorized-distance patch ceiling (matches the frame_rate_norm.h fallback
 // clamp 4..16) and pointer-cache halo (half of the ceiling each side).
 #define NLM_MAX_PATCH_FRAMES 16U

@@ -108,18 +108,18 @@ static void check_table(float frame_ms, uint32_t patch, uint32_t past,
 
 static void test_nlm_table(void) {
   printf("Testing NLM per-option table...\n");
-  check_table(23.0F, 16U, 22U, 22U);
-  check_table(32.0F, 12U, 16U, 16U);
-  check_table(46.0F, 8U, 11U, 11U);
-  check_table(64.0F, 6U, 8U, 8U);
-  check_table(93.0F, 4U, 6U, 6U);
+  check_table(23.0F, 16U, 32U, 8U);
+  check_table(32.0F, 12U, 23U, 6U);
+  check_table(46.0F, 8U, 16U, 4U);
+  check_table(64.0F, 6U, 12U, 3U);
+  check_table(93.0F, 4U, 8U, 2U);
 
-  /* Fallback formula for non-table sizes: 50ms -> 92/128/128ms targets. */
+  /* Fallback formula for non-table sizes: 50ms -> 92/184/46ms targets. */
   SbNlmGeometry g50 = sb_nlm_geometry_for_frame_ms(50.0F, 0.0125F, 21.5F);
-  TEST_ASSERT(g50.patch == 7U && g50.past == 10U && g50.future == 10U,
-              "50ms fallback must be 7/10/10");
-  TEST_ASSERT(g50.search_freq == 8U && g50.paste == 7U,
-              "50ms @21.5Hz bins must be 8 search / 7 paste (clamped)");
+  TEST_ASSERT(g50.patch == 7U && g50.past == 15U && g50.future == 4U,
+              "50ms fallback must be 7/15/4");
+  TEST_ASSERT(g50.search_freq == 8U && g50.paste == 4U,
+              "50ms @21.5Hz bins must be 8 search / 4 paste");
 
   /* Paste never exceeds patch: tiny bins + 93ms frame. */
   SbNlmGeometry gclamp =
