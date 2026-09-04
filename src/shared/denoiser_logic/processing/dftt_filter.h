@@ -28,12 +28,13 @@ typedef struct DfttFilter DfttFilter;
 
 /**
  * DFT-thresholding post-filter for the 2D NLM chain.
- * Lite adaptation of Lukin & Todd AES123 §4.2: overlapping Hann tiles of the
- * noisy SNR map undergo a 2D DFT, per-coefficient power-subtraction gain with
- * the threshold set from the NLM-smoothed tile (white-quefrency assumption),
- * then inverse DFT and overlap-add. Tiles are past-only in time, so no extra
- * latency is introduced. All memory is allocated at init; processing never
- * allocates, locks, or performs I/O.
+ * Lukin & Todd AES123 §4.2: overlapping Hann tiles of the SNR map undergo a
+ * 2D DFT; per-coefficient Wiener gain with the threshold set from the
+ * speckle residual between the noisy and the NLM-smoothed tile (the NLM
+ * tile acts as the structure prior; speckle is white in the tile-DFT
+ * domain). Then inverse DFT and overlap-add. Tiles are past-only in time,
+ * so no extra latency is introduced. All memory is allocated at init;
+ * processing never allocates, locks, or performs I/O.
  */
 
 /**
@@ -41,8 +42,9 @@ typedef struct DfttFilter DfttFilter;
  * @param spectrum_size Number of frequency bins (real spectrum size)
  * @param time_span_frames Time extent of a tile in frames (clamped to
  *                         DFTT_MAX_TIME_FRAMES); 0 fails
- * @param block_freq_bins Frequency extent of a tile in bins, hop is half of
- *                        it (clamped to DFTT_MAX_DIM); 0 fails
+ * @param block_freq_bins Frequency extent of a tile in bins, hop is
+ *                        DFTT_FREQ_OVERLAP-divided (clamped to
+ *                        DFTT_MAX_DIM); 0 fails
  * @return Pointer to initialized filter, or NULL on failure
  */
 DfttFilter* dftt_filter_initialize(uint32_t spectrum_size,

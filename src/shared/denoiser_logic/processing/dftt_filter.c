@@ -210,7 +210,7 @@ DfttFilter* dftt_filter_initialize(uint32_t spectrum_size,
   f->spectrum_size = spectrum_size;
   f->time_span = time_span_frames;
   f->block_freq = block_freq_bins;
-  f->block_hop = block_freq_bins / 2U;
+  f->block_hop = block_freq_bins / DFTT_FREQ_OVERLAP;
   if (f->block_hop == 0U) {
     f->block_hop = 1U;
   }
@@ -354,6 +354,7 @@ bool dftt_filter_process(DfttFilter* f, float* refined_snr) {
        fs += (int32_t)f->block_hop) {
     /* Gather past-only tile, oldest row first. */
     float esum = 0.0F;
+    float wsum_r2 = 0.0F;
     for (uint32_t r = 0U; r < bt; r++) {
       const float* row_n = f->noisy_ring[(f->head + r) % bt];
       const float* row_s = f->smooth_ring[(f->head + r) % bt];
@@ -362,6 +363,8 @@ bool dftt_filter_process(DfttFilter* f, float* refined_snr) {
         const uint32_t bin = dftt_clamp_bin(fs + (int32_t)i, spec);
         esum += row_n[bin];
         const float w = wt * f->win_freq[i];
+        const float resid = row_n[bin] - row_s[bin];
+        wsum_r2 += (w * w) * (resid * resid);
         const size_t at = ((size_t)r * bf) + i;
         f->tile_re[at] = row_n[bin] * w;
         f->tile_im[at] = 0.0F;
@@ -383,50 +386,21 @@ bool dftt_filter_process(DfttFilter* f, float* refined_snr) {
 
     dftt_dft_2d(f, f->tile_re, f->tile_im, false);
     dftt_dft_2d(f, f->ref_re, f->ref_im, false);
-    /* Kill-map estimate: threshold at the tile's diffuse floor, not its mean
-     * (loud partials inflate the mean and would eat weaker harmonics riding
-     * with them — that compression toward the tile mean is what muffles).
-     * Two passes, no sorting: mean of the bins below the overall mean
-     * robustly estimates the speckle floor. DC terms skipped — the flat
-     * tile level must never set the threshold. Sharper knee (squared ratio,
-     * still smooth in pn so no Gibbs ringing): structure far above the
-     * floor passes at ~1, only the diffuse layer is killed. */
-    float mean_all = 0.0F;
-    for (uint32_t r = 0U; r < bt; r++) {
-      for (uint32_t c = 0U; c < bf; c++) {
-        if (r <= 1U && c <= 1U) {
-          continue;
-        }
-        const size_t k = ((size_t)r * bf) + c;
-        mean_all +=
-            (f->ref_re[k] * f->ref_re[k]) + (f->ref_im[k] * f->ref_im[k]);
-      }
-    }
-    mean_all /= (float)tile;
-    float floor_sum = 0.0F;
-    uint32_t floor_n = 0U;
-    for (uint32_t r = 0U; r < bt; r++) {
-      for (uint32_t c = 0U; c < bf; c++) {
-        if (r <= 1U && c <= 1U) {
-          continue;
-        }
-        const size_t k = ((size_t)r * bf) + c;
-        const float p =
-            (f->ref_re[k] * f->ref_re[k]) + (f->ref_im[k] * f->ref_im[k]);
-        if (p < mean_all) {
-          floor_sum += p;
-          floor_n++;
-        }
-      }
-    }
-    const float thresh =
-        floor_n > 0U ? DFTT_KILL_K * floor_sum / (float)floor_n : 0.0F;
-    const float thresh_sq = thresh * thresh;
+    /* Per-coefficient quefrency-domain rule (paper S4.2): the NLM-smoothed
+     * tile provides the per-coefficient SNR estimate of the suppression
+     * rule. Speckle is white in the tile-DFT domain, so its per-coefficient
+     * power follows directly from Parseval on the spatial residual
+     * (noisy - NLM): sigma2 = sum(w^2 * r^2) over the tile. Gain: Wiener
+     * against the structure prior — coefficients where the NLM tile shows
+     * structure (pr >> sigma2) pass the noisy (sharp) value, coefficients
+     * where it shows none (pr ~ 0) die. The tile's flat level and slow
+     * envelopes live at huge pr, so they pass without exemptions. */
+    const float sigma2 = wsum_r2;
+    const float speckle_power = DFTT_KILL_K * sigma2;
     for (size_t k = 0U; k < tile; k++) {
-      const float pn =
-          (f->tile_re[k] * f->tile_re[k]) + (f->tile_im[k] * f->tile_im[k]);
-      const float pn_sq = pn * pn;
-      const float g = pn > 0.0F ? pn_sq / (pn_sq + thresh_sq) : 0.0F;
+      const float pr =
+          (f->ref_re[k] * f->ref_re[k]) + (f->ref_im[k] * f->ref_im[k]);
+      const float g = pr / (pr + speckle_power);
       f->tile_re[k] *= g;
       f->tile_im[k] *= g;
     }
@@ -447,16 +421,14 @@ bool dftt_filter_process(DfttFilter* f, float* refined_snr) {
     refined_snr[k] = f->wsum[k] > 0.0F ? refined_snr[k] / f->wsum[k] : 0.0F;
   }
 
-  /* Veto combine: the kill-map can only remove energy relative to NLM's
-   * verdict, never add — and only where NLM is unsure (below the gate).
-   * Confident speech bins keep NLM's exact unsmeared values, so muffling is
-   * impossible there by construction; peak-broadening from quefrency
-   * killing (a power threshold cannot separate a peak's sidelobes from
-   * speckle) can never touch them. Suppressed bins stay suppressed (no hum
-   * creep); only speckles NLM left behind get killed. */
+  /* Monotone safety: the refined map may only remove energy relative to
+   * NLM's verdict, never add it — windowing cross-talk from neighbouring
+   * tiles can never creep energy back in (no hum creep). With the
+   * structure-prior rule this is a no-op except in edge cases: refined
+   * already sits below NLM on the diffuse floor and matches it on
+   * structure. */
   for (uint32_t k = 0U; k < spec; k++) {
-    if (newest_smooth[k] >= DFTT_VETO_GATE ||
-        refined_snr[k] > newest_smooth[k]) {
+    if (refined_snr[k] > newest_smooth[k]) {
       refined_snr[k] = newest_smooth[k];
     }
   }

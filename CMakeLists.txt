@@ -284,6 +284,7 @@ if(ENABLE_TESTS)
 
     add_specbleach_test(test_utils "test_utils.c")
     add_specbleach_test(test_integration "test_integration.c")
+    add_specbleach_test(test_integration_dftt_quality "test_integration_dftt_quality.c")
     add_specbleach_test(test_audio_regression "test_audio_regression.c")
     add_specbleach_test(test_audio_files "test_audio_files.c")
     add_specbleach_test(test_fft "test_fft.c")

@@ -68,6 +68,8 @@ typedef struct SbSpectralDenoiser {
   float* snr_frame;                 // Current SNR frame for NLM input
   float* smoothed_snr;              // Smoothed SNR output from NLM
   float* dftt_snr;                  // Refined SNR output from DFTT post-filter
+  float* snr_delayed;               // Noisy SNR row aligned with NLM output
+                                    // (DFTT ring input)
   float* gain_spectrum;             // Gain spectrum of the active chain
   float* gain_spectrum_b;           // Gain spectrum of the incoming chain
                                     // (transition crossfade only)
@@ -219,6 +221,7 @@ static SpectralProcessorHandle spectral_denoiser_initialize_inner(
   self->snr_frame = (float*)calloc(self->real_spectrum_size, sizeof(float));
   self->smoothed_snr = (float*)calloc(self->real_spectrum_size, sizeof(float));
   self->dftt_snr = (float*)calloc(self->real_spectrum_size, sizeof(float));
+  self->snr_delayed = (float*)calloc(self->real_spectrum_size, sizeof(float));
   self->gain_spectrum = (float*)calloc(self->fft_size, sizeof(float));
   self->gain_spectrum_b = (float*)calloc(self->fft_size, sizeof(float));
   self->noise_spectrum =
@@ -242,10 +245,11 @@ static SpectralProcessorHandle spectral_denoiser_initialize_inner(
       (float*)calloc(self->real_spectrum_size, sizeof(float));
 
   if (!self->snr_frame || !self->smoothed_snr || !self->dftt_snr ||
-      !self->gain_spectrum || !self->gain_spectrum_b || !self->noise_spectrum ||
-      !self->noise_spectrum_buffers[0] || !self->noise_spectrum_buffers[1] ||
-      !self->alpha || !self->beta || !self->alpha_b || !self->beta_b ||
-      !self->alpha_base || !self->alpha_tonal || !self->manual_noise_floor ||
+      !self->snr_delayed || !self->gain_spectrum || !self->gain_spectrum_b ||
+      !self->noise_spectrum || !self->noise_spectrum_buffers[0] ||
+      !self->noise_spectrum_buffers[1] || !self->alpha || !self->beta ||
+      !self->alpha_b || !self->beta_b || !self->alpha_base ||
+      !self->alpha_tonal || !self->manual_noise_floor ||
       !self->smoothed_magnitude || !self->clean_magnitude) {
     spectral_denoiser_free(self);
     return NULL;
@@ -484,6 +488,7 @@ void spectral_denoiser_free(SpectralProcessorHandle instance) {
   free(self->snr_frame);
   free(self->smoothed_snr);
   free(self->dftt_snr);
+  free(self->snr_delayed);
   free(self->gain_spectrum);
   free(self->gain_spectrum_b);
   free(self->noise_spectrum);
@@ -729,12 +734,6 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
 
   const uint32_t nlm_delay = nlm_filter_get_latency_frames(self->nlm_filter);
 
-  const float* nlm_intermediate_noise = spectral_circular_buffer_retrieve(
-      self->circular_buffer, self->layer_noise, nlm_delay);
-  if (!nlm_intermediate_noise) {
-    nlm_intermediate_noise = self->noise_spectrum;
-  }
-
   // NLM smoothing (runs when NLM is the active or the incoming mode). The
   // smoothed magnitude is captured explicitly so the temporal chain cannot
   // overwrite the shared alignment layer before the NLM chain consumes it.
@@ -748,25 +747,8 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
       (self->active_mode == SPECBLEACH_SMOOTHING_NLM_2D_DFTT) ||
       (self->in_transition &&
        self->pending_mode == SPECBLEACH_SMOOTHING_NLM_2D_DFTT);
-  const float* nlm_smoothed = NULL;
-  if (nlm_needed && nlm_filter_process(self->nlm_filter, self->smoothed_snr)) {
-    // DFTT post-filter: noisy SNR (still in snr_frame) undergoes
-    // analysis/modification/synthesis while the NLM output sets the
-    // suppression threshold. Falls back to the raw NLM output until the
-    // DFTT history is full, or when the active mode is NLM-only.
-    const float* post_nlm = self->smoothed_snr;
-    if (self->dftt_filter) {
-      dftt_filter_push(self->dftt_filter, self->snr_frame, self->smoothed_snr);
-      if (use_dftt && dftt_filter_process(self->dftt_filter, self->dftt_snr)) {
-        post_nlm = self->dftt_snr;
-      }
-    }
-    nlm_filter_reconstruct_magnitude(self->nlm_filter, post_nlm,
-                                     nlm_intermediate_noise, self->snr_frame);
-    spectral_circular_buffer_push(self->circular_buffer, self->layer_smoothed,
-                                  self->snr_frame);
-    nlm_smoothed = self->snr_frame;
-  }
+  const bool nlm_ran =
+      nlm_needed && nlm_filter_process(self->nlm_filter, self->smoothed_snr);
 
   // Retrieve unified aligned frames at the common delay
   const float* delayed_spectrum = spectral_circular_buffer_retrieve(
@@ -779,6 +761,37 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
   }
   if (!delayed_noise) {
     delayed_noise = self->noise_spectrum;
+  }
+
+  const float* nlm_smoothed = NULL;
+  if (nlm_ran) {
+    // DFTT post-filter (paper S4.2): the noisy SNR row aligned with the
+    // NLM-emitted frame — recomputed from the delayed frames so both ring
+    // inputs describe the same tile — is refined while the NLM output sets
+    // the suppression threshold. Falls back to the raw NLM output until the
+    // DFTT history is full, or when the active mode is NLM-only.
+    const float* post_nlm = self->smoothed_snr;
+    if (self->dftt_filter) {
+      // Same feature extraction as the current-frame SNR (line ~730), but on
+      // the delayed frame NLM just emitted, so both DFTT ring inputs describe
+      // the same tile. Reuses the shared spectral_features scratch (the
+      // temporal chain recomputes it on the same delayed frame anyway).
+      float* delayed_reference =
+          get_spectral_feature(self->spectral_features, delayed_spectrum,
+                               self->fft_size, self->spectrum_type);
+      nlm_filter_calculate_snr(self->nlm_filter, delayed_reference,
+                               delayed_noise, self->snr_delayed);
+      dftt_filter_push(self->dftt_filter, self->snr_delayed,
+                       self->smoothed_snr);
+      if (use_dftt && dftt_filter_process(self->dftt_filter, self->dftt_snr)) {
+        post_nlm = self->dftt_snr;
+      }
+    }
+    nlm_filter_reconstruct_magnitude(self->nlm_filter, post_nlm, delayed_noise,
+                                     self->snr_frame);
+    spectral_circular_buffer_push(self->circular_buffer, self->layer_smoothed,
+                                  self->snr_frame);
+    nlm_smoothed = self->snr_frame;
   }
 
   // Align output to delayed frame for post-processing

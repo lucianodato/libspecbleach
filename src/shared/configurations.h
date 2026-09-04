@@ -183,27 +183,26 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define NLM_SEARCH_FUTURE_MS (46.0F)
 #define NLM_SEARCH_FREQ_HZ (170.0F)
 #define NLM_PASTE_FREQ_HZ (80.0F)
-// DFTT-lite post-NLM cleanup (Lukin & Todd AES123 S4.2, lite adaptation:
-// the paper uses 32x16 blocks with 8/4-bin hops at a fixed STFT size; we use
-// half-width freq blocks at DFTT_BLOCK_FREQ_HZ with hop block/2 and a
+// DFTT post-NLM cleanup (Lukin & Todd AES123 S4.2): overlapping tiles of the
+// SNR map undergo a 2D DFT; per-coefficient Wiener gain with the threshold
+// set from the speckle residual between the noisy and the NLM-smoothed tile
+// (white in the tile-DFT/quefrency domain). The NLM tile is the structure
+// prior: comb/quefrency structure passes at ~1 by construction, isolated
+// speckle absent from it is suppressed. Tiles are freq-elongated per the
+// paper (DFTT_BLOCK_FREQ_HZ wide, hop = block / DFTT_FREQ_OVERLAP) with a
 // past-only time span of DFTT_TIME_MS so no extra latency is introduced and
-// the analysis stays invariant across frame sizes. Dual input per the paper:
-// the noisy SNR tile undergoes analysis/modification/synthesis while the
-// NLM-smoothed tile sets the per-coefficient suppression threshold under a
-// white-quefrency assumption).
-#define DFTT_BLOCK_FREQ_HZ (340.0F)
+// the analysis stays invariant across frame sizes.
+#define DFTT_BLOCK_FREQ_HZ (690.0F)
 #define DFTT_MIN_BLOCK_FREQ (8U)
 #define DFTT_MAX_BLOCK_FREQ (32U)
-#define DFTT_TIME_MS (92.0F)
+#define DFTT_TIME_MS (184.0F)
 #define DFTT_MIN_TIME_FRAMES (4U)
 #define DFTT_MAX_TIME_FRAMES (16U)
+#define DFTT_FREQ_OVERLAP (4U)
 #define DFTT_SILENCE_EPS (1e-9F)
-#define DFTT_KILL_K                                                            \
-  1.0F // Kill threshold as a multiple of the tile's diffuse floor
-       // energy: quefrency bins below it are treated as diffuse speckle
-#define DFTT_VETO_GATE                                                         \
-  2.0F // NLM bins at/above this are confident speech: the veto skips them
-       // and keeps NLM's exact values (map floor sits near 1.0)
+#define DFTT_KILL_K 32.0F
+// Wiener threshold as a multiple of the tile's white speckle power
+// (sigma2); runtime-tunable via dftt_strength (reduction-depth coupling)
 // Vectorized-distance patch ceiling (matches the frame_rate_norm.h fallback
 // clamp 4..16) and pointer-cache halo (half of the ceiling each side).
 #define NLM_MAX_PATCH_FRAMES 16U
