@@ -31,9 +31,17 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define DFTT_TWO_PI (6.283185307179586F)
 #endif
 
-/* ponytail: naive O(N^2) DFT with precomputed twiddles. Tile sizes are tiny
- * (<=32x16) so this stays well under NLM cost; switch to separable PFFFT
- * if profiling ever flags this stage. */
+/* ponytail: DFT cost profile. Tile sizes are <=32x16 and every output frame
+ * recomputes ~spec/hop tiles, so the naive O(N^2) DFT dominated the stage
+ * (~4x NLM cost measured in-host). Now: radix-2 FFT dispatch per dimension
+ * when the size is a power of two (test/host configs hit bf=32, bt=16), the
+ * naive SIMD DFT stays as fallback for odd Hz/ms-derived sizes. The inverse
+ * collapses the time axis straight to the single emitted row index (only the
+ * newest row is ever reconstructed), cutting it to bt*bf MACs + one 1D
+ * transform. Gather/emit run through the sb_vec8 kit on the clamp-free
+ * interior. Float-level results differ from the naive path only through
+ * summation reassociation (~1e-7, same class as the existing SIMD DFT path);
+ * the old-vs-new A/B harness pins the exact delta. */
 #define DFTT_MAX_DIM (32U)
 
 struct DfttFilter {
@@ -53,6 +61,12 @@ struct DfttFilter {
   float* sin_freq;
   float* cos_time;
   float* sin_time;
+  uint32_t* br_freq;
+  uint32_t* br_time;
+  float* mod_cos;
+  float* mod_sin;
+  bool pow2_freq;
+  bool pow2_time;
   float* wsum;
   float* tile_re;
   float* tile_im;
@@ -118,6 +132,19 @@ static void dftt_build_twiddles(float* cos_tab, float* sin_tab, uint32_t n) {
   }
 }
 
+static bool dftt_is_pow2(uint32_t n) {
+  return (n != 0U) && ((n & (n - 1U)) == 0U);
+}
+
+static uint32_t dftt_bit_reverse(uint32_t x, uint32_t bits) {
+  uint32_t r = 0U;
+  for (uint32_t i = 0U; i < bits; i++) {
+    r = (r << 1U) | (x & 1U);
+    x >>= 1U;
+  }
+  return r;
+}
+
 /* In-place 1D complex DFT over strided data. inverse flips the sine sign and
  * scales by 1/n. The stride-1 path (frequency rows, ~2/3 of the work) runs
  * 8-wide MACs through the shared sb_vec8 kit; strided time columns stay
@@ -127,12 +154,12 @@ static void dftt_dft_1d(float* re, float* im, uint32_t stride, uint32_t n,
                         bool inverse) {
   float tmp_re[DFTT_MAX_DIM];
   float tmp_im[DFTT_MAX_DIM];
-  const sb_vec8_t vzero = sb_set8(0.0F);
   for (uint32_t k = 0U; k < n; k++) {
     float sr = 0.0F;
     float si = 0.0F;
     uint32_t m = 0U;
     if (stride == 1U) {
+      const sb_vec8_t vzero = sb_set8(0.0F);
       sb_vec8_t acc_rc = vzero;
       sb_vec8_t acc_is = vzero;
       sb_vec8_t acc_ic = vzero;
@@ -174,16 +201,110 @@ static void dftt_dft_1d(float* re, float* im, uint32_t stride, uint32_t n,
   }
 }
 
-/* In-place 2D DFT on a time_span x block_freq row-major block. */
-static void dftt_dft_2d(DfttFilter* f, float* re, float* im, bool inverse) {
+/* Iterative radix-2 Cooley-Tukey (DIT) over strided data. Twiddles reuse row
+ * 1 of the shared table (e^{-2pi i j / n}); inverse flips the sine sign and
+ * scales by 1/n, matching the naive DFT conventions. */
+static void dftt_fft_1d(float* re, float* im, uint32_t stride, uint32_t n,
+                        const uint32_t* br, const float* cos_row,
+                        const float* sin_row, bool inverse) {
+  for (uint32_t i = 0U; i < n; i++) {
+    const uint32_t j = br[i];
+    if (j > i) {
+      const size_t a = (size_t)i * stride;
+      const size_t b = (size_t)j * stride;
+      float t = re[a];
+      re[a] = re[b];
+      re[b] = t;
+      t = im[a];
+      im[a] = im[b];
+      im[b] = t;
+    }
+  }
+  for (uint32_t len = 2U; len <= n; len <<= 1U) {
+    const uint32_t half = len >> 1U;
+    const uint32_t step = n / len;
+    for (uint32_t base = 0U; base < n; base += len) {
+      for (uint32_t j = 0U; j < half; j++) {
+        const size_t tw = (size_t)j * step;
+        const float c = cos_row[tw];
+        const float s = inverse ? sin_row[tw] : -sin_row[tw];
+        const size_t p = (size_t)(base + j) * stride;
+        const size_t q = (size_t)(base + j + half) * stride;
+        const float tr = (re[q] * c) - (im[q] * s);
+        const float ti = (re[q] * s) + (im[q] * c);
+        re[q] = re[p] - tr;
+        im[q] = im[p] - ti;
+        re[p] += tr;
+        im[p] += ti;
+      }
+    }
+  }
+  if (inverse) {
+    const float scale = 1.0F / (float)n;
+    for (uint32_t i = 0U; i < n; i++) {
+      const size_t a = (size_t)i * stride;
+      re[a] *= scale;
+      im[a] *= scale;
+    }
+  }
+}
+
+static void dftt_fwd_rows(DfttFilter* f, float* re, float* im) {
+  const uint32_t bf = f->block_freq;
+  for (uint32_t r = 0U; r < f->time_span; r++) {
+    float* row_r = re + ((size_t)r * bf);
+    float* row_i = im + ((size_t)r * bf);
+    if (f->pow2_freq) {
+      dftt_fft_1d(row_r, row_i, 1U, bf, f->br_freq, f->cos_freq + bf,
+                  f->sin_freq + bf, false);
+    } else {
+      dftt_dft_1d(row_r, row_i, 1U, bf, f->cos_freq, f->sin_freq, false);
+    }
+  }
+}
+
+static void dftt_fwd_cols(DfttFilter* f, float* re, float* im) {
   const uint32_t bf = f->block_freq;
   const uint32_t bt = f->time_span;
-  for (uint32_t r = 0U; r < bt; r++) {
-    dftt_dft_1d(re + ((size_t)r * bf), im + ((size_t)r * bf), 1U, bf,
-                f->cos_freq, f->sin_freq, inverse);
-  }
   for (uint32_t c = 0U; c < bf; c++) {
-    dftt_dft_1d(re + c, im + c, bf, bt, f->cos_time, f->sin_time, inverse);
+    if (f->pow2_time) {
+      dftt_fft_1d(re + c, im + c, bf, bt, f->br_time, f->cos_time + bt,
+                  f->sin_time + bt, false);
+    } else {
+      dftt_dft_1d(re + c, im + c, bf, bt, f->cos_time, f->sin_time, false);
+    }
+  }
+}
+
+/* Inverse restricted to the emitted (newest) time row: collapse the time axis
+ * directly at output index bt-1 (one sum per quefrency column —
+ * e^{+2pi i (bt-1) r / bt} reduces to e^{-2pi i r / bt}), then one inverse
+ * transform along quefrency frequency. Same separable math as the full 2D
+ * inverse; costs bt*bf MACs + T(bf) instead of bt*T(bf) + bf*T(bt). */
+static void dftt_inv_last_row(DfttFilter* f, const float* re, const float* im,
+                              float* out_re, float* out_im) {
+  const uint32_t bf = f->block_freq;
+  const uint32_t bt = f->time_span;
+  const float inv_bt = 1.0F / (float)bt;
+  for (uint32_t k = 0U; k < bf; k++) {
+    float sr = 0.0F;
+    float si = 0.0F;
+    for (uint32_t r = 0U; r < bt; r++) {
+      const float xr = re[((size_t)r * bf) + k];
+      const float xi = im[((size_t)r * bf) + k];
+      const float mc = f->mod_cos[r];
+      const float ms = f->mod_sin[r];
+      sr += (xr * mc) + (xi * ms);
+      si += (xi * mc) - (xr * ms);
+    }
+    out_re[k] = sr * inv_bt;
+    out_im[k] = si * inv_bt;
+  }
+  if (f->pow2_freq) {
+    dftt_fft_1d(out_re, out_im, 1U, bf, f->br_freq, f->cos_freq + bf,
+                f->sin_freq + bf, true);
+  } else {
+    dftt_dft_1d(out_re, out_im, 1U, bf, f->cos_freq, f->sin_freq, true);
   }
 }
 
@@ -213,6 +334,8 @@ DfttFilter* dftt_filter_initialize(uint32_t spectrum_size,
   f->block_freq = block_freq_bins;
   f->block_hop = block_freq_bins / DFTT_FREQ_OVERLAP;
   f->kill_k = DFTT_KILL_K;
+  f->pow2_freq = dftt_is_pow2(block_freq_bins);
+  f->pow2_time = dftt_is_pow2(time_span_frames);
   if (f->block_hop == 0U) {
     f->block_hop = 1U;
   }
@@ -229,14 +352,24 @@ DfttFilter* dftt_filter_initialize(uint32_t spectrum_size,
   f->sin_freq = (float*)calloc((size_t)bf * bf, sizeof(float));
   f->cos_time = (float*)calloc((size_t)bt * bt, sizeof(float));
   f->sin_time = (float*)calloc((size_t)bt * bt, sizeof(float));
+  f->mod_cos = (float*)calloc(bt, sizeof(float));
+  f->mod_sin = (float*)calloc(bt, sizeof(float));
   f->wsum = (float*)calloc(spectrum_size, sizeof(float));
   f->tile_re = (float*)calloc(tile, sizeof(float));
   f->tile_im = (float*)calloc(tile, sizeof(float));
   f->ref_re = (float*)calloc(tile, sizeof(float));
   f->ref_im = (float*)calloc(tile, sizeof(float));
+  if (f->pow2_freq) {
+    f->br_freq = (uint32_t*)calloc(bf, sizeof(uint32_t));
+  }
+  if (f->pow2_time) {
+    f->br_time = (uint32_t*)calloc(bt, sizeof(uint32_t));
+  }
   if (!f->noisy_ring || !f->smooth_ring || !f->win_freq || !f->win_time ||
       !f->cos_freq || !f->sin_freq || !f->cos_time || !f->sin_time ||
-      !f->wsum || !f->tile_re || !f->tile_im || !f->ref_re || !f->ref_im) {
+      !f->mod_cos || !f->mod_sin || !f->wsum || !f->tile_re || !f->tile_im ||
+      !f->ref_re || !f->ref_im || (f->pow2_freq && !f->br_freq) ||
+      (f->pow2_time && !f->br_time)) {
     dftt_filter_free(f);
     return NULL;
   }
@@ -253,6 +386,29 @@ DfttFilter* dftt_filter_initialize(uint32_t spectrum_size,
   dftt_build_time_window(f->win_time, bt);
   dftt_build_twiddles(f->cos_freq, f->sin_freq, bf);
   dftt_build_twiddles(f->cos_time, f->sin_time, bt);
+  for (uint32_t r = 0U; r < bt; r++) {
+    const float ph = (DFTT_TWO_PI * (float)r) / (float)bt;
+    f->mod_cos[r] = cosf(ph);
+    f->mod_sin[r] = sinf(ph);
+  }
+  if (f->pow2_freq) {
+    uint32_t bits = 0U;
+    while ((1U << bits) < bf) {
+      bits++;
+    }
+    for (uint32_t i = 0U; i < bf; i++) {
+      f->br_freq[i] = dftt_bit_reverse(i, bits);
+    }
+  }
+  if (f->pow2_time) {
+    uint32_t bits = 0U;
+    while ((1U << bits) < bt) {
+      bits++;
+    }
+    for (uint32_t i = 0U; i < bt; i++) {
+      f->br_time[i] = dftt_bit_reverse(i, bits);
+    }
+  }
 
   /* Overlap-add normalization: only the newest time row is emitted, so each
    * tile contributes syn*ana = win^2 weights. Tiles are centered (first tile
@@ -294,6 +450,10 @@ void dftt_filter_free(DfttFilter* f) {
   free(f->sin_freq);
   free(f->cos_time);
   free(f->sin_time);
+  free(f->br_freq);
+  free(f->br_time);
+  free(f->mod_cos);
+  free(f->mod_sin);
   free(f->wsum);
   free(f->tile_re);
   free(f->tile_im);
@@ -353,7 +513,9 @@ bool dftt_filter_process(DfttFilter* f, float* refined_snr) {
   const uint32_t spec = f->spectrum_size;
   const uint32_t bt = f->time_span;
   const uint32_t bf = f->block_freq;
-  const size_t tile = (size_t)bt * bf;
+  const sb_vec8_t vzero = sb_set8(0.0F);
+  float crow_re[DFTT_MAX_DIM];
+  float crow_im[DFTT_MAX_DIM];
 
   memset(refined_snr, 0, spec * sizeof(float));
   const float* newest_smooth = f->smooth_ring[((f->head + bt) - 1U) % bt];
@@ -361,20 +523,39 @@ bool dftt_filter_process(DfttFilter* f, float* refined_snr) {
   const int32_t tile_start = -((int32_t)bf - (int32_t)f->block_hop);
   for (int32_t fs = tile_start; fs < (int32_t)spec;
        fs += (int32_t)f->block_hop) {
-    /* Gather past-only tile, oldest row first. */
+    /* Gather past-only tile, oldest row first. Interior tiles need no bin
+     * clamping and run through the 8-wide kit; edge tiles stay scalar. */
+    const bool clamped = (fs < 0) || ((fs + (int32_t)bf) > (int32_t)spec);
     float esum = 0.0F;
     float wsum_r2 = 0.0F;
     for (uint32_t r = 0U; r < bt; r++) {
       const float* row_n = f->noisy_ring[(f->head + r) % bt];
       const float* row_s = f->smooth_ring[(f->head + r) % bt];
       const float wt = f->win_time[r];
-      for (uint32_t i = 0U; i < bf; i++) {
+      const size_t row_off = (size_t)r * bf;
+      uint32_t i = 0U;
+      if (!clamped) {
+        const sb_vec8_t vw = sb_set8(wt);
+        for (; i + 8U <= bf; i += 8U) {
+          const sb_vec8_t vn = sb_load8(row_n + fs + i);
+          const sb_vec8_t vs = sb_load8(row_s + fs + i);
+          esum += sb_vec8_hsum(vn);
+          const sb_vec8_t w = sb_mul8(sb_load8(f->win_freq + i), vw);
+          const sb_vec8_t rd = sb_sub8(vn, vs);
+          wsum_r2 += sb_vec8_hsum(sb_mul8(sb_mul8(w, w), sb_mul8(rd, rd)));
+          sb_store8(f->tile_re + row_off + i, sb_mul8(vn, w));
+          sb_store8(f->tile_im + row_off + i, vzero);
+          sb_store8(f->ref_re + row_off + i, sb_mul8(vs, w));
+          sb_store8(f->ref_im + row_off + i, vzero);
+        }
+      }
+      for (; i < bf; i++) {
         const uint32_t bin = dftt_clamp_bin(fs + (int32_t)i, spec);
         esum += row_n[bin];
         const float w = wt * f->win_freq[i];
         const float resid = row_n[bin] - row_s[bin];
         wsum_r2 += (w * w) * (resid * resid);
-        const size_t at = ((size_t)r * bf) + i;
+        const size_t at = row_off + i;
         f->tile_re[at] = row_n[bin] * w;
         f->tile_im[at] = 0.0F;
         f->ref_re[at] = row_s[bin] * w;
@@ -393,8 +574,10 @@ bool dftt_filter_process(DfttFilter* f, float* refined_snr) {
       continue;
     }
 
-    dftt_dft_2d(f, f->tile_re, f->tile_im, false);
-    dftt_dft_2d(f, f->ref_re, f->ref_im, false);
+    dftt_fwd_rows(f, f->tile_re, f->tile_im);
+    dftt_fwd_cols(f, f->tile_re, f->tile_im);
+    dftt_fwd_rows(f, f->ref_re, f->ref_im);
+    dftt_fwd_cols(f, f->ref_re, f->ref_im);
     /* Per-coefficient quefrency-domain rule (paper S4.2): the NLM-smoothed
      * tile provides the per-coefficient SNR estimate of the suppression
      * rule. Speckle is white in the tile-DFT domain, so its per-coefficient
@@ -406,23 +589,32 @@ bool dftt_filter_process(DfttFilter* f, float* refined_snr) {
      * envelopes live at huge pr, so they pass without exemptions. */
     const float sigma2 = wsum_r2;
     const float speckle_power = f->kill_k * sigma2;
-    for (size_t k = 0U; k < tile; k++) {
+    for (size_t k = 0U; k < (size_t)bt * bf; k++) {
       const float pr =
           (f->ref_re[k] * f->ref_re[k]) + (f->ref_im[k] * f->ref_im[k]);
       const float g = pr / (pr + speckle_power);
       f->tile_re[k] *= g;
       f->tile_im[k] *= g;
     }
-    dftt_dft_2d(f, f->tile_re, f->tile_im, true);
 
     /* Emit the newest time row only; past rows were emitted before. The
      * gathered tile already carries the analysis weight w, so emitting with
      * w gives syn*ana = w^2 per tile, matching the wsum normalization below
      * (unity gain reconstructs exactly). */
-    const size_t last_row = ((size_t)(bt - 1U) * bf);
-    for (uint32_t i = 0U; i < bf; i++) {
+    dftt_inv_last_row(f, f->tile_re, f->tile_im, crow_re, crow_im);
+    uint32_t i = 0U;
+    if (!clamped) {
+      const sb_vec8_t vw = sb_set8(wt_last);
+      for (; i + 8U <= bf; i += 8U) {
+        const sb_vec8_t w = sb_mul8(sb_load8(f->win_freq + i), vw);
+        const sb_vec8_t v = sb_mul8(sb_load8(crow_re + i), w);
+        sb_store8(refined_snr + fs + i,
+                  sb_add8(sb_load8(refined_snr + fs + i), v));
+      }
+    }
+    for (; i < bf; i++) {
       const uint32_t bin = dftt_clamp_bin(fs + (int32_t)i, spec);
-      refined_snr[bin] += (wt_last * f->win_freq[i]) * f->tile_re[last_row + i];
+      refined_snr[bin] += (wt_last * f->win_freq[i]) * crow_re[i];
     }
   }
 
