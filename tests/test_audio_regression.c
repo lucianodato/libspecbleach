@@ -491,7 +491,8 @@ int main(void) {
 
 /* Frame-size invariance (#152): the same transient material processed at
  * 23ms and 93ms must not diverge in time fidelity beyond hop granularity.
- * NLM geometry is fixed in ms (patch 92ms / symmetric 128ms search), so
+ * NLM geometry is fixed in ms (patch 92ms / past-heavy 184ms past / 46ms
+ * future search, Lukin [-16..+4]), so
  * both runs apply the same real-time smear; this test fails if geometry is
  * counted in raw frames. Each run is aligned by its own reported latency
  * before comparing. Pre-echo (future smear) and tail (past smear) around

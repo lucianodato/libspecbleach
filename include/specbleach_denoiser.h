@@ -71,6 +71,7 @@ typedef enum SpecbleachNoiseEstimationMethod {
 typedef enum SpecbleachSmoothingMode {
   SPECBLEACH_SMOOTHING_TEMPORAL = 0, /**< 1D temporal/spatial gain smoothing */
   SPECBLEACH_SMOOTHING_NLM_2D = 1,   /**< 2D Non-Local Means patch smoothing */
+  SPECBLEACH_SMOOTHING_NLM_2D_DFTT = 2, /**< NLM + DFTT quefrency refinement */
 } SpecbleachSmoothingMode;
 
 /**

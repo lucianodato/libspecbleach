@@ -208,6 +208,43 @@ SB_SIMD_INLINE float sb_vec8_ssd(sb_vec8_t a, sb_vec8_t b) {
 }
 
 /**
+ * Horizontally sums all 8 lanes of an 8-wide vector.
+ */
+SB_SIMD_INLINE float sb_vec8_hsum(sb_vec8_t v) {
+#ifdef __AVX__
+  __m128 low = _mm256_castps256_ps128(v);
+  __m128 high = _mm256_extractf128_ps(v, 1);
+  __m128 sum128 = _mm_add_ps(low, high);
+  __m128 shuf = _mm_shuffle_ps(sum128, sum128, _MM_SHUFFLE(2, 3, 0, 1));
+  __m128 sums = _mm_add_ps(sum128, shuf);
+  shuf = _mm_movehl_ps(shuf, sums);
+  sums = _mm_add_ss(sums, shuf);
+  float f;
+  _mm_store_ss(&f, sums);
+  return f;
+#elif defined(__SSE__)
+  __m128 sum = _mm_add_ps(v.v1, v.v2);
+  __m128 shuf = _mm_shuffle_ps(sum, sum, _MM_SHUFFLE(2, 3, 0, 1));
+  __m128 sums = _mm_add_ps(sum, shuf);
+  shuf = _mm_movehl_ps(shuf, sums);
+  sums = _mm_add_ss(sums, shuf);
+  float f;
+  _mm_store_ss(&f, sums);
+  return f;
+#elif defined(__ARM_NEON)
+  float32x4_t sum = vaddq_f32(v.v1, v.v2);
+  return vgetq_lane_f32(sum, 0) + vgetq_lane_f32(sum, 1) +
+         vgetq_lane_f32(sum, 2) + vgetq_lane_f32(sum, 3);
+#else
+  float s = 0.0f;
+  for (int i = 0; i < 8; i++) {
+    s += v.v[i];
+  }
+  return s;
+#endif
+}
+
+/**
  * Accumulates Sum of Squared Differences into an accumulator vector.
  * Useful for loops like register blocking.
  */

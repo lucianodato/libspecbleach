@@ -168,21 +168,42 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 // Time geometry is fixed in ms and recomputed per frame size (see
 // frame_rate_norm.h) so temporal smear stays constant across 23-93ms frames.
 // Patch size follows Lukin & Todd AES123 (~46ms frame, 75% overlap,
-// hop ~11.5ms: PATCH 8 == 92ms). Search context is symmetric (128ms past /
-// 128ms future): this is a restoration-oriented choice, not the paper's
-// live-constrained mapping — future lookahead is the highest-value context
-// for musical-noise suppression, and latency is not a product constraint
-// (noise-repellent targets restoration/mix/mastering, not live input).
+// hop ~11.5ms: PATCH 8 == 92ms). Search context is past-heavy per the paper's
+// [-16..+4] mapping (184ms past / 46ms future at the Lukin hop): this cuts
+// NLM lookahead latency vs a symmetric context and favors post- over
+// pre-echoes of noise. Paste follows the paper's 4x4 block (~80Hz freq
+// stride, time resolution is one frame per NLM pass).
 #define NLM_PATCH_SIZE 8U
 #define NLM_PASTE_BLOCK_SIZE 8U
 #define NLM_SEARCH_RANGE_FREQ 8U
 #define NLM_SEARCH_RANGE_TIME_PAST 16U
 #define NLM_SEARCH_RANGE_TIME_FUTURE 4U
 #define NLM_PATCH_TIME_MS (92.0F)
-#define NLM_SEARCH_PAST_MS (128.0F)
-#define NLM_SEARCH_FUTURE_MS (128.0F)
+#define NLM_SEARCH_PAST_MS (184.0F)
+#define NLM_SEARCH_FUTURE_MS (46.0F)
 #define NLM_SEARCH_FREQ_HZ (170.0F)
-#define NLM_PASTE_FREQ_HZ (170.0F)
+#define NLM_PASTE_FREQ_HZ (80.0F)
+// DFTT-lite post-NLM cleanup (Lukin & Todd AES123 S4.2, lite adaptation:
+// the paper uses 32x16 blocks with 8/4-bin hops at a fixed STFT size; we use
+// half-width freq blocks at DFTT_BLOCK_FREQ_HZ with hop block/2 and a
+// past-only time span of DFTT_TIME_MS so no extra latency is introduced and
+// the analysis stays invariant across frame sizes. Dual input per the paper:
+// the noisy SNR tile undergoes analysis/modification/synthesis while the
+// NLM-smoothed tile sets the per-coefficient suppression threshold under a
+// white-quefrency assumption).
+#define DFTT_BLOCK_FREQ_HZ (340.0F)
+#define DFTT_MIN_BLOCK_FREQ (8U)
+#define DFTT_MAX_BLOCK_FREQ (32U)
+#define DFTT_TIME_MS (92.0F)
+#define DFTT_MIN_TIME_FRAMES (4U)
+#define DFTT_MAX_TIME_FRAMES (16U)
+#define DFTT_SILENCE_EPS (1e-9F)
+#define DFTT_KILL_K                                                            \
+  1.0F // Kill threshold as a multiple of the tile's diffuse floor
+       // energy: quefrency bins below it are treated as diffuse speckle
+#define DFTT_VETO_GATE                                                         \
+  2.0F // NLM bins at/above this are confident speech: the veto skips them
+       // and keeps NLM's exact values (map floor sits near 1.0)
 // Vectorized-distance patch ceiling (matches the frame_rate_norm.h fallback
 // clamp 4..16) and pointer-cache halo (half of the ceiling each side).
 #define NLM_MAX_PATCH_FRAMES 16U
