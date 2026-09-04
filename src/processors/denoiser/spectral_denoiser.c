@@ -591,6 +591,11 @@ bool load_reduction_parameters(SpectralProcessorHandle instance,
                               : 0.0F);
   }
 
+  // Update DFTT refinement strength (reduction-depth coupling, live)
+  if (self->dftt_filter) {
+    dftt_filter_set_strength(self->dftt_filter, parameters.dftt_strength);
+  }
+
   return true;
 }
 

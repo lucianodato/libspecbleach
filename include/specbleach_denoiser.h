@@ -154,6 +154,15 @@ typedef struct SpecbleachDenoiserParameters {
   SpecbleachSmoothingMode smoothing_mode;
 
   /**
+   * DFTT refinement strength multiplier (NLM 2D + DFTT mode only). Scales
+   * the quefrency-domain suppression threshold; values <= 0.0 fall back to
+   * the library default (1.0). Useful coupling: deeper reduction produces
+   * more musical noise, so a larger multiplier keeps the refinement on par.
+   * Values outside the range are clamped.
+   */
+  float dftt_strength;
+
+  /**
    * Normalized whitening factor for residue noise floor (0.0 to 1.0). Values
    * outside the range are clamped.
    */

@@ -203,6 +203,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define DFTT_KILL_K 32.0F
 // Wiener threshold as a multiple of the tile's white speckle power
 // (sigma2); runtime-tunable via dftt_strength (reduction-depth coupling)
+#define DFTT_STRENGTH_MAX (4.0F)
 // Vectorized-distance patch ceiling (matches the frame_rate_norm.h fallback
 // clamp 4..16) and pointer-cache halo (half of the ceiling each side).
 #define NLM_MAX_PATCH_FRAMES 16U

@@ -58,6 +58,14 @@ DfttFilter* dftt_filter_initialize(uint32_t spectrum_size,
 void dftt_filter_free(DfttFilter* filter);
 
 /**
+ * Set the runtime strength multiplier applied to the DFTT kill threshold
+ * (DFTT_KILL_K * strength). Clamped to DFTT_STRENGTH_MAX.
+ * @param filter Pointer to filter (NULL-safe)
+ * @param strength Threshold multiplier, > 0
+ */
+void dftt_filter_set_strength(DfttFilter* filter, float strength);
+
+/**
  * Push one frame pair into the history rings.
  * @param filter Pointer to filter
  * @param noisy_snr Current noisy SNR frame (size: spectrum_size)

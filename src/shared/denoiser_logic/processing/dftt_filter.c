@@ -41,6 +41,7 @@ struct DfttFilter {
   uint32_t time_span;
   uint32_t block_freq;
   uint32_t block_hop;
+  float kill_k;
   float** noisy_ring;
   float** smooth_ring;
   uint32_t head;
@@ -211,6 +212,7 @@ DfttFilter* dftt_filter_initialize(uint32_t spectrum_size,
   f->time_span = time_span_frames;
   f->block_freq = block_freq_bins;
   f->block_hop = block_freq_bins / DFTT_FREQ_OVERLAP;
+  f->kill_k = DFTT_KILL_K;
   if (f->block_hop == 0U) {
     f->block_hop = 1U;
   }
@@ -298,6 +300,13 @@ void dftt_filter_free(DfttFilter* f) {
   free(f->ref_re);
   free(f->ref_im);
   free(f);
+}
+
+void dftt_filter_set_strength(DfttFilter* f, float strength) {
+  if (!f || strength <= 0.0F) {
+    return;
+  }
+  f->kill_k = DFTT_KILL_K * fminf(strength, DFTT_STRENGTH_MAX);
 }
 
 void dftt_filter_push(DfttFilter* f, const float* noisy_snr,
@@ -396,7 +405,7 @@ bool dftt_filter_process(DfttFilter* f, float* refined_snr) {
      * where it shows none (pr ~ 0) die. The tile's flat level and slow
      * envelopes live at huge pr, so they pass without exemptions. */
     const float sigma2 = wsum_r2;
-    const float speckle_power = DFTT_KILL_K * sigma2;
+    const float speckle_power = f->kill_k * sigma2;
     for (size_t k = 0U; k < tile; k++) {
       const float pr =
           (f->ref_re[k] * f->ref_re[k]) + (f->ref_im[k] * f->ref_im[k]);
