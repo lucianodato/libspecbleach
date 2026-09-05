@@ -102,22 +102,38 @@ bool spectral_smoothing_run(SpectralSmoother* self,
     return true;
   }
 
-  // Map smoothing factor (0.0 to 1.0) to release time (10ms to 350ms)
-  // and attack time (1ms to 40ms)
+  // Sub-band gate dynamics: fixed fast attack (gates must open instantly when
+  // the already-stabilized target says so), and slider-driven release on a
+  // p^2-shaped curve from 10ms to 500ms.
   float p = fmaxf(0.0f, fminf(1.0f, smoothing));
   float tau_release_sec =
       GAIN_SMOOTHING_MIN_RELEASE_SEC +
-      (p * (GAIN_SMOOTHING_MAX_RELEASE_SEC - GAIN_SMOOTHING_MIN_RELEASE_SEC));
-  float tau_attack_sec =
-      GAIN_SMOOTHING_MIN_ATTACK_SEC +
-      (p * (GAIN_SMOOTHING_MAX_ATTACK_SEC - GAIN_SMOOTHING_MIN_ATTACK_SEC));
+      (powf(p, GAIN_SMOOTHING_CURVE_EXPONENT) *
+       (GAIN_SMOOTHING_MAX_RELEASE_SEC - GAIN_SMOOTHING_MIN_RELEASE_SEC));
+  float tau_attack_sec = GAIN_SMOOTHING_FIXED_ATTACK_SEC;
 
   const uint32_t hop = (self->hop_samples > 0U)
                            ? self->hop_samples
                            : (self->fft_size / self->overlap_factor);
   float dt = (float)hop / (float)self->sample_rate;
-  float alpha_release = expf(-dt / tau_release_sec);
+  float alpha_release_base = expf(-dt / tau_release_sec);
   float alpha_attack_base = expf(-dt / tau_attack_sec);
+
+  // Per-bin adaptive release: bins whose band shows energy collapse close
+  // fast (echo prevention); bins with full release weight keep the long
+  // slider release (anti-chirp). Quantized scale -> small alpha LUT per
+  // frame instead of a per-bin expf.
+  const float* scale = parameters.release_scale;
+  float alpha_lut[RELEASE_SHAPING_SCALE_STEPS];
+  if (scale) {
+    const float tau_fast_sec = RELEASE_SHAPING_FAST_SEC;
+    for (uint32_t s = 0U; s < RELEASE_SHAPING_SCALE_STEPS; s++) {
+      const float w = (float)s / (float)(RELEASE_SHAPING_SCALE_STEPS - 1U);
+      const float tau_eff =
+          tau_fast_sec + (w * (tau_release_sec - tau_fast_sec));
+      alpha_lut[s] = expf(-dt / tau_eff);
+    }
+  }
 
   const float* t_mask = parameters.transient_mask;
 
@@ -135,7 +151,17 @@ bool spectral_smoothing_run(SpectralSmoother* self,
 
       gains[k] = (alpha_attack * prev) + ((1.0F - alpha_attack) * target);
     } else {
-      // Release phase: Gain decays smoothly to prevent musical noise chatter
+      // Release phase: Gain decays smoothly to prevent musical noise chatter,
+      // with per-band collapse evidence shortening the decay when a signal
+      // has ended (avoids spectral ghosts on the residual noise)
+      float alpha_release = alpha_release_base;
+      if (scale) {
+        float w = scale[k];
+        w = fmaxf(0.0F, fminf(1.0F, w));
+        const uint32_t idx =
+            (uint32_t)(w * (float)(RELEASE_SHAPING_SCALE_STEPS - 1U) + 0.5F);
+        alpha_release = alpha_lut[idx];
+      }
       gains[k] = (alpha_release * prev) + ((1.0F - alpha_release) * target);
     }
     self->smoothed_spectrum_previous[k] = gains[k];

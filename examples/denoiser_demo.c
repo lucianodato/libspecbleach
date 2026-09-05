@@ -264,8 +264,8 @@ int main(int argc, char** argv) {
           print_usage(argv[0]);
           return 1;
         }
-        parameters.smoothing_mode =
-            (mode == 1) ? SPECBLEACH_SMOOTHING_NLM_2D : SPECBLEACH_SMOOTHING_TEMPORAL;
+        parameters.smoothing_mode = (mode == 1) ? SPECBLEACH_SMOOTHING_NLM_2D
+                                                : SPECBLEACH_SMOOTHING_TEMPORAL;
         break;
       }
       case 'd':
@@ -300,7 +300,8 @@ int main(int argc, char** argv) {
         }
         break;
       case 'n':
-        if (!parse_uint32_arg(optarg, &learn_frames, 1, UINT32_MAX)) {
+        // 0 is valid: adaptive mode can run without a pre-learned profile
+        if (!parse_uint32_arg(optarg, &learn_frames, 0, UINT32_MAX)) {
           print_usage(argv[0]);
           return 1;
         }

@@ -288,8 +288,12 @@ static inline SB_UNUSED void nlm_process_block_range(void* raw_ctx,
     float target_patch[NLM_MAX_PATCH_FRAMES * NLM_MAX_PATCH_FRAMES];
     float* tgt_rows[NLM_MAX_PATCH_FRAMES];
 
-    bool safe_block = (block_center >= half_patch_size) &&
-                      (block_center + half_patch_size <= spectrum_size);
+    // Patch rows span [center - half, center + (patch - half) - 1]; for odd
+    // patch sizes the upper reach is half + 1 bins, so the bound must use
+    // (patch_size - half_patch_size), not half_patch_size.
+    bool safe_block =
+        (block_center >= half_patch_size) &&
+        (block_center + (patch_size - half_patch_size) <= spectrum_size);
 
     if (patch_size == 8) {
       for (int r = 0; r < 8; r++) {
@@ -336,8 +340,9 @@ static inline SB_UNUSED void nlm_process_block_range(void* raw_ctx,
 
         float distance = 0.0F;
 
-        bool safe_bounds = safe_block && (cand_center >= half_patch_size) &&
-                           (cand_center + half_patch_size <= spectrum_size);
+        bool safe_bounds =
+            safe_block && (cand_center >= half_patch_size) &&
+            (cand_center + (patch_size - half_patch_size) <= spectrum_size);
 
         if (patch_size == 8 && safe_bounds && cand_rows[0]) {
           uint32_t cand_f_start = cand_center - 4;

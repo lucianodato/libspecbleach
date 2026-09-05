@@ -98,11 +98,11 @@ void test_spectral_smoother(void) {
     TEST_ASSERT(spectral_smoothing_run(ss, params, new_gains),
                 "Second run should succeed");
 
-    // Verify release time smoothing calculation (0.8 factor with the
-    // explicitly configured true hop, not the FFT-derived fallback)
-    float test_tau = GAIN_SMOOTHING_MIN_RELEASE_SEC +
-                     (0.8f * (GAIN_SMOOTHING_MAX_RELEASE_SEC -
-                              GAIN_SMOOTHING_MIN_RELEASE_SEC));
+    // Verify release time smoothing calculation (0.8 factor on the p^2-shaped
+    float test_tau =
+        GAIN_SMOOTHING_MIN_RELEASE_SEC +
+        (powf(0.8f, GAIN_SMOOTHING_CURVE_EXPONENT) *
+         (GAIN_SMOOTHING_MAX_RELEASE_SEC - GAIN_SMOOTHING_MIN_RELEASE_SEC));
     float test_dt = ((float)fft_size / (float)(custom_overlap * 2U)) / 44100.0f;
     float test_alpha = expf(-test_dt / test_tau);
     for (uint32_t i = 0; i < num_bins; i++) {
@@ -116,7 +116,8 @@ void test_spectral_smoother(void) {
       TEST_FLOAT_CLOSE(new_gains[fft_size - i], new_gains[i], 0.001f);
     }
 
-    // Test attack smoothing (increasing gain)
+    // Test attack smoothing (increasing gain): attack is fixed fast and does
+    // not scale with the smoothing factor
     float attack_gains[1024];
     for (uint32_t i = 0; i < num_bins; i++) {
       attack_gains[i] = 1.0f;
@@ -124,10 +125,7 @@ void test_spectral_smoother(void) {
     float prev_val = new_gains[0];
     TEST_ASSERT(spectral_smoothing_run(ss, params, attack_gains),
                 "Attack smoothing run should succeed");
-    float test_tau_attack = GAIN_SMOOTHING_MIN_ATTACK_SEC +
-                            (0.8f * (GAIN_SMOOTHING_MAX_ATTACK_SEC -
-                                     GAIN_SMOOTHING_MIN_ATTACK_SEC));
-    float test_alpha_attack = expf(-test_dt / test_tau_attack);
+    float test_alpha_attack = expf(-test_dt / GAIN_SMOOTHING_FIXED_ATTACK_SEC);
     float expected_attack =
         (test_alpha_attack * prev_val) + ((1.0f - test_alpha_attack) * 1.0f);
     TEST_FLOAT_CLOSE(attack_gains[0], expected_attack, 0.001f);

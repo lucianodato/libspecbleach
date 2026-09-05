@@ -305,10 +305,47 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 /* 7. Gain smoothing envelopes and runtime smoothing-mode crossfade.      */
 /* --------------------------------------------------------------------- */
 
+// Sub-band gate dynamics: attack is fixed fast (no user attack control), the
+// release is slider-driven over a p^2-shaped curve (long release times reduce
+// musical noise, but may soften transients or tails after a signal decays).
 #define GAIN_SMOOTHING_MIN_RELEASE_SEC (0.010F)
-#define GAIN_SMOOTHING_MAX_RELEASE_SEC (0.350F)
-#define GAIN_SMOOTHING_MIN_ATTACK_SEC (0.001F)
-#define GAIN_SMOOTHING_MAX_ATTACK_SEC (0.040F)
+#define GAIN_SMOOTHING_MAX_RELEASE_SEC (0.500F)
+#define GAIN_SMOOTHING_FIXED_ATTACK_SEC (0.001F)
+#define GAIN_SMOOTHING_CURVE_EXPONENT (2.0F)
+
+// Base soft knee of the Wiener subtraction curve (in units of noise power):
+// lifts the numerator by knee*noise so bins slightly below the oversubtraction
+// threshold keep a small positive gain instead of an abrupt cut (finite slope
+// at the floor crossing; more forgiving for low-level signal details at the
+// cost of a slightly shallower reduction). 0.0 = plain subtraction curve.
+#define GAIN_WIENER_KNEE (0.15F)
+
+// Signal-dependent knee widening: bins decaying from recent signal presence
+// (stabilized energy above the current raw hop, normalized by the noise power)
+// get up to GAIN_KNEE_DECAY_BOOST extra knee width once the decay evidence
+// reaches GAIN_KNEE_DECAY_RANGE, forgiving weak component tails instead of
+// cutting them. Steady or rising bins keep the base knee.
+#define GAIN_KNEE_DECAY_BOOST (0.35F)
+#define GAIN_KNEE_DECAY_RANGE (1.0F)
+
+// Pre-subtraction magnitude stabilization ("time smoothing of the signal
+// spectrum"): fixed light one-pole with tau = N hops, frame-rate invariant by
+// construction (alpha = exp(-1/N) at any hop size).
+#define SPECTRAL_STABILIZATION_HOPS 3U
+
+/* Adaptive release shaping (per-band closing edge):
+ * When a band's recent-energy envelope far exceeds its current energy, the
+ * signal in that band has ended (evidence robust to per-bin noise
+ * fluctuations) and its bins close fast to avoid ghosting the signal's
+ * spectral shape onto the residual noise. Otherwise the full slider release
+ * applies, keeping the anti-chirp protection in noise-only stretches. */
+#define RELEASE_SHAPING_FAST_SEC (0.020F) // Fast close tau (echo prevention)
+#define RELEASE_SHAPING_ENVELOPE_RELEASE_SEC (0.075F) // Recent-energy memory
+// Envelope attack in hops (alpha = exp(-hops), frame-rate invariant)
+#define RELEASE_SHAPING_ATTACK_HOPS (1.0F)
+#define RELEASE_SHAPING_GAP_ONSET_DB (6.0F) // Gap where fast close begins
+#define RELEASE_SHAPING_GAP_RANGE_DB (9.0F) // Gap span to full fast close
+#define RELEASE_SHAPING_SCALE_STEPS 16U     // Alpha LUT quantization
 
 // Duration of the internal crossfade when switching smoothing modes at runtime
 #define SMOOTHING_TRANSITION_SECONDS (0.030F)

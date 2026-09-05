@@ -29,10 +29,10 @@ typedef enum GainCalculationType {
   GATES = 1,
   GENERALIZED_SPECTRALSUBTRACTION = 2,
 } GainCalculationType;
-
 void calculate_gains(uint32_t real_spectrum_size, uint32_t fft_size,
                      const float* spectrum, const float* noise_spectrum,
                      float* gain_spectrum, const float* alpha,
-                     const float* beta, GainCalculationType type);
+                     const float* beta, GainCalculationType type,
+                     const float* knee);
 
 #endif // GAIN_CALCULATOR_H

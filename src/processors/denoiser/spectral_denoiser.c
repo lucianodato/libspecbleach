@@ -26,11 +26,11 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "shared/denoiser_logic/core/noise_profile.h"
 #include "shared/denoiser_logic/estimators/adaptive_noise_estimator.h"
 #include "shared/denoiser_logic/estimators/noise_estimator.h"
+#include "shared/denoiser_logic/processing/dftt_filter.h"
 #include "shared/denoiser_logic/processing/gain_calculator.h"
 #include "shared/denoiser_logic/processing/masking_veto.h"
 #include "shared/denoiser_logic/processing/nlm_filter.h"
-
-#include "shared/denoiser_logic/processing/dftt_filter.h"
+#include "shared/denoiser_logic/processing/release_shaper.h"
 #include "shared/denoiser_logic/processing/suppression_engine.h"
 #include "shared/denoiser_logic/processing/tonal_reducer.h"
 #include "shared/frame_rate_norm.h"
@@ -41,6 +41,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "shared/utils/spectral_smoother.h"
 #include "shared/utils/spectral_utils.h"
 #include "shared/utils/transient_detector.h"
+#include <float.h>
 #include <math.h>
 #include <stdatomic.h>
 #include <stdlib.h>
@@ -102,6 +103,8 @@ typedef struct SbSpectralDenoiser {
   NlmFilter* nlm_filter;
   DfttFilter* dftt_filter;
   SpectralSmoother* spectrum_smoothing;
+  ReleaseShaper* release_shaper;
+  float* release_scale;
   SpectralFeatures* spectral_features;
   MaskingVeto* masking_veto;
   SuppressionEngine* suppression_engine;
@@ -113,7 +116,9 @@ typedef struct SbSpectralDenoiser {
   float* onset_weights;
   float* transient_mask;
   float* clean_magnitude;
-  float* smoothed_magnitude; // Temporal pre-subtraction smoothed magnitude
+  float* smoothed_magnitude;      // Temporal pre-subtraction smoothed magnitude
+  bool smoothed_magnitude_seeded; // First frame seeds raw (no ramp-in)
+  float* knee_spectrum;           // Per-bin soft knee width (signal-dependent)
   bool is_transient_detected;
   float transient_intensity;
   float hop_sec; // True hop in seconds (frame/overlap/sr); 0 = legacy derive
@@ -243,6 +248,7 @@ static SpectralProcessorHandle spectral_denoiser_initialize_inner(
       (float*)calloc(self->real_spectrum_size, sizeof(float));
   self->clean_magnitude =
       (float*)calloc(self->real_spectrum_size, sizeof(float));
+  self->knee_spectrum = (float*)calloc(self->real_spectrum_size, sizeof(float));
 
   if (!self->snr_frame || !self->smoothed_snr || !self->dftt_snr ||
       !self->snr_delayed || !self->gain_spectrum || !self->gain_spectrum_b ||
@@ -250,7 +256,8 @@ static SpectralProcessorHandle spectral_denoiser_initialize_inner(
       !self->noise_spectrum_buffers[1] || !self->alpha || !self->beta ||
       !self->alpha_b || !self->beta_b || !self->alpha_base ||
       !self->alpha_tonal || !self->manual_noise_floor ||
-      !self->smoothed_magnitude || !self->clean_magnitude) {
+      !self->smoothed_magnitude || !self->clean_magnitude ||
+      !self->knee_spectrum) {
     spectral_denoiser_free(self);
     return NULL;
   }
@@ -352,6 +359,20 @@ static SpectralProcessorHandle spectral_denoiser_initialize_inner(
   }
   spectral_smoothing_set_hop_samples(self->spectrum_smoothing, self->hop);
 
+  // Adaptive release shaping (per-band closing-edge evidence)
+  self->release_shaper =
+      release_shaper_initialize(self->sample_rate, self->fft_size);
+  if (!self->release_shaper) {
+    spectral_denoiser_free(self);
+    return NULL;
+  }
+  release_shaper_set_hop_sec(self->release_shaper, self->hop_sec);
+  self->release_scale = (float*)calloc(self->real_spectrum_size, sizeof(float));
+  if (!self->release_scale) {
+    spectral_denoiser_free(self);
+    return NULL;
+  }
+
   // Initialize spectral features
   self->spectral_features =
       spectral_features_initialize(self->real_spectrum_size);
@@ -450,6 +471,10 @@ void spectral_denoiser_free(SpectralProcessorHandle instance) {
   if (self->spectrum_smoothing) {
     spectral_smoothing_free(self->spectrum_smoothing);
   }
+  if (self->release_shaper) {
+    release_shaper_free(self->release_shaper);
+  }
+  free(self->release_scale);
   if (self->spectral_features) {
     spectral_features_free(self->spectral_features);
   }
@@ -483,6 +508,9 @@ void spectral_denoiser_free(SpectralProcessorHandle instance) {
   }
   if (self->smoothed_magnitude) {
     free(self->smoothed_magnitude);
+  }
+  if (self->knee_spectrum) {
+    free(self->knee_spectrum);
   }
 
   free(self->snr_frame);
@@ -945,7 +973,7 @@ static bool run_nlm_chain(SbSpectralDenoiser* self, float* fft_spectrum,
   // 3.5. Gain Calculation
   calculate_gains(self->real_spectrum_size, self->fft_size, smoothed_magnitude,
                   delayed_noise, gain_out, alpha, beta,
-                  self->gain_calculation_type);
+                  self->gain_calculation_type, NULL);
 
   if (self->is_transient_detected) {
     for (uint32_t k = 0U; k < self->real_spectrum_size; ++k) {
@@ -974,24 +1002,33 @@ static void run_temporal_chain(SbSpectralDenoiser* self,
       get_spectral_feature(self->spectral_features, delayed_fft, self->fft_size,
                            self->spectrum_type);
 
-  // Pre-Subtraction temporal and spatial smoothing on input magnitude to
-  // suppress musical noise. Transient bins are spared bin-by-bin during gain
-  // calculation and time smoothing.
+  // Pre-Subtraction temporal stabilization on input magnitude ("time
+  // smoothing of the signal spectrum"): fixed light one-pole with tau =
+  // SPECTRAL_STABILIZATION_HOPS hops — frame-rate invariant by construction.
+  // Gated on smoothing: slider 0 must stay a pristine raw-magnitude bypass.
+  // Transient bins are spared bin-by-bin during gain calculation and time
+  // smoothing.
   const float* effective_magnitude;
 
   if (self->parameters.smoothing_factor > 0.0F) {
-    float smooth_alpha =
-        fminf(0.95F, self->parameters.smoothing_factor * 0.90F);
+    if (!self->smoothed_magnitude_seeded) {
+      memcpy(self->smoothed_magnitude, delayed_magnitude,
+             self->real_spectrum_size * sizeof(float));
+      self->smoothed_magnitude_seeded = true;
+    } else {
+      const float stabilization_alpha =
+          expf(-1.0F / (float)SPECTRAL_STABILIZATION_HOPS);
 
-    for (uint32_t k = 0U; k < self->real_spectrum_size; ++k) {
-      float raw = delayed_magnitude[k];
-      float prev = self->smoothed_magnitude[k];
-      // Bin-by-bin adaptive smoothing: open immediately on transient bins
-      // while keeping full smoothing elsewhere
-      float t_w = self->transient_mask[k];
-      float adapt_alpha = (1.0F - t_w) * smooth_alpha;
-      self->smoothed_magnitude[k] =
-          (adapt_alpha * prev) + ((1.0F - adapt_alpha) * raw);
+      for (uint32_t k = 0U; k < self->real_spectrum_size; ++k) {
+        float raw = delayed_magnitude[k];
+        float prev = self->smoothed_magnitude[k];
+        // Bin-by-bin adaptive smoothing: open immediately on transient bins
+        // while keeping full smoothing elsewhere
+        float t_w = self->transient_mask[k];
+        float adapt_alpha = (1.0F - t_w) * stabilization_alpha;
+        self->smoothed_magnitude[k] =
+            (adapt_alpha * prev) + ((1.0F - adapt_alpha) * raw);
+      }
     }
 
     int spatial_passes = (int)(self->parameters.smoothing_factor * 2.0F);
@@ -1001,10 +1038,18 @@ static void run_temporal_chain(SbSpectralDenoiser* self,
     }
 
     effective_magnitude = self->smoothed_magnitude;
+
+    // Adaptive release shaping: bands whose recent-energy envelope collapses
+    // close fast (no spectral ghosts on the residual); the rest keep the full
+    // slider release (anti-chirp protection in noise-only stretches)
+    release_shaper_compute(self->release_shaper, effective_magnitude,
+                           self->release_scale);
   } else {
+    // Pristine bypass: raw magnitude everywhere, no smoothing state
     memcpy(self->smoothed_magnitude, delayed_magnitude,
            self->real_spectrum_size * sizeof(float));
-    effective_magnitude = delayed_magnitude;
+    self->smoothed_magnitude_seeded = false;
+    effective_magnitude = self->smoothed_magnitude;
   }
 
   // Publish the smoothed magnitude so a pending switch to NLM starts from an
@@ -1045,10 +1090,30 @@ static void run_temporal_chain(SbSpectralDenoiser* self,
     }
   }
 
+  // Signal-dependent knee width: bins decaying from recent signal presence
+  // (stabilized energy above the current raw hop) get a wider knee so weak
+  // component tails are forgiven instead of cut; steady or rising bins keep
+  // the base knee. Pristine bypass keeps a zero knee everywhere.
+  if (self->parameters.smoothing_factor > 0.0F) {
+    for (uint32_t k = 0U; k < self->real_spectrum_size; ++k) {
+      float decay_evidence = 0.0F;
+      if (delayed_noise[k] > FLT_MIN) {
+        decay_evidence =
+            (effective_magnitude[k] - delayed_magnitude[k]) / delayed_noise[k];
+      }
+      self->knee_spectrum[k] =
+          GAIN_WIENER_KNEE +
+          (GAIN_KNEE_DECAY_BOOST *
+           fminf(1.0F, fmaxf(0.0F, decay_evidence) / GAIN_KNEE_DECAY_RANGE));
+    }
+  } else {
+    memset(self->knee_spectrum, 0, self->real_spectrum_size * sizeof(float));
+  }
+
   // Gain Calculation
   calculate_gains(self->real_spectrum_size, self->fft_size, effective_magnitude,
                   delayed_noise, gain_out, alpha, beta,
-                  self->gain_calculation_type);
+                  self->gain_calculation_type, self->knee_spectrum);
 
   // Transient Protection: ensure transient bins have gain near 1.0
   if (self->is_transient_detected) {
@@ -1067,6 +1132,9 @@ static void run_temporal_chain(SbSpectralDenoiser* self,
       (TimeSmoothingParameters){
           .smoothing = self->parameters.smoothing_factor,
           .transient_mask = self->transient_mask,
+          .release_scale = (self->parameters.smoothing_factor > 0.0F)
+                               ? self->release_scale
+                               : NULL, // Unused while bypassed
       };
   spectral_smoothing_run(self->spectrum_smoothing,
                          spectral_smoothing_parameters, gain_out);
@@ -1122,6 +1190,8 @@ void spectral_denoiser_reset_noise_profile(SpectralProcessorHandle instance) {
   }
   self->was_learning = false;
   self->last_adaptive_state = 0;
+  self->smoothed_magnitude_seeded = false;
+  release_shaper_reset(self->release_shaper);
 }
 
 uint32_t spectral_denoiser_get_latency_frames(
