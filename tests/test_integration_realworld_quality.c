@@ -31,8 +31,13 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 //   added; > 1 = flickery residual introduced).
 // - Decay deficit: post-transient decay shortfall in dB (higher = temporal
 //   smearing / echoing after the clean signal drops).
-// CI runs the moderate preset by default; set SPECBLEACH_REALWORLD_FULL=1 to
-// sweep light/moderate/heavy locally.
+//
+// Engine configuration mirrors the noise-repellent plugin defaults exactly
+// (buildEngineParams at default slider values): that is the config the
+// plugin actually runs and the one subjective listening tests judge. The
+// sweep axis is the smoothing slider; reduction stays at the plugin default.
+// CI runs the plugin-default smoothing (0.0) only; set
+// SPECBLEACH_REALWORLD_FULL=1 to sweep all smoothing values locally.
 
 #include "../src/shared/stft/fft_transform.h"
 #include "specbleach_denoiser.h"
@@ -58,7 +63,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define NOISE_LEAD_IN_SEC 1.5F
 #define BODY_SEC 8.0F
 
-#define FRAME_MS 40.0F // 1920 samples per block at 48 kHz
+#define FRAME_MS                                                               \
+  46.0F // plugin default STFT frame size (index 2 of 23/32/46/64/93)
 
 // Analysis STFT for metric computation (independent of the engine's STFT)
 #define ANALYSIS_FFT 1024U
@@ -87,18 +93,21 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define ENV_HOP 256U
 #define ECHO_DROP_DB 15.0F // clean decay that qualifies as a phrase/word end
 
-// Presets (mirroring the historical autoresearch evaluator)
-typedef struct Preset {
-  const char* name;
-  float reduction_db;
-  float whitening; // 0..1
-  float smoothing; // 0..1
-} Preset;
+// Plugin-default engine configuration (mirrors noise-repellent's
+// buildEngineParams at default slider values). Reduction stays at the plugin
+// default; the sweep axis is the smoothing slider.
+#define PLUGIN_REDUCTION_DB 12.0F // Master Reduction default (linked tonal)
+#define DFTT_STRENGTH_DOUBLING_DB 12.0F // kDfttStrengthDoublingReductionDb
 
-static const Preset PRESETS[3] = {
-    {"light", 12.0F, 0.10F, 0.05F},
-    {"moderate", 18.0F, 0.20F, 0.15F},
-    {"heavy", 24.0F, 0.30F, 0.25F},
+typedef struct SmoothingConfig {
+  const char* name;
+  float smoothing; // Smoothing slider 0..1 (plugin default 0.0)
+} SmoothingConfig;
+
+static const SmoothingConfig SMOOTHING_CONFIGS[3] = {
+    {"smoothing-off", 0.0F},
+    {"smoothing-mid", 0.15F},
+    {"smoothing-high", 0.50F},
 };
 
 typedef struct Case {
@@ -117,11 +126,13 @@ static const Case CASES[4] = {
 
 #define NUM_MODES 3U
 
-// Per-mode regression gates for the CI (moderate) preset, aggregated over
-// cases: [Temporal, NLM 2D, NLM 2D + DFTT]
-static const float ATT_GATES_DB[3] = {3.0F, 3.0F, 3.0F};   // minimum rejection
-static const float SD_GATES_DB[3] = {25.0F, 25.0F, 25.0F}; // maximum damage
-static const float MNI_GATES[3] = {2.5F, 2.5F, 2.5F};      // max musical noise
+// Per-mode regression gates for the CI (plugin-default smoothing) config,
+// aggregated over cases: [Temporal, NLM 2D, NLM 2D + DFTT]
+// Calibrated on plugin defaults at 12 dB reduction (att ~11, sd ~7.7,
+// mni ~1.31, decay ~6.0) with headroom for cross-platform SIMD variance.
+static const float ATT_GATES_DB[3] = {8.0F, 8.0F, 8.0F};   // minimum rejection
+static const float SD_GATES_DB[3] = {10.0F, 10.0F, 10.0F}; // maximum damage
+static const float MNI_GATES[3] = {1.7F, 1.7F, 1.7F};      // max musical noise
 static const float DECAY_GATES_DB[3] = {8.0F, 8.0F, 8.0F}; // max smearing
 
 typedef struct Metrics {
@@ -275,6 +286,44 @@ static void analyzer_run(Analyzer* self, const float* signal, int offset,
   }
 }
 
+// Exact mirror of the plugin's buildEngineParams at default slider values:
+// suppression 1.0, aggressiveness 0.5, masking 100% (cubic -> 1.0), whitening
+// 0, transient protection off, tonal reduction linked to the master reduction,
+// DFTT strength coupled to reduction depth (Refinement mode).
+// Diagnostic override: SPECBLEACH_REALWORLD_REDUCTION_DB (default 12).
+static float plugin_reduction_db(void) {
+  const char* env = getenv("SPECBLEACH_REALWORLD_REDUCTION_DB");
+  if (env != NULL && env[0] != '\0') {
+    float v = (float)atof(env);
+    if (v > 0.0F && v <= 40.0F) {
+      return v;
+    }
+  }
+  return PLUGIN_REDUCTION_DB;
+}
+
+static SpecbleachDenoiserParameters make_parameters(float smoothing,
+                                                    uint32_t mode) {
+  const float reduction_db = plugin_reduction_db();
+  const float reduction_gain = powf(10.0F, -reduction_db / 20.0F);
+  return (SpecbleachDenoiserParameters){
+      .residual_listen = false,
+      .aggressiveness = 0.5F,
+      .learn_noise = SPECBLEACH_LEARN_ALL,
+      .reduction_gain = reduction_gain,
+      .smoothing_factor = smoothing,
+      .smoothing_mode = (SpecbleachSmoothingMode)mode,
+      .whitening_factor = 0.0F,
+      .adaptive_noise = false,
+      .noise_estimation_method = SPECBLEACH_NOISE_ESTIMATION_MARTIN,
+      .masking_depth = 1.0F,
+      .suppression_strength = 1.0F,
+      .tonal_reduction_gain = reduction_gain,
+      .dftt_strength =
+          mode == 2U ? 1.0F + reduction_db / DFTT_STRENGTH_DOUBLING_DB : 1.0F,
+      .hpss_enable = false};
+}
+
 // Measures the true stream delay empirically with an impulse on a scratch
 // instance (the reported latency is host-compensation info).
 static uint32_t measure_stream_delay(uint32_t sample_rate,
@@ -282,16 +331,7 @@ static uint32_t measure_stream_delay(uint32_t sample_rate,
   specbleach_denoiser* probe =
       specbleach_denoiser_initialize(sample_rate, FRAME_MS);
   TEST_ASSERT(probe != NULL, "probe init");
-  SpecbleachDenoiserParameters p =
-      (SpecbleachDenoiserParameters){.aggressiveness = 1.0F,
-                                     .learn_noise = SPECBLEACH_LEARN_ALL,
-                                     .reduction_gain = 0.1F,
-                                     .smoothing_factor = 0.15F,
-                                     .smoothing_mode = smoothing_mode,
-                                     .masking_depth = 0.5F,
-                                     .whitening_factor = 0.2F,
-                                     .tonal_reduction_gain = 1.0F,
-                                     .hpss_enable = true};
+  SpecbleachDenoiserParameters p = make_parameters(0.0F, smoothing_mode);
   TEST_ASSERT(specbleach_denoiser_load_parameters(probe, &p, sizeof(p)),
               "probe params");
   const uint32_t half = sample_rate / 2U;
@@ -325,29 +365,14 @@ static uint32_t measure_stream_delay(uint32_t sample_rate,
   return peak - impulse_pos;
 }
 
-static SpecbleachDenoiserParameters make_parameters(const Preset* preset,
-                                                    uint32_t mode) {
-  return (SpecbleachDenoiserParameters){
-      .residual_listen = false,
-      .aggressiveness = 1.0F,
-      .learn_noise = SPECBLEACH_LEARN_ALL,
-      .reduction_gain = powf(10.0F, -preset->reduction_db / 20.0F),
-      .smoothing_factor = preset->smoothing,
-      .smoothing_mode = (SpecbleachSmoothingMode)mode,
-      .whitening_factor = preset->whitening,
-      .masking_depth = 0.5F,
-      .tonal_reduction_gain = 1.0F,
-      .hpss_enable = true};
-}
-
 // Denoises the mix: learns on the lead-in, finalizes, then reduces.
 // Returns the allocated output; the caller frees it.
 static float* process_mix(const Signals* signals, uint32_t sample_rate,
-                          const Preset* preset, uint32_t mode) {
+                          const SmoothingConfig* config, uint32_t mode) {
   specbleach_denoiser* handle =
       specbleach_denoiser_initialize(sample_rate, FRAME_MS);
   TEST_ASSERT(handle != NULL, "denoiser initialize");
-  SpecbleachDenoiserParameters p = make_parameters(preset, mode);
+  SpecbleachDenoiserParameters p = make_parameters(config->smoothing, mode);
   TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &p, sizeof(p)),
               "parameters load");
 
@@ -402,6 +427,11 @@ static float* process_mix(const Signals* signals, uint32_t sample_rate,
                 "reduce process");
     pos += chunk;
   }
+
+  // Capture modes 3-4 (STD_DEV/CV_MASK) finalize on the learn -> off
+  // transition; the tonal reducer is load-bearing on CV_MASK availability.
+  TEST_ASSERT(specbleach_denoiser_noise_profile_available_for_mode(handle, 4),
+              "CV_MASK profile was not finalized");
 
   specbleach_denoiser_free(handle);
   return out;
@@ -673,13 +703,13 @@ static void dump_wav(const char* dir, const char* name, const float* data,
   sf_close(file);
 }
 
-// Full pipeline for one (case, preset, mode): mix -> learn -> reduce ->
-// analyze -> probes -> metrics.
+// Full pipeline for one (case, smoothing config, mode): mix -> learn ->
+// reduce -> analyze -> probes -> metrics.
 static Metrics run_case_mode(const Signals* signals, uint32_t sample_rate,
-                             const Preset* preset, uint32_t mode) {
+                             const SmoothingConfig* config, uint32_t mode) {
   // Determinism + immutability probes
-  float* out = process_mix(signals, sample_rate, preset, mode);
-  float* out2 = process_mix(signals, sample_rate, preset, mode);
+  float* out = process_mix(signals, sample_rate, config, mode);
+  float* out2 = process_mix(signals, sample_rate, config, mode);
   const uint32_t total = signals->total_samples;
   uint32_t diffs = 0U;
   double max_diff = 0.0;
@@ -709,7 +739,7 @@ static Metrics run_case_mode(const Signals* signals, uint32_t sample_rate,
   const char* dump_dir = getenv("SPECBLEACH_REALWORLD_DUMP_DIR");
   if (dump_dir != NULL && dump_dir[0] != '\0') {
     char name[128];
-    snprintf(name, sizeof(name), "%s_%s_mode%u_out", preset->name,
+    snprintf(name, sizeof(name), "%s_%s_mode%u_out", config->name,
              signals->case_name, mode);
     dump_wav(dump_dir, name, out, total, sample_rate);
     snprintf(name, sizeof(name), "%s_mix", signals->case_name);
@@ -855,7 +885,7 @@ static Metrics run_case_mode(const Signals* signals, uint32_t sample_rate,
   return m;
 }
 
-int main() {
+int main(void) {
   setvbuf(stdout, NULL, _IONBF, 0); // live output; asserts abort otherwise
 
   int full_mode = 0;
@@ -863,8 +893,8 @@ int main() {
   if (full_env != NULL && full_env[0] != '\0' && full_env[0] != '0') {
     full_mode = 1;
   }
-  const uint32_t num_presets = full_mode ? 3U : 1U; // CI default: moderate
-  const uint32_t preset_offset = full_mode ? 0U : 1U;
+  // CI default: plugin-default smoothing (0.0); FULL sweeps all values
+  const uint32_t num_configs = full_mode ? 3U : 1U;
 
   uint32_t sample_rate = 0U;
   uint32_t body_samples = 0U;
@@ -897,14 +927,15 @@ int main() {
   const uint32_t total = lead_samples + body_samples;
 
   printf(
-      "== real-world quality metrics (sample rate %u, %u cases, %s "
-      "preset%s) ==\n",
-      sample_rate, 4U, full_mode ? "all" : "moderate", full_mode ? "s" : "");
+      "== real-world quality metrics (sample rate %u, %u cases, plugin-default "
+      "config at %.0f dB reduction, %s smoothing config%s) ==\n",
+      sample_rate, 4U, (double)plugin_reduction_db(),
+      full_mode ? "all" : "default", full_mode ? "s" : "");
 
-  for (uint32_t pi = 0U; pi < num_presets; pi++) {
-    const Preset* preset = &PRESETS[preset_offset + pi];
+  for (uint32_t ci = 0U; ci < num_configs; ci++) {
+    const SmoothingConfig* config = &SMOOTHING_CONFIGS[ci];
     for (uint32_t mode = 0U; mode < NUM_MODES; mode++) {
-      printf("== %s | %s ==\n", preset->name, mode_name(mode));
+      printf("== %s | %s ==\n", config->name, mode_name(mode));
       Metrics agg = {0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F};
       for (uint32_t c = 0U; c < 4U; c++) {
         Signals* sig = &signals[c];
@@ -923,7 +954,7 @@ int main() {
                  CASES[c].snr_db, sig);
         memcpy(sig->snapshot, sig->mix, total * sizeof(float));
 
-        Metrics m = run_case_mode(sig, sample_rate, preset, mode);
+        Metrics m = run_case_mode(sig, sample_rate, config, mode);
         agg.att_db += m.att_db;
         agg.att_all_db += m.att_all_db;
         agg.sd_db += m.sd_db;
