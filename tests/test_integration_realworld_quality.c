@@ -31,6 +31,13 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 //   added; > 1 = flickery residual introduced).
 // - Decay deficit: post-transient decay shortfall in dB (higher = temporal
 //   smearing / echoing after the clean signal drops).
+// - SI-SDR: scale-invariant signal-to-distortion ratio of the output against
+//   the clean reference (dB, higher = cleaner overall).
+// - SAR: signal-to-artifacts ratio from a BSS_eval-style projection of the
+//   output onto the span of {clean, noise} (dB, higher = less musical
+//   noise/processing texture). SI-SDR/SAR are report-only (no CI gates yet).
+// - sd/att: damage per dB rejected, from existing numbers (lower = cheaper
+//   cleaning).
 //
 // Engine configuration mirrors the noise-repellent plugin defaults exactly
 // (buildEngineParams at default slider values): that is the config the
@@ -106,8 +113,8 @@ typedef struct SmoothingConfig {
 
 static const SmoothingConfig SMOOTHING_CONFIGS[3] = {
     {"smoothing-off", 0.0F},
-    {"smoothing-mid", 0.15F},
-    {"smoothing-high", 0.50F},
+    {"smoothing-30", 0.30F},
+    {"smoothing-80", 0.80F},
 };
 
 typedef struct Case {
@@ -128,12 +135,12 @@ static const Case CASES[4] = {
 
 // Per-mode regression gates for the CI (plugin-default smoothing) config,
 // aggregated over cases: [Temporal, NLM 2D, NLM 2D + DFTT]
-// Calibrated on plugin defaults at 12 dB reduction (att ~11, sd ~7.7,
-// mni ~1.31, decay ~6.0) with headroom for cross-platform SIMD variance.
+// Calibrated on delay-compensated scores at 12 dB reduction (att ~10.9,
+// sd ~3.0, mni ~1.22, decay ~0.0) with headroom for cross-platform variance.
 static const float ATT_GATES_DB[3] = {8.0F, 8.0F, 8.0F};   // minimum rejection
-static const float SD_GATES_DB[3] = {10.0F, 10.0F, 10.0F}; // maximum damage
-static const float MNI_GATES[3] = {1.7F, 1.7F, 1.7F};      // max musical noise
-static const float DECAY_GATES_DB[3] = {8.0F, 8.0F, 8.0F}; // max smearing
+static const float SD_GATES_DB[3] = {5.0F, 5.0F, 5.0F};    // maximum damage
+static const float MNI_GATES[3] = {1.4F, 1.4F, 1.4F};      // max musical noise
+static const float DECAY_GATES_DB[3] = {2.0F, 2.0F, 2.0F}; // max smearing
 
 typedef struct Metrics {
   float att_db;     // attenuation on learned-noise bins over noise-only frames
@@ -142,6 +149,8 @@ typedef struct Metrics {
   float mni_ratio;  // output shape-CV / unprocessed noise shape-CV
   float mni_out;    // raw output shape-CV (for reference when tuning)
   float decay_db;   // mean post-transient decay deficit
+  float sisdr_db;   // SI-SDR of output vs clean (higher = cleaner)
+  float sar_db;     // signal-to-artifacts ratio vs span{clean,noise}
 } Metrics;
 
 typedef struct Signals {
@@ -324,8 +333,11 @@ static SpecbleachDenoiserParameters make_parameters(float smoothing,
       .hpss_enable = false};
 }
 
-// Measures the true stream delay empirically with an impulse on a scratch
-// instance (the reported latency is host-compensation info).
+// Measures the true stream delay empirically: noise burst on a scratch
+// instance, then cross-correlate output against input (the reported latency
+// is host-compensation info). Peak-picking an impulse response lands on the
+// first OLA lobe (one block); correlation finds the energy centroid the dry
+// path must align to (two blocks here).
 static uint32_t measure_stream_delay(uint32_t sample_rate,
                                      uint32_t smoothing_mode) {
   specbleach_denoiser* probe =
@@ -338,31 +350,45 @@ static uint32_t measure_stream_delay(uint32_t sample_rate,
   float* pin = (float*)calloc((size_t)2U * half, sizeof(float));
   float* pout = (float*)calloc((size_t)2U * half, sizeof(float));
   TEST_ASSERT(pin != NULL && pout != NULL, "probe buffers");
-  const uint32_t impulse_pos = 4000U;
-  pin[impulse_pos] = 1.0F;
+  uint32_t rng = 0x12345678U; // deterministic burst (no rand())
+  for (uint32_t n = 0U; n < 2U * half; n++) {
+    rng ^= rng << 13U;
+    rng ^= rng >> 17U;
+    rng ^= rng << 5U;
+    pin[n] = (float)(int32_t)rng / 2147483648.0F * 0.5F;
+  }
   specbleach_denoiser_process(probe, half, pin, pout);
   p.learn_noise = SPECBLEACH_LEARN_OFF;
   specbleach_denoiser_load_parameters(probe, &p, sizeof(p));
   specbleach_denoiser_process(probe, half, pin + half, pout + half);
-  uint32_t peak = 0U;
-  float peak_v = 0.0F;
-  for (uint32_t n = 0U; n < 2U * half; n++) {
-    if (fabsf(pout[n]) > peak_v) {
-      peak_v = fabsf(pout[n]);
-      peak = n;
+  const uint32_t block =
+      (uint32_t)((float)sample_rate * FRAME_MS / 1000.0F + 0.5F);
+  const uint32_t max_lag = 4U * block;
+  // Skip the learn->off switch transient at `half` when correlating.
+  const uint32_t corr_first = half + 2U * block;
+  double best = 0.0;
+  uint32_t delay = 0U;
+  for (uint32_t lag = 0U; lag <= max_lag; lag++) {
+    double acc = 0.0;
+    for (uint32_t n = corr_first; n < 2U * half; n++) {
+      acc += (double)pout[n] * (double)pin[n - lag];
+    }
+    if (acc > best) {
+      best = acc;
+      delay = lag;
     }
   }
   free(pin);
   free(pout);
   specbleach_denoiser_free(probe);
-  TEST_ASSERT(peak > impulse_pos, "impulse peak after input");
+  TEST_ASSERT(best > 0.0 && delay > 0U && delay < max_lag,
+              "correlation peak strictly inside lag range");
   const char* dbg = getenv("SPECBLEACH_REALWORLD_DEBUG");
   if (dbg != NULL && dbg[0] != '0' && dbg[0] != '\0') {
-    printf("  [probe] impulse delay: %u samples (block=%u)\n",
-           peak - impulse_pos,
-           (uint32_t)((float)sample_rate * FRAME_MS / 1000.0F + 0.5F));
+    printf("  [probe] correlation delay: %u samples (block=%u)\n", delay,
+           block);
   }
-  return peak - impulse_pos;
+  return delay;
 }
 
 // Denoises the mix: learns on the lead-in, finalizes, then reduces.
@@ -705,6 +731,86 @@ static void dump_wav(const char* dir, const char* name, const float* data,
 
 // Full pipeline for one (case, smoothing config, mode): mix -> learn ->
 // reduce -> analyze -> probes -> metrics.
+// SI-SDR (Le Roux et al.): score est[i] against ref[i - delay] over
+// [lo, hi), both zero-meaned. Higher = cleaner overall.
+static float si_sdr_db(const float* est, const float* ref, uint32_t lo,
+                       uint32_t hi, uint32_t delay) {
+  double sum_e = 0.0, sum_r = 0.0;
+  uint32_t n = 0U;
+  for (uint32_t i = lo; i < hi; i++) {
+    sum_e += (double)est[i];
+    sum_r += (double)ref[i - delay];
+    n++;
+  }
+  if (n == 0U) {
+    return -60.0F;
+  }
+  const double mean_e = sum_e / (double)n;
+  const double mean_r = sum_r / (double)n;
+  double cc = 0.0, ec = 0.0, ee = 0.0;
+  for (uint32_t i = lo; i < hi; i++) {
+    const double e = (double)est[i] - mean_e;
+    const double c = (double)ref[i - delay] - mean_r;
+    cc += c * c;
+    ec += e * c;
+    ee += e * e;
+  }
+  if (!(cc > 0.0)) {
+    return -60.0F;
+  }
+  const double denom = cc * ee - ec * ec;
+  if (!(denom > 0.0)) {
+    return 100.0F;
+  }
+  double v = 10.0 * log10(ec * ec / denom);
+  if (v > 100.0) {
+    v = 100.0;
+  } else if (v < -60.0) {
+    v = -60.0;
+  }
+  return (float)v;
+}
+
+// SAR (BSS_eval style): project est[i] onto the span of {clean, noise} at
+// [i - delay]; the residual is processing artifact (musical noise). Higher =
+// less artifact. Valid because mix == clean + noise exactly here.
+static float sar_db(const float* est, const float* clean, const float* noise,
+                    uint32_t lo, uint32_t hi, uint32_t delay) {
+  double cc = 0.0, nn = 0.0, cn = 0.0, ec = 0.0, en = 0.0, ee = 0.0;
+  for (uint32_t i = lo; i < hi; i++) {
+    const double e = (double)est[i];
+    const double c = (double)clean[i - delay];
+    const double v = (double)noise[i - delay];
+    cc += c * c;
+    nn += v * v;
+    cn += c * v;
+    ec += e * c;
+    en += e * v;
+    ee += e * e;
+  }
+  const double det = cc * nn - cn * cn;
+  if (!(det > 1e-12 * cc * nn)) {
+    return -60.0F; // collinear or silent references
+  }
+  const double wc = (ec * nn - en * cn) / det;
+  const double wn = (en * cc - ec * cn) / det;
+  const double allowed = wc * ec + wn * en; // ||projection||^2
+  const double artif = ee - allowed;
+  if (!(artif > 1e-12 * ee)) {
+    return 100.0F; // (near) bit-exact projection, no artifacts
+  }
+  if (!(allowed > 0.0)) {
+    return -60.0F;
+  }
+  double val = 10.0 * log10(allowed / artif);
+  if (val > 100.0) {
+    val = 100.0;
+  } else if (val < -60.0) {
+    val = -60.0;
+  }
+  return (float)val;
+}
+
 static Metrics run_case_mode(const Signals* signals, uint32_t sample_rate,
                              const SmoothingConfig* config, uint32_t mode) {
   // Determinism + immutability probes
@@ -790,7 +896,7 @@ static Metrics run_case_mode(const Signals* signals, uint32_t sample_rate,
   remove_boundary_frames(active, noise_only, num_frames);
   remove_boundary_frames(noise_only, active, num_frames);
 
-  Metrics m = {0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F};
+  Metrics m = {0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F};
 
   // Learned-noise bin selection: per-bin PSD from lead-in mix frames (the
   // same region the engine learned from). Energy-ratio attenuation over all
@@ -876,6 +982,17 @@ static Metrics run_case_mode(const Signals* signals, uint32_t sample_rate,
   m.decay_db = decay_deficit(signals->clean, out, signals->mix, total,
                              signals->lead_samples, stream_delay);
 
+  // SI-SDR / SAR over the delay-compensated body (report-only, no gates).
+  // The 1.5 s lead-in settles all filter fill, so the body window is clean
+  // for every mode; out[i] aligns with clean/noise at [i - stream_delay].
+  {
+    const uint32_t lo = signals->lead_samples + stream_delay;
+    TEST_ASSERT(lo < total, "scored body window exists");
+    m.sisdr_db = si_sdr_db(out, signals->clean, lo, total, stream_delay);
+    m.sar_db =
+        sar_db(out, signals->clean, signals->noise, lo, total, stream_delay);
+  }
+
   analyzer_free(&clean_an);
   analyzer_free(&out_an);
   analyzer_free(&mix_an);
@@ -936,7 +1053,7 @@ int main(void) {
     const SmoothingConfig* config = &SMOOTHING_CONFIGS[ci];
     for (uint32_t mode = 0U; mode < NUM_MODES; mode++) {
       printf("== %s | %s ==\n", config->name, mode_name(mode));
-      Metrics agg = {0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F};
+      Metrics agg = {0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F};
       for (uint32_t c = 0U; c < 4U; c++) {
         Signals* sig = &signals[c];
         sig->case_name = CASES[c].name;
@@ -961,11 +1078,13 @@ int main(void) {
         agg.mni_ratio += m.mni_ratio;
         agg.mni_out += m.mni_out;
         agg.decay_db += m.decay_db;
+        agg.sisdr_db += m.sisdr_db;
+        agg.sar_db += m.sar_db;
         printf(
             "  %s: att %.1f dB (all %.1f), sd %.1f dB, mni %.2f (raw "
-            "%.2f), decay %.1f dB\n",
+            "%.2f), decay %.1f dB, sisdr %.1f dB, sar %.1f dB\n",
             CASES[c].name, m.att_db, m.att_all_db, m.sd_db, m.mni_ratio,
-            m.mni_out, m.decay_db);
+            m.mni_out, m.decay_db, m.sisdr_db, m.sar_db);
         free(sig->clean);
         free(sig->noise);
         free(sig->mix);
@@ -977,10 +1096,15 @@ int main(void) {
       agg.mni_ratio /= 4.0F;
       agg.mni_out /= 4.0F;
       agg.decay_db /= 4.0F;
+      agg.sisdr_db /= 4.0F;
+      agg.sar_db /= 4.0F;
+      const float sd_per_att =
+          (agg.att_db > 0.01F) ? agg.sd_db / agg.att_db : 0.0F;
       printf(
           "  AGGREGATE: att %.1f dB (all %.1f), sd %.1f dB, mni %.2f, decay "
-          "%.1f dB\n",
-          agg.att_db, agg.att_all_db, agg.sd_db, agg.mni_ratio, agg.decay_db);
+          "%.1f dB, sisdr %.1f dB, sar %.1f dB, sd/att %.2f\n",
+          agg.att_db, agg.att_all_db, agg.sd_db, agg.mni_ratio, agg.decay_db,
+          agg.sisdr_db, agg.sar_db, sd_per_att);
 
       if (!full_mode) {
         TEST_ASSERT(agg.att_db > ATT_GATES_DB[mode], "attenuation gate");
