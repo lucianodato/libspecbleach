@@ -147,7 +147,7 @@ example lives in [`examples/simple_embed.c`](examples/simple_embed.c).
 
 ### Low-Latency Mode
 
-For live use (EasyEffects, live hosts), pass `SPECBLEACH_INIT_LOW_LATENCY`
+For live use (live hosts), pass `SPECBLEACH_INIT_LOW_LATENCY`
 at init with a 512-sample frame (`512*1000/sample_rate` ms). The denoiser
 goes causal: the NLM look-ahead is removed and NLM/DFTT smoothing requests
 are clamped to 1D temporal, so total latency equals the STFT frame alone —
