@@ -31,6 +31,8 @@ typedef struct TimeSmoothingParameters {
   float smoothing;
   const float* transient_mask; // Optional per-bin percussive/transient weights
                                // (0.0 to 1.0)
+  const float* release_scale;  // Optional per-bin release weight (0.0 = fast
+                               // close, 1.0 = full slider release); NULL = 1.0
 } TimeSmoothingParameters;
 
 typedef struct SpectralSmoother SpectralSmoother;
