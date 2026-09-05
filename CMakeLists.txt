@@ -321,6 +321,8 @@ if(ENABLE_TESTS)
     if(TARGET PkgConfig::SNDFILE)
         add_specbleach_test(test_audio_file_regression "test_audio_file_regression.c")
         target_link_libraries(test_audio_file_regression PRIVATE PkgConfig::SNDFILE)
+        add_specbleach_test(test_integration_realworld_quality "test_integration_realworld_quality.c")
+        target_link_libraries(test_integration_realworld_quality PRIVATE PkgConfig::SNDFILE)
     endif()
 
     if(SPECBLEACH_BUILD_EXTRAS)
