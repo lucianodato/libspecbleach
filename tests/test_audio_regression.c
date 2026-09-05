@@ -70,7 +70,7 @@ void generate_test_signal(float* buffer, int length, unsigned int seed) {
 void process_audio(const float* input, float* output, int length) {
   float frame_size_ms = 20.0f;
   specbleach_denoiser* handle =
-      specbleach_denoiser_initialize(SAMPLE_RATE, frame_size_ms);
+      specbleach_denoiser_initialize(SAMPLE_RATE, frame_size_ms, 0u);
   TEST_ASSERT(handle != NULL, "Failed to initialize denoiser");
 
   SpecbleachDenoiserParameters parameters = (SpecbleachDenoiserParameters){
@@ -118,7 +118,7 @@ void process_audio(const float* input, float* output, int length) {
 void process_audio_adaptive(const float* input, float* output, int length) {
   float frame_size_ms = 20.0f;
   specbleach_denoiser* handle =
-      specbleach_denoiser_initialize(SAMPLE_RATE, frame_size_ms);
+      specbleach_denoiser_initialize(SAMPLE_RATE, frame_size_ms, 0u);
   TEST_ASSERT(handle != NULL, "Failed to initialize adaptive denoiser");
 
   SpecbleachDenoiserParameters parameters = (SpecbleachDenoiserParameters){
@@ -378,7 +378,7 @@ void test_noise_estimation_methods(void) {
           SPECBLEACH_NOISE_ESTIMATION_MARTIN}; // 2: Martin MS
 
   specbleach_denoiser* handle_martin =
-      specbleach_denoiser_initialize(SAMPLE_RATE, frame_size_ms);
+      specbleach_denoiser_initialize(SAMPLE_RATE, frame_size_ms, 0u);
   TEST_ASSERT(handle_martin != NULL, "Failed to initialize Martin denoiser");
 
   TEST_ASSERT(specbleach_denoiser_load_parameters(handle_martin, &params_martin,
@@ -409,7 +409,7 @@ void test_noise_estimation_methods(void) {
           SPECBLEACH_NOISE_ESTIMATION_SPP_MMSE}; // 0: SPP-MMSE
 
   specbleach_denoiser* handle_spp_mmse =
-      specbleach_denoiser_initialize(SAMPLE_RATE, frame_size_ms);
+      specbleach_denoiser_initialize(SAMPLE_RATE, frame_size_ms, 0u);
   TEST_ASSERT(handle_spp_mmse != NULL,
               "Failed to initialize SPP-MMSE denoiser");
 
@@ -502,7 +502,7 @@ static void process_transient_nlm(const float* input, float* output, int length,
                                   SpecbleachSmoothingMode mode,
                                   uint32_t* latency_out) {
   specbleach_denoiser* handle =
-      specbleach_denoiser_initialize(SAMPLE_RATE, frame_size_ms);
+      specbleach_denoiser_initialize(SAMPLE_RATE, frame_size_ms, 0u);
   TEST_ASSERT(handle != NULL, "Failed to initialize denoiser");
 
   SpecbleachDenoiserParameters parameters =

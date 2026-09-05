@@ -114,8 +114,8 @@ static Signal make_signal(bool with_comb) {
 
 static void run_engine(SpecbleachSmoothingMode mode, const Signal* in,
                        float dftt_strength, float* out) {
-  specbleach_denoiser* handle =
-      specbleach_denoiser_initialize((uint32_t)SAMPLE_RATE, ENGINE_FRAME_MS);
+  specbleach_denoiser* handle = specbleach_denoiser_initialize(
+      (uint32_t)SAMPLE_RATE, ENGINE_FRAME_MS, 0u);
   TEST_ASSERT(handle != NULL, "engine init failed");
 
   SpecbleachDenoiserParameters params = {

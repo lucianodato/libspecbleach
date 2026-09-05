@@ -81,7 +81,7 @@ int main(void) {
 
   // Explicit true-hop init must agree with the derived-hop init
   SpectralProcessorHandle hop_handle = spectral_denoiser_initialize_with_hop(
-      44100U, 2048U, OVERLAP_FACTOR, 2048U / OVERLAP_FACTOR, profile);
+      44100U, 2048U, OVERLAP_FACTOR, 2048U / OVERLAP_FACTOR, profile, false);
   TEST_ASSERT(hop_handle != NULL, "With-hop initialization should succeed");
   TEST_ASSERT(spectral_denoiser_get_latency_frames(hop_handle) ==
                   spectral_denoiser_get_latency_frames(handle),

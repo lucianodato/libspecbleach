@@ -341,7 +341,7 @@ static SpecbleachDenoiserParameters make_parameters(float smoothing,
 static uint32_t measure_stream_delay(uint32_t sample_rate,
                                      uint32_t smoothing_mode) {
   specbleach_denoiser* probe =
-      specbleach_denoiser_initialize(sample_rate, FRAME_MS);
+      specbleach_denoiser_initialize(sample_rate, FRAME_MS, 0u);
   TEST_ASSERT(probe != NULL, "probe init");
   SpecbleachDenoiserParameters p = make_parameters(0.0F, smoothing_mode);
   TEST_ASSERT(specbleach_denoiser_load_parameters(probe, &p, sizeof(p)),
@@ -396,7 +396,7 @@ static uint32_t measure_stream_delay(uint32_t sample_rate,
 static float* process_mix(const Signals* signals, uint32_t sample_rate,
                           const SmoothingConfig* config, uint32_t mode) {
   specbleach_denoiser* handle =
-      specbleach_denoiser_initialize(sample_rate, FRAME_MS);
+      specbleach_denoiser_initialize(sample_rate, FRAME_MS, 0u);
   TEST_ASSERT(handle != NULL, "denoiser initialize");
   SpecbleachDenoiserParameters p = make_parameters(config->smoothing, mode);
   TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &p, sizeof(p)),

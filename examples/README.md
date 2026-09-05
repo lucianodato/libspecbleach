@@ -25,7 +25,7 @@ and the demos call out exactly where the real-time differences are.
 
 // 1. CREATE — one instance per channel; frame_size_ms = STFT window (20-100)
 specbleach_denoiser* denoiser =
-    specbleach_denoiser_initialize(sample_rate, 46.0f);
+    specbleach_denoiser_initialize(sample_rate, 46.0f, 0u);
 
 // 2. CONFIGURE — start from documented-safe defaults, override what you need.
 //    Never "= {0}": zero-initialized reduction_gain means MAXIMUM reduction.
@@ -50,8 +50,12 @@ specbleach_denoiser_free(denoiser);
 ```
 
 For multi-channel, wrap steps in a group instead:
-`specbleach_stereo_initialize(sr, ms, channels)` then load/process
+`specbleach_stereo_initialize(sr, ms, channels, flags)` then load/process
 once for all channels (deinterleaved pointer arrays).
+
+Live use: pass `SPECBLEACH_INIT_LOW_LATENCY` with a 512-sample frame for a
+causal 1D-only path at ~10.7 ms (48 kHz); see "Low-Latency Mode" in the
+main README.
 
 ## Building the examples
 

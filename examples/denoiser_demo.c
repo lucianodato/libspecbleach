@@ -30,7 +30,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  * ===========================================================================
  * INTEGRATION LIFECYCLE (each step maps to a labeled section in main()):
  * ===========================================================================
- *   1. CREATE     specbleach_denoiser_initialize(sample_rate, frame_size_ms)
+ *   1. CREATE     specbleach_denoiser_initialize(sample_rate, frame_size_ms,
+ *                                             flags)
  *   2. CONFIGURE  specbleach_denoiser_load_parameters(handle, &params,
  *                                                     sizeof(params))
  *   3. LEARN      process blocks while params.learn_noise is
@@ -382,7 +383,7 @@ int main(int argc, char** argv) {
     // pass it back to every specbleach_denoiser_* call from now on.
     // Initialize library instance
     lib_instance = specbleach_denoiser_initialize((uint32_t)sfinfo->samplerate,
-                                                  frame_size_ms);
+                                                  frame_size_ms, 0u);
     if (!lib_instance) {
       fprintf(stderr, "Error: Failed to initialize library instance\n");
       break;

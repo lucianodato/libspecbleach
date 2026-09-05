@@ -33,6 +33,7 @@ typedef struct specbleach_denoiser { // NOLINT(readability-identifier-naming)
   float frame_size_ms;
   uint32_t frame_size_samples;
   uint32_t fft_size;
+  uint32_t init_flags;
   StftProcessor* stft_processor;
   NoiseProfile* noise_profile;
   SpectralProcessorHandle spectral_denoiser;
@@ -156,12 +157,14 @@ static bool rebuild_engines(SbDenoiserInstance* self) {
   }
   self->spectral_denoiser = spectral_denoiser_initialize_with_hop(
       self->sample_rate, fft_size, OVERLAP_FACTOR, self->hop,
-      self->noise_profile);
+      self->noise_profile,
+      (self->init_flags & SPECBLEACH_INIT_LOW_LATENCY) ? true : false);
   return self->spectral_denoiser != NULL;
 }
 
 specbleach_denoiser* specbleach_denoiser_initialize(uint32_t sample_rate,
-                                                    float frame_size_ms) {
+                                                    float frame_size_ms,
+                                                    uint32_t flags) {
   if (sample_rate == 0 || !isfinite(frame_size_ms) || frame_size_ms <= 0.0f) {
     return NULL;
   }
@@ -182,6 +185,7 @@ specbleach_denoiser* specbleach_denoiser_initialize(uint32_t sample_rate,
   self->sample_rate = sample_rate;
   self->frame_size_ms = frame_size_ms;
   self->frame_size_samples = (uint32_t)frame_samples;
+  self->init_flags = flags;
   self->stft_processor = stft_processor_initialize(
       sample_rate, frame_size_ms, OVERLAP_FACTOR, PADDING_CONFIGURATION,
       ZEROPADDING_AMOUNT, INPUT_WINDOW_TYPE, OUTPUT_WINDOW_TYPE);
@@ -203,7 +207,8 @@ specbleach_denoiser* specbleach_denoiser_initialize(uint32_t sample_rate,
 
   self->spectral_denoiser = spectral_denoiser_initialize_with_hop(
       self->sample_rate, self->fft_size, OVERLAP_FACTOR, self->hop,
-      self->noise_profile);
+      self->noise_profile,
+      (flags & SPECBLEACH_INIT_LOW_LATENCY) ? true : false);
 
   if (!self->spectral_denoiser) {
     specbleach_denoiser_free(self);
@@ -455,6 +460,9 @@ bool specbleach_denoiser_load_parameters(
   DenoiserParameters denoise_parameters =
       sanitize_denoiser_parameters(parameters);
   denoise_parameters.reduction_curve_bias = owned_bias;
+  if ((self->init_flags & SPECBLEACH_INIT_LOW_LATENCY) != 0u) {
+    denoise_parameters.smoothing_mode = (int)SPECBLEACH_SMOOTHING_TEMPORAL;
+  }
 
   return load_reduction_parameters(self->spectral_denoiser, denoise_parameters);
 }

@@ -57,9 +57,10 @@ using StereoGroupPtr = std::unique_ptr<specbleach_stereo, StereoGroupDeleter>;
 /// Creates a multi-channel engine group (extras); null on failure.
 inline StereoGroupPtr make_stereo_group(const uint32_t sample_rate,
                                         const float frame_size_ms,
-                                        const uint32_t channels) noexcept {
-  return StereoGroupPtr(
-      specbleach_stereo_initialize(sample_rate, frame_size_ms, channels));
+                                        const uint32_t channels,
+                                        const uint32_t flags = 0u) noexcept {
+  return StereoGroupPtr(specbleach_stereo_initialize(sample_rate, frame_size_ms,
+                                                     channels, flags));
 }
 
 } // namespace specbleach

@@ -61,9 +61,10 @@ using DenoiserPtr = std::unique_ptr<specbleach_denoiser, DenoiserDeleter>;
 
 /// Creates a single-channel spectral denoiser; null on failure.
 inline DenoiserPtr make_denoiser(const uint32_t sample_rate,
-                                 const float frame_size_ms) noexcept {
+                                 const float frame_size_ms,
+                                 const uint32_t flags = 0u) noexcept {
   return DenoiserPtr(
-      specbleach_denoiser_initialize(sample_rate, frame_size_ms));
+      specbleach_denoiser_initialize(sample_rate, frame_size_ms, flags));
 }
 
 } // namespace specbleach

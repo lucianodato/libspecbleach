@@ -27,7 +27,8 @@ void test_specbleach_noise_profile_mode_functions(void) {
   printf("Testing specbleach noise profile mode functions...\n");
 
   // Initialize denoiser
-  specbleach_denoiser* handle = specbleach_denoiser_initialize(44100, 20.0f);
+  specbleach_denoiser* handle =
+      specbleach_denoiser_initialize(44100, 20.0f, 0u);
   TEST_ASSERT(handle != NULL, "Denoiser initialization should succeed");
 
   SpecbleachDenoiserParameters params = {
@@ -95,7 +96,8 @@ void test_specbleach_noise_profile_mode_functions(void) {
 void test_specbleach_load_noise_profile_with_mode(void) {
   printf("Testing specbleach load noise profile with mode...\n");
 
-  specbleach_denoiser* handle = specbleach_denoiser_initialize(44100, 20.0f);
+  specbleach_denoiser* handle =
+      specbleach_denoiser_initialize(44100, 20.0f, 0u);
   TEST_ASSERT(handle != NULL, "Denoiser initialization should succeed");
 
   // Load
@@ -164,7 +166,8 @@ void test_specbleach_load_noise_profile_with_mode(void) {
 void test_specbleach_mode_switching(void) {
   printf("Testing specbleach mode switching...\n");
 
-  specbleach_denoiser* handle = specbleach_denoiser_initialize(44100, 20.0f);
+  specbleach_denoiser* handle =
+      specbleach_denoiser_initialize(44100, 20.0f, 0u);
   TEST_ASSERT(handle != NULL, "Denoiser initialization should succeed");
 
   uint32_t profile_size = specbleach_denoiser_get_noise_profile_size(handle);
@@ -267,7 +270,8 @@ void test_specbleach_mode_switching(void) {
 void test_specbleach_reset_noise_profile(void) {
   printf("Testing specbleach reset noise profile...\n");
 
-  specbleach_denoiser* handle = specbleach_denoiser_initialize(44100, 20.0f);
+  specbleach_denoiser* handle =
+      specbleach_denoiser_initialize(44100, 20.0f, 0u);
   TEST_ASSERT(handle != NULL, "Denoiser initialization should succeed");
 
   uint32_t profile_size = specbleach_denoiser_get_noise_profile_size(handle);
@@ -323,7 +327,8 @@ void test_specbleach_reset_noise_profile(void) {
 void test_specbleach_load_noise_profile_for_mode(void) {
   printf("Testing specbleach load noise profile for mode...\n");
 
-  specbleach_denoiser* handle = specbleach_denoiser_initialize(44100, 20.0f);
+  specbleach_denoiser* handle =
+      specbleach_denoiser_initialize(44100, 20.0f, 0u);
   TEST_ASSERT(handle != NULL, "Denoiser initialization should succeed");
 
   // Get profile size
@@ -362,7 +367,8 @@ void test_specbleach_load_noise_profile_for_mode(void) {
 void test_specbleach_run_features(void) {
   printf("Testing specbleach run features (whitening, residual listen)...\n");
 
-  specbleach_denoiser* handle = specbleach_denoiser_initialize(44100, 20.0f);
+  specbleach_denoiser* handle =
+      specbleach_denoiser_initialize(44100, 20.0f, 0u);
   TEST_ASSERT(handle != NULL, "Denoiser initialization should succeed");
 
   float* input = (float*)malloc(1024 * sizeof(float));
@@ -411,7 +417,8 @@ void test_specbleach_run_features(void) {
 void test_specbleach_silence_bypass(void) {
   printf("Testing specbleach silence bypass with active profile...\n");
 
-  specbleach_denoiser* handle = specbleach_denoiser_initialize(44100, 20.0f);
+  specbleach_denoiser* handle =
+      specbleach_denoiser_initialize(44100, 20.0f, 0u);
   TEST_ASSERT(handle != NULL, "Denoiser initialization should succeed");
 
   uint32_t profile_size = specbleach_denoiser_get_noise_profile_size(handle);
@@ -458,12 +465,13 @@ void test_specbleach_smoothing_transition_and_validation(void) {
   printf("Testing smoothing mode transitions and API validation...\n");
 
   // Invalid initialization arguments
-  TEST_ASSERT(specbleach_denoiser_initialize(0, 20.0f) == NULL,
+  TEST_ASSERT(specbleach_denoiser_initialize(0, 20.0f, 0u) == NULL,
               "Zero sample rate must fail initialization");
-  TEST_ASSERT(specbleach_denoiser_initialize(44100, 0.0f) == NULL,
+  TEST_ASSERT(specbleach_denoiser_initialize(44100, 0.0f, 0u) == NULL,
               "Zero frame size must fail initialization");
 
-  specbleach_denoiser* handle = specbleach_denoiser_initialize(44100, 20.0f);
+  specbleach_denoiser* handle =
+      specbleach_denoiser_initialize(44100, 20.0f, 0u);
   TEST_ASSERT(handle != NULL, "Denoiser initialization should succeed");
 
   // Process with NULL buffers must be rejected
@@ -609,7 +617,8 @@ void test_specbleach_smoothing_transition_and_validation(void) {
 void test_specbleach_adaptive_method_switch(void) {
   printf("Testing adaptive estimation method re-initialization...\n");
 
-  specbleach_denoiser* handle = specbleach_denoiser_initialize(44100, 20.0f);
+  specbleach_denoiser* handle =
+      specbleach_denoiser_initialize(44100, 20.0f, 0u);
   TEST_ASSERT(handle != NULL, "Denoiser initialization should succeed");
 
   float in_buf[1024];
@@ -656,13 +665,13 @@ void test_specbleach_redesigned_api_coverage(void) {
   printf("Testing redesigned API coverage...\n");
 
   // Init validation: zero/negative parameters and sub-hop frame must fail
-  TEST_ASSERT(specbleach_denoiser_initialize(0, 20.0f) == NULL,
+  TEST_ASSERT(specbleach_denoiser_initialize(0, 20.0f, 0u) == NULL,
               "Zero sample rate should fail");
-  TEST_ASSERT(specbleach_denoiser_initialize(44100, 0.0f) == NULL,
+  TEST_ASSERT(specbleach_denoiser_initialize(44100, 0.0f, 0u) == NULL,
               "Zero frame size should fail");
-  TEST_ASSERT(specbleach_denoiser_initialize(44100, -5.0f) == NULL,
+  TEST_ASSERT(specbleach_denoiser_initialize(44100, -5.0f, 0u) == NULL,
               "Negative frame size should fail");
-  TEST_ASSERT(specbleach_denoiser_initialize(44100, 0.01f) == NULL,
+  TEST_ASSERT(specbleach_denoiser_initialize(44100, 0.01f, 0u) == NULL,
               "Sub-hop frame size should fail");
 
   // Default parameters carry safe, documented values
@@ -675,7 +684,8 @@ void test_specbleach_redesigned_api_coverage(void) {
   TEST_ASSERT(defaults.reduction_curve_bias == NULL,
               "Default curve bias should be NULL");
 
-  specbleach_denoiser* handle = specbleach_denoiser_initialize(44100, 20.0f);
+  specbleach_denoiser* handle =
+      specbleach_denoiser_initialize(44100, 20.0f, 0u);
   TEST_ASSERT(handle != NULL, "Denoiser initialization should succeed");
 
   // Geometry getters on a live instance and NULL
@@ -808,6 +818,54 @@ void test_specbleach_redesigned_api_coverage(void) {
   printf("✓ Redesigned API coverage tests passed\n");
 }
 
+void test_specbleach_low_latency_mode(void) {
+  printf("Testing specbleach low-latency mode...\n");
+
+  const float ms48 = 512.0f * 1000.0f / 48000.0f;
+  specbleach_denoiser* legacy = specbleach_denoiser_initialize(48000, ms48, 0u);
+  specbleach_denoiser* low =
+      specbleach_denoiser_initialize(48000, ms48, SPECBLEACH_INIT_LOW_LATENCY);
+  TEST_ASSERT(legacy != NULL && low != NULL, "Both modes must initialize");
+
+  TEST_ASSERT(specbleach_denoiser_get_frame_size(low) == 512,
+              "Low-latency frame must be 512 samples");
+  TEST_ASSERT(specbleach_denoiser_get_latency(low) == 512,
+              "Low-latency total must equal the STFT frame (zero look-ahead)");
+  TEST_ASSERT(specbleach_denoiser_get_latency(legacy) > 512,
+              "Legacy mode must keep the NLM look-ahead");
+  TEST_ASSERT(
+      1000.0f * (float)specbleach_denoiser_get_latency(low) / 48000.0f < 20.0f,
+      "Low-latency total must stay under 20 ms");
+
+  // NLM/DFTT requests are clamped to temporal: load succeeds, latency and
+  // processing stay causal.
+  SpecbleachDenoiserParameters params =
+      specbleach_denoiser_get_default_parameters();
+  params.smoothing_mode = SPECBLEACH_SMOOTHING_NLM_2D_DFTT;
+  params.reduction_gain = 0.1f;
+  TEST_ASSERT(specbleach_denoiser_load_parameters(low, &params, sizeof(params)),
+              "Clamped NLM load must succeed");
+  TEST_ASSERT(specbleach_denoiser_get_latency(low) == 512,
+              "Smoothing load must never change low-latency latency");
+
+  float in_buf[1024];
+  float out_buf[1024];
+  for (int i = 0; i < 1024; ++i) {
+    in_buf[i] = ((float)(i % 100) / 100.0f) * 0.5f;
+  }
+  for (int f = 0; f < 10; ++f) {
+    TEST_ASSERT(specbleach_denoiser_process(low, 1024, in_buf, out_buf),
+                "Low-latency process must succeed");
+  }
+  for (int i = 0; i < 1024; ++i) {
+    TEST_ASSERT(isfinite(out_buf[i]) != 0, "Output must stay finite");
+  }
+
+  specbleach_denoiser_free(legacy);
+  specbleach_denoiser_free(low);
+  printf("✓ Specbleach low-latency mode tests passed\n");
+}
+
 int main(void) {
   printf("Running specbleach denoiser tests...\n");
 
@@ -821,10 +879,11 @@ int main(void) {
   test_specbleach_smoothing_transition_and_validation();
   test_specbleach_adaptive_method_switch();
   test_specbleach_redesigned_api_coverage();
+  test_specbleach_low_latency_mode();
 
   // Getter Coverage (Extra) and NULL Safety
   printf("Testing API Getters and NULL safety for coverage...\n");
-  specbleach_denoiser* h = specbleach_denoiser_initialize(44100, 20.0f);
+  specbleach_denoiser* h = specbleach_denoiser_initialize(44100, 20.0f, 0u);
 
   // Verify getters work with valid handle
   specbleach_denoiser_get_noise_profile_for_mode(h, ROLLING_MEAN);
@@ -924,7 +983,8 @@ int main(void) {
 
   // Test adaptive noise profile persistence when deactivating adaptive mode
   printf("Testing adaptive profile persistence across mode toggles...\n");
-  specbleach_denoiser* h_adapt = specbleach_denoiser_initialize(44100, 20.0f);
+  specbleach_denoiser* h_adapt =
+      specbleach_denoiser_initialize(44100, 20.0f, 0u);
   TEST_ASSERT(h_adapt != NULL, "Initialization should succeed");
 
   TEST_ASSERT(

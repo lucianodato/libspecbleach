@@ -238,7 +238,7 @@ int main(int argc, char** argv) {
          (double)total_frames / (double)sample_rate);
 
   specbleach_stereo* group = specbleach_stereo_initialize(
-      sample_rate, options.frame_size_ms, channels);
+      sample_rate, options.frame_size_ms, channels, 0u);
   const uint32_t latency = specbleach_stereo_get_latency(group);
 
   float* interleaved = calloc((size_t)channels * BLOCK_SIZE, sizeof(float));

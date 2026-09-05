@@ -115,7 +115,7 @@ cmake --build build --config Release --parallel
 
 // 1. CREATE — one instance per channel; frame_size_ms = STFT window (20-100)
 specbleach_denoiser* denoiser =
-    specbleach_denoiser_initialize(sample_rate, 46.0f);
+    specbleach_denoiser_initialize(sample_rate, 46.0f, 0u);
 
 // Report latency to your host for delay compensation (stable after init)
 uint32_t latency = specbleach_denoiser_get_latency(denoiser);
@@ -144,6 +144,28 @@ Buffers are plain planar float arrays of `nframes` length; output may alias
 input. `_process` is real-time safe (no allocations, locks, or I/O);
 parameter loads and create/destroy are not. A complete zero-dependency
 example lives in [`examples/simple_embed.c`](examples/simple_embed.c).
+
+### Low-Latency Mode
+
+For live use (EasyEffects, live hosts), pass `SPECBLEACH_INIT_LOW_LATENCY`
+at init with a 512-sample frame (`512*1000/sample_rate` ms). The denoiser
+goes causal: the NLM look-ahead is removed and NLM/DFTT smoothing requests
+are clamped to 1D temporal, so total latency equals the STFT frame alone —
+~10.7 ms at 48 kHz, ~11.6 ms at 44.1 kHz (both under 20 ms):
+
+```c
+float frame_ms = 512.0f * 1000.0f / (float)sample_rate;
+specbleach_denoiser* denoiser = specbleach_denoiser_initialize(
+    sample_rate, frame_ms, SPECBLEACH_INIT_LOW_LATENCY);
+// get_latency() reports 512: re-query once and compensate downstream.
+```
+
+Rules: the flag is init-time only (it changes latency/geometry, so it
+cannot ride `load_parameters`); masking veto and transient protection stay
+fully active (both are causal); zeropadding a 512 frame buys no real
+frequency resolution (interpolation only) and is not recommended —
+prefer the native 512 frame. `flags = 0` preserves the default
+full-latency behavior bit-for-bit.
 
 ## Usage Examples
 

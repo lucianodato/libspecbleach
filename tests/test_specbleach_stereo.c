@@ -38,16 +38,16 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 static void test_init_and_free(void) {
   printf("Testing stereo init and free...\n");
 
-  TEST_ASSERT(specbleach_stereo_initialize(0, 46.0f, CHANNELS) == NULL,
+  TEST_ASSERT(specbleach_stereo_initialize(0, 46.0f, CHANNELS, 0u) == NULL,
               "sample_rate == 0 rejected");
-  TEST_ASSERT(specbleach_stereo_initialize(44100, 0.0f, CHANNELS) == NULL,
+  TEST_ASSERT(specbleach_stereo_initialize(44100, 0.0f, CHANNELS, 0u) == NULL,
               "frame_size <= 0 rejected");
-  TEST_ASSERT(specbleach_stereo_initialize(44100, 46.0f, 0) == NULL,
+  TEST_ASSERT(specbleach_stereo_initialize(44100, 46.0f, 0, 0u) == NULL,
               "channels == 0 rejected");
   specbleach_stereo_free(NULL);
 
   specbleach_stereo* stereo =
-      specbleach_stereo_initialize(44100, 46.0f, CHANNELS);
+      specbleach_stereo_initialize(44100, 46.0f, CHANNELS, 0u);
   TEST_ASSERT(stereo != NULL, "stereo init");
   TEST_ASSERT(specbleach_stereo_get_channel_count(stereo) == CHANNELS,
               "Channel count roundtrip");
@@ -63,7 +63,7 @@ static void test_parameter_loading(void) {
   printf("Testing stereo parameter loading...\n");
 
   specbleach_stereo* stereo =
-      specbleach_stereo_initialize(44100, 46.0f, CHANNELS);
+      specbleach_stereo_initialize(44100, 46.0f, CHANNELS, 0u);
   TEST_ASSERT(stereo != NULL, "init for param tests");
 
   SpecbleachDenoiserParameters params = {0};
@@ -91,7 +91,7 @@ static void test_process_and_sync(void) {
   printf("Testing stereo processing and profile sync...\n");
 
   specbleach_stereo* stereo =
-      specbleach_stereo_initialize(44100, 46.0f, CHANNELS);
+      specbleach_stereo_initialize(44100, 46.0f, CHANNELS, 0u);
   TEST_ASSERT(stereo != NULL, "init for process tests");
 
   float input[2][BLOCK_SIZE];
