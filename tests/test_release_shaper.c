@@ -106,6 +106,11 @@ static void test_release_shaper(void) {
   for (int frame = 0; frame < 5; frame++) {
     run_frame(shaper, magnitude, scale);
   }
+  // Hard cut to exact zero: band_energy == 0 must still count as collapse
+  // evidence (floored for the ratio), not fall back to the full release
+  fill_magnitude(magnitude, 0.0F);
+  TEST_ASSERT(run_frame(shaper, magnitude, scale) < 0.2F,
+              "Zero-energy band after loud signal must close fast");
   fill_magnitude(magnitude, 1.0F); // signal stops (back to noise floor)
   TEST_ASSERT(run_frame(shaper, magnitude, scale) < 0.2F,
               "Band collapse after signal end must shorten the release");

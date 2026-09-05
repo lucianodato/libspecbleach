@@ -341,6 +341,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  * applies, keeping the anti-chirp protection in noise-only stretches. */
 #define RELEASE_SHAPING_FAST_SEC (0.020F) // Fast close tau (echo prevention)
 #define RELEASE_SHAPING_ENVELOPE_RELEASE_SEC (0.075F) // Recent-energy memory
+// Envelope attack in hops (alpha = exp(-hops), frame-rate invariant)
+#define RELEASE_SHAPING_ATTACK_HOPS (1.0F)
 #define RELEASE_SHAPING_GAP_ONSET_DB (6.0F) // Gap where fast close begins
 #define RELEASE_SHAPING_GAP_RANGE_DB (9.0F) // Gap span to full fast close
 #define RELEASE_SHAPING_SCALE_STEPS 16U     // Alpha LUT quantization

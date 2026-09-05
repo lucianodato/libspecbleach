@@ -21,6 +21,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "release_shaper.h"
 #include "shared/configurations.h"
 #include "shared/utils/critical_bands.h"
+#include "shared/utils/simd_utils.h"
 #include "shared/utils/spectral_utils.h"
 #include <math.h>
 #include <stdlib.h>
@@ -115,6 +116,10 @@ bool release_shaper_compute(ReleaseShaper* self, const float* magnitude,
     return false;
   }
 
+  // Per-frame envelope decays are a denormal hazard after a signal ends;
+  // guard the whole pass like the other per-frame DSP paths.
+  sb_simd_state_t old_simd_state = sb_simd_enable_ftz_daz();
+
   // Default: full slider release everywhere (bins outside any band, first
   // frame, and bands without collapse evidence)
   for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
@@ -138,11 +143,16 @@ bool release_shaper_compute(ReleaseShaper* self, const float* magnitude,
       continue;
     }
 
-    // Collapse evidence: recent-energy envelope vs current energy. Empty or
-    // denormal-level bands carry no evidence (keep full release).
+    // Collapse evidence: recent-energy envelope vs current energy. A band
+    // that hard-cuts to (near) zero after a loud frame is the strongest
+    // collapse case, so a nontrivial envelope with floored current energy
+    // still yields the fast close. Only a trivial envelope (no past energy)
+    // carries no evidence and keeps full release.
     float weight = 1.0F;
-    if (band_energy > SPECTRAL_EPSILON) {
-      const float gap_db = 10.0F * log10f(self->band_envelope[j] / band_energy);
+    if (self->band_envelope[j] > SPECTRAL_EPSILON) {
+      const float current_energy = fmaxf(band_energy, SPECTRAL_EPSILON);
+      const float gap_db =
+          10.0F * log10f(self->band_envelope[j] / current_energy);
       const float normalized_gap = (gap_db - RELEASE_SHAPING_GAP_ONSET_DB) /
                                    RELEASE_SHAPING_GAP_RANGE_DB;
       weight = 1.0F - fmaxf(0.0F, fminf(1.0F, normalized_gap));
@@ -155,13 +165,14 @@ bool release_shaper_compute(ReleaseShaper* self, const float* magnitude,
 
   if (!self->seeded) {
     self->seeded = true;
+    sb_simd_restore_state(old_simd_state);
     return true;
   }
 
-  // Envelope update: fast attack (tau = 1 hop, frame-rate invariant by
-  // construction), slow release (named constant)
+  // Envelope update: fast attack (RELEASE_SHAPING_ATTACK_HOPS hops,
+  // frame-rate invariant by construction), slow release (named constant)
   const float hop_sec = release_shaper_get_hop_sec(self);
-  const float alpha_attack = expf(-1.0F);
+  const float alpha_attack = expf(-RELEASE_SHAPING_ATTACK_HOPS);
   const float alpha_release =
       expf(-hop_sec / RELEASE_SHAPING_ENVELOPE_RELEASE_SEC);
 
@@ -176,6 +187,8 @@ bool release_shaper_compute(ReleaseShaper* self, const float* magnitude,
     }
     self->band_envelope[j] = envelope;
   }
+
+  sb_simd_restore_state(old_simd_state);
 
   return true;
 }
