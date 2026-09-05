@@ -7,6 +7,10 @@ on:
   pull_request:
     branches:
       - "*"
+  schedule:
+    # Nightly full-suite run (including the slow integration suites)
+    - cron: "0 3 * * *"
+  workflow_dispatch:
 
 jobs:
   build:
@@ -48,16 +52,23 @@ jobs:
 
       - name: Run CTest Suite
         run: |
-          cd build && ctest --output-on-failure --test-dir .
+          cd build
+          # PRs gate on the fast unit suite; the slower integration suites
+          # run on main pushes, the nightly schedule, and manual dispatches.
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            ctest --output-on-failure --test-dir . -LE integration
+          else
+            ctest --output-on-failure --test-dir .
+          fi
 
       - name: Generate coverage report
-        if: matrix.config.run_coverage
+        if: matrix.config.run_coverage && github.event_name != 'pull_request'
         run: |
           gcovr --xml build/coverage.xml -r . -e tests/ -e examples/ \
             --gcov-ignore-parse-errors negative_hits.warn_once_per_file
 
       - name: Upload coverage to Codecov
-        if: matrix.config.run_coverage
+        if: matrix.config.run_coverage && github.event_name != 'pull_request'
         uses: codecov/codecov-action@v5
         with:
           files: build/coverage.xml

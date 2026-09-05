@@ -280,6 +280,18 @@ if(ENABLE_TESTS)
             target_link_libraries(${test_name} PRIVATE ${MATH_LIB})
         endif()
         add_test(NAME ${test_name} COMMAND ${test_name})
+        # PR CI runs `ctest -LE integration`; engine-flow/slow suites are
+        # labeled separately (see mark_integration_test below).
+        set_tests_properties(${test_name} PROPERTIES LABELS "unit")
+    endmacro()
+
+    # Engine-driven suites (STFT round-trips, quality metrics, audio
+    # regressions) are slower: they run on main pushes and nightly, and are
+    # excluded from PR checks via ctest -LE integration.
+    macro(mark_integration_test test_name)
+        if(TARGET ${test_name})
+            set_tests_properties(${test_name} PROPERTIES LABELS "integration")
+        endif()
     endmacro()
 
     add_specbleach_test(test_utils "test_utils.c")
@@ -321,7 +333,16 @@ if(ENABLE_TESTS)
     if(TARGET PkgConfig::SNDFILE)
         add_specbleach_test(test_audio_file_regression "test_audio_file_regression.c")
         target_link_libraries(test_audio_file_regression PRIVATE PkgConfig::SNDFILE)
+        add_specbleach_test(test_integration_realworld_quality "test_integration_realworld_quality.c")
+        target_link_libraries(test_integration_realworld_quality PRIVATE PkgConfig::SNDFILE)
     endif()
+
+    mark_integration_test(test_integration)
+    mark_integration_test(test_integration_dftt_quality)
+    mark_integration_test(test_quality_metrics)
+    mark_integration_test(test_audio_regression)
+    mark_integration_test(test_audio_file_regression)
+    mark_integration_test(test_integration_realworld_quality)
 
     if(SPECBLEACH_BUILD_EXTRAS)
         add_specbleach_test(test_specbleach_stereo "test_specbleach_stereo.c")
