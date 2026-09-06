@@ -859,10 +859,7 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
   float* gain_a = self->gain_spectrum;
   float* gain_b = self->gain_spectrum_b;
 
-  if (self->low_latency) {
-    run_temporal_chain(self, fft_spectrum, delayed_noise, gain_a, self->alpha,
-                       self->beta);
-  } else if (self->in_transition) {
+  if (!self->low_latency && self->in_transition) {
     const float total = (float)self->transition_frames;
     const float w = (float)self->transition_pos / total; // 0 → 1
 
@@ -887,7 +884,7 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
       self->active_mode = self->pending_mode;
       self->in_transition = false;
     }
-  } else if (is_nlm_family(self->active_mode)) {
+  } else if (!self->low_latency && is_nlm_family(self->active_mode)) {
     (void)run_nlm_chain(self, fft_spectrum, nlm_smoothed, delayed_noise, gain_a,
                         self->alpha, self->beta);
   } else {
