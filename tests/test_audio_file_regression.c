@@ -70,7 +70,7 @@ void test_denoiser_file_regression(void) {
   TEST_ASSERT(in_info.channels == 1, "Input file must be mono");
 
   specbleach_denoiser* handle = specbleach_denoiser_initialize(
-      (uint32_t)in_info.samplerate, FRAME_SIZE_MS);
+      (uint32_t)in_info.samplerate, FRAME_SIZE_MS, 0u);
   TEST_ASSERT(handle != NULL, "Failed to initialize denoiser");
 
   SpecbleachDenoiserParameters params = canonical_denoiser_params;
@@ -147,7 +147,7 @@ void test_adenoiser_file_regression(void) {
   TEST_ASSERT(in_info.channels == 1, "Input file must be mono");
 
   specbleach_denoiser* handle = specbleach_denoiser_initialize(
-      (uint32_t)in_info.samplerate, FRAME_SIZE_ADAPTIVE_MS);
+      (uint32_t)in_info.samplerate, FRAME_SIZE_ADAPTIVE_MS, 0u);
   TEST_ASSERT(handle != NULL, "Failed to initialize adaptive denoiser");
 
   SpecbleachDenoiserParameters params = canonical_adenoiser_params;

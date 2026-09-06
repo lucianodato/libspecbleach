@@ -28,7 +28,8 @@ typedef struct specbleach_stereo { // NOLINT(readability-identifier-naming)
 
 specbleach_stereo* specbleach_stereo_initialize(uint32_t sample_rate,
                                                 float frame_size_ms,
-                                                uint32_t channels) {
+                                                uint32_t channels,
+                                                uint32_t flags) {
   if (sample_rate == 0 || frame_size_ms <= 0.0f || channels == 0) {
     return NULL;
   }
@@ -47,7 +48,7 @@ specbleach_stereo* specbleach_stereo_initialize(uint32_t sample_rate,
 
   for (uint32_t ch = 0; ch < channels; ++ch) {
     self->instances[ch] =
-        specbleach_denoiser_initialize(sample_rate, frame_size_ms);
+        specbleach_denoiser_initialize(sample_rate, frame_size_ms, flags);
     if (!self->instances[ch]) {
       specbleach_stereo_free(self);
       return NULL;
@@ -98,8 +99,8 @@ bool specbleach_stereo_load_parameters(
 }
 
 bool specbleach_stereo_process(specbleach_stereo* instance,
-                               uint32_t number_of_samples,
-                               const float** input, float** output) {
+                               uint32_t number_of_samples, const float** input,
+                               float** output) {
   SpecbleachStereoState* self = instance;
 
   if (!self || number_of_samples == 0 || !input || !output) {

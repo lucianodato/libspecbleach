@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Error-code API**: Removed `specbleach_denoiser_get_last_error()`, `specbleach_denoiser_get_last_error_string()`, the `SpecbleachError` bookkeeping they served, and the now-unreferenced `specbleach_error.h` header. Fallible calls uniformly fail fast with `bool`; tests assert the `false` paths directly.
 
 ### Added
+- **Low-latency mode**: New `SPECBLEACH_INIT_LOW_LATENCY` init flag (new `flags` parameter on `specbleach_denoiser_initialize()` / `specbleach_stereo_initialize()`, defaulted in the C++ wrappers) selecting a causal 1D-only path with zero look-ahead. NLM/DFTT smoothing requests are clamped to temporal internally; masking veto and transient protection stay active. Combined with a 512-sample frame, total latency is ~10.7 ms at 48 kHz / ~11.6 ms at 44.1 kHz for live hosts. The frame runs at 8x overlap (64-sample hop) for agile gain updates with standard FFT padding; reported latency stays one frame. `flags = 0` preserves legacy behavior.
 - **Internal Thread Pool**: Added `SbThreadPool` (`src/shared/utils/thread_pool.h`), a fixed-size worker pool with semaphore-based dispatch and static contiguous partitioning, powering multi-threaded NLM 2D smoothing without any external threading runtime. Thread count is configurable per instance via `NlmFilterConfig::num_threads` (default `NLM_NUM_THREADS_DEFAULT`).
 
 ### Improved & Refactored

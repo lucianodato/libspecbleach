@@ -214,7 +214,7 @@ static int frame_is_voiced(float frame_center_seconds) {
 // the buffer-level delay seen when feeding frame-sized blocks).
 static uint32_t measure_stream_delay(uint32_t smoothing_mode) {
   specbleach_denoiser* probe =
-      specbleach_denoiser_initialize(SAMPLE_RATE, FRAME_MS);
+      specbleach_denoiser_initialize(SAMPLE_RATE, FRAME_MS, 0u);
   TEST_ASSERT(probe != NULL, "probe init");
   SpecbleachDenoiserParameters p =
       (SpecbleachDenoiserParameters){.learn_noise = SPECBLEACH_LEARN_ALL,
@@ -460,7 +460,7 @@ static Metrics run_and_measure(uint32_t smoothing_mode, const float* mix,
                                Analyzer* clean_an, Analyzer* mix_an) {
   printf("== %s ==\n", mode_name(smoothing_mode));
   specbleach_denoiser* handle =
-      specbleach_denoiser_initialize(SAMPLE_RATE, FRAME_MS);
+      specbleach_denoiser_initialize(SAMPLE_RATE, FRAME_MS, 0u);
   TEST_ASSERT(handle != NULL, "denoiser initialize");
 
   SpecbleachDenoiserParameters parameters = (SpecbleachDenoiserParameters){
@@ -503,7 +503,7 @@ static Metrics run_and_measure(uint32_t smoothing_mode, const float* mix,
   {
     float* out2 = (float*)calloc(TOTAL_SAMPLES, sizeof(float));
     specbleach_denoiser* handle2 =
-        specbleach_denoiser_initialize(SAMPLE_RATE, FRAME_MS);
+        specbleach_denoiser_initialize(SAMPLE_RATE, FRAME_MS, 0u);
     TEST_ASSERT(handle2 != NULL, "second instance");
     SpecbleachDenoiserParameters p2 = parameters;
     p2.learn_noise = SPECBLEACH_LEARN_ALL; // parameters was already finalized

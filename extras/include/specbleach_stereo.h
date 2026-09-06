@@ -74,13 +74,15 @@ typedef struct specbleach_stereo
  * @param frame_size_ms STFT frame size in milliseconds (e.g. 46.0f).
  * @param channels Number of channels (1 supported too; useful for
  * symmetric code paths).
+ * @param flags Init flags (see SPECBLEACH_INIT_*); 0 = default mode.
  * @return New instance or NULL on failure. Free with
  * specbleach_stereo_free().
  *
  * Thread safety: setup-only (allocates one engine per channel).
  */
 SPECBLEACH_API specbleach_stereo* specbleach_stereo_initialize(
-    uint32_t sample_rate, float frame_size_ms, uint32_t channels);
+    uint32_t sample_rate, float frame_size_ms, uint32_t channels,
+    uint32_t flags);
 
 /**
  * Frees the instance and every underlying engine. NULL is a no-op.

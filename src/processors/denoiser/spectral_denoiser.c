@@ -121,7 +121,8 @@ typedef struct SbSpectralDenoiser {
   float* knee_spectrum;           // Per-bin soft knee width (signal-dependent)
   bool is_transient_detected;
   float transient_intensity;
-  float hop_sec; // True hop in seconds (frame/overlap/sr); 0 = legacy derive
+  float hop_sec;    // True hop in seconds (frame/overlap/sr); 0 = legacy derive
+  bool low_latency; // Causal 1D-only: zero look-ahead, no NLM delay
 
   // Smoothing mode state (written by load_parameters, read by process; the
   // load/process concurrency contract forbids concurrent calls on the same
@@ -162,6 +163,9 @@ static int normalize_smoothing_mode(const int mode) {
  */
 static void align_bypass_frame(SbSpectralDenoiser* self, float* fft_spectrum,
                                const float* reference_spectrum) {
+  if (self->low_latency) {
+    return; // causal: emit current frame, no delay
+  }
   spectral_circular_buffer_push(self->circular_buffer, self->layer_fft,
                                 fft_spectrum);
   spectral_circular_buffer_push(self->circular_buffer, self->layer_noise,
@@ -193,7 +197,7 @@ static void run_temporal_chain(SbSpectralDenoiser* self,
 static SpectralProcessorHandle spectral_denoiser_initialize_inner(
     const uint32_t sample_rate, const uint32_t fft_size,
     const uint32_t overlap_factor, const uint32_t hop_override,
-    NoiseProfile* noise_profile) {
+    NoiseProfile* noise_profile, const bool low_latency) {
 
   if (!noise_profile || sample_rate == 0 || fft_size == 0 ||
       overlap_factor == 0) {
@@ -430,6 +434,10 @@ static SpectralProcessorHandle spectral_denoiser_initialize_inner(
       (transition_from_sec < SMOOTHING_TRANSITION_MIN_FRAMES)
           ? SMOOTHING_TRANSITION_MIN_FRAMES
           : transition_from_sec;
+  self->low_latency = low_latency;
+  self->active_mode = SPECBLEACH_SMOOTHING_TEMPORAL;
+  self->pending_mode = SPECBLEACH_SMOOTHING_TEMPORAL;
+  self->previous_mode = SPECBLEACH_SMOOTHING_TEMPORAL;
 
   return self;
 }
@@ -437,16 +445,17 @@ static SpectralProcessorHandle spectral_denoiser_initialize_inner(
 SpectralProcessorHandle spectral_denoiser_initialize(
     const uint32_t sample_rate, const uint32_t fft_size,
     const uint32_t overlap_factor, NoiseProfile* noise_profile) {
-  return spectral_denoiser_initialize_inner(sample_rate, fft_size,
-                                            overlap_factor, 0U, noise_profile);
+  return spectral_denoiser_initialize_inner(
+      sample_rate, fft_size, overlap_factor, 0U, noise_profile, false);
 }
 
 SpectralProcessorHandle spectral_denoiser_initialize_with_hop(
     const uint32_t sample_rate, const uint32_t fft_size,
     const uint32_t overlap_factor, const uint32_t hop_samples,
-    NoiseProfile* noise_profile) {
-  return spectral_denoiser_initialize_inner(
-      sample_rate, fft_size, overlap_factor, hop_samples, noise_profile);
+    NoiseProfile* noise_profile, const bool low_latency) {
+  return spectral_denoiser_initialize_inner(sample_rate, fft_size,
+                                            overlap_factor, hop_samples,
+                                            noise_profile, low_latency);
 }
 
 void spectral_denoiser_free(SpectralProcessorHandle instance) {
@@ -577,6 +586,13 @@ bool load_reduction_parameters(SpectralProcessorHandle instance,
   }
 
   self->parameters = parameters;
+  if (self->low_latency) {
+    self->parameters.smoothing_mode = SPECBLEACH_SMOOTHING_TEMPORAL;
+    self->active_mode = SPECBLEACH_SMOOTHING_TEMPORAL;
+    self->pending_mode = SPECBLEACH_SMOOTHING_TEMPORAL;
+    self->previous_mode = SPECBLEACH_SMOOTHING_TEMPORAL;
+    self->in_transition = false;
+  }
 
   // Runtime smoothing mode switching (allocation-free): the outgoing mode is
   // crossfaded against the incoming one over SMOOTHING_TRANSITION_SECONDS.
@@ -753,91 +769,97 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
   }
 
   // 2.2 Align internal state and output to the common delayed frame
-  spectral_circular_buffer_push(self->circular_buffer, self->layer_fft,
-                                fft_spectrum);
-  spectral_circular_buffer_push(self->circular_buffer, self->layer_noise,
-                                self->noise_spectrum);
-
-  // Compute SNR for NLM using CURRENT noise and push frame. This keeps the
-  // NLM history rolling even in temporal mode so a runtime mode switch is
-  // seamless and allocation-free.
-  nlm_filter_calculate_snr(self->nlm_filter, reference_spectrum,
-                           self->noise_spectrum, self->snr_frame);
-  nlm_filter_push_frame(self->nlm_filter, self->snr_frame);
-
-  const uint32_t nlm_delay = nlm_filter_get_latency_frames(self->nlm_filter);
-
-  // NLM smoothing (runs when NLM is the active or the incoming mode). The
-  // smoothed magnitude is captured explicitly so the temporal chain cannot
-  // overwrite the shared alignment layer before the NLM chain consumes it.
-  const bool nlm_needed =
-      is_nlm_family(self->active_mode) ||
-      (self->in_transition && is_nlm_family(self->pending_mode));
-  // DFTT refinement follows the DFTT mode: the active chain, or the incoming
-  // side of a temporal crossfade. Rings are pushed on every NLM pass so they
-  // stay warm for instant intra-family flips.
-  const bool use_dftt =
-      (self->active_mode == SPECBLEACH_SMOOTHING_NLM_2D_DFTT) ||
-      (self->in_transition &&
-       self->pending_mode == SPECBLEACH_SMOOTHING_NLM_2D_DFTT);
-  const bool nlm_ran =
-      nlm_needed && nlm_filter_process(self->nlm_filter, self->smoothed_snr);
-
-  // Retrieve unified aligned frames at the common delay
-  const float* delayed_spectrum = spectral_circular_buffer_retrieve(
-      self->circular_buffer, self->layer_fft, nlm_delay);
-  const float* delayed_noise = spectral_circular_buffer_retrieve(
-      self->circular_buffer, self->layer_noise, nlm_delay);
-
-  if (!delayed_spectrum) {
-    delayed_spectrum = fft_spectrum;
-  }
-  if (!delayed_noise) {
-    delayed_noise = self->noise_spectrum;
-  }
-
+  // (skipped in low-latency mode: causal, zero look-ahead)
+  const float* delayed_spectrum = fft_spectrum;
+  const float* delayed_noise = self->noise_spectrum;
   const float* nlm_smoothed = NULL;
-  if (nlm_ran) {
-    // DFTT post-filter (paper S4.2): the noisy SNR row aligned with the
-    // NLM-emitted frame — recomputed from the delayed frames so both ring
-    // inputs describe the same tile — is refined while the NLM output sets
-    // the suppression threshold. Falls back to the raw NLM output until the
-    // DFTT history is full, or when the active mode is NLM-only.
-    const float* post_nlm = self->smoothed_snr;
-    if (self->dftt_filter) {
-      // Same feature extraction as the current-frame SNR (line ~730), but on
-      // the delayed frame NLM just emitted, so both DFTT ring inputs describe
-      // the same tile. Reuses the shared spectral_features scratch (the
-      // temporal chain recomputes it on the same delayed frame anyway).
-      float* delayed_reference =
-          get_spectral_feature(self->spectral_features, delayed_spectrum,
-                               self->fft_size, self->spectrum_type);
-      nlm_filter_calculate_snr(self->nlm_filter, delayed_reference,
-                               delayed_noise, self->snr_delayed);
-      dftt_filter_push(self->dftt_filter, self->snr_delayed,
-                       self->smoothed_snr);
-      if (use_dftt && dftt_filter_process(self->dftt_filter, self->dftt_snr)) {
-        post_nlm = self->dftt_snr;
-      }
+  if (!self->low_latency) {
+    spectral_circular_buffer_push(self->circular_buffer, self->layer_fft,
+                                  fft_spectrum);
+    spectral_circular_buffer_push(self->circular_buffer, self->layer_noise,
+                                  self->noise_spectrum);
+
+    // Compute SNR for NLM using CURRENT noise and push frame. This keeps the
+    // NLM history rolling even in temporal mode so a runtime mode switch is
+    // seamless and allocation-free.
+    nlm_filter_calculate_snr(self->nlm_filter, reference_spectrum,
+                             self->noise_spectrum, self->snr_frame);
+    nlm_filter_push_frame(self->nlm_filter, self->snr_frame);
+
+    const uint32_t nlm_delay = nlm_filter_get_latency_frames(self->nlm_filter);
+
+    // NLM smoothing (runs when NLM is the active or the incoming mode). The
+    // smoothed magnitude is captured explicitly so the temporal chain cannot
+    // overwrite the shared alignment layer before the NLM chain consumes it.
+    const bool nlm_needed =
+        is_nlm_family(self->active_mode) ||
+        (self->in_transition && is_nlm_family(self->pending_mode));
+    // DFTT refinement follows the DFTT mode: the active chain, or the incoming
+    // side of a temporal crossfade. Rings are pushed on every NLM pass so they
+    // stay warm for instant intra-family flips.
+    const bool use_dftt =
+        (self->active_mode == SPECBLEACH_SMOOTHING_NLM_2D_DFTT) ||
+        (self->in_transition &&
+         self->pending_mode == SPECBLEACH_SMOOTHING_NLM_2D_DFTT);
+    const bool nlm_ran =
+        nlm_needed && nlm_filter_process(self->nlm_filter, self->smoothed_snr);
+
+    // Retrieve unified aligned frames at the common delay
+    delayed_spectrum = spectral_circular_buffer_retrieve(
+        self->circular_buffer, self->layer_fft, nlm_delay);
+    delayed_noise = spectral_circular_buffer_retrieve(
+        self->circular_buffer, self->layer_noise, nlm_delay);
+
+    if (!delayed_spectrum) {
+      delayed_spectrum = fft_spectrum;
     }
-    nlm_filter_reconstruct_magnitude(self->nlm_filter, post_nlm, delayed_noise,
-                                     self->snr_frame);
-    spectral_circular_buffer_push(self->circular_buffer, self->layer_smoothed,
-                                  self->snr_frame);
-    nlm_smoothed = self->snr_frame;
+    if (!delayed_noise) {
+      delayed_noise = self->noise_spectrum;
+    }
+
+    if (nlm_ran) {
+      // DFTT post-filter (paper S4.2): the noisy SNR row aligned with the
+      // NLM-emitted frame — recomputed from the delayed frames so both ring
+      // inputs describe the same tile — is refined while the NLM output sets
+      // the suppression threshold. Falls back to the raw NLM output until the
+      // DFTT history is full, or when the active mode is NLM-only.
+      const float* post_nlm = self->smoothed_snr;
+      if (self->dftt_filter) {
+        // Same feature extraction as the current-frame SNR (line ~730), but on
+        // the delayed frame NLM just emitted, so both DFTT ring inputs describe
+        // the same tile. Reuses the shared spectral_features scratch (the
+        // temporal chain recomputes it on the same delayed frame anyway).
+        float* delayed_reference =
+            get_spectral_feature(self->spectral_features, delayed_spectrum,
+                                 self->fft_size, self->spectrum_type);
+        nlm_filter_calculate_snr(self->nlm_filter, delayed_reference,
+                                 delayed_noise, self->snr_delayed);
+        dftt_filter_push(self->dftt_filter, self->snr_delayed,
+                         self->smoothed_snr);
+        if (use_dftt &&
+            dftt_filter_process(self->dftt_filter, self->dftt_snr)) {
+          post_nlm = self->dftt_snr;
+        }
+      }
+      nlm_filter_reconstruct_magnitude(self->nlm_filter, post_nlm,
+                                       delayed_noise, self->snr_frame);
+      spectral_circular_buffer_push(self->circular_buffer, self->layer_smoothed,
+                                    self->snr_frame);
+      nlm_smoothed = self->snr_frame;
+    }
   }
 
   // Align output to delayed frame for post-processing
-  if (delayed_spectrum != fft_spectrum) {
+  if (!self->low_latency && delayed_spectrum != fft_spectrum) {
     memcpy(fft_spectrum, delayed_spectrum, self->fft_size * sizeof(float));
   }
 
   // 3. Denoising Stage: dispatch the active smoothing strategy (or crossfade
-  // both during a runtime mode transition)
+  // both during a runtime mode transition; low-latency is always temporal)
   float* gain_a = self->gain_spectrum;
   float* gain_b = self->gain_spectrum_b;
 
-  if (self->in_transition) {
+  if (!self->low_latency && self->in_transition) {
     const float total = (float)self->transition_frames;
     const float w = (float)self->transition_pos / total; // 0 → 1
 
@@ -862,7 +884,7 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
       self->active_mode = self->pending_mode;
       self->in_transition = false;
     }
-  } else if (is_nlm_family(self->active_mode)) {
+  } else if (!self->low_latency && is_nlm_family(self->active_mode)) {
     (void)run_nlm_chain(self, fft_spectrum, nlm_smoothed, delayed_noise, gain_a,
                         self->alpha, self->beta);
   } else {
@@ -889,7 +911,9 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
   denoiser_post_process_apply(post_params);
 
   // Finalize: Advance circular buffer write index
-  spectral_circular_buffer_advance(self->circular_buffer);
+  if (!self->low_latency) {
+    spectral_circular_buffer_advance(self->circular_buffer);
+  }
 
   // Safely publish noise spectrum to inactive double buffer via SPSC atomic
   // release
@@ -1203,7 +1227,11 @@ uint32_t spectral_denoiser_get_latency_frames(
   }
 
   // Common delay: NLM look-ahead applies to both smoothing modes so the
-  // reported latency never changes on a runtime mode switch
+  // reported latency never changes on a runtime mode switch.
+  // Low-latency mode is causal: zero look-ahead by construction.
+  if (self->low_latency) {
+    return 0;
+  }
   return nlm_filter_get_latency_frames(self->nlm_filter);
 }
 

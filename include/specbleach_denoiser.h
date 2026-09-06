@@ -289,7 +289,8 @@ specbleach_denoiser_get_default_parameters(void);
  * the centered frame are always exactly zero, independent of the window
  * type, and padding never affects latency. Reported latency is frame_size
  * plus the NLM look-ahead (NLM_SEARCH_RANGE_TIME_FUTURE frames x hop),
- * constant across smoothing modes; query it at runtime with
+ * constant across smoothing modes; with SPECBLEACH_INIT_LOW_LATENCY the
+ * look-ahead is zero (latency = frame_size). Query it at runtime with
  * specbleach_denoiser_get_latency(). Query the
  * effective values with specbleach_denoiser_get_frame_size(),
  * specbleach_denoiser_get_fft_size(), and
@@ -300,11 +301,27 @@ specbleach_denoiser_get_default_parameters(void);
  * @param sample_rate Sample rate in Hz (e.g. 48000).
  * @param frame_size_ms STFT frame size in milliseconds (e.g. 46.0f). Must
  * yield at least OVERLAP (4) samples, otherwise initialization fails.
+ * @param flags Init flags (see SPECBLEACH_INIT_*); 0 = default mode.
+ * Latency is stable for the instance lifetime.
  * @return A new instance or NULL on allocation failure. Free it with
  * specbleach_denoiser_free().
  */
+/**
+ * Init flags for specbleach_denoiser_initialize().
+ *
+ * SPECBLEACH_INIT_LOW_LATENCY: causal 1D-only mode with zero look-ahead.
+ * Latency drops to the STFT frame alone (e.g. 512 samples ~= 10.7 ms at
+ * 48 kHz, so pass 512*1000/sample_rate ms). The frame runs at 8x overlap
+ * (64-sample hop) for agile gain updates; reported latency stays one
+ * frame (overlap never changes it). NLM/DFTT requests are clamped to temporal
+ * internally. This is an init-time choice (different latency/geometry); it
+ * cannot be toggled via load_parameters. Flag value 0 selects the default
+ * full-latency mode.
+ */
+#define SPECBLEACH_INIT_LOW_LATENCY (1u << 0)
+
 SPECBLEACH_API specbleach_denoiser* specbleach_denoiser_initialize(
-    uint32_t sample_rate, float frame_size_ms);
+    uint32_t sample_rate, float frame_size_ms, uint32_t flags);
 
 /**
  * Frees an instance created by specbleach_denoiser_initialize().

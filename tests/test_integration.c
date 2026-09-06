@@ -87,7 +87,7 @@ void test_spectral_denoiser(void) {
   // Initialize denoiser
   float frame_size_ms = 20.0f;
   specbleach_denoiser* handle =
-      specbleach_denoiser_initialize(SAMPLE_RATE, frame_size_ms);
+      specbleach_denoiser_initialize(SAMPLE_RATE, frame_size_ms, 0u);
   TEST_ASSERT(handle != NULL, "Failed to initialize spectral denoiser");
 
   SpecbleachDenoiserParameters parameters = (SpecbleachDenoiserParameters){
@@ -163,7 +163,7 @@ void test_different_noise_levels(void) {
 
   float frame_size_ms = 20.0f;
   specbleach_denoiser* handle =
-      specbleach_denoiser_initialize(SAMPLE_RATE, frame_size_ms);
+      specbleach_denoiser_initialize(SAMPLE_RATE, frame_size_ms, 0u);
   TEST_ASSERT(handle != NULL, "Failed to initialize denoiser");
 
   SpecbleachDenoiserParameters parameters = (SpecbleachDenoiserParameters){
@@ -232,7 +232,7 @@ void test_library_info(void) {
   // Test that we can get valid information after initialization
   float frame_size_ms = 20.0f;
   specbleach_denoiser* handle =
-      specbleach_denoiser_initialize(SAMPLE_RATE, frame_size_ms);
+      specbleach_denoiser_initialize(SAMPLE_RATE, frame_size_ms, 0u);
   TEST_ASSERT(handle != NULL, "Failed to initialize for info test");
 
   latency = (int)specbleach_denoiser_get_latency(handle);
@@ -276,7 +276,7 @@ void test_adaptive_denoiser(void) {
 
   float frame_size_ms = 40.0f;
   specbleach_denoiser* handle =
-      specbleach_denoiser_initialize(SAMPLE_RATE, frame_size_ms);
+      specbleach_denoiser_initialize(SAMPLE_RATE, frame_size_ms, 0u);
   TEST_ASSERT(handle != NULL, "Failed to initialize denoiser");
 
   SpecbleachDenoiserParameters parameters = (SpecbleachDenoiserParameters){
@@ -324,7 +324,7 @@ void test_2d_denoiser(void) {
 
   float frame_size_ms = 20.0f;
   specbleach_denoiser* handle =
-      specbleach_denoiser_initialize(SAMPLE_RATE, frame_size_ms);
+      specbleach_denoiser_initialize(SAMPLE_RATE, frame_size_ms, 0u);
   TEST_ASSERT(handle != NULL, "Failed to initialize unified denoiser");
 
   // Test latency reporting (should include NLM look-ahead)
@@ -417,7 +417,7 @@ void test_runtime_mode_switch(void) {
   generate_test_audio(input_buffer, BLOCK_SIZE, 1000.0f, 0.1f);
 
   specbleach_denoiser* handle =
-      specbleach_denoiser_initialize(SAMPLE_RATE, 20.0f);
+      specbleach_denoiser_initialize(SAMPLE_RATE, 20.0f, 0u);
   TEST_ASSERT(handle != NULL, "Failed to initialize denoiser");
 
   const uint32_t latency_temporal = specbleach_denoiser_get_latency(handle);

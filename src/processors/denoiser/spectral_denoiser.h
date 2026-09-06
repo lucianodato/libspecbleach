@@ -57,10 +57,12 @@ SpectralProcessorHandle spectral_denoiser_initialize(
     uint32_t sample_rate, uint32_t fft_size, uint32_t overlap_factor,
     NoiseProfile* noise_profile);
 /* Preferred: pass the true STFT hop (frame/overlap) so time constants stay
- * frame-rate independent even when the FFT is padded above the frame. */
+ * frame-rate independent even when the FFT is padded above the frame.
+ * low_latency selects the causal 1D-only mode (zero look-ahead; NLM/DFTT
+ * clamped to temporal). */
 SpectralProcessorHandle spectral_denoiser_initialize_with_hop(
     uint32_t sample_rate, uint32_t fft_size, uint32_t overlap_factor,
-    uint32_t hop_samples, NoiseProfile* noise_profile);
+    uint32_t hop_samples, NoiseProfile* noise_profile, bool low_latency);
 void spectral_denoiser_free(SpectralProcessorHandle instance);
 bool load_reduction_parameters(SpectralProcessorHandle instance,
                                DenoiserParameters parameters);

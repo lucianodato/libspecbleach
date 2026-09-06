@@ -34,7 +34,8 @@ int main(void) {
   // 1. Core API
   printf("Testing Core API...\n");
   specbleach_denoiser_free(NULL);
-  specbleach_denoiser* sb = specbleach_denoiser_initialize(sample_rate, 10.0f);
+  specbleach_denoiser* sb =
+      specbleach_denoiser_initialize(sample_rate, 10.0f, 0u);
   if (sb) {
     specbleach_denoiser_free(sb);
   }

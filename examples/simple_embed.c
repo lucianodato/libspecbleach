@@ -59,7 +59,7 @@ int main(void) {
 
   // 1. CREATE
   specbleach_denoiser* denoiser =
-      specbleach_denoiser_initialize(SAMPLE_RATE, FRAME_SIZE_MS);
+      specbleach_denoiser_initialize(SAMPLE_RATE, FRAME_SIZE_MS, 0u);
   if (!denoiser) {
     fprintf(stderr, "Error: failed to initialize denoiser\n");
     return 1;
