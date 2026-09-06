@@ -311,10 +311,12 @@ specbleach_denoiser_get_default_parameters(void);
  *
  * SPECBLEACH_INIT_LOW_LATENCY: causal 1D-only mode with zero look-ahead.
  * Latency drops to the STFT frame alone (e.g. 512 samples ~= 10.7 ms at
- * 48 kHz, so pass 512*1000/sample_rate ms). NLM/DFTT requests are clamped
- * to temporal internally. This is an init-time choice (different
- * latency/geometry); it cannot be toggled via load_parameters. Flag value
- * 0 selects the default full-latency mode.
+ * 48 kHz, so pass 512*1000/sample_rate ms). The frame runs at 8x overlap
+ * (64-sample hop) for agile gain updates; reported latency stays one
+ * frame (overlap never changes it). NLM/DFTT requests are clamped to temporal
+ * internally. This is an init-time choice (different latency/geometry); it
+ * cannot be toggled via load_parameters. Flag value 0 selects the default
+ * full-latency mode.
  */
 #define SPECBLEACH_INIT_LOW_LATENCY (1u << 0)
 

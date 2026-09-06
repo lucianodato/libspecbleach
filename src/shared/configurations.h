@@ -48,6 +48,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define OVERLAP_FACTOR 4
 #define INPUT_WINDOW_TYPE HANN_WINDOW
 #define OUTPUT_WINDOW_TYPE HANN_WINDOW
+// Low-latency mode geometry (SPECBLEACH_INIT_LOW_LATENCY): 8x overlap for
+// 1.33 ms gain-update agility. Reported latency stays one frame: overlap
+// never changes it.
+#define LOW_LATENCY_OVERLAP_FACTOR 8
 
 // FFT configuration: smallest PFFFT-valid size >= frame, frame centered,
 // the rest zero-padded. Padding never affects latency (latency =

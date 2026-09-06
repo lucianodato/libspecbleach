@@ -829,6 +829,12 @@ void test_specbleach_low_latency_mode(void) {
 
   TEST_ASSERT(specbleach_denoiser_get_frame_size(low) == 512,
               "Low-latency frame must be 512 samples");
+  TEST_ASSERT(specbleach_denoiser_get_hop_size(low) == 64,
+              "Low-latency hop must be frame / overlap 8");
+  TEST_ASSERT(specbleach_denoiser_get_fft_size(low) == 512,
+              "Low-latency FFT must use standard padding");
+  TEST_ASSERT(specbleach_denoiser_get_noise_profile_size(low) == 257,
+              "Low-latency profile must match the 512 FFT");
   TEST_ASSERT(specbleach_denoiser_get_latency(low) == 512,
               "Low-latency total must equal the STFT frame (zero look-ahead)");
   TEST_ASSERT(specbleach_denoiser_get_latency(legacy) > 512,

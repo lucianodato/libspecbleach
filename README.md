@@ -151,7 +151,9 @@ For live use (live hosts), pass `SPECBLEACH_INIT_LOW_LATENCY`
 at init with a 512-sample frame (`512*1000/sample_rate` ms). The denoiser
 goes causal: the NLM look-ahead is removed and NLM/DFTT smoothing requests
 are clamped to 1D temporal, so total latency equals the STFT frame alone —
-~10.7 ms at 48 kHz, ~11.6 ms at 44.1 kHz (both under 20 ms):
+~10.7 ms at 48 kHz, ~11.6 ms at 44.1 kHz (both under 20 ms). The frame
+runs at 8x overlap (64-sample hop, Hann/Hann) for agile gain updates;
+reported latency stays one frame:
 
 ```c
 float frame_ms = 512.0f * 1000.0f / (float)sample_rate;
