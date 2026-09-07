@@ -35,7 +35,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 /* --------------------------------------------------------------------- */
 /* Sections below follow the runtime signal pipeline: STFT front-end ->   */
-/* noise estimation -> tonal/transient analysis -> NLM/HPSS processing -> */
+/* noise estimation -> tonal/transient analysis -> NLM smoothing -> */
 /* gain computation -> masking -> gain smoothing -> core plumbing.        */
 /* --------------------------------------------------------------------- */
 
@@ -165,7 +165,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
   4.0F // Noise over-subtraction factor for clean transient estimation
 
 /* --------------------------------------------------------------------- */
-/* 4. NLM 2D smoothing (Lukin Algorithm B) and HPSS transient protection. */
+/* 4. NLM 2D smoothing (Lukin Algorithm B) and transient protection. */
 /* --------------------------------------------------------------------- */
 
 // NLM (Lukin Algorithm B) Parameters

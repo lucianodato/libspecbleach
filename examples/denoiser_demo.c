@@ -210,7 +210,7 @@ int main(int argc, char** argv) {
       .whitening_factor = 0.5f,
       .masking_depth = 0.5f,
       .tonal_reduction_gain = 1.0f,
-      .hpss_enable = true};
+      .transient_protection_enable = true};
 
   static struct option long_options[] = {
       {"reduction", required_argument, 0, 'r'},
