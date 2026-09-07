@@ -5,7 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.2] - Unreleased
+## [0.4.0] - 2026-09-07
+
+### Changed (Breaking)
+- **Type-safe public API**: Reworked public C API around library best practices with type-safe handles and an optional orchestration extras layer. Fallible calls fail fast with `bool`; see README for the zero-dependency embed example.
+- **Linear parameter scale**: API parameters now use linear scale and normalized ranges instead of `remap_percentage_log_like_unity`.
+- **Init flags**: `specbleach_denoiser_initialize()` / `specbleach_stereo_initialize()` take a new `flags` parameter (`SPECBLEACH_INIT_LOW_LATENCY`, `flags = 0` preserves legacy behavior).
 
 ### Removed
 - **Dead stereo API surface**: Removed nine `specbleach_stereo_*` functions with zero callers (`get_sample_rate`, `get_frame_size`, `get_fft_size`, `get_hop_size`, `reset_dsp_state`, `is_transient_detected`, `is_transient_detected_for_channel`, `get_tonal_mask_for_channel`, `get_last_error`) along with the now write-only `last_error` bookkeeping, and the unused `SPECBLEACH_VERSION_NUMBER` macro. The mono `specbleach_denoiser_*` equivalents remain the supported path.
@@ -13,16 +18,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Low-latency mode**: New `SPECBLEACH_INIT_LOW_LATENCY` init flag (new `flags` parameter on `specbleach_denoiser_initialize()` / `specbleach_stereo_initialize()`, defaulted in the C++ wrappers) selecting a causal 1D-only path with zero look-ahead. NLM/DFTT smoothing requests are clamped to temporal internally; masking veto and transient protection stay active. Combined with a 512-sample frame, total latency is ~10.7 ms at 48 kHz / ~11.6 ms at 44.1 kHz for live hosts. The frame runs at 8x overlap (64-sample hop) for agile gain updates with standard FFT padding; reported latency stays one frame. `flags = 0` preserves legacy behavior.
+- **Post-NLM DFTT refinement**: New Discrete Fourier Transform Thresholding stage (Lukin & Todd AES123 §4.2) after NLM 2D smoothing, with past-heavy NLM geometry.
+- **Adaptive Wiener knee**: Per-bin decay-evidence knee plus release shaper for smoother suppression tails.
+- **Frame-rate-independent time constants**: DSP attack/release constants now normalize to wall-clock time regardless of STFT hop/frame rate.
+- **HPSS transient protection**: Zero-latency sliding Harmonic-Percussive Source Separation filter with transient preservation.
+- **Tonal detection**: CV-based tonal detection, statistical variance profile matching, and tonal noise profile scale.
+- **Threshold offset & custom reduction curve**: User-controllable threshold offset and custom reduction curve mapping.
+- **Quality metrics suite**: Real-world quality metrics over committed fixture cases (`test_integration_realworld_quality`).
 - **Internal Thread Pool**: Added `SbThreadPool` (`src/shared/utils/thread_pool.h`), a fixed-size worker pool with semaphore-based dispatch and static contiguous partitioning, powering multi-threaded NLM 2D smoothing without any external threading runtime. Thread count is configurable per instance via `NlmFilterConfig::num_threads` (default `NLM_NUM_THREADS_DEFAULT`).
 
 ### Improved & Refactored
 - **PFFFT Migration**: Replaced FFTW3 backend with vendored PFFFT (`thirdparty/pffft/`). Eliminated external FFTW runtime/dynamic dependency, GPL linking restrictions, network FetchContent dependencies, and packaging overhead.
-- **OpenMP Removal**: Replaced OpenMP parallelization in the NLM 2D filter with the internal worker pool. Binaries no longer depend on `libomp`/`libgomp`/`libomp140` runtimes, dispatches are deterministic (static partitioning instead of dynamic scheduling), and no threads or locks are created in the audio path.
+- **OpenMP Removal**: Replaced OpenMP parallelization in the NLM 2D filter with the internal worker pool. Binaries no longer depend on `libomp`/`libgomp`/`libomp140` runtimes and dispatches are deterministic (static partitioning instead of dynamic scheduling). No threads are created in the audio path (pool is created at init); note that 2D mode still blocks the calling thread on worker completion, so the hard-real-time path is the causal 1D / low-latency mode. Restructured RT contracts are documented in the README.
+- **Denoiser consolidation**: Merged temporal and 2D NLM denoisers into a single processor; synced aggressiveness tracking and added silence bypass optimization plus reduced CPU usage during learn and idle.
 - **Adaptive Profile Persistence**: Updated standalone adaptive noise estimation to persist learned noise profiles to the noise profile manager so estimated spectral curves remain available when switching to manual mode.
 - **Manual Baseline Re-seeding**: Fixed standalone adaptive mode state tracking to reset hybrid initialization state when no manual profile exists, ensuring manual noise profiles captured while adaptive mode is active immediately morph and seed the baseline floor.
 
 ### Fixed
-
+- **Audio artifacts**: Fixed various output artifacts during the 0.4.0 cycle (NLM temporal alignment, HPSS temporal magnitude caching).
 
 ## [0.3.1] - 2026-08-07
 
@@ -75,7 +88,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Made demo applications accept command-line arguments for all processing parameters
 - Improved STFT processor input latency calculation
 - Enhanced memory initialization and error handling across all modules
-- Library now generates versioned shared objects (libspecbleach.so.0.2.0, libspecbleach.so.0)
+- Library now generates versioned shared objects (libspecbleach.so.0.4.0, libspecbleach.so.0)
 
 ### Fixed
 - STFT input latency bug causing incorrect delay calculations
