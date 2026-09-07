@@ -22,7 +22,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  * Audio file regression tests - compare library output against reference files
  */
 
-#include "shared/denoiser_logic/processing/hpss_filter.h"
 #include <math.h>
 #include <sndfile.h>
 #include <specbleach_denoiser.h>
@@ -53,7 +52,7 @@ static const SpecbleachDenoiserParameters canonical_denoiser_params = {
     .smoothing_factor = 0.0f,
     .whitening_factor = 0.5f,
     .masking_depth = 0.5f,
-    .hpss_enable = true};
+    .transient_protection_enable = true};
 
 static const SpecbleachDenoiserParameters canonical_adenoiser_params = {
     .residual_listen = false,
@@ -61,7 +60,7 @@ static const SpecbleachDenoiserParameters canonical_adenoiser_params = {
     .smoothing_factor = 0.0f,
     .whitening_factor = 0.5f,
     .masking_depth = 0.5f,
-    .hpss_enable = true,
+    .transient_protection_enable = true,
 
     .adaptive_noise = true,
     .noise_estimation_method = SPECBLEACH_NOISE_ESTIMATION_SPP_MMSE};

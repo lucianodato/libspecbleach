@@ -330,7 +330,7 @@ static SpecbleachDenoiserParameters make_parameters(float smoothing,
       .tonal_reduction_gain = reduction_gain,
       .dftt_strength =
           mode == 2U ? 1.0F + reduction_db / DFTT_STRENGTH_DOUBLING_DB : 1.0F,
-      .hpss_enable = false};
+      .transient_protection_enable = false};
 }
 
 // Measures the true stream delay empirically: noise burst on a scratch

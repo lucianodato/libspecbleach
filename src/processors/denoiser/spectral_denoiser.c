@@ -730,7 +730,7 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
   // 2.1 Transient Detection via Transient Detector across Critical Bands
   // Transient detection runs on a clean signal estimate with scaled-up noise
   // subtraction to avoid false triggering from residual musical noise.
-  bool transient_enabled = (self->parameters.hpss_enable != 0);
+  bool transient_enabled = (self->parameters.transient_protection_enable != 0);
   if (transient_enabled && self->critical_bands && self->transient_detector) {
     for (uint32_t k = 0U; k < self->real_spectrum_size; ++k) {
       // Scale noise up using TRANSIENT_CLEAN_NOISE_SCALE to eliminate spurious

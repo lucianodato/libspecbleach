@@ -69,7 +69,8 @@ static DenoiserParameters sanitize_denoiser_parameters(
       .aggressiveness = fmaxf(-1.0f, fminf(1.0f, parameters->aggressiveness)),
       .tonal_reduction =
           fmaxf(0.0f, fminf(1.0f, parameters->tonal_reduction_gain)),
-      .hpss_enable = parameters->hpss_enable ? 1 : 0,
+      .transient_protection_enable =
+          parameters->transient_protection_enable ? 1 : 0,
       .noise_profile_offset_linear =
           fmaxf(0.01f, fminf(100.0f, parameters->noise_profile_scale > 0.0f
                                          ? parameters->noise_profile_scale
@@ -118,7 +119,7 @@ SpecbleachDenoiserParameters specbleach_denoiser_get_default_parameters(void) {
   p.suppression_strength = 1.0f;
   p.aggressiveness = 0.0f;
   p.tonal_reduction_gain = 0.1f;
-  p.hpss_enable = false;
+  p.transient_protection_enable = false;
   p.noise_profile_scale = 1.0f;
   p.reduction_curve_bias = NULL;
   p.reduction_curve_enabled = false;

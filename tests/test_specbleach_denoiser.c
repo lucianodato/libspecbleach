@@ -27,7 +27,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdlib.h>
 #include <string.h>
 
-#include "shared/denoiser_logic/processing/hpss_filter.h"
 #include "specbleach_denoiser.h"
 
 #define ROLLING_MEAN 1
@@ -587,15 +586,15 @@ void test_specbleach_smoothing_transition_and_validation(void) {
   }
 
   // Transient during NLM mode: transient-mask loops in the NLM chain
-  params.hpss_enable = true;
+  params.transient_protection_enable = true;
   params.smoothing_mode = SPECBLEACH_SMOOTHING_NLM_2D;
   TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &params,
                                                   sizeof(params)) == true,
-              "Loading NLM with HPSS should succeed");
+              "Loading NLM with transient protection should succeed");
   for (int f = 0; f < 15; ++f) {
     specbleach_denoiser_process(handle, 1024, transient_like, out_buf);
   }
-  params.hpss_enable = false;
+  params.transient_protection_enable = false;
 
   // Profile with mismatched size must be rejected
   TEST_ASSERT(specbleach_denoiser_load_noise_profile_for_mode(
@@ -923,14 +922,14 @@ int main(void) {
   float peak_freqs[10];
   specbleach_denoiser_get_tonal_peaks(h, peak_freqs, 10);
 
-  // Process with tonal reduction and HPSS enabled
+  // Process with tonal reduction and transient protection enabled
   float in_buf[1024] = {0};
   float out_buf[1024] = {0};
   SpecbleachDenoiserParameters t_params = {
       .learn_noise = SPECBLEACH_LEARN_OFF,
       .tonal_reduction_gain = 0.5f,
       .reduction_gain = 0.1f,
-      .hpss_enable = true,
+      .transient_protection_enable = true,
   };
   specbleach_denoiser_load_parameters(h, &t_params, sizeof(t_params));
   specbleach_denoiser_process(h, 1024, in_buf, out_buf);
@@ -964,23 +963,23 @@ int main(void) {
       "Load with curve bias should succeed");
   specbleach_denoiser_process(h, 1024, transient_buf, out_buf);
 
-  // Switch HPSS modes and verify latency
+  // Switch transient protection modes and verify latency
   t_params.residual_listen = 0;
   t_params.reduction_curve_enabled = false;
   t_params.reduction_curve_bias = NULL;
   t_params.reduction_curve_size = 0;
   free(curve_bias);
 
-  t_params.hpss_enable = false;
+  t_params.transient_protection_enable = false;
   specbleach_denoiser_load_parameters(h, &t_params, sizeof(t_params));
   specbleach_denoiser_process(h, 1024, in_buf, out_buf);
   uint32_t lat0 = specbleach_denoiser_get_latency(h);
 
-  t_params.hpss_enable = true;
+  t_params.transient_protection_enable = true;
   specbleach_denoiser_load_parameters(h, &t_params, sizeof(t_params));
   specbleach_denoiser_process(h, 1024, in_buf, out_buf);
   uint32_t lat1 = specbleach_denoiser_get_latency(h);
-  TEST_ASSERT(lat1 == lat0, "Sliding HPSS introduces zero lookahead latency");
+  TEST_ASSERT(lat1 == lat0, "Transient protection adds no lookahead latency");
 
   // Verify NULL handle protections
   TEST_ASSERT(specbleach_denoiser_get_latency(NULL) == 0, "NULL latency");

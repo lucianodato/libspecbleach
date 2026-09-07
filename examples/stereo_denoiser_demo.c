@@ -256,7 +256,7 @@ int main(int argc, char** argv) {
     params.learn_noise = SPECBLEACH_LEARN_ALL;
     params.reduction_gain = powf(10.0f, -options.reduction_db / 20.0f);
     params.smoothing_mode = SPECBLEACH_SMOOTHING_TEMPORAL;
-    params.hpss_enable = true;
+    params.transient_protection_enable = true;
 
     if (!specbleach_stereo_load_parameters(group, &params, sizeof(params))) {
       break;

@@ -204,9 +204,10 @@ typedef struct SpecbleachDenoiserParameters {
   float tonal_reduction_gain;
 
   /**
-   * Enables HPSS transient protection.
+   * Enables transient protection: onset-based transient veto that freezes
+   * gain updates on transient bins (not HPSS separation).
    */
-  bool hpss_enable;
+  bool transient_protection_enable;
 
   /**
    * Noise Profile Linear Scale — multiplier for the noise power spectrum.

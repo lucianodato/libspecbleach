@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Post-NLM DFTT refinement**: New Discrete Fourier Transform Thresholding stage (Lukin & Todd AES123 §4.2) after NLM 2D smoothing, with past-heavy NLM geometry.
 - **Adaptive Wiener knee**: Per-bin decay-evidence knee plus release shaper for smoother suppression tails.
 - **Frame-rate-independent time constants**: DSP attack/release constants now normalize to wall-clock time regardless of STFT hop/frame rate.
-- **HPSS transient protection**: Zero-latency sliding Harmonic-Percussive Source Separation filter with transient preservation.
+- **Transient protection**: Onset-based transient veto (`transient_protection_enable`, formerly misnamed `hpss_enable`) that freezes gain updates on transient bins. It does not use HPSS separation; the standalone sliding-HPSS module remains available but unwired.
 - **Tonal detection**: CV-based tonal detection, statistical variance profile matching, and tonal noise profile scale.
 - **Threshold offset & custom reduction curve**: User-controllable threshold offset and custom reduction curve mapping.
 - **Quality metrics suite**: Real-world quality metrics over committed fixture cases (`test_integration_realworld_quality`).
