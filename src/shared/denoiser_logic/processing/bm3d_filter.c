@@ -291,6 +291,16 @@ Bm3dFilter* bm3d_filter_initialize(Bm3dFilterConfig config) {
     self->config.time_buffer_size = self->config.search_range_time_past +
                                     self->config.search_range_time_future + 1;
   }
+  // Geometry validation: the frame ring needs one slot per relative frame
+  // (-past..+future) and the pointer cache assumes the patch half-width fits
+  // the halo. Anything else reads aliased or out-of-bounds frames.
+  if (self->config.time_buffer_size <
+          self->config.search_range_time_past +
+              self->config.search_range_time_future + 1U ||
+      self->config.patch_size / 2U > NLM_HALO_FRAMES) {
+    bm3d_filter_free(self);
+    return NULL;
+  }
   bm3d_filter_set_h_parameter(self, config.h_parameter <= 0.0F
                                         ? BM3D_DEFAULT_H_PARAMETER
                                         : config.h_parameter);

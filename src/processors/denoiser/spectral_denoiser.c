@@ -184,6 +184,7 @@ static void align_bypass_frame(SbSpectralDenoiser* self, float* fft_spectrum,
   nlm_filter_calculate_snr(self->nlm_filter, reference_spectrum,
                            self->noise_spectrum, self->snr_frame);
   nlm_filter_push_frame(self->nlm_filter, self->snr_frame);
+  bm3d_filter_push_frame(self->bm3d_filter, self->snr_frame);
   const float* delayed_spectrum = spectral_circular_buffer_retrieve(
       self->circular_buffer, self->layer_fft,
       nlm_filter_get_latency_frames(self->nlm_filter));
@@ -632,6 +633,13 @@ bool load_reduction_parameters(SpectralProcessorHandle instance,
     const int requested = normalize_smoothing_mode(parameters.smoothing_mode);
     if (requested != self->active_mode) {
       if (is_2d_family(requested) && is_2d_family(self->active_mode)) {
+        // Crossing BM3D changes the map producer feeding the DFTT rings;
+        // reset so the refinement only ever sees NLM priors (it falls back
+        // to the raw NLM output until the history refills).
+        if ((requested == SPECBLEACH_SMOOTHING_BM3D) !=
+            (self->active_mode == SPECBLEACH_SMOOTHING_BM3D)) {
+          dftt_filter_reset(self->dftt_filter);
+        }
         self->active_mode = requested;
         self->pending_mode = requested;
       } else {

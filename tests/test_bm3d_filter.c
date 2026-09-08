@@ -57,6 +57,50 @@ static void test_bm3d_lifecycle(void) {
               "BM3D init with zero spectrum_size should fail");
 }
 
+static void test_bm3d_geometry_validation(void) {
+  // Nonzero time_buffer_size smaller than past+future+1 would alias the
+  // frame ring and must be rejected.
+  Bm3dFilterConfig short_buffer = {
+      .spectrum_size = 64,
+      .time_buffer_size = 20, // past(16) + future(4) + 1 == 21 required
+      .patch_size = 8,
+      .search_range_freq = 8,
+      .search_range_time_past = 16,
+      .search_range_time_future = 4,
+      .h_parameter = 1.0f,
+  };
+  TEST_ASSERT(bm3d_filter_initialize(short_buffer) == NULL,
+              "BM3D init with time_buffer_size < past+future+1 must fail");
+
+  // Patch half-width beyond NLM_HALO_FRAMES (8) would index the frame
+  // pointer cache out of bounds and must be rejected.
+  Bm3dFilterConfig wide_patch = {
+      .spectrum_size = 64,
+      .time_buffer_size = 21,
+      .patch_size = 18, // half-width 9 > NLM_HALO_FRAMES (8)
+      .search_range_freq = 8,
+      .search_range_time_past = 16,
+      .search_range_time_future = 4,
+      .h_parameter = 1.0f,
+  };
+  TEST_ASSERT(bm3d_filter_initialize(wide_patch) == NULL,
+              "BM3D init with patch half-width > NLM_HALO_FRAMES must fail");
+
+  // Exact boundary (half-width == NLM_HALO_FRAMES) stays valid.
+  Bm3dFilterConfig edge_patch = {
+      .spectrum_size = 64,
+      .time_buffer_size = 21,
+      .patch_size = 16, // half-width 8 == NLM_HALO_FRAMES
+      .search_range_freq = 8,
+      .search_range_time_past = 16,
+      .search_range_time_future = 4,
+      .h_parameter = 1.0f,
+  };
+  Bm3dFilter* filter = bm3d_filter_initialize(edge_patch);
+  TEST_ASSERT(filter != NULL, "patch half-width == NLM_HALO_FRAMES is valid");
+  bm3d_filter_free(filter);
+}
+
 static void test_bm3d_uniform_and_silence(void) {
   Bm3dFilterConfig config = {
       .spectrum_size = 32,
@@ -155,6 +199,7 @@ static void test_bm3d_spike_reduction(void) {
 int main(void) {
   printf("Running BM3D filter tests...\n\n");
   test_bm3d_lifecycle();
+  test_bm3d_geometry_validation();
   test_bm3d_uniform_and_silence();
   test_bm3d_spike_reduction();
   printf("\nAll BM3D filter tests passed!\n");
