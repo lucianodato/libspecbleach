@@ -204,9 +204,14 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define DFTT_MAX_TIME_FRAMES (16U)
 #define DFTT_FREQ_OVERLAP (4U)
 #define DFTT_SILENCE_EPS (1e-9F)
-#define DFTT_KILL_K 32.0F
+#define DFTT_KILL_K 12.0F
 // Wiener threshold as a multiple of the tile's white speckle power
-// (sigma2); runtime-tunable via dftt_strength (reduction-depth coupling)
+// (sigma2); runtime-tunable via dftt_strength (reduction-depth coupling).
+// Tuned on the kill<->damage frontier (effective kill = KILL_K * strength):
+// 32 keeps only the >18 dB skeleton (max flicker suppression, heavy SD
+// damage); 12 keeps ~12 dB structure with flicker improvement ~15% (gate:
+// 10%). Lower admits speckle, higher strips harmonics — measure both axes
+// before touching.
 #define DFTT_STRENGTH_MAX (4.0F)
 // Vectorized-distance patch ceiling (matches the frame_rate_norm.h fallback
 // clamp 4..16) and pointer-cache halo (half of the ceiling each side).
@@ -223,6 +228,29 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define NLM_DISTANCE_THRESHOLD_MULTIPLIER 4.0F
 #define NLM_NUM_THREADS_DEFAULT 4U
 #define NLM_MAX_THREADS 16U
+
+// BM3D-lite (1-pass collaborative filter): reuses the NLM search geometry and
+// latency so mode switches stay instant and the reported look-ahead never
+// changes. Block-match groups of similar patches, hard-thresholds the stack
+// residuals, then collaboratively averages.
+#define BM3D_STACK_MAX 8U
+#define BM3D_THRESHOLD_K 3.0F
+// Match admission gate in h^2 units (SSD below this enters the group stack).
+// BM3D-specific so the collaborative shrink can admit stricter/looser
+// patches than NLM averaging. Default mirrors NLM.
+#define BM3D_DISTANCE_THRESHOLD_MULTIPLIER 4.0F
+// SNR-confidence crossover (linear SNR-map units, ~+6 dB above the noise
+// floor): 2D-smoothed maps (NLM, BM3D) are blended back against the raw bin
+// with steep 4th-power weighting raw_w = e^4/(e^4+crossover^4) driven by the
+// smoothed estimate e itself — instantaneous noise spikes must not buy raw
+// passthrough, or gap suppression regresses. Strong harmonics keep their
+// raw value; the noise floor stays fully smoothed. Shared by the map
+// smoothers; applied once at engine level on the aligned delayed map.
+// DFTT-refined output is exempt (its flicker-suppression contract needs
+// those bins smoothed).
+#define SMOOTHING_CONFIDENCE_SNR 2.0F
+#define BM3D_DEFAULT_H_PARAMETER NLM_DEFAULT_H_PARAMETER
+#define BM3D_MAX_H_PARAMETER NLM_MAX_H_PARAMETER
 
 // Must be >= search_time_past + search_time_future + patch_size for NLM caching
 // Using power-of-two (64U) for efficient modulo wrap-around and future headroom
@@ -316,6 +344,11 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define GAIN_SMOOTHING_MAX_RELEASE_SEC (0.500F)
 #define GAIN_SMOOTHING_FIXED_ATTACK_SEC (0.001F)
 #define GAIN_SMOOTHING_CURVE_EXPONENT (2.0F)
+// Release slider cap for the temporal gain smoother (p^2 curve: 0.4 ~=
+// 88 ms max release). Past this, longer releases freeze gains high after
+// offsets on gappy material and suppression collapses faster than any
+// musical-noise benefit accrues; the slider top still adds spectral passes.
+#define GAIN_SMOOTHING_RELEASE_P_CAP (0.40F)
 
 // Base soft knee of the Wiener subtraction curve (in units of noise power):
 // lifts the numerator by knee*noise so bins slightly below the oversubtraction

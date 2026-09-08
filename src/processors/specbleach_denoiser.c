@@ -59,7 +59,10 @@ static DenoiserParameters sanitize_denoiser_parameters(
               : ((int)parameters->smoothing_mode ==
                          (int)SPECBLEACH_SMOOTHING_NLM_2D_DFTT
                      ? (int)SPECBLEACH_SMOOTHING_NLM_2D_DFTT
-                     : (int)SPECBLEACH_SMOOTHING_TEMPORAL),
+                     : ((int)parameters->smoothing_mode ==
+                                (int)SPECBLEACH_SMOOTHING_BM3D
+                            ? (int)SPECBLEACH_SMOOTHING_BM3D
+                            : (int)SPECBLEACH_SMOOTHING_TEMPORAL)),
       .dftt_strength = parameters->dftt_strength > 0.0f
                            ? fminf(parameters->dftt_strength, DFTT_STRENGTH_MAX)
                            : 1.0f,

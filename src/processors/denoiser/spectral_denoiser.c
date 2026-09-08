@@ -26,6 +26,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "shared/denoiser_logic/core/noise_profile.h"
 #include "shared/denoiser_logic/estimators/adaptive_noise_estimator.h"
 #include "shared/denoiser_logic/estimators/noise_estimator.h"
+#include "shared/denoiser_logic/processing/bm3d_filter.h"
 #include "shared/denoiser_logic/processing/dftt_filter.h"
 #include "shared/denoiser_logic/processing/gain_calculator.h"
 #include "shared/denoiser_logic/processing/masking_veto.h"
@@ -53,9 +54,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  * Both smoothing strategies (1D temporal/spatial gain smoothing and 2D
  * Non-Local Means patch smoothing) share the same chassis: STFT analysis,
  * noise estimation/profile, transient detection, suppression, masking veto,
- * gain calculation and post-processing. Both smoothing sub-modules are fully
+ * gain calculation and post-processing. All smoothing sub-modules are fully
  * allocated at initialization so switching modes at runtime is allocation-
- * free. Both modes share a common algorithmic delay (the NLM look-ahead) so
+ * free. Every mode shares a common algorithmic delay (the 2D look-ahead) so
  * reported latency never changes on a mode switch.
  */
 typedef struct SbSpectralDenoiser {
@@ -101,6 +102,7 @@ typedef struct SbSpectralDenoiser {
   NoiseEstimator* noise_estimator;
   AdaptiveNoiseEstimator* adaptive_estimator;
   NlmFilter* nlm_filter;
+  Bm3dFilter* bm3d_filter;
   DfttFilter* dftt_filter;
   SpectralSmoother* spectrum_smoothing;
   ReleaseShaper* release_shaper;
@@ -145,12 +147,19 @@ static bool is_nlm_family(const int mode) {
          mode == SPECBLEACH_SMOOTHING_NLM_2D_DFTT;
 }
 
+static bool is_2d_family(const int mode) {
+  return is_nlm_family(mode) || mode == SPECBLEACH_SMOOTHING_BM3D;
+}
+
 static int normalize_smoothing_mode(const int mode) {
   if (mode == SPECBLEACH_SMOOTHING_NLM_2D) {
     return SPECBLEACH_SMOOTHING_NLM_2D;
   }
   if (mode == SPECBLEACH_SMOOTHING_NLM_2D_DFTT) {
     return SPECBLEACH_SMOOTHING_NLM_2D_DFTT;
+  }
+  if (mode == SPECBLEACH_SMOOTHING_BM3D) {
+    return SPECBLEACH_SMOOTHING_BM3D;
   }
   return SPECBLEACH_SMOOTHING_TEMPORAL;
 }
@@ -340,6 +349,23 @@ static SpectralProcessorHandle spectral_denoiser_initialize_inner(
     return NULL;
   }
 
+  // BM3D-lite shares the NLM geometry/latency so switches stay instant.
+  Bm3dFilterConfig bm3d_config = {
+      .spectrum_size = self->real_spectrum_size,
+      .time_buffer_size = nlm_geo.past + nlm_geo.future + 1,
+      .patch_size = nlm_geo.patch,
+      .paste_block_size = nlm_geo.paste,
+      .search_range_freq = nlm_geo.search_freq,
+      .search_range_time_past = nlm_geo.past,
+      .search_range_time_future = nlm_geo.future,
+      .h_parameter = NLM_DEFAULT_H_PARAMETER,
+  };
+  self->bm3d_filter = bm3d_filter_initialize(bm3d_config);
+  if (!self->bm3d_filter) {
+    spectral_denoiser_free(self);
+    return NULL;
+  }
+
   // DFTT post-filter (paper S4.2 lite): past-only time span in ms so it adds
   // no latency on top of the NLM look-ahead; freq block in Hz so the
   // analysis stays invariant across frame sizes.
@@ -474,6 +500,9 @@ void spectral_denoiser_free(SpectralProcessorHandle instance) {
   if (self->nlm_filter) {
     nlm_filter_free(self->nlm_filter);
   }
+  if (self->bm3d_filter) {
+    bm3d_filter_free(self->bm3d_filter);
+  }
   if (self->dftt_filter) {
     dftt_filter_free(self->dftt_filter);
   }
@@ -596,13 +625,13 @@ bool load_reduction_parameters(SpectralProcessorHandle instance,
 
   // Runtime smoothing mode switching (allocation-free): the outgoing mode is
   // crossfaded against the incoming one over SMOOTHING_TRANSITION_SECONDS.
-  // Within the NLM family (NLM <-> NLM+DFTT) the switch is instant: both
-  // sides share NLM history, latency and DFTT rings (pushed on every NLM
+  // Within the 2D family (NLM <-> NLM+DFTT <-> BM3D) the switch is instant:
+  // all sides share NLM history, latency and DFTT rings (pushed on every 2D
   // pass), so only the map source flips — no crossfade needed.
   if (!self->in_transition) {
     const int requested = normalize_smoothing_mode(parameters.smoothing_mode);
     if (requested != self->active_mode) {
-      if (is_nlm_family(requested) && is_nlm_family(self->active_mode)) {
+      if (is_2d_family(requested) && is_2d_family(self->active_mode)) {
         self->active_mode = requested;
         self->pending_mode = requested;
       } else {
@@ -627,12 +656,15 @@ bool load_reduction_parameters(SpectralProcessorHandle instance,
     }
   }
 
-  // Update NLM h parameter based on smoothing factor
+  // Update NLM/BM3D h parameter based on smoothing factor
+  const float h_value = (parameters.smoothing_factor > 0.0F)
+                            ? (0.5F + (parameters.smoothing_factor * 4.5F))
+                            : 0.0F;
   if (self->nlm_filter) {
-    nlm_filter_set_h_parameter(
-        self->nlm_filter, (parameters.smoothing_factor > 0.0F)
-                              ? (0.5F + (parameters.smoothing_factor * 4.5F))
-                              : 0.0F);
+    nlm_filter_set_h_parameter(self->nlm_filter, h_value);
+  }
+  if (self->bm3d_filter) {
+    bm3d_filter_set_h_parameter(self->bm3d_filter, h_value);
   }
 
   // Update DFTT refinement strength (reduction-depth coupling, live)
@@ -779,30 +811,39 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
     spectral_circular_buffer_push(self->circular_buffer, self->layer_noise,
                                   self->noise_spectrum);
 
-    // Compute SNR for NLM using CURRENT noise and push frame. This keeps the
-    // NLM history rolling even in temporal mode so a runtime mode switch is
-    // seamless and allocation-free.
+    // Compute SNR for 2D filters using CURRENT noise and push frame. This
+    // keeps both NLM and BM3D histories rolling even in temporal mode so a
+    // runtime mode switch is seamless and allocation-free.
     nlm_filter_calculate_snr(self->nlm_filter, reference_spectrum,
                              self->noise_spectrum, self->snr_frame);
     nlm_filter_push_frame(self->nlm_filter, self->snr_frame);
+    bm3d_filter_push_frame(self->bm3d_filter, self->snr_frame);
 
     const uint32_t nlm_delay = nlm_filter_get_latency_frames(self->nlm_filter);
 
-    // NLM smoothing (runs when NLM is the active or the incoming mode). The
-    // smoothed magnitude is captured explicitly so the temporal chain cannot
-    // overwrite the shared alignment layer before the NLM chain consumes it.
-    const bool nlm_needed =
-        is_nlm_family(self->active_mode) ||
-        (self->in_transition && is_nlm_family(self->pending_mode));
+    // 2D smoothing (runs when a 2D mode is the active or the incoming mode).
+    // The smoothed magnitude is captured explicitly so the temporal chain
+    // cannot overwrite the shared alignment layer before the 2D chain
+    // consumes it.
+    const bool mode_2d_needed =
+        is_2d_family(self->active_mode) ||
+        (self->in_transition && is_2d_family(self->pending_mode));
     // DFTT refinement follows the DFTT mode: the active chain, or the incoming
-    // side of a temporal crossfade. Rings are pushed on every NLM pass so they
+    // side of a temporal crossfade. Rings are pushed on every 2D pass so they
     // stay warm for instant intra-family flips.
     const bool use_dftt =
         (self->active_mode == SPECBLEACH_SMOOTHING_NLM_2D_DFTT) ||
         (self->in_transition &&
          self->pending_mode == SPECBLEACH_SMOOTHING_NLM_2D_DFTT);
-    const bool nlm_ran =
-        nlm_needed && nlm_filter_process(self->nlm_filter, self->smoothed_snr);
+    // BM3D source follows the same active/incoming rule; DFTT modes always
+    // read NLM so the refinement rings stay valid.
+    const bool use_bm3d = (self->active_mode == SPECBLEACH_SMOOTHING_BM3D) ||
+                          (self->in_transition &&
+                           self->pending_mode == SPECBLEACH_SMOOTHING_BM3D);
+    const bool filter_ran =
+        mode_2d_needed &&
+        (use_bm3d ? bm3d_filter_process(self->bm3d_filter, self->smoothed_snr)
+                  : nlm_filter_process(self->nlm_filter, self->smoothed_snr));
 
     // Retrieve unified aligned frames at the common delay
     delayed_spectrum = spectral_circular_buffer_retrieve(
@@ -817,28 +858,53 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
       delayed_noise = self->noise_spectrum;
     }
 
-    if (nlm_ran) {
+    if (filter_ran) {
+      // Noisy SNR row aligned with the 2D-emitted frame, recomputed from the
+      // delayed frames so it describes the same tile the filters just
+      // emitted. Feeds the DFTT rings and the confidence blend below.
+      // Reuses the shared spectral_features scratch (the temporal chain
+      // recomputes it on the same delayed frame anyway).
+      float* delayed_reference =
+          get_spectral_feature(self->spectral_features, delayed_spectrum,
+                               self->fft_size, self->spectrum_type);
+      nlm_filter_calculate_snr(self->nlm_filter, delayed_reference,
+                               delayed_noise, self->snr_delayed);
       // DFTT post-filter (paper S4.2): the noisy SNR row aligned with the
-      // NLM-emitted frame — recomputed from the delayed frames so both ring
+      // 2D-emitted frame — recomputed from the delayed frames so both ring
       // inputs describe the same tile — is refined while the NLM output sets
       // the suppression threshold. Falls back to the raw NLM output until the
       // DFTT history is full, or when the active mode is NLM-only.
-      const float* post_nlm = self->smoothed_snr;
+      float* post_nlm = self->smoothed_snr;
       if (self->dftt_filter) {
-        // Same feature extraction as the current-frame SNR (line ~730), but on
-        // the delayed frame NLM just emitted, so both DFTT ring inputs describe
-        // the same tile. Reuses the shared spectral_features scratch (the
-        // temporal chain recomputes it on the same delayed frame anyway).
-        float* delayed_reference =
-            get_spectral_feature(self->spectral_features, delayed_spectrum,
-                                 self->fft_size, self->spectrum_type);
-        nlm_filter_calculate_snr(self->nlm_filter, delayed_reference,
-                                 delayed_noise, self->snr_delayed);
         dftt_filter_push(self->dftt_filter, self->snr_delayed,
                          self->smoothed_snr);
         if (use_dftt &&
             dftt_filter_process(self->dftt_filter, self->dftt_snr)) {
           post_nlm = self->dftt_snr;
+        }
+      }
+      // SNR-confidence blend-back (NLM/BM3D maps only): bins the smoother
+      // itself rates far above the noise floor keep their raw value — map
+      // smoothing drags strong harmonics — while the rest take the smoothed
+      // estimate. Confidence is driven by the smoothed estimate (not the
+      // instantaneous bin: noise spikes must not buy raw passthrough, or
+      // gap suppression regresses). Steep 4th-power weighting
+      // raw_w = e^4/(e^4+crossover^4) with crossover
+      // SMOOTHING_CONFIDENCE_SNR. DFTT-refined output is exempt: its
+      // flicker-suppression contract lives in the bins this blend would
+      // restore to raw. Both post_nlm candidates are self-owned scratch
+      // (the DFTT rings were already pushed), so blend in place.
+      if (post_nlm == self->smoothed_snr) {
+        const float conf_sq =
+            SMOOTHING_CONFIDENCE_SNR * SMOOTHING_CONFIDENCE_SNR;
+        const float conf_4th = conf_sq * conf_sq;
+        const uint32_t blend_n = self->real_spectrum_size;
+        for (uint32_t k = 0U; k < blend_n; k++) {
+          const float e = post_nlm[k];
+          const float e_sq = e * e;
+          const float e_4th = e_sq * e_sq;
+          const float raw_w = e_4th / (e_4th + conf_4th);
+          post_nlm[k] = raw_w * self->snr_delayed[k] + (1.0F - raw_w) * e;
         }
       }
       nlm_filter_reconstruct_magnitude(self->nlm_filter, post_nlm,
@@ -863,7 +929,7 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
     const float total = (float)self->transition_frames;
     const float w = (float)self->transition_pos / total; // 0 → 1
 
-    if (is_nlm_family(self->previous_mode)) {
+    if (is_2d_family(self->previous_mode)) {
       (void)run_nlm_chain(self, fft_spectrum, nlm_smoothed, delayed_noise,
                           gain_a, self->alpha, self->beta);
       run_temporal_chain(self, fft_spectrum, delayed_noise, gain_b,
@@ -884,7 +950,7 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
       self->active_mode = self->pending_mode;
       self->in_transition = false;
     }
-  } else if (!self->low_latency && is_nlm_family(self->active_mode)) {
+  } else if (!self->low_latency && is_2d_family(self->active_mode)) {
     (void)run_nlm_chain(self, fft_spectrum, nlm_smoothed, delayed_noise, gain_a,
                         self->alpha, self->beta);
   } else {
@@ -1151,10 +1217,16 @@ static void run_temporal_chain(SbSpectralDenoiser* self,
 
   // Temporal gain smoothing: on detected transients, the time smoother
   // attacks instantly (0 attack time) strictly on transient bins, while
-  // non-transient bins receive 100% of full time smoothing.
+  // non-transient bins receive 100% of full time smoothing. The release is
+  // capped (GAIN_SMOOTHING_RELEASE_P_CAP): uncapped long releases freeze
+  // gains high after offsets on gappy material, collapsing suppression
+  // (measured: Temporal att 11.7 -> 4.0 dB on speech+city across the top
+  // half of the slider), while the cap bounds mistracking without any fast
+  // path that could chop onsets (cf. low-latency 130 ms release cap).
   TimeSmoothingParameters spectral_smoothing_parameters =
       (TimeSmoothingParameters){
-          .smoothing = self->parameters.smoothing_factor,
+          .smoothing = fminf(self->parameters.smoothing_factor,
+                             GAIN_SMOOTHING_RELEASE_P_CAP),
           .transient_mask = self->transient_mask,
           .release_scale = (self->parameters.smoothing_factor > 0.0F)
                                ? self->release_scale
@@ -1226,7 +1298,7 @@ uint32_t spectral_denoiser_get_latency_frames(
     return 0;
   }
 
-  // Common delay: NLM look-ahead applies to both smoothing modes so the
+  // Common delay: 2D look-ahead applies to every smoothing mode so the
   // reported latency never changes on a runtime mode switch.
   // Low-latency mode is causal: zero look-ahead by construction.
   if (self->low_latency) {

@@ -586,7 +586,10 @@ bool dftt_filter_process(DfttFilter* f, float* refined_snr) {
      * against the structure prior — coefficients where the NLM tile shows
      * structure (pr >> sigma2) pass the noisy (sharp) value, coefficients
      * where it shows none (pr ~ 0) die. The tile's flat level and slow
-     * envelopes live at huge pr, so they pass without exemptions. */
+     * envelopes live at huge pr, so they pass without exemptions. Prior
+     * stays absolute by design: a noisy-witness rescue was measured
+     * SD-neutral — the monotone clamp below caps output at the NLM map, so
+     * DFTT cannot repair prior undershoots (only overshoots, i.e. speckle). */
     const float sigma2 = wsum_r2;
     const float speckle_power = f->kill_k * sigma2;
     for (size_t k = 0U; k < (size_t)bt * bf; k++) {

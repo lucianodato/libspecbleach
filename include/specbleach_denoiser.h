@@ -72,6 +72,7 @@ typedef enum SpecbleachSmoothingMode {
   SPECBLEACH_SMOOTHING_TEMPORAL = 0, /**< 1D temporal/spatial gain smoothing */
   SPECBLEACH_SMOOTHING_NLM_2D = 1,   /**< 2D Non-Local Means patch smoothing */
   SPECBLEACH_SMOOTHING_NLM_2D_DFTT = 2, /**< NLM + DFTT quefrency refinement */
+  SPECBLEACH_SMOOTHING_BM3D = 3, /**< 1-pass block-match collaborative filter */
 } SpecbleachSmoothingMode;
 
 /**
@@ -141,8 +142,8 @@ typedef struct SpecbleachDenoiserParameters {
    * the range are clamped.
    *
    * In temporal mode this controls temporal/spatial gain smoothing. In NLM
-   * 2D mode it controls the NLM h parameter and 2D time-frequency artifact
-   * smoothing.
+   * 2D / BM3D modes it controls the h parameter and 2D time-frequency
+   * artifact smoothing.
    */
   float smoothing_factor;
 

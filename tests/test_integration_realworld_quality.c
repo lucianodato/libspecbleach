@@ -95,6 +95,13 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define PEAK_DYNAMIC_DB 25.0F // bin inclusion floor relative to frame peak
 #define DEV_CLIP_DB 20.0F     // per-bin deviation clamp (outlier robustness)
 
+// SD split diagnostic (report-only, no gates): where the damage lives.
+// Bands in Hz; transient = clean frame-energy onset + short tail.
+#define SD_BAND_MF_HZ 1000.0F
+#define SD_BAND_HF_HZ 4000.0F
+#define SD_TRANSIENT_ATTACK_DB 6.0F
+#define SD_TRANSIENT_TAIL_FRAMES 1U
+
 // Decay metric tuning
 #define ENV_WINDOW 512U
 #define ENV_HOP 256U
@@ -105,6 +112,14 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 // default; the sweep axis is the smoothing slider.
 #define PLUGIN_REDUCTION_DB 12.0F // Master Reduction default (linked tonal)
 #define DFTT_STRENGTH_DOUBLING_DB 12.0F // kDfttStrengthDoublingReductionDb
+
+// Synthetic white-noise case: deterministic LCG (high 24 bits) so the case is
+// reproducible across platforms without shipping a fixture binary. Reproduces
+// the low-SNR white-noise guitar scenario from the BM3D listening tests.
+#define WHITE_NOISE_LCG_SEED 12345U
+#define WHITE_NOISE_LCG_MULT 1664525U
+#define WHITE_NOISE_LCG_INC 1013904223U
+#define WHITE_NOISE_AMPLITUDE 0.2F
 
 typedef struct SmoothingConfig {
   const char* name;
@@ -117,35 +132,48 @@ static const SmoothingConfig SMOOTHING_CONFIGS[3] = {
     {"smoothing-80", 0.80F},
 };
 
+#define NUM_CASES 5U
+
 typedef struct Case {
   const char* name;
   float snr_db;
+  const char* clean_source; // clean fixture dir (defaults to name)
+  bool white_noise;         // synthetic deterministic noise (no fixture)
 } Case;
 
 // Fixture cases with their designated SNR (matrix: stationary/non-stationary
-// noise x speech/music x moderate/hard SNR)
-static const Case CASES[4] = {
-    {"case_voice_fan", 12.0F},
-    {"case_voice_city", 6.0F},
-    {"case_guitar_electric", 18.0F},
-    {"case_drums_fridge", 6.0F},
+// noise x speech/music x moderate/hard SNR). case_guitar_white reuses the
+// electric-guitar clean track against synthetic white noise at 3 dB: the
+// low-SNR white-noise scenario where BM3D vs NLM differences actually show.
+static const Case CASES[NUM_CASES] = {
+    {"case_voice_fan", 12.0F, NULL, false},
+    {"case_voice_city", 6.0F, NULL, false},
+    {"case_guitar_electric", 18.0F, NULL, false},
+    {"case_drums_fridge", 6.0F, NULL, false},
+    {"case_guitar_white", 3.0F, "case_guitar_electric", true},
 };
 
-#define NUM_MODES 3U
+#define NUM_MODES 4U
 
 // Per-mode regression gates for the CI (plugin-default smoothing) config,
-// aggregated over cases: [Temporal, NLM 2D, NLM 2D + DFTT]
+// aggregated over cases: [Temporal, NLM 2D, NLM 2D + DFTT, BM3D]
 // Calibrated on delay-compensated scores at 12 dB reduction (att ~10.9,
 // sd ~3.0, mni ~1.22, decay ~0.0) with headroom for cross-platform variance.
-static const float ATT_GATES_DB[3] = {8.0F, 8.0F, 8.0F};   // minimum rejection
-static const float SD_GATES_DB[3] = {5.0F, 5.0F, 5.0F};    // maximum damage
-static const float MNI_GATES[3] = {1.4F, 1.4F, 1.4F};      // max musical noise
-static const float DECAY_GATES_DB[3] = {2.0F, 2.0F, 2.0F}; // max smearing
+static const float ATT_GATES_DB[4] = {8.0F, 8.0F, 8.0F,
+                                      8.0F}; // minimum rejection
+static const float SD_GATES_DB[4] = {5.0F, 5.0F, 5.0F, 5.0F}; // maximum damage
+static const float MNI_GATES[4] = {1.4F, 1.4F, 1.4F, 1.4F}; // max musical noise
+static const float DECAY_GATES_DB[4] = {2.0F, 2.0F, 2.0F, 2.0F}; // max smearing
 
 typedef struct Metrics {
   float att_db;     // attenuation on learned-noise bins over noise-only frames
   float att_all_db; // attenuation over all bins (whitening-sensitive reference)
   float sd_db;      // log-spectral distortion on active frames
+  float sd_lf_db;   // SD on LF bins (< 1 kHz), report-only
+  float sd_mf_db;   // SD on MF bins (1-4 kHz), report-only
+  float sd_hf_db;   // SD on HF bins (> 4 kHz), report-only
+  float sd_tr_db;   // SD on transient active frames, report-only
+  float sd_st_db;   // SD on steady active frames, report-only
   float mni_ratio;  // output shape-CV / unprocessed noise shape-CV
   float mni_out;    // raw output shape-CV (for reference when tuning)
   float decay_db;   // mean post-transient decay deficit
@@ -187,6 +215,18 @@ static float* load_wav(const char* path, uint32_t* sample_rate,
   sf_close(file);
   *sample_rate = (uint32_t)info.samplerate;
   *length = (uint32_t)info.frames;
+  return data;
+}
+
+static float* make_white_noise(uint32_t length) {
+  float* data = (float*)malloc((size_t)length * sizeof(float));
+  TEST_ASSERT(data != NULL, "white noise alloc");
+  uint32_t state = WHITE_NOISE_LCG_SEED;
+  for (uint32_t n = 0U; n < length; n++) {
+    state = state * WHITE_NOISE_LCG_MULT + WHITE_NOISE_LCG_INC;
+    data[n] = (((float)(state >> 8) / 16777216.0F) * 2.0F - 1.0F) *
+              WHITE_NOISE_AMPLITUDE;
+  }
   return data;
 }
 
@@ -574,19 +614,85 @@ static float shape_cv(const Analyzer* an, const uint8_t* noise_only) {
   return (float)(cv_sum / (double)cv_count);
 }
 
+// SD split diagnostic: overall + LF/MF/HF band medians + transient/steady
+// medians over signal-active frames. Band medians reuse the frame's global
+// peak floor (signal-dominant bins only); transient = clean energy onset.
+// Subsets below MIN_METRIC_FRAMES fall back to the overall median.
+typedef struct SdSplit {
+  float lf_db;
+  float mf_db;
+  float hf_db;
+  float tr_db;
+  float st_db;
+} SdSplit;
+
+static float median_in_place(float* values, uint32_t count) {
+  // median via insertion sort (count is small)
+  for (uint32_t i = 1U; i < count; i++) {
+    float key = values[i];
+    int j = (int)i - 1;
+    while (j >= 0 && values[j] > key) {
+      values[j + 1] = values[j];
+      j--;
+    }
+    values[j + 1] = key;
+  }
+  return values[count / 2U];
+}
+
 // SD: median per-frame log-spectral distance over signal-active frames,
 // restricted to bins within PEAK_DYNAMIC_DB of the frame's clean peak.
 static float spectral_distortion(const Analyzer* clean_an,
-                                 const Analyzer* out_an,
-                                 const uint8_t* active) {
+                                 const Analyzer* out_an, const uint8_t* active,
+                                 uint32_t sample_rate, SdSplit* split) {
   const uint32_t bins = ANALYSIS_FFT / 2U;
   const float bin_floor_ratio = powf(10.0F, -PEAK_DYNAMIC_DB / 10.0F);
   const float clip = DEV_CLIP_DB * DEV_CLIP_DB;
+  const float bin_hz = (float)sample_rate / (float)ANALYSIS_FFT;
+  const uint32_t mf_bin = (uint32_t)(SD_BAND_MF_HZ / bin_hz);
+  const uint32_t hf_bin = (uint32_t)(SD_BAND_HF_HZ / bin_hz);
+  const uint32_t nf = clean_an->num_frames;
 
-  float* frame_sd = (float*)calloc(clean_an->num_frames, sizeof(float));
-  TEST_ASSERT(frame_sd != NULL, "sd alloc");
+  // Transient mask: clean frame-energy onsets (+ tail), intersected with
+  // active at accumulation time.
+  uint8_t* transient = (uint8_t*)calloc(nf, sizeof(uint8_t));
+  TEST_ASSERT(transient != NULL, "transient alloc");
+  {
+    float prev_p = 0.0F;
+    for (uint32_t f = 0U; f < nf; f++) {
+      float p = 0.0F;
+      for (uint32_t k = 1U; k < bins; k++) {
+        p += clean_an->power[f * bins + k];
+      }
+      const float onset_db = 10.0F * log10f((p + 1e-12F) / (prev_p + 1e-12F));
+      prev_p = p;
+      if (onset_db > SD_TRANSIENT_ATTACK_DB) {
+        const uint32_t last = f + SD_TRANSIENT_TAIL_FRAMES < nf
+                                  ? f + SD_TRANSIENT_TAIL_FRAMES
+                                  : nf - 1U;
+        for (uint32_t t = f; t <= last; t++) {
+          transient[t] = 1U;
+        }
+      }
+    }
+  }
+
+  float* frame_sd = (float*)calloc(nf, sizeof(float));
+  float* frame_lf = (float*)calloc(nf, sizeof(float));
+  float* frame_mf = (float*)calloc(nf, sizeof(float));
+  float* frame_hf = (float*)calloc(nf, sizeof(float));
+  float* frame_tr = (float*)calloc(nf, sizeof(float));
+  float* frame_st = (float*)calloc(nf, sizeof(float));
+  TEST_ASSERT(frame_sd != NULL && frame_lf != NULL && frame_mf != NULL &&
+                  frame_hf != NULL && frame_tr != NULL && frame_st != NULL,
+              "sd alloc");
   uint32_t count = 0U;
-  for (uint32_t f = 0U; f < clean_an->num_frames; f++) {
+  uint32_t count_lf = 0U;
+  uint32_t count_mf = 0U;
+  uint32_t count_hf = 0U;
+  uint32_t count_tr = 0U;
+  uint32_t count_st = 0U;
+  for (uint32_t f = 0U; f < nf; f++) {
     if (!active[f]) {
       continue;
     }
@@ -601,7 +707,13 @@ static float spectral_distortion(const Analyzer* clean_an,
     }
     const float floor_power = peak * bin_floor_ratio;
     double sum = 0.0;
+    double sum_lf = 0.0;
+    double sum_mf = 0.0;
+    double sum_hf = 0.0;
     uint32_t used = 0U;
+    uint32_t used_lf = 0U;
+    uint32_t used_mf = 0U;
+    uint32_t used_hf = 0U;
     for (uint32_t k = 1U; k < bins; k++) {
       float cp = clean_an->power[f * bins + k];
       float op = out_an->power[f * bins + k];
@@ -617,25 +729,61 @@ static float spectral_distortion(const Analyzer* clean_an,
       }
       sum += dev * dev;
       used++;
+      if (k < mf_bin) {
+        sum_lf += dev * dev;
+        used_lf++;
+      } else if (k < hf_bin) {
+        sum_mf += dev * dev;
+        used_mf++;
+      } else {
+        sum_hf += dev * dev;
+        used_hf++;
+      }
     }
     if (used > 0U) {
-      frame_sd[count++] = (float)sqrt(sum / (double)used);
+      const float frame_value = (float)sqrt(sum / (double)used);
+      frame_sd[count++] = frame_value;
+      if (transient[f]) {
+        frame_tr[count_tr++] = frame_value;
+      } else {
+        frame_st[count_st++] = frame_value;
+      }
+    }
+    if (used_lf > 0U) {
+      frame_lf[count_lf++] = (float)sqrt(sum_lf / (double)used_lf);
+    }
+    if (used_mf > 0U) {
+      frame_mf[count_mf++] = (float)sqrt(sum_mf / (double)used_mf);
+    }
+    if (used_hf > 0U) {
+      frame_hf[count_hf++] = (float)sqrt(sum_hf / (double)used_hf);
     }
   }
   TEST_ASSERT(count >= MIN_METRIC_FRAMES, "enough active frames for SD");
-  // median via insertion sort (count is small)
-  for (uint32_t i = 1U; i < count; i++) {
-    float key = frame_sd[i];
-    int j = (int)i - 1;
-    while (j >= 0 && frame_sd[j] > key) {
-      frame_sd[j + 1] = frame_sd[j];
-      j--;
-    }
-    frame_sd[j + 1] = key;
-  }
-  float median = frame_sd[count / 2U];
+  const float overall = median_in_place(frame_sd, count);
+  split->lf_db = count_lf >= MIN_METRIC_FRAMES
+                     ? median_in_place(frame_lf, count_lf)
+                     : overall;
+  split->mf_db = count_mf >= MIN_METRIC_FRAMES
+                     ? median_in_place(frame_mf, count_mf)
+                     : overall;
+  split->hf_db = count_hf >= MIN_METRIC_FRAMES
+                     ? median_in_place(frame_hf, count_hf)
+                     : overall;
+  split->tr_db = count_tr >= MIN_METRIC_FRAMES
+                     ? median_in_place(frame_tr, count_tr)
+                     : overall;
+  split->st_db = count_st >= MIN_METRIC_FRAMES
+                     ? median_in_place(frame_st, count_st)
+                     : overall;
+  free(transient);
   free(frame_sd);
-  return median;
+  free(frame_lf);
+  free(frame_mf);
+  free(frame_hf);
+  free(frame_tr);
+  free(frame_st);
+  return overall;
 }
 
 // Decay deficit: at clean-envelope drop points (phrase/word endings well
@@ -707,7 +855,8 @@ static float decay_deficit(const float* clean, const float* out,
 }
 
 static const char* mode_name(uint32_t mode) {
-  static const char* names[3] = {"Temporal (1D)", "NLM 2D", "NLM 2D + DFTT"};
+  static const char* names[4] = {"Temporal (1D)", "NLM 2D", "NLM 2D + DFTT",
+                                 "BM3D"};
   return names[mode];
 }
 
@@ -896,7 +1045,8 @@ static Metrics run_case_mode(const Signals* signals, uint32_t sample_rate,
   remove_boundary_frames(active, noise_only, num_frames);
   remove_boundary_frames(noise_only, active, num_frames);
 
-  Metrics m = {0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F};
+  Metrics m = {0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F,
+               0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F};
 
   // Learned-noise bin selection: per-bin PSD from lead-in mix frames (the
   // same region the engine learned from). Energy-ratio attenuation over all
@@ -970,8 +1120,15 @@ static Metrics run_case_mode(const Signals* signals, uint32_t sample_rate,
   free(noise_psd);
   free(noise_bins);
 
-  // SD over active frames
-  m.sd_db = spectral_distortion(&clean_an, &out_an, active);
+  // SD over active frames (+ band/transient split diagnostic)
+  SdSplit sd_split = {0.0F, 0.0F, 0.0F, 0.0F, 0.0F};
+  m.sd_db =
+      spectral_distortion(&clean_an, &out_an, active, sample_rate, &sd_split);
+  m.sd_lf_db = sd_split.lf_db;
+  m.sd_mf_db = sd_split.mf_db;
+  m.sd_hf_db = sd_split.hf_db;
+  m.sd_tr_db = sd_split.tr_db;
+  m.sd_st_db = sd_split.st_db;
 
   // MNI v2
   m.mni_out = shape_cv(&out_an, noise_only);
@@ -1010,26 +1167,43 @@ int main(void) {
   if (full_env != NULL && full_env[0] != '\0' && full_env[0] != '0') {
     full_mode = 1;
   }
-  // CI default: plugin-default smoothing (0.0); FULL sweeps all values
-  const uint32_t num_configs = full_mode ? 3U : 1U;
+  int dense_mode = 0;
+  const char* dense_env = getenv("SPECBLEACH_REALWORLD_DENSE");
+  if (dense_env != NULL && dense_env[0] != '\0' && dense_env[0] != '0') {
+    dense_mode = 1;
+  }
+  // CI default: plugin-default smoothing (0.0); FULL sweeps 3 values; DENSE
+  // sweeps 0.0..1.0 in 0.1 steps for knob-response curves (audit only)
+#define SMOOTHING_DENSE_STEPS 11U
+  const uint32_t num_configs =
+      dense_mode ? SMOOTHING_DENSE_STEPS : (full_mode ? 3U : 1U);
 
   uint32_t sample_rate = 0U;
   uint32_t body_samples = 0U;
 
   // Load fixtures (all cases must share the sample rate)
-  float* clean_body[4];
-  float* noise_raw[4];
-  Signals signals[4];
-  for (uint32_t c = 0U; c < 4U; c++) {
+  float* clean_body[NUM_CASES];
+  float* noise_raw[NUM_CASES];
+  Signals signals[NUM_CASES];
+  for (uint32_t c = 0U; c < NUM_CASES; c++) {
     uint32_t sr = 0U;
     uint32_t len = 0U;
-    clean_body[c] = load_wav(fixture_file(CASES[c].name, "clean"), &sr, &len);
+    clean_body[c] = load_wav(
+        fixture_file(CASES[c].clean_source != NULL ? CASES[c].clean_source
+                                                   : CASES[c].name,
+                     "clean"),
+        &sr, &len);
     if (c == 0U) {
       sample_rate = sr;
       body_samples = len;
     }
     TEST_ASSERT(sr == sample_rate && len == body_samples,
                 "fixture sample rates and lengths must match");
+    if (CASES[c].white_noise) {
+      noise_raw[c] =
+          make_white_noise((uint32_t)(NOISE_LEAD_IN_SEC * (float)sr) + len);
+      continue;
+    }
     uint32_t noise_len = 0U;
     noise_raw[c] =
         load_wav(fixture_file(CASES[c].name, "noise"), &sr, &noise_len);
@@ -1046,15 +1220,26 @@ int main(void) {
   printf(
       "== real-world quality metrics (sample rate %u, %u cases, plugin-default "
       "config at %.0f dB reduction, %s smoothing config%s) ==\n",
-      sample_rate, 4U, (double)plugin_reduction_db(),
+      sample_rate, NUM_CASES, (double)plugin_reduction_db(),
       full_mode ? "all" : "default", full_mode ? "s" : "");
 
   for (uint32_t ci = 0U; ci < num_configs; ci++) {
-    const SmoothingConfig* config = &SMOOTHING_CONFIGS[ci];
+    char dense_name[32];
+    SmoothingConfig dense_config;
+    const SmoothingConfig* config;
+    if (dense_mode) {
+      snprintf(dense_name, sizeof(dense_name), "smoothing-%u", ci * 10U);
+      dense_config.name = dense_name;
+      dense_config.smoothing = (float)ci / 10.0F;
+      config = &dense_config;
+    } else {
+      config = &SMOOTHING_CONFIGS[ci];
+    }
     for (uint32_t mode = 0U; mode < NUM_MODES; mode++) {
       printf("== %s | %s ==\n", config->name, mode_name(mode));
-      Metrics agg = {0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F};
-      for (uint32_t c = 0U; c < 4U; c++) {
+      Metrics agg = {0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F,
+                     0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F};
+      for (uint32_t c = 0U; c < NUM_CASES; c++) {
         Signals* sig = &signals[c];
         sig->case_name = CASES[c].name;
         sig->total_samples = total;
@@ -1075,6 +1260,11 @@ int main(void) {
         agg.att_db += m.att_db;
         agg.att_all_db += m.att_all_db;
         agg.sd_db += m.sd_db;
+        agg.sd_lf_db += m.sd_lf_db;
+        agg.sd_mf_db += m.sd_mf_db;
+        agg.sd_hf_db += m.sd_hf_db;
+        agg.sd_tr_db += m.sd_tr_db;
+        agg.sd_st_db += m.sd_st_db;
         agg.mni_ratio += m.mni_ratio;
         agg.mni_out += m.mni_out;
         agg.decay_db += m.decay_db;
@@ -1085,19 +1275,28 @@ int main(void) {
             "%.2f), decay %.1f dB, sisdr %.1f dB, sar %.1f dB\n",
             CASES[c].name, m.att_db, m.att_all_db, m.sd_db, m.mni_ratio,
             m.mni_out, m.decay_db, m.sisdr_db, m.sar_db);
+        printf(
+            "    sd split: LF %.1f dB, MF %.1f dB, HF %.1f dB | tr %.1f dB, "
+            "st %.1f dB\n",
+            m.sd_lf_db, m.sd_mf_db, m.sd_hf_db, m.sd_tr_db, m.sd_st_db);
         free(sig->clean);
         free(sig->noise);
         free(sig->mix);
         free(sig->snapshot);
       }
-      agg.att_db /= 4.0F;
-      agg.att_all_db /= 4.0F;
-      agg.sd_db /= 4.0F;
-      agg.mni_ratio /= 4.0F;
-      agg.mni_out /= 4.0F;
-      agg.decay_db /= 4.0F;
-      agg.sisdr_db /= 4.0F;
-      agg.sar_db /= 4.0F;
+      agg.att_db /= (float)NUM_CASES;
+      agg.att_all_db /= (float)NUM_CASES;
+      agg.sd_db /= (float)NUM_CASES;
+      agg.sd_lf_db /= (float)NUM_CASES;
+      agg.sd_mf_db /= (float)NUM_CASES;
+      agg.sd_hf_db /= (float)NUM_CASES;
+      agg.sd_tr_db /= (float)NUM_CASES;
+      agg.sd_st_db /= (float)NUM_CASES;
+      agg.mni_ratio /= (float)NUM_CASES;
+      agg.mni_out /= (float)NUM_CASES;
+      agg.decay_db /= (float)NUM_CASES;
+      agg.sisdr_db /= (float)NUM_CASES;
+      agg.sar_db /= (float)NUM_CASES;
       const float sd_per_att =
           (agg.att_db > 0.01F) ? agg.sd_db / agg.att_db : 0.0F;
       printf(
@@ -1105,8 +1304,12 @@ int main(void) {
           "%.1f dB, sisdr %.1f dB, sar %.1f dB, sd/att %.2f\n",
           agg.att_db, agg.att_all_db, agg.sd_db, agg.mni_ratio, agg.decay_db,
           agg.sisdr_db, agg.sar_db, sd_per_att);
+      printf(
+          "    sd split: LF %.1f dB, MF %.1f dB, HF %.1f dB | tr %.1f dB, "
+          "st %.1f dB\n",
+          agg.sd_lf_db, agg.sd_mf_db, agg.sd_hf_db, agg.sd_tr_db, agg.sd_st_db);
 
-      if (!full_mode) {
+      if (!full_mode && !dense_mode) {
         TEST_ASSERT(agg.att_db > ATT_GATES_DB[mode], "attenuation gate");
         TEST_ASSERT(agg.sd_db < SD_GATES_DB[mode], "spectral distortion gate");
         TEST_ASSERT(agg.mni_ratio < MNI_GATES[mode], "musical noise gate");
@@ -1115,7 +1318,7 @@ int main(void) {
     }
   }
 
-  for (uint32_t c = 0U; c < 4U; c++) {
+  for (uint32_t c = 0U; c < NUM_CASES; c++) {
     free(clean_body[c]);
     free(noise_raw[c]);
   }
