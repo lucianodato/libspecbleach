@@ -43,6 +43,17 @@ typedef struct specbleach_denoiser { // NOLINT(readability-identifier-naming)
 
 static DenoiserParameters sanitize_denoiser_parameters(
     const SpecbleachDenoiserParameters* parameters) {
+  int smoothing_mode;
+  switch (parameters->smoothing_mode) {
+    case SPECBLEACH_SMOOTHING_NLM_2D:
+    case SPECBLEACH_SMOOTHING_NLM_2D_DFTT:
+    case SPECBLEACH_SMOOTHING_BM3D:
+      smoothing_mode = (int)parameters->smoothing_mode;
+      break;
+    default:
+      smoothing_mode = (int)SPECBLEACH_SMOOTHING_TEMPORAL;
+      break;
+  }
   return (DenoiserParameters){
       .learn_noise = (int)parameters->learn_noise,
       .residual_listen = parameters->residual_listen,
@@ -53,13 +64,7 @@ static DenoiserParameters sanitize_denoiser_parameters(
           fmaxf(0.0f, fminf(1.0f, parameters->whitening_factor)),
       .adaptive_noise = parameters->adaptive_noise ? 1 : 0,
       .noise_estimation_method = (int)parameters->noise_estimation_method,
-      .smoothing_mode =
-          (int)parameters->smoothing_mode == (int)SPECBLEACH_SMOOTHING_NLM_2D
-              ? (int)SPECBLEACH_SMOOTHING_NLM_2D
-              : ((int)parameters->smoothing_mode ==
-                         (int)SPECBLEACH_SMOOTHING_NLM_2D_DFTT
-                     ? (int)SPECBLEACH_SMOOTHING_NLM_2D_DFTT
-                     : (int)SPECBLEACH_SMOOTHING_TEMPORAL),
+      .smoothing_mode = smoothing_mode,
       .dftt_strength = parameters->dftt_strength > 0.0f
                            ? fminf(parameters->dftt_strength, DFTT_STRENGTH_MAX)
                            : 1.0f,

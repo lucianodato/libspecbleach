@@ -36,7 +36,7 @@ typedef struct DenoiserParameters {
   int learn_noise;        /**< Learning mode: 0=disabled, 1=learn all modes */
   bool residual_listen;   /**< Output residue instead of denoised signal */
   float reduction_amount; /**< Gain floor / reduction amount (linear) */
-  int smoothing_mode;     /**< 0=temporal (1D), 1=NLM 2D, 2=NLM 2D + DFTT */
+  int smoothing_mode; /**< 0=temporal (1D), 1=NLM 2D, 2=NLM 2D + DFTT, 3=BM3D */
   float dftt_strength;    /**< DFTT threshold multiplier (<=0 -> default 1.0) */
   float smoothing_factor; /**< Temporal smoothing strength / NLM h parameter */
   float whitening_factor; /**< Whitening factor (0.0 to 1.0) */
