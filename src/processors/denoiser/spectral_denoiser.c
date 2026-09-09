@@ -119,16 +119,16 @@ typedef struct SbSpectralDenoiser {
   float* held_weights;        // Band weights decayed after detection (hold)
   float* transient_mask;      // Per-bin, clean-evidence gated (gain floor)
   float* transient_band_mask; // Band-level, ungated (alpha drop / smoothing)
+  float* clean_magnitude;
+  float* smoothed_magnitude;  // Temporal pre-subtraction smoothed magnitude
+  float* knee_spectrum;       // Per-bin soft knee width (signal-dependent)
   float transient_hold_decay; // Per-hop hold decay factor
   uint32_t transient_hold_remaining; // Frames of mask hold left
-  bool transient_protection_active;  // Detected now or within hold window
-  float* clean_magnitude;
-  float* smoothed_magnitude;      // Temporal pre-subtraction smoothed magnitude
-  bool smoothed_magnitude_seeded; // First frame seeds raw (no ramp-in)
-  float* knee_spectrum;           // Per-bin soft knee width (signal-dependent)
-  bool is_transient_detected;
   float transient_intensity;
-  float hop_sec;    // True hop in seconds (frame/overlap/sr); 0 = legacy derive
+  float hop_sec; // True hop in seconds (frame/overlap/sr); 0 = legacy derive
+  bool smoothed_magnitude_seeded; // First frame seeds raw (no ramp-in)
+  bool is_transient_detected;
+  bool transient_protection_active; // Detected now or within hold window
   bool low_latency; // Causal 1D-only: zero look-ahead, no NLM delay
 
   // Smoothing mode state (written by load_parameters, read by process; the
@@ -893,7 +893,7 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
           const float e_sq = e * e;
           const float e_4th = e_sq * e_sq;
           const float raw_w = e_4th / (e_4th + conf_4th);
-          post_nlm[k] = raw_w * self->snr_delayed[k] + (1.0F - raw_w) * e;
+          post_nlm[k] = (raw_w * self->snr_delayed[k]) + ((1.0F - raw_w) * e);
         }
       }
       nlm_filter_reconstruct_magnitude(self->nlm_filter, post_nlm,
@@ -943,7 +943,7 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
     if (self->is_transient_detected) {
       self->transient_hold_remaining =
           (self->transient_hold_decay > 0.0F)
-              ? (uint32_t)(TRANSIENT_HOLD_SEC / self->hop_sec + 0.5F)
+              ? (uint32_t)((TRANSIENT_HOLD_SEC / self->hop_sec) + 0.5F)
               : 0U;
     } else if (self->transient_hold_remaining > 0U) {
       self->transient_hold_remaining--;
