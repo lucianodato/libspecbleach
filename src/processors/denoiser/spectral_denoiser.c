@@ -116,14 +116,19 @@ typedef struct SbSpectralDenoiser {
 
   float* band_energies;
   float* onset_weights;
-  float* transient_mask;
+  float* held_weights;        // Band weights decayed after detection (hold)
+  float* transient_mask;      // Per-bin, clean-evidence gated (gain floor)
+  float* transient_band_mask; // Band-level, ungated (alpha drop / smoothing)
   float* clean_magnitude;
-  float* smoothed_magnitude;      // Temporal pre-subtraction smoothed magnitude
-  bool smoothed_magnitude_seeded; // First frame seeds raw (no ramp-in)
-  float* knee_spectrum;           // Per-bin soft knee width (signal-dependent)
-  bool is_transient_detected;
+  float* smoothed_magnitude;  // Temporal pre-subtraction smoothed magnitude
+  float* knee_spectrum;       // Per-bin soft knee width (signal-dependent)
+  float transient_hold_decay; // Per-hop hold decay factor
+  uint32_t transient_hold_remaining; // Frames of mask hold left
   float transient_intensity;
-  float hop_sec;    // True hop in seconds (frame/overlap/sr); 0 = legacy derive
+  float hop_sec; // True hop in seconds (frame/overlap/sr); 0 = legacy derive
+  bool smoothed_magnitude_seeded; // First frame seeds raw (no ramp-in)
+  bool is_transient_detected;
+  bool transient_protection_active; // Detected now or within hold window
   bool low_latency; // Causal 1D-only: zero look-ahead, no NLM delay
 
   // Smoothing mode state (written by load_parameters, read by process; the
@@ -437,12 +442,23 @@ static SpectralProcessorHandle spectral_denoiser_initialize_inner(
       (float*)calloc(num_bands > 0U ? num_bands : 1U, sizeof(float));
   self->onset_weights =
       (float*)calloc(num_bands > 0U ? num_bands : 1U, sizeof(float));
+  self->held_weights =
+      (float*)calloc(num_bands > 0U ? num_bands : 1U, sizeof(float));
   self->transient_mask =
       (float*)calloc(self->real_spectrum_size, sizeof(float));
+  self->transient_band_mask =
+      (float*)calloc(self->real_spectrum_size, sizeof(float));
+  // Hold decay: per-hop factor so the mask hold spans TRANSIENT_HOLD_SEC
+  // regardless of frame size.
+  self->transient_hold_decay =
+      (self->hop_sec > 0.0F) ? expf(-self->hop_sec / TRANSIENT_HOLD_SEC) : 0.0F;
+  self->transient_hold_remaining = 0U;
+  self->transient_protection_active = false;
 
   if (!self->noise_floor_manager || !self->critical_bands ||
       !self->transient_detector || !self->band_energies ||
-      !self->onset_weights || !self->transient_mask) {
+      !self->onset_weights || !self->transient_mask ||
+      !self->transient_band_mask || !self->held_weights) {
     spectral_denoiser_free(self);
     return NULL;
   }
@@ -539,8 +555,14 @@ void spectral_denoiser_free(SpectralProcessorHandle instance) {
   if (self->onset_weights) {
     free(self->onset_weights);
   }
+  if (self->held_weights) {
+    free(self->held_weights);
+  }
   if (self->transient_mask) {
     free(self->transient_mask);
+  }
+  if (self->transient_band_mask) {
+    free(self->transient_band_mask);
   }
   if (self->clean_magnitude) {
     free(self->clean_magnitude);
@@ -767,47 +789,6 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
     }
   }
 
-  // 2.1 Transient Detection via Transient Detector across Critical Bands
-  // Transient detection runs on a clean signal estimate with scaled-up noise
-  // subtraction to avoid false triggering from residual musical noise.
-  bool transient_enabled = (self->parameters.transient_protection_enable != 0);
-  if (transient_enabled && self->critical_bands && self->transient_detector) {
-    for (uint32_t k = 0U; k < self->real_spectrum_size; ++k) {
-      // Scale noise up using TRANSIENT_CLEAN_NOISE_SCALE to eliminate spurious
-      // noise peaks
-      float clean = fmaxf(reference_spectrum[k] - (TRANSIENT_CLEAN_NOISE_SCALE *
-                                                   self->noise_spectrum[k]),
-                          0.0F);
-      self->clean_magnitude[k] = clean;
-    }
-
-    compute_critical_bands_spectrum(self->critical_bands, self->clean_magnitude,
-                                    self->band_energies);
-    self->is_transient_detected = transient_detector_process(
-        self->transient_detector, self->band_energies, self->onset_weights,
-        &self->transient_intensity);
-
-    // Expand critical band onset weights to per-bin transient mask
-    uint32_t num_bands = get_number_of_critical_bands(self->critical_bands);
-    memset(self->transient_mask, 0, self->real_spectrum_size * sizeof(float));
-    for (uint32_t b = 0; b < num_bands; ++b) {
-      float bw = self->onset_weights[b];
-      if (bw > 0.0F) {
-        CriticalBandIndexes idx = get_band_indexes(self->critical_bands, b);
-        uint32_t end = (idx.end_position < self->real_spectrum_size)
-                           ? idx.end_position
-                           : self->real_spectrum_size;
-        for (uint32_t k = idx.start_position; k < end; ++k) {
-          self->transient_mask[k] = fmaxf(self->transient_mask[k], bw);
-        }
-      }
-    }
-  } else {
-    self->is_transient_detected = false;
-    self->transient_intensity = 0.0f;
-    memset(self->transient_mask, 0, self->real_spectrum_size * sizeof(float));
-  }
-
   // 2.2 Align internal state and output to the common delayed frame
   // (skipped in low-latency mode: causal, zero look-ahead)
   const float* delayed_spectrum = fft_spectrum;
@@ -912,7 +893,7 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
           const float e_sq = e * e;
           const float e_4th = e_sq * e_sq;
           const float raw_w = e_4th / (e_4th + conf_4th);
-          post_nlm[k] = raw_w * self->snr_delayed[k] + (1.0F - raw_w) * e;
+          post_nlm[k] = (raw_w * self->snr_delayed[k]) + ((1.0F - raw_w) * e);
         }
       }
       nlm_filter_reconstruct_magnitude(self->nlm_filter, post_nlm,
@@ -926,6 +907,99 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
   // Align output to delayed frame for post-processing
   if (!self->low_latency && delayed_spectrum != fft_spectrum) {
     memcpy(fft_spectrum, delayed_spectrum, self->fft_size * sizeof(float));
+  }
+
+  // 2.3 Transient Detection via Transient Detector across Critical Bands.
+  // Runs on the ALIGNED (delayed) frame so the transient mask describes the
+  // same frame the gains below modify. Detecting on the current input frame
+  // would fire ~46 ms before the transient is emitted and open gains on the
+  // noise-only frames around it (audible noise pumping at every transient).
+  // A clean signal estimate with scaled-up noise subtraction avoids false
+  // triggering from residual musical noise.
+  bool transient_enabled = (self->parameters.transient_protection_enable != 0);
+  if (transient_enabled && self->critical_bands && self->transient_detector) {
+    const float* delayed_magnitude =
+        get_spectral_feature(self->spectral_features, delayed_spectrum,
+                             self->fft_size, self->spectrum_type);
+    for (uint32_t k = 0U; k < self->real_spectrum_size; ++k) {
+      // Scale noise up using TRANSIENT_CLEAN_NOISE_SCALE to eliminate spurious
+      // noise peaks
+      float clean = fmaxf(delayed_magnitude[k] -
+                              (TRANSIENT_CLEAN_NOISE_SCALE * delayed_noise[k]),
+                          0.0F);
+      self->clean_magnitude[k] = clean;
+    }
+
+    compute_critical_bands_spectrum(self->critical_bands, self->clean_magnitude,
+                                    self->band_energies);
+    self->is_transient_detected = transient_detector_process(
+        self->transient_detector, self->band_energies, self->onset_weights,
+        &self->transient_intensity);
+
+    // Hold: keep the fired band weights alive (decayed) across the transient
+    // decay tail, so oversubtraction relief outlives the detector's own
+    // trigger window instead of cutting the tail off as soon as the SNR
+    // drops below the trigger.
+    if (self->is_transient_detected) {
+      self->transient_hold_remaining =
+          (self->transient_hold_decay > 0.0F)
+              ? (uint32_t)((TRANSIENT_HOLD_SEC / self->hop_sec) + 0.5F)
+              : 0U;
+    } else if (self->transient_hold_remaining > 0U) {
+      self->transient_hold_remaining--;
+    }
+    self->transient_protection_active =
+        self->is_transient_detected || self->transient_hold_remaining > 0U;
+    uint32_t num_bands = get_number_of_critical_bands(self->critical_bands);
+    for (uint32_t b = 0; b < num_bands; ++b) {
+      self->held_weights[b] =
+          fmaxf(self->onset_weights[b],
+                self->held_weights[b] * self->transient_hold_decay);
+    }
+
+    // Expand held band weights to two per-bin masks:
+    // - transient_band_mask keeps the raw band weight: it only removes
+    //   oversubtraction (alpha -> alpha_min) and shapes smoothing, where the
+    //   Wiener curve itself keeps noise-dominant bins closed.
+    // - transient_mask is additionally scaled by per-bin clean evidence and
+    //   drives the hard gain floor: a band onset must not floor bins whose
+    //   energy is mostly noise (clean estimate ~0 under the scaled
+    //   subtraction), or every transient leaks the noise floor across the
+    //   whole critical band.
+    memset(self->transient_mask, 0, self->real_spectrum_size * sizeof(float));
+    memset(self->transient_band_mask, 0,
+           self->real_spectrum_size * sizeof(float));
+    for (uint32_t b = 0; b < num_bands; ++b) {
+      float bw = self->held_weights[b];
+      if (bw > 0.0F) {
+        CriticalBandIndexes idx = get_band_indexes(self->critical_bands, b);
+        uint32_t end = (idx.end_position < self->real_spectrum_size)
+                           ? idx.end_position
+                           : self->real_spectrum_size;
+        for (uint32_t k = idx.start_position; k < end; ++k) {
+          self->transient_band_mask[k] =
+              fmaxf(self->transient_band_mask[k], bw);
+          float evidence = self->clean_magnitude[k] /
+                           (delayed_magnitude[k] + TRANSIENT_BIN_EVIDENCE_EPS);
+          self->transient_mask[k] =
+              fmaxf(self->transient_mask[k], bw * evidence);
+        }
+      }
+    }
+  } else {
+    self->is_transient_detected = false;
+    self->transient_intensity = 0.0f;
+    self->transient_protection_active = false;
+    self->transient_hold_remaining = 0U;
+    if (self->critical_bands) {
+      uint32_t bands = get_number_of_critical_bands(self->critical_bands);
+      for (uint32_t b = 0; b < bands; ++b) {
+        self->held_weights[b] = 0.0F;
+      }
+    }
+    memset(self->transient_mask, 0, self->real_spectrum_size * sizeof(float));
+    memset(self->transient_band_mask, 0,
+           self->real_spectrum_size * sizeof(float));
   }
 
   // 3. Denoising Stage: dispatch the active smoothing strategy (or crossfade
@@ -1055,10 +1129,13 @@ static bool run_nlm_chain(SbSpectralDenoiser* self, float* fft_spectrum,
 
   // 3.4. Transient Protection:
   // Strictly on frequencies where transient was detected, drop alpha to
-  // ALPHA_MIN (1.0)
-  if (self->is_transient_detected) {
+  // ALPHA_MIN (1.0). Band-level weight: the Wiener curve itself keeps
+  // noise-dominant bins closed at alpha_min, while tonal transient
+  // components only modestly above the noise (excluded by the per-bin
+  // evidence gate) keep their oversubtraction relief.
+  if (self->transient_protection_active) {
     for (uint32_t k = 0U; k < self->real_spectrum_size; ++k) {
-      float t_weight = self->transient_mask[k];
+      float t_weight = self->transient_band_mask[k];
       if (t_weight > 0.0F) {
         float prot_factor = sqrtf(t_weight);
         alpha[k] =
@@ -1073,7 +1150,7 @@ static bool run_nlm_chain(SbSpectralDenoiser* self, float* fft_spectrum,
                   delayed_noise, gain_out, alpha, beta,
                   self->gain_calculation_type, NULL);
 
-  if (self->is_transient_detected) {
+  if (self->transient_protection_active) {
     for (uint32_t k = 0U; k < self->real_spectrum_size; ++k) {
       float t_weight = self->transient_mask[k];
       if (t_weight > 0.0F) {
@@ -1122,7 +1199,7 @@ static void run_temporal_chain(SbSpectralDenoiser* self,
         float prev = self->smoothed_magnitude[k];
         // Bin-by-bin adaptive smoothing: open immediately on transient bins
         // while keeping full smoothing elsewhere
-        float t_w = self->transient_mask[k];
+        float t_w = self->transient_band_mask[k];
         float adapt_alpha = (1.0F - t_w) * stabilization_alpha;
         self->smoothed_magnitude[k] =
             (adapt_alpha * prev) + ((1.0F - adapt_alpha) * raw);
@@ -1175,10 +1252,10 @@ static void run_temporal_chain(SbSpectralDenoiser* self,
 
   // When transients are detected and enabled, drop alphas firmly to ALPHA_MIN
   // (1.0) strictly on the specific frequencies where transient energy was
-  // detected.
-  if (self->is_transient_detected) {
+  // detected. Band-level weight (see run_nlm_chain 3.4).
+  if (self->transient_protection_active) {
     for (uint32_t k = 0U; k < self->real_spectrum_size; ++k) {
-      float t_weight = self->transient_mask[k];
+      float t_weight = self->transient_band_mask[k];
       if (t_weight > 0.0F) {
         float prot_factor = sqrtf(t_weight);
         alpha[k] =
@@ -1214,7 +1291,7 @@ static void run_temporal_chain(SbSpectralDenoiser* self,
                   self->gain_calculation_type, self->knee_spectrum);
 
   // Transient Protection: ensure transient bins have gain near 1.0
-  if (self->is_transient_detected) {
+  if (self->transient_protection_active) {
     for (uint32_t k = 0U; k < self->real_spectrum_size; ++k) {
       float t_weight = self->transient_mask[k];
       if (t_weight > 0.0F) {
@@ -1235,7 +1312,7 @@ static void run_temporal_chain(SbSpectralDenoiser* self,
       (TimeSmoothingParameters){
           .smoothing = fminf(self->parameters.smoothing_factor,
                              GAIN_SMOOTHING_RELEASE_P_CAP),
-          .transient_mask = self->transient_mask,
+          .transient_mask = self->transient_band_mask,
           .release_scale = (self->parameters.smoothing_factor > 0.0F)
                                ? self->release_scale
                                : NULL, // Unused while bypassed

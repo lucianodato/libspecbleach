@@ -162,7 +162,11 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define ONSET_RATIO_SENSITIVITY 0.25F // Innovation required for full weight
 #define TRANSIENT_SMOOTH_ALPHA 0.8F   // Reference smoothing alpha
 #define TRANSIENT_CLEAN_NOISE_SCALE                                            \
-  4.0F // Noise over-subtraction factor for clean transient estimation
+  2.0F // Noise over-subtraction factor for clean transient estimation
+#define TRANSIENT_HOLD_SEC                                                     \
+  0.20F // Band-mask decay hold after detection (covers decay tails)
+#define TRANSIENT_BIN_EVIDENCE_EPS                                             \
+  1e-9F // Denominator floor for per-bin transient evidence ratio
 
 /* --------------------------------------------------------------------- */
 /* 4. NLM 2D smoothing (Lukin Algorithm B) and transient protection. */
