@@ -46,6 +46,10 @@ void test_adaptive_denoising(void);
 void test_noise_estimation_methods(void);
 void test_snr_improvement(void);
 void test_frame_size_invariance(void);
+void test_transient_noise_pump(void);
+void test_transient_band_leak(void);
+void test_transient_pluck_preservation(void);
+/* TEMP DIAGNOSTIC */
 
 #define TEST_ASSERT(condition, message)                                        \
   do {                                                                         \
@@ -504,6 +508,9 @@ int main(void) {
   test_adaptive_denoising();
   test_noise_estimation_methods();
   test_frame_size_invariance();
+  test_transient_noise_pump();
+  test_transient_band_leak();
+  test_transient_pluck_preservation();
 
   printf("\n✅ All audio regression tests passed!\n");
   return 0;
@@ -740,4 +747,330 @@ void test_frame_size_invariance(void) {
   run_frame_invariance(SPECBLEACH_SMOOTHING_NLM_2D, "NLM");
   run_frame_invariance(SPECBLEACH_SMOOTHING_NLM_2D_DFTT, "NLM+DFTT");
   printf("✓ Frame-size invariance (both modes) passed\n");
+}
+
+/* Transient protection noise-pump regression: the transient mask must
+ * describe the ALIGNED (delayed) frame the gains modify, and must not open
+ * bins whose energy is mostly noise. Detection on the current input frame
+ * fires ~46 ms before the onset is emitted and floors the gain on
+ * noise-only frames — an audible noise pulse ("pumping") preceding every
+ * transient on highly noisy material. Metric: output noise power in a leak
+ * window ending just before each onset, protection ON vs OFF. */
+static void process_pump_probe(const float* input, float* output, int length,
+                               uint32_t* latency_out, int protection_on,
+                               float strength) {
+  specbleach_denoiser* handle =
+      specbleach_denoiser_initialize(SAMPLE_RATE, 46.0f, 0u);
+  TEST_ASSERT(handle != NULL, "Failed to initialize denoiser");
+
+  SpecbleachDenoiserParameters parameters = (SpecbleachDenoiserParameters){
+      .learn_noise = SPECBLEACH_LEARN_ALL,
+      .tonal_reduction_gain = 0.0f,
+      .aggressiveness = 0.0f,
+      .reduction_gain = 0.3f,
+      .smoothing_factor = 0.0f,
+      .smoothing_mode = SPECBLEACH_SMOOTHING_TEMPORAL,
+      .masking_depth = 0.5f,
+      .suppression_strength = strength,
+      .transient_protection_enable = (protection_on != 0),
+      .residual_listen = false,
+      .whitening_factor = 0.0f};
+
+  TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &parameters,
+                                                  sizeof(parameters)),
+              "Load learn parameters should succeed");
+
+  /* Learn on noise-only head (first 0.5s), then denoise. */
+  const int learn_samples = SAMPLE_RATE / 2;
+  specbleach_denoiser_process(handle, learn_samples, input, output);
+
+  parameters.learn_noise = SPECBLEACH_LEARN_OFF;
+  TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &parameters,
+                                                  sizeof(parameters)),
+              "Load reduction parameters should succeed");
+
+  int processed = learn_samples;
+  while (processed < length) {
+    int block_size = FRAME_SIZE;
+    if (processed + block_size > length) {
+      block_size = length - processed;
+    }
+    TEST_ASSERT(specbleach_denoiser_process(
+                    handle, block_size, input + processed, output + processed),
+                "Processing failed");
+    processed += block_size;
+  }
+
+  if (latency_out) {
+    *latency_out = specbleach_denoiser_get_latency(handle);
+  }
+  specbleach_denoiser_free(handle);
+}
+
+/* Goertzel power at one frequency over a window. */
+static double goertzel_power(const float* x, int start, int n, double freq) {
+  double coeff = 2.0 * cos(2.0 * M_PI * freq / (double)SAMPLE_RATE);
+  double s1 = 0.0, s2 = 0.0;
+  for (int i = 0; i < n; i++) {
+    double s = (double)x[start + i] + coeff * s1 - s2;
+    s2 = s1;
+    s1 = s;
+  }
+  return s1 * s1 + s2 * s2 - coeff * s1 * s2;
+}
+
+void test_transient_noise_pump(void) {
+  printf("Testing transient protection noise-pump (leak before onsets)...\n");
+
+  const int len = SAMPLE_RATE * 4;
+  float* input = calloc(len, sizeof(float));
+  float* out_on = calloc(len, sizeof(float));
+  float* out_off = calloc(len, sizeof(float));
+  TEST_ASSERT(input && out_on && out_off, "Failed to allocate test buffers");
+
+  /* Noise floor + broadband impulses every 0.6s starting at 1.2s (clear
+   * learn/settle head). On highly noisy audio the detector also fires on
+   * noise fluctuations; the mask must not open noise bins regardless. */
+  srand(4321);
+  for (int i = 0; i < len; i++) {
+    input[i] = 0.05f * ((float)rand() / RAND_MAX - 0.5f) * 2.0f;
+  }
+  int onsets = 0;
+  for (int t = SAMPLE_RATE * 12 / 10; t < len; t += SAMPLE_RATE * 6 / 10) {
+    input[t] = (onsets % 2 == 0) ? 0.9f : -0.9f;
+    if (t + 1 < len) {
+      input[t + 1] = -input[t] * 0.5f;
+    }
+    onsets++;
+  }
+
+  uint32_t lat_on = 0, lat_off = 0;
+  process_pump_probe(input, out_on, len, &lat_on, 1, 0.0f);
+  process_pump_probe(input, out_off, len, &lat_off, 0, 0.0f);
+  TEST_ASSERT(lat_on > 0 && lat_on < (uint32_t)len, "Latency must be finite");
+
+  /* Leak window in input time, latency-aligned: [onset-70ms, onset-25ms]
+   * covers the ~46ms misalignment zone; baseline is noise-only elsewhere. */
+  const int leak_start = (int)(0.070f * SAMPLE_RATE);
+  const int leak_end = (int)(0.025f * SAMPLE_RATE);
+  const int peak_len = (int)(0.030f * SAMPLE_RATE);
+
+  double leak_on = 0.0, leak_off = 0.0, peak = 0.0;
+  int leak_n = 0, covered = 0;
+  for (int t = SAMPLE_RATE * 12 / 10; t < len; t += SAMPLE_RATE * 6 / 10) {
+    covered++;
+    for (int j = t - leak_start; j < t - leak_end; j++) {
+      if (j + (int)lat_off >= len) {
+        break;
+      }
+      leak_off += out_off[j + lat_off] * out_off[j + lat_off];
+      if (j + (int)lat_on < len) {
+        leak_on += out_on[j + lat_on] * out_on[j + lat_on];
+      }
+      leak_n++;
+    }
+    for (int j = t; j < t + peak_len; j++) {
+      if (j + (int)lat_on >= len) {
+        break;
+      }
+      double v = fabs(out_on[j + lat_on]);
+      if (v > peak) {
+        peak = v;
+      }
+    }
+  }
+  TEST_ASSERT(covered > 0 && leak_n > 0, "Must cover onsets");
+  leak_on /= leak_n;
+  leak_off /= leak_n;
+  const double pump_ratio = leak_on / leak_off;
+  printf("  lat=%u onsets=%d leak_on=%.8f leak_off=%.8f ratio=%.2f peak=%.4f\n",
+         lat_on, covered, leak_on, leak_off, pump_ratio, peak);
+
+  /* Protection must not raise noise power just before onsets (bug: gain
+   * floored to the onset weight across whole critical bands ~46 ms before
+   * each onset; measured ~1.7x on/off with the bug). */
+  TEST_ASSERT(pump_ratio < 1.35,
+              "Noise power just before onsets must match the protection-off "
+              "baseline (no transient-protection pump)");
+  /* Protection must still preserve the transient itself. */
+  TEST_ASSERT(peak > 0.1, "Transient peak must be preserved");
+
+  free(input);
+  free(out_on);
+  free(out_off);
+  printf("✓ Transient noise-pump test passed\n");
+}
+
+/* In-band per-bin leak: a band-limited burst fires one critical band; the
+ * mask must open only bins that actually carry burst energy, not the whole
+ * band. Probes a noise-only bin inside the fired band (burst skirt below
+ * the scaled-noise clean floor there) during the burst window, protection
+ * ON vs OFF. */
+void test_transient_band_leak(void) {
+  printf("Testing transient protection in-band bin leak...\n");
+
+  const int len = SAMPLE_RATE * 4;
+  float* input = calloc(len, sizeof(float));
+  float* out_on = calloc(len, sizeof(float));
+  float* out_off = calloc(len, sizeof(float));
+  TEST_ASSERT(input && out_on && out_off, "Failed to allocate test buffers");
+
+  srand(4321);
+  for (int i = 0; i < len; i++) {
+    input[i] = 0.05f * ((float)rand() / RAND_MAX - 0.5f) * 2.0f;
+  }
+  /* Blackman-edged 8ms 5.85kHz bursts every 0.6s from 1.2s: fires the
+   * 5.3-6.4kHz band; the 6.35kHz probe bin holds only noise (skirt far
+   * below the scaled clean floor). */
+  const int burst_len = (int)(0.008f * SAMPLE_RATE);
+  for (int t = SAMPLE_RATE * 12 / 10; t < len; t += SAMPLE_RATE * 6 / 10) {
+    for (int j = 0; j < burst_len && t + j < len; j++) {
+      double w = 0.42 - 0.5 * cos(2.0 * M_PI * j / (burst_len - 1)) +
+                 0.08 * cos(4.0 * M_PI * j / (burst_len - 1));
+      input[t + j] +=
+          (float)(0.5 * w * sin(2.0 * M_PI * 5850.0 * j / (double)SAMPLE_RATE));
+    }
+  }
+
+  uint32_t lat_on = 0, lat_off = 0;
+  process_pump_probe(input, out_on, len, &lat_on, 1, 0.0f);
+  process_pump_probe(input, out_off, len, &lat_off, 0, 0.0f);
+
+  /* 24ms Goertzel window just before each burst, latency-aligned: the
+   * strong burst-band mask must not floor this noise-only in-band bin
+   * there (bug: mask misalignment + band-wide expansion opened it). */
+  const int win = (int)(0.024f * SAMPLE_RATE);
+  double probe_on = 0.0, probe_off = 0.0;
+  int bursts = 0;
+  for (int t = SAMPLE_RATE * 12 / 10; t + (int)lat_on + win < len;
+       t += SAMPLE_RATE * 6 / 10) {
+    probe_on += goertzel_power(
+        out_on, t + (int)lat_on - (int)(0.058f * SAMPLE_RATE), win, 6350.0);
+    probe_off += goertzel_power(
+        out_off, t + (int)lat_off - (int)(0.058f * SAMPLE_RATE), win, 6350.0);
+    bursts++;
+  }
+  TEST_ASSERT(bursts > 0, "Must cover at least one burst");
+  probe_on /= bursts;
+  probe_off /= bursts;
+  printf("  bursts=%d probe_on=%.10f probe_off=%.10f ratio=%.2f\n", bursts,
+         probe_on, probe_off, probe_on / probe_off);
+
+  /* The band onset must not floor the noise-only probe bin (bug: mask
+   * misalignment + band-wide expansion opened it; measured 1.99x on/off
+   * with the bug). */
+  TEST_ASSERT(probe_on < 1.5 * probe_off,
+              "In-band noise-only bin must stay suppressed during a "
+              "band-limited transient (no band-wide leak)");
+
+  free(input);
+  free(out_on);
+  free(out_off);
+  printf("✓ Transient in-band leak test passed\n");
+}
+
+/* Tonal transient (plucked-string-like) preservation at high suppression
+ * strength: the protection must relieve oversubtraction on the pluck's
+ * attack and decay tail while leaving noise-only frames untouched. */
+void test_transient_pluck_preservation(void) {
+  printf("Testing pluck preservation (high threshold, on vs off)...\n");
+
+  const int len = SAMPLE_RATE * 4;
+  float* input = calloc(len, sizeof(float));
+  float* out_on = calloc(len, sizeof(float));
+  float* out_off = calloc(len, sizeof(float));
+  TEST_ASSERT(input && out_on && out_off, "Failed to allocate test buffers");
+
+  srand(4321);
+  for (int i = 0; i < len; i++) {
+    input[i] = 0.05f * ((float)rand() / RAND_MAX - 0.5f) * 2.0f;
+  }
+  /* Pluck: 220Hz + 4 harmonics, 3ms attack, 150ms exp decay, 500ms long. */
+  const int pluck_len = (int)(0.500f * SAMPLE_RATE);
+  const int attack = (int)(0.003f * SAMPLE_RATE);
+  const int harm_n = 4;
+  const float amps[4] = {1.0f, 0.5f, 0.33f, 0.25f};
+  for (int t = SAMPLE_RATE * 12 / 10; t + pluck_len < len;
+       t += SAMPLE_RATE * 6 / 10) {
+    for (int j = 0; j < pluck_len; j++) {
+      float env = (j < attack)
+                      ? (float)j / (float)attack
+                      : expf(-(float)(j - attack) / (0.150f * SAMPLE_RATE));
+      float s = 0.0f;
+      for (int h = 0; h < harm_n; h++) {
+        s += amps[h] * sinf(2.0f * M_PIf * 220.0f * (float)(h + 1) * (float)j /
+                            (float)SAMPLE_RATE);
+      }
+      input[t + j] += 0.35f * env * s / 2.08f; /* /sum(amps) normalize */
+    }
+  }
+
+  uint32_t lat_on = 0, lat_off = 0;
+  process_pump_probe(input, out_on, len, &lat_on, 1, 1.0f);
+  process_pump_probe(input, out_off, len, &lat_off, 0, 1.0f);
+
+  const int attack_win = (int)(0.020f * SAMPLE_RATE);
+  const int early_win = (int)(0.150f * SAMPLE_RATE);
+  const int late_win = (int)(0.450f * SAMPLE_RATE);
+  double att_in = 0.0, att_on = 0.0, att_off = 0.0;
+  double early_in = 0.0, early_on = 0.0, early_off = 0.0;
+  double late_in = 0.0, late_on = 0.0, late_off = 0.0;
+  double peak_in = 0.0, peak_on = 0.0, peak_off = 0.0;
+  int onsets = 0;
+  for (int t = SAMPLE_RATE * 12 / 10; t + (int)lat_on + late_win < len;
+       t += SAMPLE_RATE * 6 / 10) {
+    onsets++;
+    for (int j = 0; j < attack_win; j++) {
+      att_in += input[t + j] * input[t + j];
+      att_on += out_on[t + j + lat_on] * out_on[t + j + lat_on];
+      att_off += out_off[t + j + lat_off] * out_off[t + j + lat_off];
+      double v1 = fabs(out_on[t + j + lat_on]);
+      double v0 = fabs(out_off[t + j + lat_off]);
+      double vi = fabs(input[t + j]);
+      if (v1 > peak_on) {
+        peak_on = v1;
+      }
+      if (v0 > peak_off) {
+        peak_off = v0;
+      }
+      if (vi > peak_in) {
+        peak_in = vi;
+      }
+    }
+    for (int j = attack_win; j < early_win; j++) {
+      early_in += input[t + j] * input[t + j];
+      early_on += out_on[t + j + lat_on] * out_on[t + j + lat_on];
+      early_off += out_off[t + j + lat_off] * out_off[t + j + lat_off];
+    }
+    for (int j = early_win; j < late_win; j++) {
+      late_in += input[t + j] * input[t + j];
+      late_on += out_on[t + j + lat_on] * out_on[t + j + lat_on];
+      late_off += out_off[t + j + lat_off] * out_off[t + j + lat_off];
+    }
+  }
+  TEST_ASSERT(onsets > 0, "Must cover at least one pluck");
+  late_on /= onsets;
+  late_off /= onsets;
+  printf(
+      "  onsets=%d attack in=%.4f on=%.4f off=%.4f | early in=%.4f "
+      "on=%.4f off=%.4f | late in=%.4f on=%.4f off=%.4f | peak in=%.4f "
+      "on=%.4f off=%.4f\n",
+      onsets, att_in / onsets, att_on / onsets, att_off / onsets,
+      early_in / onsets, early_on / onsets, early_off / onsets,
+      late_in / onsets, late_on / onsets, late_off / onsets, peak_in, peak_on,
+      peak_off);
+
+  /* Non-regression: protection must never eat the pluck relative to the
+   * protection-off baseline. */
+  TEST_ASSERT(peak_on > 0.9 * peak_off, "Protection must not eat pluck peak");
+  TEST_ASSERT(att_on > 0.9 * att_off, "Protection must not eat pluck attack");
+  TEST_ASSERT(early_on > 0.9 * early_off, "Protection must not eat pluck body");
+  /* Tail hold: the held band mask must keep oversubtraction relief alive
+   * into the decay tail (measured +3.7% tail energy on/off). */
+  TEST_ASSERT(late_on > late_off,
+              "Protection hold must relieve the decay tail");
+
+  free(input);
+  free(out_on);
+  free(out_off);
 }
