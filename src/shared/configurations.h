@@ -154,6 +154,49 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define TONAL_REDUCER_NEGLIGIBLE_NOISE_THRESHOLD (1e-12F)
 #define ALPHA_MAX_TONAL (10.F)
 
+// Tonal/broadband dual-path decoupling: the noise profile is split into a
+// broadband floor N_bb (tonal peaks replaced by a morphological-opening
+// envelope of the profile) and a tonal residual N_tonal = N - N_bb. All
+// broadband suppression and gain smoothing run on N_bb only, while a parallel
+// tonal gain path (second Wiener evaluation against N_tonal) supplies the
+// narrowband notch; the final per-bin gain is min(broadband, tonal). This
+// keeps the temporal/spatial smoothers' gain fields free of stationary tonal
+// notches (they no longer carve or smear into neighbors), and the notch keeps
+// its full depth in exchange.
+// Morphological opening window: peaks narrower than this window are treated
+// as tonal and lifted out of the broadband profile. Must comfortably cover
+// the spacing of the strongest hum/buzz harmonic series (50/60 Hz).
+#define TONAL_DETONE_WINDOW_HZ (150.0F)
+#define TONAL_DETONE_MIN_BINS (4U)
+#define TONAL_DETONE_MAX_BINS (16U)
+// Softening pass on the extracted envelope (dupe of smooth_spectrum factor).
+#define TONAL_DETONE_SMOOTHING (0.5F)
+// One-pole stabilization of the tonal gain path (mask flicker rejection),
+// frame-rate invariant (alpha = exp(-1/N) at any hop size).
+#define TONAL_GAIN_STABILIZATION_HOPS 3U
+
+// Measurement toggle (A/B test bed for the tonal decoupling): 1 = decoupled
+// dual-path (tonal notch as a parallel gain path, smoothers see a broadband
+// field only). 0 = legacy coupled path (tonal alpha boost applied inline to
+// the single gain chain that the smoothen follow tonal carving included).
+// Build the comparison variant with -DTONAL_DUAL_PATH=0.
+#ifndef TONAL_DUAL_PATH
+#define TONAL_DUAL_PATH 1
+#endif
+
+// Measurement toggle (A/B test bed for the transient relief rearrangement):
+// 1 = the band-level transient alpha relief (alpha lerped toward ALPHA_MIN
+// pre-gain) is instead applied as a parallel GAIN-domain blend after the
+// base gain evaluation: g' = (1-pf)*g_base + pf*Wiener(alpha=ALPHA_MIN,
+// same knee). Equal to legacy at full/no protection, differs at partial
+// band weights where the Wiener curve is nonlinear in alpha (gain-domain
+// relief is softer, never overshoots, and no longer mutates the shared
+// alpha). 0 = legacy alpha-domain relief.
+// Build the comparison variant with -DTRANSIENT_RELIEF_PARALLEL=0.
+#ifndef TRANSIENT_RELIEF_PARALLEL
+#define TRANSIENT_RELIEF_PARALLEL 1
+#endif
+
 // Transient Detector Constants
 #define UPPER_LIMIT (5.F)
 #define DEFAULT_TRANSIENT_THRESHOLD (2.F)

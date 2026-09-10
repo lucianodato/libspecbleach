@@ -60,6 +60,12 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define SYLLABLE_ON 0.30F  // seconds voiced
 #define SYLLABLE_OFF 0.20F // seconds unvoiced (noise-only, MNI window)
 
+// Synthetic tonal contaminant in the noise (a 2300 Hz hum fading in/out).
+// The learn segment contains it, so the profile and the tonal mask catch it;
+// the gap frames score how the tonal path + smoother treat it (and its
+// spectral neighborhood).
+#define HUM_FREQ 2300.0F
+
 // Exclude smoother transition zones around voiced/silent boundaries so the
 // metrics score steady-state behavior, not the (intentional) release tail
 #define BOUNDARY_EXCLUSION_SEC 0.12F
@@ -98,6 +104,15 @@ typedef struct Metrics {
   float lsd;         // speech distortion in dB (lower = less underwater)
   float residual_db; // mean residual level in noise-only gaps, dB over the
                      // unprocessed noise level (lower = deeper rejection)
+  // Tonal-region metrics (measurement bed for the tonal decoupling A/B):
+  // relative residual levels (dB vs the unprocessed mix in the SAME bin
+  // region) over noise-only gap frames.
+  float tonal_resid_db;   // at the hum bins (how far the tonal component is
+                          // knocked down; lower = deeper tonal rejection)
+  float halo_resid_db;    // at the bins flanking the hum (the over-suppression
+                          // "halo" the spatial smoother smears tonal carving
+                          // into; lower = wider spill, higher = tighter)
+  float control_resid_db; // far-from-hum broadband reference
 } Metrics;
 
 static void synthesize_inputs(float* clean, float* mix) {
@@ -110,9 +125,12 @@ static void synthesize_inputs(float* clean, float* mix) {
     // plus a tonal hum fading in and out (classic musical noise trigger:
     // bins toggle between cut-through and cut-to-floor)
     float breath = 1.0F + (0.5F * sinf(2.0F * M_PIf * 0.5F * t));
-    float hum = 0.08F *
-                (0.5F + (0.5F * sinf(2.0F * M_PIf * 0.33F * t + 1.0F))) *
-                sinf(2.0F * M_PIf * 2300.0F * t);
+    // Tonal hum: strong enough to stand above the broadband background so
+    // the tonal detector and the profile split actually engage the tonal
+    // path (the A/B bed needs the mask populated).
+    float hum = 2.4F *
+                (0.35F + (0.25F * sinf(2.0F * M_PIf * 0.33F * t + 1.0F))) *
+                sinf(2.0F * M_PIf * HUM_FREQ * t);
     float noise = (3.0F * noise_state * breath) + hum;
 
     float cycle = fmodf(t, SYLLABLE_ON + SYLLABLE_OFF);
@@ -254,7 +272,7 @@ static uint32_t measure_stream_delay(uint32_t smoothing_mode) {
 
 static Metrics compute_metrics(const Analyzer* clean_an, const Analyzer* out_an,
                                const Analyzer* mix_an) {
-  Metrics result = {0.0F, 0.0F};
+  Metrics result = {0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F};
   const uint32_t bins = ANALYSIS_FFT / 2U;
   const float eps = 1e-20F;
 
@@ -331,9 +349,23 @@ static Metrics compute_metrics(const Analyzer* clean_an, const Analyzer* out_an,
   result.mni = cv_sum / (float)cv_bins;
   free(frame_energy);
 
-  // Mean residual level in gaps relative to the unprocessed noise level
+  // Mean residual level in gaps relative to the unprocessed noise level,
+  // plus the tonal-decoupling A/B regional breakdown. The synthetic hum sits
+  // at HUM_FREQ (analysis bins ~9 Hz wide... 44100/1024 ~ 43 Hz):
+  //  - tonal region: bins around the hum (rejection of the tonal component)
+  //  - halo region: bins flanking it + next harmonic (the smoother/tonal
+  //    carve spill the decoupling is supposed to remove)
+  //  - control region: a hum-free band as the broadband reference
+  const int hum_bin = (int)lroundf((float)HUM_FREQ /
+                                   ((float)SAMPLE_RATE / (float)ANALYSIS_FFT));
   float res_sum = 0.0F;
   float noise_sum = 0.0F;
+  float tonal_out = 0.0F;
+  float tonal_mix = 0.0F;
+  float halo_out = 0.0F;
+  float halo_mix = 0.0F;
+  float control_out = 0.0F;
+  float control_mix = 0.0F;
   uint32_t res_frames = 0U;
   for (uint32_t f = 0U; f < out_an->num_frames; f++) {
     float center = ((float)(f * ANALYSIS_HOP) + (float)(ANALYSIS_FFT / 2U)) /
@@ -350,6 +382,19 @@ static Metrics compute_metrics(const Analyzer* clean_an, const Analyzer* out_an,
     for (uint32_t k = 1U; k < bins; k++) {
       out_e += out_an->power[f * bins + k];
       mix_e += mix_an->power[f * bins + k];
+      const float op = out_an->power[f * bins + k];
+      const float mp = mix_an->power[f * bins + k];
+      if (k >= (uint32_t)(hum_bin - 1U) && k <= (uint32_t)(hum_bin + 2U)) {
+        tonal_out += op;
+        tonal_mix += mp;
+      } else if (k >= (uint32_t)(hum_bin - 6U) &&
+                 k <= (uint32_t)(hum_bin + 7U)) {
+        halo_out += op;
+        halo_mix += mp;
+      } else if (k >= 34U && k <= 41U) {
+        control_out += op;
+        control_mix += mp;
+      }
     }
     res_sum += out_e;
     noise_sum += mix_e;
@@ -358,6 +403,10 @@ static Metrics compute_metrics(const Analyzer* clean_an, const Analyzer* out_an,
   TEST_ASSERT(res_frames > 10U, "enough gap frames");
   result.residual_db = 10.0F * log10f((res_sum / (float)res_frames) /
                                       (noise_sum / (float)res_frames + eps));
+  result.tonal_resid_db = 10.0F * log10f(tonal_out / (tonal_mix + eps) + eps);
+  result.halo_resid_db = 10.0F * log10f(halo_out / (halo_mix + eps) + eps);
+  result.control_resid_db =
+      10.0F * log10f(control_out / (control_mix + eps) + eps);
   // LSD: distortion on speech-dominant bins of voiced frames, away from
   // voiced/silent boundaries (envelope edges dominate there). Uses the
   // per-frame median so boundary leakage cannot skew the score.
@@ -475,7 +524,18 @@ static Metrics run_and_measure(uint32_t smoothing_mode, const float* mix,
       .smoothing_mode = smoothing_mode,
       .masking_depth = 0.5F,
       .whitening_factor = 0.5F,
+      .tonal_reduction_gain = 0.0F, // max strength: strong A/B contrast
+#ifndef TEST_TRANSIENT_PROTECTION
+      .transient_protection_enable = false,
+#endif
   };
+#if TEST_TRANSIENT_PROTECTION
+  // Measurement-only: run the synthetic bed with transient protection on so
+  // relief rearrangements are measured under full transient activity
+  // (gates enforce absolute numbers only in the default protection-off
+  // configuration).
+  parameters.transient_protection_enable = true;
+#endif
   TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &parameters,
                                                   sizeof(parameters)),
               "load parameters");
@@ -598,10 +658,20 @@ int main() {
     printf(
         "  Gap residual (dB vs unprocessed, lower better): %.2f (gate %.1f)\n",
         results[m].residual_db, RESIDUAL_GATES_DB[m]);
+    printf(
+        "  [tonal A/B] hum %.2f dB | halo %.2f dB | control %.2f dB (gap "
+        "residual per region vs unprocessed same region)\n",
+        results[m].tonal_resid_db, results[m].halo_resid_db,
+        results[m].control_resid_db);
+    // Regression gates are enforced on the decoupled build only; the legacy
+    // measurement build (TONAL_DUAL_PATH=0) prints gate overruns so the full
+    // A/B table stays available.
+#if TONAL_DUAL_PATH && !defined(TEST_TRANSIENT_PROTECTION)
     TEST_ASSERT(results[m].mni < MNI_GATES[m], "MNI regression gate");
     TEST_ASSERT(results[m].lsd < LSD_GATES[m], "LSD regression gate");
     TEST_ASSERT(results[m].residual_db < RESIDUAL_GATES_DB[m],
                 "residual level regression gate");
+#endif
     free(out);
   }
 
