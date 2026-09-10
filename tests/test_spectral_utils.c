@@ -18,6 +18,7 @@ License along with this library; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
+#include "shared/configurations.h"
 #include "shared/utils/spectral_utils.h"
 #include <math.h>
 #include <stdio.h>
@@ -371,6 +372,49 @@ void test_get_morphed_profile(void) {
   printf("✓ get_morphed_profile tests passed\n");
 }
 
+void test_spectral_envelope_opening(void) {
+  printf("Testing sb_spectral_envelope_opening...\n");
+
+  const uint32_t size = 256;
+  const float floor_level = 1.0f;
+  float spectrum[size];
+  float scratch[size];
+  float env[size];
+
+  // Error paths
+  TEST_ASSERT(!sb_spectral_envelope_opening(NULL, scratch, env, size, 6),
+              "NULL spectrum check");
+  TEST_ASSERT(!sb_spectral_envelope_opening(spectrum, scratch, env, size, 0),
+              "Zero window check");
+  TEST_ASSERT(!sb_spectral_envelope_opening(spectrum, scratch, env, size,
+                                            TONAL_DETONE_MAX_BINS + 1U),
+              "Window overflow check");
+
+  // Flat floor + narrow single-bin peaks (tonal spikes).
+  for (uint32_t k = 0U; k < size; k++) {
+    spectrum[k] = floor_level;
+  }
+  spectrum[64] = 20.0f;
+  spectrum[129] = 15.0f;
+  spectrum[130] = 15.0f;
+
+  TEST_ASSERT(sb_spectral_envelope_opening(spectrum, scratch, env, size, 6),
+              "opening runs");
+  // Peaks are lifted out: envelope stays near the floor at the peak bins.
+  TEST_FLOAT_CLOSE(env[64], floor_level, 0.2f);
+  TEST_FLOAT_CLOSE(env[129], floor_level, 0.2f);
+  TEST_FLOAT_CLOSE(env[130], floor_level, 0.2f);
+  // Broadband baseline is preserved between peaks (not over-eroded).
+  TEST_FLOAT_CLOSE(env[100], floor_level, 0.2f);
+  TEST_FLOAT_CLOSE(env[0], floor_level, 0.2f);
+  TEST_FLOAT_CLOSE(env[size - 1], floor_level, 0.2f);
+
+  // Inputs are never modified (const contract).
+  TEST_FLOAT_CLOSE(spectrum[64], 20.0f, 1e-6f);
+
+  printf("✓ sb_spectral_envelope_opening tests passed\n");
+}
+
 int main(void) {
   printf("Running spectral_utils tests...\n\n");
 
@@ -383,6 +427,7 @@ int main(void) {
   test_smooth_spectrum();
   test_interpolate_spectrum_gaps();
   test_get_morphed_profile();
+  test_spectral_envelope_opening();
 
   printf("\n✅ All spectral_utils tests passed!\n");
   return 0;

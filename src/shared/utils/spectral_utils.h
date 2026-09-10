@@ -71,6 +71,15 @@ bool get_morphed_profile(float* output_profile, const float* mean_profile,
                          const float* median_profile, const float* max_profile,
                          const float* min_profile, uint32_t size,
                          float aggressiveness);
+/**
+ * @brief Extracts a broadband baseline envelope from a noise profile via
+ * morphological opening (erosion + dilation with a flat window, then a light
+ * smoothing pass). Narrowband tonal peaks are removed while the surrounding
+ * broadband level is preserved. O(N), no allocation; needs `scratch` of
+ * `size` floats. `window` must be <= TONAL_DETONE_MAX_BINS.
+ */
+bool sb_spectral_envelope_opening(const float* spectrum, float* scratch,
+                                  float* out, uint32_t size, uint32_t window);
 
 #include "shared/utils/general_utils.h"
 

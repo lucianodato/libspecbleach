@@ -329,6 +329,49 @@ void interpolate_spectrum_gaps(float* spectrum, uint32_t size,
   }
 }
 
+// Sliding window extreme (min with is_min=true, max otherwise) over a
+// trailing window of `window` elements, clamped at the array edge. O(N*W)
+// with W <= TONAL_DETONE_MAX_BINS (16): a few thousand comparisons per frame
+// — negligible against the STFT/NLM cost, and immune to deque edge cases.
+static void sb_slide_extreme(const float* src, float* dst, uint32_t size,
+                             uint32_t window, const bool is_min) {
+  for (uint32_t i = 0U; i < size; i++) {
+    const uint32_t lo = (window > (i + 1U)) ? 0U : (i + 1U - window);
+    float ext = src[lo];
+    for (uint32_t j = lo + 1U; j <= i; j++) {
+      if (is_min) {
+        if (src[j] < ext) {
+          ext = src[j];
+        }
+      } else {
+        if (src[j] > ext) {
+          ext = src[j];
+        }
+      }
+    }
+    dst[i] = ext;
+  }
+}
+
+bool sb_spectral_envelope_opening(const float* spectrum, float* scratch,
+                                  float* out, const uint32_t size,
+                                  const uint32_t window) {
+  if (!spectrum || !scratch || !out || size == 0U || window == 0U) {
+    return false;
+  }
+  if (window > TONAL_DETONE_MAX_BINS) {
+    return false;
+  }
+
+  // Morphological opening: erosion (running min) then dilation (running max)
+  // removes narrowband peaks while preserving the broadband baseline level.
+  sb_slide_extreme(spectrum, scratch, size, window, true);
+  sb_slide_extreme(scratch, out, size, window, false);
+  smooth_spectrum(out, size, TONAL_DETONE_SMOOTHING);
+
+  return true;
+}
+
 bool get_morphed_profile(float* output_profile, const float* mean_profile,
                          const float* median_profile, const float* max_profile,
                          const float* min_profile, uint32_t size,
