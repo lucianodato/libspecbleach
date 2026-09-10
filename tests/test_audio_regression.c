@@ -1066,9 +1066,12 @@ void test_transient_pluck_preservation(void) {
   TEST_ASSERT(att_on > 0.9 * att_off, "Protection must not eat pluck attack");
   TEST_ASSERT(early_on > 0.9 * early_off, "Protection must not eat pluck body");
   /* Tail hold: the held band mask must keep oversubtraction relief alive
-   * into the decay tail (measured +3.7% tail energy on/off). */
+   * into the decay tail (measured +3.7% tail energy on/off), but bounded so
+   * the hold cannot inject audible broadband pumping (level lift). */
   TEST_ASSERT(late_on > late_off,
               "Protection hold must relieve the decay tail");
+  TEST_ASSERT(late_on < 1.10 * late_off,
+              "Protection hold must not pump the decay tail");
 
   free(input);
   free(out_on);

@@ -97,8 +97,8 @@ void test_flat_noise_identity_split(void) {
   }
 
   // Tonal gains must be unity everywhere (no residual)
-  tonal_reducer_compute_tonal_gains(reducer, 0U, smoothed, noise_tonal, 0.0f,
-                                    gain_tonal);
+  tonal_reducer_compute_tonal_gains(reducer, 0U, smoothed, noise_tonal, mask,
+                                    0.0f, gain_tonal);
   for (int i = 0; i < TEST_SPECTRUM_SIZE; i++) {
     if (gain_tonal[i] != 1.0f) {
       fprintf(stderr, "FAIL: Tonal gain not unity at bin %d\n", i);
@@ -173,7 +173,7 @@ void test_tonal_split_and_gains(void) {
 
   // Tonal gains: deep notch at the full-strength bin, softer at partial-mask
   // neighbors, unity far away.
-  tonal_reducer_compute_tonal_gains(reducer, 0U, smoothed, noise_tonal,
+  tonal_reducer_compute_tonal_gains(reducer, 0U, smoothed, noise_tonal, mask,
                                     reduction_gain, gain_tonal);
   if (gain_tonal[bin] > 0.5f) {
     fprintf(stderr, "FAIL: Tonal gain not notched at bin %d (%f)\n", bin,
@@ -195,13 +195,39 @@ void test_tonal_split_and_gains(void) {
   printf("  Gains: full=%f partial=%f far=1.0 ✓\n", gain_tonal[bin],
          gain_tonal[bin - 1]);
 
-  // Second call: one-pole tracks toward the raw gains (not deeper)
+  // Second call: feed a changed magnitude so the raw target moves up. The
+  // one-pole must land strictly between the seeded gain and the new raw target
+  // (a fresh reducer's first call exposes that unstabilized target).
+  const int probe = bin - 1; // partial-mask bin: unsaturated and movable
+  float smoothed_second[TEST_SPECTRUM_SIZE];
+  memcpy(smoothed_second, smoothed, sizeof(smoothed));
+  smoothed_second[probe] = 0.5f; // more signal -> higher raw gain
   float gain_second[TEST_SPECTRUM_SIZE];
-  tonal_reducer_compute_tonal_gains(reducer, 0U, smoothed, noise_tonal,
-                                    reduction_gain, gain_second);
+  tonal_reducer_compute_tonal_gains(reducer, 0U, smoothed_second, noise_tonal,
+                                    mask, reduction_gain, gain_second);
   if (gain_second[bin] < gain_tonal[bin] - 1e-6f || gain_second[bin] > 1.0f) {
     fprintf(stderr, "FAIL: One-pole trajectory invalid at bin %d (%f -> %f)\n",
             bin, gain_tonal[bin], gain_second[bin]);
+    exit(1);
+  }
+
+  TonalReducer* fresh = tonal_reducer_initialize(
+      TEST_SPECTRUM_SIZE, TEST_SAMPLE_RATE, TEST_FFT_SIZE);
+  float fresh_bb[TEST_SPECTRUM_SIZE];
+  float fresh_tonal[TEST_SPECTRUM_SIZE];
+  tonal_reducer_compute_split(fresh, noise_spectrum, cv_mask, true,
+                              reduction_gain, fresh_bb, fresh_tonal);
+  float target[TEST_SPECTRUM_SIZE];
+  tonal_reducer_compute_tonal_gains(fresh, 0U, smoothed_second, fresh_tonal,
+                                    tonal_reducer_get_mask(fresh),
+                                    reduction_gain, target);
+  tonal_reducer_free(fresh);
+  if (!(gain_second[probe] > gain_tonal[probe] + 1e-6f &&
+        gain_second[probe] < target[probe] - 1e-6f)) {
+    fprintf(stderr,
+            "FAIL: One-pole not between seeded and raw target at bin %d "
+            "(%f -> %f, target %f)\n",
+            probe, gain_tonal[probe], gain_second[probe], target[probe]);
     exit(1);
   }
 

@@ -412,6 +412,54 @@ void test_spectral_envelope_opening(void) {
   // Inputs are never modified (const contract).
   TEST_FLOAT_CLOSE(spectrum[64], 20.0f, 1e-6f);
 
+  // Monotonic baselines: trailing erosion + leading dilation is a zero-phase
+  // pair, so ramps survive unshifted (a same-orientation opening would delay
+  // the envelope by a full window).
+  for (uint32_t k = 0U; k < size; k++) {
+    spectrum[k] = (float)k;
+  }
+  TEST_ASSERT(sb_spectral_envelope_opening(spectrum, scratch, env, size, 6),
+              "increasing ramp opening runs");
+  for (uint32_t k = 16U; k + 16U < size; k++) {
+    TEST_FLOAT_CLOSE(env[k], spectrum[k], 1e-3f);
+  }
+
+  for (uint32_t k = 0U; k < size; k++) {
+    spectrum[k] = (float)(size - 1U - k);
+  }
+  TEST_ASSERT(sb_spectral_envelope_opening(spectrum, scratch, env, size, 6),
+              "decreasing ramp opening runs");
+  for (uint32_t k = 16U; k + 16U < size; k++) {
+    TEST_FLOAT_CLOSE(env[k], spectrum[k], 1e-3f);
+  }
+
+  // A step edge keeps its location (no window delay) and stays monotonic.
+  for (uint32_t k = 0U; k < size; k++) {
+    spectrum[k] = (k < size / 2U) ? 0.0f : 1.0f;
+  }
+  TEST_ASSERT(sb_spectral_envelope_opening(spectrum, scratch, env, size, 6),
+              "step opening runs");
+  TEST_FLOAT_CLOSE(env[size / 4U], 0.0f, 1e-3f);
+  TEST_FLOAT_CLOSE(env[(3U * size) / 4U], 1.0f, 1e-3f);
+  for (uint32_t k = 1U; k < size; k++) {
+    if (env[k] < env[k - 1] - 1e-6f) {
+      fprintf(stderr, "FAIL: step opening not monotonic at bin %u\n", k);
+      exit(1);
+    }
+  }
+
+  // Narrowband peaks close to the edges are still lifted out: the trailing
+  // erosion window always has enough floor next to them.
+  for (uint32_t k = 0U; k < size; k++) {
+    spectrum[k] = floor_level;
+  }
+  spectrum[2U] = 20.0f;
+  spectrum[size - 3U] = 20.0f;
+  TEST_ASSERT(sb_spectral_envelope_opening(spectrum, scratch, env, size, 6),
+              "edge peak opening runs");
+  TEST_FLOAT_CLOSE(env[2U], floor_level, 0.2f);
+  TEST_FLOAT_CLOSE(env[size - 3U], floor_level, 0.2f);
+
   printf("✓ sb_spectral_envelope_opening tests passed\n");
 }
 

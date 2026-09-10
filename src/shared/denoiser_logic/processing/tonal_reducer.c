@@ -21,6 +21,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "shared/denoiser_logic/processing/tonal_reducer.h"
 #include "shared/configurations.h"
 #include "shared/frame_rate_norm.h"
+#include "shared/utils/simd_utils.h"
 #include "shared/utils/spectral_utils.h"
 #include "shared/utils/tonal_detector.h"
 #include <float.h>
@@ -155,11 +156,23 @@ void tonal_reducer_compute_split(TonalReducer* self,
 void tonal_reducer_compute_tonal_gains(TonalReducer* self, uint32_t slot,
                                        const float* smoothed_magnitude,
                                        const float* noise_tonal,
+                                       const float* tonal_mask,
                                        float tonal_reduction_gain,
                                        float* gain_tonal) {
   if (!self || !smoothed_magnitude || !noise_tonal || !gain_tonal ||
       slot >= 2U) {
     return;
+  }
+
+  // Per-bin sqrt/division on residual bins can decay into denormals; guard the
+  // whole pass like the other per-frame DSP paths.
+  sb_simd_state_t old_simd_state = sb_simd_enable_ftz_daz();
+
+  // The mask must describe the same (possibly delayed) tile as noise_tonal.
+  // Callers with a delayed residual pass the frame-aligned mask; a NULL mask
+  // falls back to the current one for causal/low-latency callers.
+  if (!tonal_mask) {
+    tonal_mask = self->tonal_mask;
   }
 
   // Inactive tonal path (no residual anywhere): emit unity gains and keep the
@@ -174,6 +187,7 @@ void tonal_reducer_compute_tonal_gains(TonalReducer* self, uint32_t slot,
   if (!any_tonal) {
     initialize_spectrum_with_value(gain_tonal, self->real_spectrum_size, 1.0f);
     self->gain_seeded[slot] = false;
+    sb_simd_restore_state(old_simd_state);
     return;
   }
 
@@ -183,7 +197,7 @@ void tonal_reducer_compute_tonal_gains(TonalReducer* self, uint32_t slot,
   const float alpha_needed =
       ALPHA_MIN + (tonal_reduction_strength * (ALPHA_MAX_TONAL - ALPHA_MIN));
   for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
-    const float mask = fminf(self->tonal_mask[k], 1.0f);
+    const float mask = fminf(tonal_mask[k], 1.0f);
     self->alpha_tonal[k] = ALPHA_MIN + (mask * (alpha_needed - ALPHA_MIN));
   }
 
@@ -209,6 +223,7 @@ void tonal_reducer_compute_tonal_gains(TonalReducer* self, uint32_t slot,
     memcpy(self->gain_memory[slot], gain_tonal,
            self->real_spectrum_size * sizeof(float));
     self->gain_seeded[slot] = true;
+    sb_simd_restore_state(old_simd_state);
     return;
   }
   for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
@@ -216,6 +231,29 @@ void tonal_reducer_compute_tonal_gains(TonalReducer* self, uint32_t slot,
         (alpha * self->gain_memory[slot][k]) + ((1.0F - alpha) * gain_tonal[k]);
     self->gain_memory[slot][k] = gain_tonal[k];
   }
+
+  sb_simd_restore_state(old_simd_state);
+}
+
+void tonal_reducer_promote_gain_slot(TonalReducer* self) {
+  if (!self || !self->gain_memory[0] || !self->gain_memory[1]) {
+    return;
+  }
+  memcpy(self->gain_memory[0], self->gain_memory[1],
+         self->real_spectrum_size * sizeof(float));
+  self->gain_seeded[0] = self->gain_seeded[1];
+}
+
+void tonal_reducer_swap_gain_slots(TonalReducer* self) {
+  if (!self) {
+    return;
+  }
+  float* gain_memory_tmp = self->gain_memory[0];
+  self->gain_memory[0] = self->gain_memory[1];
+  self->gain_memory[1] = gain_memory_tmp;
+  const bool seeded_tmp = self->gain_seeded[0];
+  self->gain_seeded[0] = self->gain_seeded[1];
+  self->gain_seeded[1] = seeded_tmp;
 }
 
 void tonal_reducer_apply_alpha_boost(TonalReducer* self, float* alpha,

@@ -1150,12 +1150,13 @@ static Metrics run_case_mode(const Signals* signals, uint32_t sample_rate,
   TEST_ASSERT(att_frames >= MIN_METRIC_FRAMES, "enough noise-only frames");
   m.att_db = (float)(10.0 * log10(mix_e / out_e));
   m.att_all_db = (float)(10.0 * log10(mix_e_all / out_e_all));
-  m.tonal_att_db = (tonal_out_e > 0.0)
-                       ? (float)(10.0 * log10(tonal_mix_e / tonal_out_e))
-                       : 0.0F;
-  m.halo_att_db = (halo_out_e > 0.0)
-                      ? (float)(10.0 * log10(halo_mix_e / halo_out_e))
-                      : 0.0F;
+  // Positive energy floor on both operands so complete suppression reports a
+  // finite positive attenuation instead of 0.0 dB (log10(0) is -inf).
+  const double att_energy_floor = 1e-12;
+  m.tonal_att_db = (float)(10.0 * log10((tonal_mix_e + att_energy_floor) /
+                                        (tonal_out_e + att_energy_floor)));
+  m.halo_att_db = (float)(10.0 * log10((halo_mix_e + att_energy_floor) /
+                                       (halo_out_e + att_energy_floor)));
   free(noise_psd);
   free(noise_bins);
 

@@ -69,14 +69,30 @@ void tonal_reducer_compute_split(TonalReducer* self,
  *                            1 = transition/chain B)
  * @param smoothed_magnitude  Smoothed signal magnitude of the calling chain
  * @param noise_tonal         Tonal noise residual from compute_split
+ * @param tonal_mask          Mask aligned to the same delayed frame as
+ *                            noise_tonal (NULL falls back to the current mask)
  * @param tonal_reduction_gain Linear reduction coefficient (0.0–1.0)
  * @param gain_tonal          Output tonal gain spectrum (1.0 where no notch)
  */
 void tonal_reducer_compute_tonal_gains(TonalReducer* self, uint32_t slot,
                                        const float* smoothed_magnitude,
                                        const float* noise_tonal,
+                                       const float* tonal_mask,
                                        float tonal_reduction_gain,
                                        float* gain_tonal);
+
+/**
+ * Promote the transition (incoming) one-pole gain state in slot 1 into the
+ * active slot 0. Called when a crossfade completes so the newly-active chain
+ * continues from the state it built up while fading in.
+ */
+void tonal_reducer_promote_gain_slot(TonalReducer* self);
+
+/**
+ * Swap the two per-chain one-pole gain states. Called when an in-progress
+ * crossfade reverses so each chain keeps following its own history.
+ */
+void tonal_reducer_swap_gain_slots(TonalReducer* self);
 
 /**
  * Legacy (coupled-path) alpha boost: raise alpha toward the reduction-depth

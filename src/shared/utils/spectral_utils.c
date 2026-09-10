@@ -329,16 +329,26 @@ void interpolate_spectrum_gaps(float* spectrum, uint32_t size,
   }
 }
 
-// Sliding window extreme (min with is_min=true, max otherwise) over a
-// trailing window of `window` elements, clamped at the array edge. O(N*W)
-// with W <= TONAL_DETONE_MAX_BINS (16): a few thousand comparisons per frame
-// — negligible against the STFT/NLM cost, and immune to deque edge cases.
+// Sliding window extreme (min with is_min=true, max otherwise). `forward`
+// selects the leading window [i, i+window-1]; otherwise the window trails
+// [i-window+1, i]. Both clamp at the array edges. O(N*W) with W <=
+// TONAL_DETONE_MAX_BINS (16): a few thousand comparisons per frame — negligible
+// against the STFT/NLM cost, and immune to deque edge cases.
 static void sb_slide_extreme(const float* src, float* dst, uint32_t size,
-                             uint32_t window, const bool is_min) {
+                             uint32_t window, const bool is_min,
+                             const bool forward) {
   for (uint32_t i = 0U; i < size; i++) {
-    const uint32_t lo = (window > (i + 1U)) ? 0U : (i + 1U - window);
+    uint32_t lo;
+    uint32_t hi;
+    if (forward) {
+      lo = i;
+      hi = (i + window > size) ? (size - 1U) : (i + window - 1U);
+    } else {
+      lo = (window > (i + 1U)) ? 0U : (i + 1U - window);
+      hi = i;
+    }
     float ext = src[lo];
-    for (uint32_t j = lo + 1U; j <= i; j++) {
+    for (uint32_t j = lo + 1U; j <= hi; j++) {
       if (is_min) {
         if (src[j] < ext) {
           ext = src[j];
@@ -363,10 +373,13 @@ bool sb_spectral_envelope_opening(const float* spectrum, float* scratch,
     return false;
   }
 
-  // Morphological opening: erosion (running min) then dilation (running max)
-  // removes narrowband peaks while preserving the broadband baseline level.
-  sb_slide_extreme(spectrum, scratch, size, window, true);
-  sb_slide_extreme(scratch, out, size, window, false);
+  // Morphological opening with opposed orientations: a trailing erosion
+  // followed by a leading dilation removes narrowband peaks while leaving
+  // monotonic baselines and steps where they are. Using the same orientation
+  // for both passes would delay the envelope by a full window, misaligning the
+  // extracted baseline from the tonal residual it is subtracted from.
+  sb_slide_extreme(spectrum, scratch, size, window, true, false);
+  sb_slide_extreme(scratch, out, size, window, false, true);
   smooth_spectrum(out, size, TONAL_DETONE_SMOOTHING);
 
   return true;
