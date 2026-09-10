@@ -329,6 +329,62 @@ void interpolate_spectrum_gaps(float* spectrum, uint32_t size,
   }
 }
 
+// Sliding window extreme (min with is_min=true, max otherwise). `forward`
+// selects the leading window [i, i+window-1]; otherwise the window trails
+// [i-window+1, i]. Both clamp at the array edges. O(N*W) with W <=
+// TONAL_DETONE_MAX_BINS (16): a few thousand comparisons per frame — negligible
+// against the STFT/NLM cost, and immune to deque edge cases.
+static void sb_slide_extreme(const float* src, float* dst, uint32_t size,
+                             uint32_t window, const bool is_min,
+                             const bool forward) {
+  for (uint32_t i = 0U; i < size; i++) {
+    uint32_t lo;
+    uint32_t hi;
+    if (forward) {
+      lo = i;
+      hi = (i + window > size) ? (size - 1U) : (i + window - 1U);
+    } else {
+      lo = (window > (i + 1U)) ? 0U : (i + 1U - window);
+      hi = i;
+    }
+    float ext = src[lo];
+    for (uint32_t j = lo + 1U; j <= hi; j++) {
+      if (is_min) {
+        if (src[j] < ext) {
+          ext = src[j];
+        }
+      } else {
+        if (src[j] > ext) {
+          ext = src[j];
+        }
+      }
+    }
+    dst[i] = ext;
+  }
+}
+
+bool sb_spectral_envelope_opening(const float* spectrum, float* scratch,
+                                  float* out, const uint32_t size,
+                                  const uint32_t window) {
+  if (!spectrum || !scratch || !out || size == 0U || window == 0U) {
+    return false;
+  }
+  if (window > TONAL_DETONE_MAX_BINS) {
+    return false;
+  }
+
+  // Morphological opening with opposed orientations: a trailing erosion
+  // followed by a leading dilation removes narrowband peaks while leaving
+  // monotonic baselines and steps where they are. Using the same orientation
+  // for both passes would delay the envelope by a full window, misaligning the
+  // extracted baseline from the tonal residual it is subtracted from.
+  sb_slide_extreme(spectrum, scratch, size, window, true, false);
+  sb_slide_extreme(scratch, out, size, window, false, true);
+  smooth_spectrum(out, size, TONAL_DETONE_SMOOTHING);
+
+  return true;
+}
+
 bool get_morphed_profile(float* output_profile, const float* mean_profile,
                          const float* median_profile, const float* max_profile,
                          const float* min_profile, uint32_t size,

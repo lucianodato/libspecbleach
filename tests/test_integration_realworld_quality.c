@@ -179,6 +179,12 @@ typedef struct Metrics {
   float decay_db;   // mean post-transient decay deficit
   float sisdr_db;   // SI-SDR of output vs clean (higher = cleaner)
   float sar_db;     // signal-to-artifacts ratio vs span{clean,noise}
+  // Tonal regional A/B (report-only): attenuation (dB) over noise-only
+  // frames in (1) the LEARNED noise's dominant tonal peak bins and (2) the
+  // bins flanking it. The decoupled tonal path should hold or deepen (1)
+  // without deepening (2) relative to the legacy coupled build.
+  float tonal_att_db;
+  float halo_att_db;
 } Metrics;
 
 typedef struct Signals {
@@ -370,7 +376,8 @@ static SpecbleachDenoiserParameters make_parameters(float smoothing,
       .tonal_reduction_gain = reduction_gain,
       .dftt_strength =
           mode == 2U ? 1.0F + reduction_db / DFTT_STRENGTH_DOUBLING_DB : 1.0F,
-      .transient_protection_enable = false};
+      .transient_protection_enable =
+          (getenv("SPECBLEACH_REALWORLD_TRANSIENT") != NULL)};
 }
 
 // Measures the true stream delay empirically: noise burst on a scratch
@@ -1045,8 +1052,8 @@ static Metrics run_case_mode(const Signals* signals, uint32_t sample_rate,
   remove_boundary_frames(active, noise_only, num_frames);
   remove_boundary_frames(noise_only, active, num_frames);
 
-  Metrics m = {0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F,
-               0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F};
+  Metrics m = {0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F,
+               0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F};
 
   // Learned-noise bin selection: per-bin PSD from lead-in mix frames (the
   // same region the engine learned from). Energy-ratio attenuation over all
@@ -1094,11 +1101,28 @@ static Metrics run_case_mode(const Signals* signals, uint32_t sample_rate,
   }
   TEST_ASSERT(noise_bin_count >= MIN_NOISE_BINS, "learned noise bins found");
 
+  // Tonal regional breakdown: the dominant learned-noise peak bin and its
+  // flanks. Report-only A/B for the tonal decoupling measurement builds.
+  uint32_t peak_bin = 1U;
+  for (uint32_t k = 1U; k < bins; k++) {
+    if (noise_psd[k] > noise_psd[peak_bin]) {
+      peak_bin = k;
+    }
+  }
+  const uint32_t tonal_lo = (peak_bin > 1U) ? peak_bin - 1U : 1U;
+  const uint32_t tonal_hi = (peak_bin + 2U < bins) ? peak_bin + 2U : bins - 1U;
+  const uint32_t halo_lo = (peak_bin > 6U) ? peak_bin - 6U : 1U;
+  const uint32_t halo_hi = (peak_bin + 7U < bins) ? peak_bin + 7U : bins - 1U;
+
   // Att: attenuation over noise-only frames
   double mix_e = 0.0;
   double out_e = 0.0;
   double mix_e_all = 0.0;
   double out_e_all = 0.0;
+  double tonal_mix_e = 0.0;
+  double tonal_out_e = 0.0;
+  double halo_mix_e = 0.0;
+  double halo_out_e = 0.0;
   uint32_t att_frames = 0U;
   for (uint32_t f = 0U; f < num_frames; f++) {
     if (!noise_only[f]) {
@@ -1106,17 +1130,33 @@ static Metrics run_case_mode(const Signals* signals, uint32_t sample_rate,
     }
     att_frames++;
     for (uint32_t k = 1U; k < bins; k++) {
-      mix_e_all += (double)mix_an.power[f * bins + k];
-      out_e_all += (double)out_an.power[f * bins + k];
+      const double mk = (double)mix_an.power[f * bins + k];
+      const double ok = (double)out_an.power[f * bins + k];
+      mix_e_all += mk;
+      out_e_all += ok;
       if (noise_bins[k]) {
-        mix_e += (double)mix_an.power[f * bins + k];
-        out_e += (double)out_an.power[f * bins + k];
+        mix_e += mk;
+        out_e += ok;
+      }
+      if (k >= tonal_lo && k <= tonal_hi) {
+        tonal_mix_e += mk;
+        tonal_out_e += ok;
+      } else if (k >= halo_lo && k <= halo_hi) {
+        halo_mix_e += mk;
+        halo_out_e += ok;
       }
     }
   }
   TEST_ASSERT(att_frames >= MIN_METRIC_FRAMES, "enough noise-only frames");
   m.att_db = (float)(10.0 * log10(mix_e / out_e));
   m.att_all_db = (float)(10.0 * log10(mix_e_all / out_e_all));
+  // Positive energy floor on both operands so complete suppression reports a
+  // finite positive attenuation instead of 0.0 dB (log10(0) is -inf).
+  const double att_energy_floor = 1e-12;
+  m.tonal_att_db = (float)(10.0 * log10((tonal_mix_e + att_energy_floor) /
+                                        (tonal_out_e + att_energy_floor)));
+  m.halo_att_db = (float)(10.0 * log10((halo_mix_e + att_energy_floor) /
+                                       (halo_out_e + att_energy_floor)));
   free(noise_psd);
   free(noise_bins);
 
@@ -1237,8 +1277,8 @@ int main(void) {
     }
     for (uint32_t mode = 0U; mode < NUM_MODES; mode++) {
       printf("== %s | %s ==\n", config->name, mode_name(mode));
-      Metrics agg = {0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F,
-                     0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F};
+      Metrics agg = {0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F,
+                     0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F};
       for (uint32_t c = 0U; c < NUM_CASES; c++) {
         Signals* sig = &signals[c];
         sig->case_name = CASES[c].name;
@@ -1270,11 +1310,15 @@ int main(void) {
         agg.decay_db += m.decay_db;
         agg.sisdr_db += m.sisdr_db;
         agg.sar_db += m.sar_db;
+        agg.tonal_att_db += m.tonal_att_db;
+        agg.halo_att_db += m.halo_att_db;
         printf(
             "  %s: att %.1f dB (all %.1f), sd %.1f dB, mni %.2f (raw "
             "%.2f), decay %.1f dB, sisdr %.1f dB, sar %.1f dB\n",
             CASES[c].name, m.att_db, m.att_all_db, m.sd_db, m.mni_ratio,
             m.mni_out, m.decay_db, m.sisdr_db, m.sar_db);
+        printf("    [tonal A/B] peak-bin att %.1f dB, halo att %.1f dB\n",
+               m.tonal_att_db, m.halo_att_db);
         printf(
             "    sd split: LF %.1f dB, MF %.1f dB, HF %.1f dB | tr %.1f dB, "
             "st %.1f dB\n",
@@ -1297,6 +1341,8 @@ int main(void) {
       agg.decay_db /= (float)NUM_CASES;
       agg.sisdr_db /= (float)NUM_CASES;
       agg.sar_db /= (float)NUM_CASES;
+      agg.tonal_att_db /= (float)NUM_CASES;
+      agg.halo_att_db /= (float)NUM_CASES;
       const float sd_per_att =
           (agg.att_db > 0.01F) ? agg.sd_db / agg.att_db : 0.0F;
       printf(
@@ -1304,6 +1350,8 @@ int main(void) {
           "%.1f dB, sisdr %.1f dB, sar %.1f dB, sd/att %.2f\n",
           agg.att_db, agg.att_all_db, agg.sd_db, agg.mni_ratio, agg.decay_db,
           agg.sisdr_db, agg.sar_db, sd_per_att);
+      printf("    [tonal A/B] agg peak-bin att %.1f dB, halo att %.1f dB\n",
+             agg.tonal_att_db, agg.halo_att_db);
       printf(
           "    sd split: LF %.1f dB, MF %.1f dB, HF %.1f dB | tr %.1f dB, "
           "st %.1f dB\n",
