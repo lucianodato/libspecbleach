@@ -54,12 +54,12 @@ extern "C" {
 /**
  * Patch version component of the library release.
  */
-#define SPECBLEACH_VERSION_PATCH 0
+#define SPECBLEACH_VERSION_PATCH 1
 
 /**
- * Release version as a string literal (e.g., "0.4.0").
+ * Release version as a string literal (e.g., "0.4.1").
  */
-#define SPECBLEACH_VERSION_STRING "0.4.0"
+#define SPECBLEACH_VERSION_STRING "0.4.1"
 
 /**
  * Returns the runtime version banner ("libspecbleach " +

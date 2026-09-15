@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(libspecbleach VERSION 0.4.0 LANGUAGES C)
+project(libspecbleach VERSION 0.4.1 LANGUAGES C)
 
 # Guard against drift between the project version and the static
 # include/specbleach_version.h macros (single source of truth: this file).

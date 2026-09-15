@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-09-15
+
+### Added
+- **BM3D 1-pass collaborative smoothing mode**: confidence-blended collaborative smoothing with DFTT kill retune and temporal release cap, plus smoothing-mode switch sanitize and BM3D geometry validation.
+- **Parallel gain-path decoupling**: tonal dual-path with parallel notch gain plus transient relief as a gain-domain branch (FTZ/DAZ-guarded tonal gain, zero-phase morphological opening, delay-aligned tonal mask, pluck-tail pump bound).
+
+### Fixed
+- **Transient protection noise pump**: run transient detection on the aligned (delayed) frame, gate hard gain floors by per-bin clean evidence, hold fired band weights (200 ms decay) for the decay tail; detector clean scale 4.0 -> 2.0.
+- **Profile reset**: clear published noise spectrum on profile reset.
+
 ## [0.4.0] - 2026-09-07
 
 ### Changed (Breaking)
