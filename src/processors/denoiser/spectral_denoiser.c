@@ -1563,6 +1563,23 @@ void spectral_denoiser_reset_noise_profile(SpectralProcessorHandle instance) {
     memset(self->manual_noise_floor, 0,
            self->real_spectrum_size * sizeof(float));
   }
+  if (self->noise_spectrum) {
+    memset(self->noise_spectrum, 0, self->real_spectrum_size * sizeof(float));
+  }
+  if (self->noise_spectrum_buffers[0]) {
+    memset(self->noise_spectrum_buffers[0], 0,
+           self->real_spectrum_size * sizeof(float));
+  }
+  if (self->noise_spectrum_buffers[1]) {
+    memset(self->noise_spectrum_buffers[1], 0,
+           self->real_spectrum_size * sizeof(float));
+  }
+  if (self->noise_bb) {
+    memset(self->noise_bb, 0, self->real_spectrum_size * sizeof(float));
+  }
+  if (self->noise_tonal) {
+    memset(self->noise_tonal, 0, self->real_spectrum_size * sizeof(float));
+  }
   self->was_learning = false;
   self->last_adaptive_state = 0;
   self->smoothed_magnitude_seeded = false;
