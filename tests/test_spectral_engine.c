@@ -18,7 +18,7 @@ License along with this library; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#include "processors/denoiser/spectral_denoiser.h"
+#include "processors/denoiser/spectral_engine.h"
 #include "shared/configurations.h"
 #include "shared/denoiser_logic/core/noise_profile.h"
 #include <stdio.h>
@@ -34,7 +34,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
   } while (0)
 
 int main(void) {
-  printf("Testing spectral denoiser internal API validation...\n");
+  printf("Testing spectral engine internal API validation...\n");
 
   // Valid noise profile for a 2048-point FFT (real spectrum size is 1025)
   NoiseProfile* profile = noise_profile_initialize(1025U);
@@ -42,61 +42,62 @@ int main(void) {
 
   // Invalid initialization arguments: each invalid field isolated with a
   // valid profile
-  TEST_ASSERT(spectral_denoiser_initialize(0U, 2048U, 4U, profile) == NULL,
+  TEST_ASSERT(spectral_engine_initialize(0U, 2048U, 4U, profile) == NULL,
               "Zero sample rate must fail");
-  TEST_ASSERT(spectral_denoiser_initialize(44100U, 0U, 4U, profile) == NULL,
+  TEST_ASSERT(spectral_engine_initialize(44100U, 0U, 4U, profile) == NULL,
               "Zero fft size must fail");
-  TEST_ASSERT(spectral_denoiser_initialize(44100U, 2048U, 0U, profile) == NULL,
+  TEST_ASSERT(spectral_engine_initialize(44100U, 2048U, 0U, profile) == NULL,
               "Zero overlap must fail");
-  TEST_ASSERT(spectral_denoiser_initialize(44100U, 2048U, 4U, NULL) == NULL,
+  TEST_ASSERT(spectral_engine_initialize(44100U, 2048U, 4U, NULL) == NULL,
               "NULL noise profile must fail");
-  TEST_ASSERT(spectral_denoiser_initialize(44100U, 3U, 4U, profile) == NULL,
+  TEST_ASSERT(spectral_engine_initialize(44100U, 3U, 4U, profile) == NULL,
               "Sub-hop FFT (zero hop) must fail");
 
   // NULL-handle guards
   float spectrum[1026] = {0};
-  TEST_ASSERT(load_reduction_parameters(NULL, (DenoiserParameters){0}) == false,
+  TEST_ASSERT(spectral_engine_load_parameters(
+                  NULL, (SpectralEngineParameters){0}) == false,
               "NULL load parameters must fail");
-  TEST_ASSERT(spectral_denoiser_run(NULL, spectrum) == false,
+  TEST_ASSERT(spectral_engine_run(NULL, spectrum) == false,
               "NULL instance run must fail");
-  TEST_ASSERT(spectral_denoiser_get_tonal_mask(NULL) == NULL,
+  TEST_ASSERT(spectral_engine_get_tonal_mask(NULL) == NULL,
               "NULL tonal mask must be NULL");
-  TEST_ASSERT(spectral_denoiser_get_active_noise_profile(NULL) == NULL,
+  TEST_ASSERT(spectral_engine_get_active_noise_profile(NULL) == NULL,
               "NULL active profile must be NULL");
-  TEST_ASSERT(spectral_denoiser_get_latency_frames(NULL) == 0,
+  TEST_ASSERT(spectral_engine_get_latency_frames(NULL) == 0,
               "NULL latency must be 0");
-  TEST_ASSERT(spectral_denoiser_is_transient_detected(NULL) == false,
+  TEST_ASSERT(spectral_engine_is_transient_detected(NULL) == false,
               "NULL transient detected must be false");
-  TEST_ASSERT(spectral_denoiser_get_transient_intensity(NULL) == 0.0f,
+  TEST_ASSERT(spectral_engine_get_transient_intensity(NULL) == 0.0f,
               "NULL transient intensity must be 0");
   float peaks[8];
-  TEST_ASSERT(spectral_denoiser_get_peaks(NULL, peaks, 8) == 0,
+  TEST_ASSERT(spectral_engine_get_peaks(NULL, peaks, 8) == 0,
               "NULL peaks must return 0");
-  spectral_denoiser_reset_noise_profile(NULL); // must not crash
+  spectral_engine_reset_noise_profile(NULL); // must not crash
 
   // Valid handle: NULL spectrum must fail and reset must be safe
   SpectralProcessorHandle handle =
-      spectral_denoiser_initialize(44100U, 2048U, OVERLAP_FACTOR, profile);
+      spectral_engine_initialize(44100U, 2048U, OVERLAP_FACTOR, profile);
   TEST_ASSERT(handle != NULL, "Initialization should succeed");
 
   // Explicit true-hop init must agree with the derived-hop init
-  SpectralProcessorHandle hop_handle = spectral_denoiser_initialize_with_hop(
+  SpectralProcessorHandle hop_handle = spectral_engine_initialize_with_hop(
       44100U, 2048U, OVERLAP_FACTOR, 2048U / OVERLAP_FACTOR, profile, false);
   TEST_ASSERT(hop_handle != NULL, "With-hop initialization should succeed");
-  TEST_ASSERT(spectral_denoiser_get_latency_frames(hop_handle) ==
-                  spectral_denoiser_get_latency_frames(handle),
+  TEST_ASSERT(spectral_engine_get_latency_frames(hop_handle) ==
+                  spectral_engine_get_latency_frames(handle),
               "Explicit and derived hop must agree");
-  spectral_denoiser_free(hop_handle);
+  spectral_engine_free(hop_handle);
 
-  TEST_ASSERT(spectral_denoiser_run(handle, NULL) == false,
+  TEST_ASSERT(spectral_engine_run(handle, NULL) == false,
               "NULL spectrum with valid handle must fail");
-  TEST_ASSERT(spectral_denoiser_get_latency_frames(handle) > 0,
+  TEST_ASSERT(spectral_engine_get_latency_frames(handle) > 0,
               "Latency frames must be positive");
-  spectral_denoiser_reset_noise_profile(handle);
+  spectral_engine_reset_noise_profile(handle);
 
-  spectral_denoiser_free(handle);
+  spectral_engine_free(handle);
   noise_profile_free(profile);
 
-  printf("✅ All spectral denoiser internal tests passed!\n");
+  printf("✅ All spectral engine internal tests passed!\n");
   return 0;
 }

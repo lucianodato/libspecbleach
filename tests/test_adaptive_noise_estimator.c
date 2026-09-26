@@ -21,7 +21,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "processors/denoiser/spectral_denoiser.h"
+#include "processors/denoiser/spectral_engine.h"
 
 #include "shared/denoiser_logic/core/noise_floor_manager.h"
 #include "shared/denoiser_logic/core/noise_profile.h"
@@ -188,7 +188,7 @@ int main(void) {
   suppression_engine_free(se);
 
   // Internal Processors
-  spectral_denoiser_free(NULL);
+  spectral_engine_free(NULL);
 
   // Dispatcher Coverage (Extra)
   printf("Testing Adaptive Estimator Dispatcher...\n");
