@@ -102,6 +102,34 @@ void test_brandt_run_logic(void) {
     TEST_FLOAT_CLOSE(noise_spectrum[i], 1.0f, 1e-4f);
   }
 
+  // Exercise sorted-history replacement across multiple ring wraps, including
+  // state and floor updates that must keep the sorted copy in sync.
+  brandt_noise_estimator_set_hop_sec(est, 0.01F);
+  for (uint32_t i = 0; i < real_size; i++) {
+    spectrum[i] = 1.0F;
+  }
+  brandt_noise_estimator_set_state(est, spectrum);
+  float floor_profile[64];
+  float state_profile[64];
+  for (uint32_t frame = 0; frame < 120U; frame++) {
+    for (uint32_t i = 0; i < real_size; i++) {
+      spectrum[i] = 0.05F + ((float)((frame * 7U + i * 3U) % 31U) * 0.01F);
+      floor_profile[i] = 0.02F + ((float)(i % 5U) * 0.005F);
+      state_profile[i] = 0.1F + ((float)(i % 9U) * 0.01F);
+    }
+    if (frame == 37U) {
+      brandt_noise_estimator_apply_floor(est, floor_profile);
+    } else if (frame == 73U) {
+      brandt_noise_estimator_set_state(est, state_profile);
+    }
+    TEST_ASSERT(brandt_noise_estimator_run(est, spectrum, noise_spectrum),
+                "Run should succeed while replacing sorted history");
+    for (uint32_t i = 0; i < real_size; i++) {
+      TEST_ASSERT(isfinite(noise_spectrum[i]),
+                  "Sorted-history updates should remain finite");
+    }
+  }
+
   // NULL checks
   TEST_ASSERT(!brandt_noise_estimator_run(NULL, spectrum, noise_spectrum),
               "Should fail with NULL estimator");
@@ -153,12 +181,41 @@ void test_brandt_state_management(void) {
   printf("✓ Brandt state management tests passed\n");
 }
 
+void test_brandt_sorted_history_updates(void) {
+  printf("Testing Brandt sorted-history updates...\n");
+
+  BrandtNoiseEstimator* est =
+      brandt_noise_estimator_initialize(1U, 500.0F, 48000U, 4096U);
+  TEST_ASSERT(est != NULL, "Sorted-history estimator should initialize");
+  brandt_noise_estimator_set_hop_sec(est, 0.01F);
+
+  float spectrum = 0.0F;
+  float noise = 0.0F;
+  for (uint32_t frame = 0U; frame < 60U; frame++) {
+    uint32_t rank = (frame * 17U) % 50U;
+    float u = ((float)rank + 0.5F) / 50.0F;
+    spectrum = -logf(1.0F - u);
+    TEST_ASSERT(brandt_noise_estimator_run(est, &spectrum, &noise),
+                "Run should succeed for exponential-history input");
+
+    if (frame == 45U) {
+      TEST_FLOAT_CLOSE(noise, 0.8500484F, 1e-4F);
+    } else if (frame == 50U) {
+      TEST_FLOAT_CLOSE(noise, 0.9930851F, 1e-4F);
+    }
+  }
+
+  brandt_noise_estimator_free(est);
+  printf("✓ Brandt sorted-history tests passed\n");
+}
+
 int main(void) {
   printf("Running Brandt Noise Estimator tests...\n\n");
 
   test_brandt_initialization();
   test_brandt_run_logic();
   test_brandt_state_management();
+  test_brandt_sorted_history_updates();
 
   printf("\n✅ All Brandt tests passed!\n");
   return 0;
