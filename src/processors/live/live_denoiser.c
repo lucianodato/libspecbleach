@@ -85,6 +85,13 @@ struct specbleach_live_denoiser { // NOLINT(readability-identifier-naming)
   float noise[LIVE_NUM_BANDS];
   float r[LIVE_NUM_BANDS];
   float gain[LIVE_NUM_BANDS];
+  /* Voice-gated HF residual follower: slow[] tracks HF band power
+   * only while voiceband energy sits clearly above the frozen floor;
+   * the HF gate then uses max(noise, slow) so hiss stays down under
+   * speech while noise-only stretches (no voice -> follower parked
+   * at/below the floor) are untouched. Calloc-zeroed at init,
+   * cleared on Learn reset like noise[]. */
+  float slow[LIVE_NUM_BANDS];
   /* Raw gate target for the current sample, written by pass 1 and read
    * back by the across-band smoothing step below (scratch, not state:
    * every active entry is rewritten each sample before it is read). */
@@ -127,13 +134,26 @@ struct specbleach_live_denoiser { // NOLINT(readability-identifier-naming)
   float gate_attack;
   float gate_release;
   float snr_attack;
+  float snr_attack_hf;
   float snr_release;
+
   float peak_a_floor;
+  float follow_down;
+  float follow_up;
+  float follow_release;
+  /* Voice/HF band split (design-time centers, ascending): voice is
+   * the [0, n_voice) prefix, HF follow the [i_hf, NUM) suffix. */
+  uint32_t n_voice;
+  uint32_t i_hf;
   /* Per-band synthesis depth exponent: compensates the bank geometry
    * so the closed-gate static response is flat with frequency
    * (sparse edge regions otherwise cut shallower than dense mids).
    * Derived at design time from the section overlap, no tuning. */
   float peak_exp[LIVE_NUM_BANDS];
+  /* Bark group index for the joint gate decision (see Pass 1b):
+   * the bank tiles Bark uniformly, so consecutive bands form equal
+   * Bark groups. Calloc-zeroed; filled at design time. */
+  uint8_t group[LIVE_NUM_BANDS];
 };
 
 static float live_bark(float freq_hz) {
@@ -282,8 +302,16 @@ static void live_design_bank(specbleach_live_denoiser* self) {
     self->a2[k] = (1.0F - alpha) * a0_inv;
     /* Same slot geometry for the synthesis peaking section. */
     self->spk_cos[k] = cos_w;
-    /* Wider notch for synthesis (see LIVE_PEAK_Q_MULT). */
+    /* Wider notch for synthesis (see LIVE_PEAK_Q_MULT). NOTE: easing
+     * spk_alpha wider toward the top octave for closed-gate HF depth
+     * was tried at x2.0 and x1.3 and reverted: every widened build
+     * CRASHes the plugin host, every revert passes. HF depth stays
+     * geometry-limited; fix by adding bands, not widening. */
     self->spk_alpha[k] = sin_w / (2.0F * q * LIVE_PEAK_Q_MULT);
+    /* Bark group for the joint decision: uniform Bark tiling makes
+     * consecutive bands equal Bark groups (see Pass 1b). */
+    self->group[k] = (uint8_t)(((uint32_t)k * (uint32_t)LIVE_NUM_GROUPS) /
+                               (uint32_t)LIVE_NUM_BANDS);
     self->band_lo_hz[k] = freq_lo;
     self->band_hi_hz[k] = freq_hi;
   }
@@ -412,10 +440,50 @@ static void live_derive_control_coeffs(specbleach_live_denoiser* self) {
       live_time_to_coeff(self->parameters.attack_time, sample_rate);
   self->gate_release_sec = self->parameters.release_time;
   self->gate_release = live_time_to_coeff(self->gate_release_sec, sample_rate);
-  self->snr_attack =
-      live_time_to_coeff(/* symmetric */ LIVE_SNR_SMOOTH_SEC, sample_rate);
-  self->snr_release = self->snr_attack;
+  self->snr_attack = live_time_to_coeff(LIVE_SNR_ATTACK_SEC, sample_rate);
+  /* NOTE: knob-tracked release (fast shallow, slow deep) was tried
+   * and reverted: +0.03 R20 body for hotter onsets. Flat wins on
+   * the complaint axis. */
+  self->snr_release = live_time_to_coeff(LIVE_SNR_RELEASE_SEC, sample_rate);
+  /* HF attack tracks the knob like anchor/tail: RX's HF decisions
+   * quicken with Reduction (50 ms at R12 keeps the tuned match
+   * exact, 8 ms at R20 opens harmonic peaks for binary contrast).
+   * Derived from the slider gain floor, clamped both ends. */
+  {
+    const float gm = self->parameters.reduction_gain;
+    const float rdb = -20.0F * log10f(gm > 1.0e-6F ? gm : 1.0e-6F);
+    float asec =
+        LIVE_SNR_SMOOTH_SEC - LIVE_HF_ATK_TRACK * (rdb - LIVE_ANCHOR_REF_DB);
+    if (asec < LIVE_SNR_ATTACK_HF_MIN_SEC) {
+      asec = LIVE_SNR_ATTACK_HF_MIN_SEC;
+    } else if (asec > LIVE_SNR_SMOOTH_SEC) {
+      asec = LIVE_SNR_SMOOTH_SEC;
+    }
+    self->snr_attack_hf = live_time_to_coeff(asec, sample_rate);
+  }
   self->peak_a_floor = powf(10.0F, -LIVE_PEAK_CUT_MIN_DB / 20.0F);
+  self->follow_down = live_time_to_coeff(LIVE_FOLLOW_DOWN_SEC, sample_rate);
+  self->follow_up = live_time_to_coeff(LIVE_FOLLOW_UP_SEC, sample_rate);
+  self->follow_release =
+      live_time_to_coeff(LIVE_FOLLOW_RELEASE_SEC, sample_rate);
+  /* Voice/HF split from design-time geometric centers (ascending). */
+  uint32_t nv = 0U, ih = LIVE_NUM_BANDS;
+  uint32_t k;
+  for (k = 0U; k < LIVE_NUM_BANDS; k++) {
+    if (!self->active[k] || self->band_lo_hz[k] <= 0.0F ||
+        self->band_hi_hz[k] <= 0.0F) {
+      continue;
+    }
+    const float c = sqrtf(self->band_lo_hz[k] * self->band_hi_hz[k]);
+    if (c < LIVE_FOLLOW_VOICE_HZ) {
+      nv = k + 1U;
+    }
+    if (c >= LIVE_FOLLOW_HF_HZ && ih == LIVE_NUM_BANDS) {
+      ih = k;
+    }
+  }
+  self->n_voice = nv;
+  self->i_hf = ih;
 }
 
 specbleach_live_denoiser* specbleach_live_denoiser_initialize(
@@ -503,7 +571,13 @@ bool specbleach_live_denoiser_process(specbleach_live_denoiser* instance,
   const float gate_attack = instance->gate_attack;
   const float gate_release = instance->gate_release;
   const float snr_attack = instance->snr_attack;
+  const float snr_attack_hf = instance->snr_attack_hf;
   const float snr_release = instance->snr_release;
+  const float follow_down = instance->follow_down;
+  const float follow_up = instance->follow_up;
+  const float follow_release = instance->follow_release;
+  const uint32_t n_voice = instance->n_voice;
+  const uint32_t i_hf = instance->i_hf;
   const bool adaptive = instance->parameters.adaptive_noise;
   const float knee_ratio = powf(10.0F, -instance->parameters.knee_db / 20.0F);
   /* Gain-law constants (block-level: every term depends only on the
@@ -521,12 +595,65 @@ bool specbleach_live_denoiser_process(specbleach_live_denoiser* instance,
   const float reduction_db = -20.0F * log10f(g_min > 1.0e-6F ? g_min : 1.0e-6F);
   const float span = 1.0F + (1.0F - knee_ratio) * (LIVE_GATE_OPEN_RATIO - 1.0F);
   const float wener_anchor =
-      threshold_mult * threshold_mult * LIVE_GATE_RLO_MULT * span;
+      threshold_mult * threshold_mult * LIVE_GATE_RLO_MULT * span *
+      powf(g_min / LIVE_ANCHOR_REF_LIN, LIVE_ANCHOR_TRACK_EXP);
   const float wener_inv_anchor = 1.0F / wener_anchor;
+  /* Voice-gated HF anchor lift (power ratio): under voice the HF
+   * tail stays deep on weak harmonics (RX holds -14.2 vs our -10.3
+   * at R20) while fricatives, pauses and noise-only stretches never
+   * engage the voice gate (fires 65% vowels / 0% fricatives /
+   * never without lowband energy) so sibilance and floors are
+   * untouched. R-tracked from the 12 dB reference, clamped at 0
+   * below it, so the tuned 12 dB match is untouched. */
+  float hf_lift_db = LIVE_HF_TRACK_DB * (reduction_db - LIVE_ANCHOR_REF_DB);
+  if (hf_lift_db < 0.0F) {
+    hf_lift_db = 0.0F;
+  }
+  const float hf_voice_lift = powf(10.0F, hf_lift_db / 10.0F);
+  /* HF tail tracks the knob like the anchor: RX's expansion ratio
+   * rises with Reduction (R12 HF tones release like a=0.6, R20
+   * vowel peaks need a=0.9 for binary contrast). 0.6 at/under R12
+   * so the tuned 12 dB match is untouched. */
+  float hf_tail = LIVE_GAIN_TAIL_EXP +
+                  LIVE_HF_TAIL_TRACK * (reduction_db - LIVE_ANCHOR_REF_DB);
+  if (hf_tail < LIVE_GAIN_TAIL_EXP) {
+    hf_tail = LIVE_GAIN_TAIL_EXP;
+  }
+  /* Lowband anchor lift: RX demands more SNR to open low gates (its
+   * low node sits hotter), so buried voice lows stay shut instead of
+   * leaking. Full lift at/below LOW_FULL_HZ, tapering to none at
+   * LOW_TOP_HZ (log-frequency). Block-level like the anchor itself;
+   * the floor (nu <= 1) is untouched. */
+  float inv_anchor[LIVE_NUM_BANDS];
+  {
+    const float log_lo = logf(LIVE_LOW_LIFT_FULL_HZ);
+    const float log_hi = logf(LIVE_LOW_LIFT_TOP_HZ);
+    const float lift_track =
+        LIVE_LIFT_TRACK_DB * (reduction_db - LIVE_ANCHOR_REF_DB);
+    uint32_t k = 0U;
+    for (k = 0U; k < LIVE_NUM_BANDS; k++) {
+      float lift_db = 0.0F;
+      if (instance->active[k] && instance->band_lo_hz[k] > 0.0F &&
+          instance->band_hi_hz[k] > 0.0F) {
+        const float c =
+            sqrtf(instance->band_lo_hz[k] * instance->band_hi_hz[k]);
+        if (c <= LIVE_LOW_LIFT_FULL_HZ) {
+          lift_db = LIVE_LOW_LIFT_DB + lift_track;
+        } else if (c < LIVE_LOW_LIFT_TOP_HZ) {
+          lift_db = LIVE_LOW_LIFT_DB * (logf(c) - log_hi) / (log_lo - log_hi);
+        }
+      }
+      if (lift_db < 0.0F) {
+        lift_db = 0.0F;
+      }
+      inv_anchor[k] = wener_inv_anchor / powf(10.0F, lift_db / 10.0F);
+    }
+  }
   /* Learn: drop the floor so it re-converges on the current input. */
   if (atomic_exchange_explicit(&instance->reset_floor, false,
                                memory_order_acq_rel)) {
     memset(instance->noise, 0, sizeof(instance->noise));
+    memset(instance->slow, 0, sizeof(instance->slow));
   }
 
   sb_simd_state_t simd_state = sb_simd_enable_ftz_daz();
@@ -536,6 +663,12 @@ bool specbleach_live_denoiser_process(specbleach_live_denoiser* instance,
 
   for (uint32_t n = 0U; n < number_of_samples; n++) {
     const float x = input[n];
+    float v_env = 0.0F;
+    float v_noise = 0.0F;
+    bool voice = false;
+    bool voice_lo = false;
+    float m_env = 0.0F;
+    float m_noise = 0.0F;
 
     /* Pass 1: per-band analysis + gain computation. */
     for (uint32_t k = 0U; k < LIVE_NUM_BANDS; k++) {
@@ -569,14 +702,67 @@ bool specbleach_live_denoiser_process(specbleach_live_denoiser* instance,
         instance->noise[k] = floor;
       }
 
+      /* Voice gate for the HF hold/follower: lowband power vs
+       * frozen lowband floor (level-invariant ratio), AND midband
+       * harmonic richness (speech-selective: steady sine gates are
+       * loud down low but empty in the mids, so they must not hold
+       * HF shut - vowels keep 60/64 coverage, sine-gates drop to
+       * 0%). Low completes at the first non-voice band, mid at the
+       * first HF band, both before any k >= i_hf use below. */
+      if (k < n_voice) {
+        v_env += power;
+        v_noise += instance->noise[k];
+      } else if (k == n_voice) {
+        voice_lo = v_env > LIVE_FOLLOW_RATIO * (v_noise + SPECTRAL_EPSILON);
+        if (i_hf <= n_voice) {
+          voice = voice_lo;
+        } else {
+          m_env += power;
+          m_noise += instance->noise[k];
+        }
+      } else if (k < i_hf) {
+        m_env += power;
+        m_noise += instance->noise[k];
+      } else if (k == i_hf) {
+        voice = voice_lo &&
+                m_env > LIVE_FOLLOW_MIDRATIO * (m_noise + SPECTRAL_EPSILON);
+      }
+
       /* Decision-directed smoothing of the instantaneous power SNR:
        * fast attack opens as soon as signal rises above the floor,
        * slow release collapses the noise's own fluctuation so the
        * gate target is steady (the time-domain analog of the full
        * denoiser's DD smoothing). */
+      /* HF residual follower: voice-gated minima tracker. While
+       * voice is present slow[] falls fast toward local minima (the
+       * hiss under speech) and climbs back slowly, so it estimates
+       * the HF noise floor even while sibilance fires above it.
+       * Silent stretches relax it to the frozen floor; the gate uses
+       * whichever is hotter. */
+      float floor_eff = instance->noise[k];
+      if (k >= i_hf) {
+        float sl = instance->slow[k];
+        if (voice) {
+          const float c = (power < sl) ? follow_down : follow_up;
+          sl += c * (power - sl);
+        } else {
+          sl += follow_release * (instance->noise[k] - sl);
+        }
+        instance->slow[k] = sl;
+        if (sl > floor_eff) {
+          floor_eff = sl;
+        }
+      }
       float lsnr = instance->r[k];
-      const float inst_r = power / (instance->noise[k] + SPECTRAL_EPSILON);
-      lsnr += (inst_r > lsnr ? snr_attack : snr_release) * (inst_r - lsnr);
+      const float inst_r = power / (floor_eff + SPECTRAL_EPSILON);
+      /* HF attack runs faster (R-tracked): harmonic peaks open fully
+       * for a frame or two while valleys stay shut - RX is
+       * near-binary under voice. Release stays slow everywhere so
+       * noise chatter still integrates out (a fast HF release was
+       * tried: better vowel frame-mean but worse body at both
+       * depths - it overfits the diagnostic). */
+      const float sa = k >= i_hf ? snr_attack_hf : snr_attack;
+      lsnr += (inst_r > lsnr ? sa : snr_release) * (inst_r - lsnr);
       instance->r[k] = lsnr;
 
       float target;
@@ -599,12 +785,50 @@ bool specbleach_live_denoiser_process(specbleach_live_denoiser* instance,
        * where RX held -1.3 dB and the background stayed audible under
        * speech. nu <= 1 keeps the exact floor, so the noise-only probe
        * and the slider meaning are unchanged. */
-      const float nu = lsnr * wener_inv_anchor;
+      float nu = lsnr * inv_anchor[k];
+      /* Voice-gated HF hold: hotter anchor while voice is present so
+       * weak harmonics cannot open the tail (fricatives never engage
+       * the gate, so sibilance still opens). k >= i_hf always runs
+       * after the gate completes (k == n_voice), so voice is valid. */
+      if (voice && k >= i_hf) {
+        nu /= hf_voice_lift;
+      }
       if (nu <= 1.0F) {
         target = g_min;
       } else {
-        const float cut_db = reduction_db * powf(nu, -LIVE_GAIN_TAIL_EXP);
-        target = powf(10.0F, -cut_db * 0.05F);
+        /* Power-subtraction gain (Berouti-style, STFT-subtractor
+         * family): G = sqrt(max(1 - alpha/nu, g_min^2)), alpha
+         * SNR-adaptive (LIVE_SS_*). At/below the anchor the floor
+         * keeps probe and slider meaning; just above it the
+         * over-subtraction holds near-floor where the old nu^-tail
+         * law already released to half-cut - that is the deeper
+         * mixed-section cut (vowel frame-mean exact vs RX). In HF
+         * alpha scales with the R-tracked tail ratio, preserving
+         * hiss/harmonic contrast. Sibilance overcut is worked on
+         * separately, not by cooling this law. */
+        const float seg_snr = 10.0F * log10f(nu);
+        float alpha;
+        if (seg_snr <= LIVE_SS_SNR_LO_DB) {
+          alpha = LIVE_SS_ALPHA_HI;
+        } else if (seg_snr >= LIVE_SS_SNR_HI_DB) {
+          alpha = 1.0F;
+        } else {
+          alpha = LIVE_SS_ALPHA_HI -
+                  (LIVE_SS_ALPHA_HI - 1.0F) * (seg_snr - LIVE_SS_SNR_LO_DB) /
+                      (LIVE_SS_SNR_HI_DB - LIVE_SS_SNR_LO_DB);
+        }
+        if (k >= i_hf) {
+          alpha *= hf_tail / LIVE_GAIN_TAIL_EXP;
+        }
+        const float g_floor2 = g_min * g_min;
+        const float g2 = 1.0F - alpha / nu;
+        if (g2 <= g_floor2) {
+          target = g_min;
+        } else if (g2 >= 1.0F) {
+          target = 1.0F;
+        } else {
+          target = sqrtf(g2);
+        }
       }
       if (target < g_min) {
         target = g_min;
@@ -615,44 +839,63 @@ bool specbleach_live_denoiser_process(specbleach_live_denoiser* instance,
       instance->gate_target[k] = target;
     }
 
-    /* Pass 1b: smooth the gain-law target ACROSS bands, then drive each
-     * band's gain toward the smoothed value.
+    /* Pass 1b: joint gate decision per Bark GROUP, then drive each
+     * band's gain toward its group's value.
      *
-     * The continuous law removed the hard 1.0/g_min cliff, but its slope
-     * is still steepest where it matters most: right at the floor a 3 dB
-     * SNR step between neighbours is a ~2.3 dB step in gain (12 -> 9.7 dB
-     * of cut at 0 -> 3 dB past the anchor), and the noise profile decays
-     * smoothly while the decision does not. Drawn and heard, that is a
-     * visible band-to-band discontinuity. A binomial 5-tap [1 4 6 4 1]/16
-     * cuts a step to 5/16 of its height, which puts the law's contribution
-     * below the spectrum's own natural band-to-band steps (measured on
-     * benchmark_suite_lead10s: gate-made step max 8.0 -> 2.78 dB against
-     * an input-curve p95 of 2.11 dB).
-     * Smoothing the TARGET rather than the gain is deliberate: gain is
-     * state, so re-blending it every sample would diffuse all bands
-     * toward one another within milliseconds. */
+     * 64 Bark groups over the 256 bands (RX's own "64 Bark gates"
+     * architecture): a group opens only when a member is FULLY open
+     * (a real harmonic/sibilant peak), never on mid-level chatter -
+     * a plain max opened everything (R12 body 0.26 -> 0.38) because
+     * smoothed noise excursions sit half-open. Peak-triggered groups
+     * preserve lone harmonics while uniformly quiet groups shut
+     * together: near-binary under voice. Smoothing the TARGET rather
+     * than the gain is deliberate: gain is state, so re-blending it
+     * every sample would diffuse all bands toward one another within
+     * milliseconds. */
+    float gmax[LIVE_NUM_GROUPS];
+    for (uint32_t g = 0U; g < (uint32_t)LIVE_NUM_GROUPS; g++) {
+      gmax[g] = 0.0F;
+    }
     for (uint32_t k = 0U; k < LIVE_NUM_BANDS; k++) {
       if (!instance->active[k]) {
         continue;
       }
-      /* active[] is an active-prefix, so k-1/k-2 are always valid; the
-       * upper taps clamp to k at the last active band. */
-      const uint32_t km1 = (k > 0U) ? k - 1U : k;
-      const uint32_t km2 = (km1 > 0U) ? km1 - 1U : km1;
-      uint32_t kp1 = k + 1U;
-      if (kp1 >= LIVE_NUM_BANDS || !instance->active[kp1]) {
-        kp1 = k;
+      const float t = instance->gate_target[k];
+      uint32_t g = instance->group[k];
+      if (g >= (uint32_t)LIVE_NUM_GROUPS) {
+        g = (uint32_t)LIVE_NUM_GROUPS - 1U;
       }
-      uint32_t kp2 = kp1 + 1U;
-      if (kp2 >= LIVE_NUM_BANDS || !instance->active[kp2]) {
-        kp2 = kp1;
+      if (t > gmax[g]) {
+        gmax[g] = t;
       }
-      const float* const t = instance->gate_target;
-      const float desired =
-          (t[km2] + 4.0F * t[km1] + 6.0F * t[k] + 4.0F * t[kp1] + t[kp2]) *
-          (1.0F / 16.0F);
+    }
+    for (uint32_t k = 0U; k < LIVE_NUM_BANDS; k++) {
+      if (!instance->active[k]) {
+        continue;
+      }
+      uint32_t g = instance->group[k];
+      if (g >= (uint32_t)LIVE_NUM_GROUPS) {
+        g = (uint32_t)LIVE_NUM_GROUPS - 1U;
+      }
+      const float own = instance->gate_target[k];
+      const float shared = gmax[g];
+      float desired = shared > LIVE_GROUP_PEAK_TRIG ? shared : own;
+      /* NOTE: a voice-confidence mid trim lived here and was
+       * removed: it fired on all voiced mids (corpus 0.93 -> 2.11)
+       * while the hot moments it targeted never moved - the
+       * controller cannot separate them. */
+      /* NOTE: contrast lift was tried here and reverted (level sweep:
+       * RX spares tones only above ~+12 dB SNR, voice lives below). */
+      /* NOTE: a broadband transient bypass (25 ms full-open on flux)
+       * lived here and was removed: the impulse probe showed it
+       * pumping ~100 ms of noise after every attack while RX stays
+       * shut. Each band now decides alone; attacks survive through
+       * their own loud bins. Onset chop is the known cost. */
 
-      /* De-clicked gain toward the target. */
+      /* De-clicked gain toward the target. NOTE: a tonal-absence
+       * fast release was tried for pause residual and reverted: it
+       * chops reverb tails (R20 pauses -19.9 vs RX -12.9) instead
+       * of denoising - pauses were already at parity. */
       float gain = instance->gain[k];
       gain += (desired > gain ? gate_attack : gate_release) * (desired - gain);
       if (gain < g_min) {
@@ -708,6 +951,11 @@ bool specbleach_live_denoiser_process(specbleach_live_denoiser* instance,
     } else {
       output[n] = sig;
     }
+    /* NOTE: an absence room-tone cap (fresh pauses capped at -13 dB
+     * like RX) lived here and was removed: scoping it to long
+     * silences never fires on the pause metric (short gaps), and
+     * any wider scope heats onsets and opens vowels. R20 deep
+     * pauses stay a known tradeoff. */
   }
 
   sb_simd_restore_state(simd_state);
