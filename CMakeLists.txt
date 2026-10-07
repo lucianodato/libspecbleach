@@ -84,6 +84,12 @@ if(ENABLE_SANITIZERS AND NOT MSVC)
     add_link_options(-fsanitize=address -fsanitize=undefined)
 endif()
 
+option(ENABLE_TSAN "Enable ThreadSanitizer" OFF)
+if(ENABLE_TSAN AND NOT MSVC)
+    add_compile_options(-fsanitize=thread)
+    add_link_options(-fsanitize=thread)
+endif()
+
 if(ENABLE_COVERAGE AND NOT MSVC)
     add_compile_options(--coverage -O0)
     add_link_options(--coverage)
@@ -97,6 +103,10 @@ file(GLOB_RECURSE SPECLEACH_SHARED_SOURCES
 )
 list(FILTER SPECLEACH_SHARED_SOURCES EXCLUDE REGEX ".*nlm_filter_avx\\.c$")
 
+file(GLOB SPECLEACH_TOP_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c"
+)
+
 file(GLOB_RECURSE SPECLEACH_PROCESSOR_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/src/processors/*.c"
 )
@@ -105,6 +115,7 @@ file(GLOB_RECURSE SPECLEACH_PROCESSOR_SOURCES
 # 6. Target Definition
 # ==============================================================================
 add_library(libspecbleach
+    ${SPECLEACH_TOP_SOURCES}
     ${SPECLEACH_SHARED_SOURCES}
     ${SPECLEACH_PROCESSOR_SOURCES}
     ${PFFFT_SOURCES}
@@ -246,6 +257,7 @@ if(ENABLE_TESTS)
     # the library sources instead. The public shared artifact is untouched.
     if(BUILD_SHARED_LIBS)
         add_library(specbleach_test_internal STATIC EXCLUDE_FROM_ALL
+            ${SPECLEACH_TOP_SOURCES}
             ${SPECLEACH_SHARED_SOURCES}
             ${SPECLEACH_PROCESSOR_SOURCES}
             ${PFFFT_SOURCES}
@@ -311,7 +323,7 @@ if(ENABLE_TESTS)
     add_specbleach_test(test_spectral_utils "test_spectral_utils.c")
     add_specbleach_test(test_noise_profile "test_noise_profile.c")
     add_specbleach_test(test_specbleach_denoiser "test_specbleach_denoiser.c")
-    add_specbleach_test(test_spectral_denoiser "test_spectral_denoiser.c")
+    add_specbleach_test(test_spectral_engine "test_spectral_engine.c")
     add_specbleach_test(test_noise_floor_manager "test_noise_floor_manager.c")
     add_specbleach_test(test_adaptive_noise_estimator "test_adaptive_noise_estimator.c")
     add_specbleach_test(test_nlm_filter "test_nlm_filter.c")
@@ -331,6 +343,7 @@ if(ENABLE_TESTS)
     add_specbleach_test(test_hpss_filter "test_hpss_filter.c")
     add_specbleach_test(test_denoiser_post_process "test_denoiser_post_process.c")
     add_specbleach_test(test_specbleach_version "test_specbleach_version.c")
+    add_specbleach_test(test_specbleach_live_denoiser "test_specbleach_live_denoiser.c")
 
     if(TARGET PkgConfig::SNDFILE)
         add_specbleach_test(test_audio_file_regression "test_audio_file_regression.c")

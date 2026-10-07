@@ -435,6 +435,228 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define SMOOTHING_TRANSITION_SECONDS (0.030F)
 #define SMOOTHING_TRANSITION_MIN_FRAMES 4U
 
+/* --------------------------------------------------------------- */
+/* ------------------- LIVE (multiband gate) ------------------- */
+// Zero-latency 64-band Bark-spaced time-domain multiband gate (RX
+// Voice-style): causal biquad bank, per-band envelope + adaptive floor,
+// no worker thread, no FFT in the audio path.
+#define LIVE_NUM_BANDS 256U     // psychoacoustically spaced bandpass filters
+#define LIVE_BAND_OVERLAP (2.4) // bandwidth overlap factor between bands
+#define LIVE_BAND_Q_MIN (0.5F)  // widest LF bands (stability, no ringing)
+#define LIVE_BAND_Q_MAX (24)    // narrowest mid bands: capped below design
+// need (~32) so capped bands widen and inter-band valleys stay
+// shallow, like the 64-band design (capped 12 vs need ~16). Bands
+// whose design Q stays BELOW the cap (the wide Bark slots above
+// ~10 kHz) keep their design width, so LIVE_BAND_OVERLAP is the only
+// lever on top-octave cascade coverage: 1.2 left a 20 % inter-band
+// overlap that collapsed closed-gate depth to -15 dB above 23 kHz
+// while the Q-capped mids held -65 dB.
+#define LIVE_MIN_GAIN_DB (-40.0F)    // default attenuation floor G_min
+#define LIVE_ENV_ATTACK_SEC (0.002F) // envelope follower attack (dialogue-fast)
+#define LIVE_ENV_RELEASE_SEC (0.030F) // envelope follower release
+/* Power-SNR smoothing (DD prior): opening is SLOW (nicks onsets
+ * like RX instead of pumping through them) and closing is FAST
+ * (no hangover bridging gaps). Asymmetric by measurement: slow
+ * symmetric smoothing hung 150 ms of openness across gaps (hotter
+ * onsets, worse bodies); the old symmetric 50 ms is kept as the
+ * HF clamp ceiling. */
+#define LIVE_SNR_SMOOTH_SEC (0.050F)
+#define LIVE_SNR_ATTACK_SEC (0.150F)
+#define LIVE_SNR_RELEASE_SEC (0.025F)
+#define LIVE_SNR_ATTACK_HF_MIN_SEC (0.008F)
+#define LIVE_HF_ATK_TRACK (0.00525F)
+
+#define LIVE_NOISE_TRACK_SEC                                                   \
+  (0.5F) /* symmetric floor tracker: asym up/down coefficients bias the        \
+            converged floor below its mean (median-of-regimes balance on a     \
+            skewed power distribution), forcing the Threshold up */
+#define LIVE_GATE_ATTACK_DEFAULT_SEC (0.005F)  // gate opening speed (de-click)
+#define LIVE_GATE_ATTACK_MIN_SEC (0.0001F)     // fastest gate attack
+#define LIVE_GATE_ATTACK_MAX_SEC (0.500F)      // slowest gate attack
+#define LIVE_GATE_RELEASE_DEFAULT_SEC (0.100F) // gate closing speed
+/* NOTE: a broadband transient bypass (LIVE_ONSET_*) lived here and
+ * was removed: the impulse probe showed ~100 ms noise pumps after
+ * every attack while RX stays shut. Per-band decisions only. */
+#define LIVE_GATE_RELEASE_MIN_SEC (0.010F) // fastest gate release
+#define LIVE_GATE_RELEASE_MAX_SEC (2.000F) // slowest gate release
+#define LIVE_THRESHOLD_DB_MIN                                                  \
+  (-12.0F) // gate threshold offset, like full denoiser
+#define LIVE_THRESHOLD_DB_MAX                                                  \
+  (12.0F) // gate threshold offset, like full denoiser
+#define LIVE_THRESHOLD_DB_DEFAULT (0.0F) // unity threshold multiplier
+#define LIVE_GATE_KNEE_MIN_DB (0.0F)     // hard gate
+#define LIVE_GATE_KNEE_MAX_DB (12.0F)    // widest soft knee
+#define LIVE_GATE_KNEE_DEFAULT_DB (0.0F) // soft-knee width below threshold
+/* Knee widens the gain-law anchor (see LIVE_GATE_RLO_MULT): 0 dB
+ * leaves the anchor at the Threshold, 12 dB pushes it 4x further up
+ * the SNR axis, so the full cut holds to a higher SNR before it starts
+ * relaxing. */
+#define LIVE_GATE_OPEN_RATIO (4.0F)
+/* Gain-law anchor: the SNR (band power / learned floor) at which the
+ * gain stops being the Reduction slider's full cut and starts
+ * relaxing. Nu = lsnr / anchor drives
+ *
+ *     cut_dB = Reduction_dB * nu^(-LIVE_GAIN_TAIL_EXP)
+ *
+ * so nu = 1 -> exactly the slider marking and nu -> 0 -> the floor.
+ * Threshold multiplies it (raise Threshold = cut harder), Knee widens
+ * it, and this constant is the base margin.
+ *
+ * Base is 4.0 (6 dB SNR): the learned floor is by construction where
+ * noise sits, so that is where the full cut belongs. The old 16.0 was
+ * wrong - at 16 every band under 12 dB SNR clamps to the full cut,
+ * which is what ate the low-frequency speech in the delta. */
+#define LIVE_GATE_RLO_MULT (4.0F)
+/* Lowband anchor lift: black-box A/B shows RX holding low gates shut
+ * where ours leaks (case_20 body band1 -13.6 vs -11.4; 120 Hz tone +
+ * fan-noise bed -10.4 vs -5.4; pulsed same-RMS identical to steady,
+ * so no modulation keying - just a hotter low anchor). RX's low
+ * threshold node maps to the same foot (static node1 sweep moves
+ * analysis bands 1 fully + 2 partially). A global +6 dB Threshold
+ * nails band1 exactly (-13.4) but overshoots bands 2/5/8, hence the
+ * lift lives only in the lows: full below FULL_HZ, log-taper to none
+ * at TOP_HZ. 4 dB compromises slope-sitters (case_18 b1 +0.6 -> -3.3
+ * at 6 dB): 8-voice driver corpus body distance-to-RX 1.01 -> 0.84
+ * with probe bit-identical (floor untouched). Power-domain ratio
+ * (threshold_mult is amplitude). */
+#define LIVE_LOW_LIFT_DB (4.0F)
+#define LIVE_LOW_LIFT_FULL_HZ (90.0F)
+#define LIVE_LOW_LIFT_TOP_HZ (250.0F)
+#define LIVE_LIFT_TRACK_DB (-0.40F)
+/* Lift shrinks as the slider deepens (buried voice lows open
+ * relatively earlier at deep settings): -0.40 dB of lift per dB of
+ * Reduction above the 12 dB reference (interpolated: +0.25 lands
+ * R20 body lows -20.6, -0.75 lands -12.6, RX sits -15.5). Zero at R12 by
+ * construction, so the tuned 12 dB match is untouched. */
+/* Anchor rides DOWN as the Reduction slider goes up: black-box tone
+ * sweeps (1 kHz, +8 dB of knob) move cut by only x1.1 at fixed tone
+ * level while the noise floor takes the full knob, i.e. loud-signal
+ * cut stays ~fixed (RX clean voice deletion barely moves: lows
+ * -13.0 -> -14.4, mids flat; ours tracked the knob 1:1: clean lows
+ * -11.1 -> -21.1, onsets p10 -9.8 -> -17.3). Fitted: anchor power
+ * ratio ~0.73 per +8 dB = cbrt of the linear-gain ratio, so the
+ * release curve opens relatively earlier as the floor deepens.
+ * Reference = 12 dB, the long-tuned default: factor is exactly 1.0
+ * there, so 12 dB behavior is unchanged. Power-domain ratio against
+ * the linear gain floor. */
+#define LIVE_ANCHOR_REF_DB (12.0F)
+#define LIVE_ANCHOR_REF_LIN (0.25118864F) /* 10^(-12/20) */
+#define LIVE_ANCHOR_TRACK_EXP (0.75F)
+/* Voice-gated HF hold: dB of extra HF anchor per dB of Reduction
+ * above the 12 dB reference, applied only while the lowband voice
+ * gate fires. Fitted: +4 dB at R20 with the R-tracked HF tail below
+ * (per-bin openness 27.5 vs 26.3%, p90 -6.1 vs -7.0, mean -14.2 vs
+ * -13.6; R12 clamped at 0 so the tuned match is untouched). */
+#define LIVE_HF_TRACK_DB (0.5F)
+/* Roll-off rate of the cut: cut_dB = Reduction_dB * nu^(-a), where nu
+ * is the band's SNR relative to the anchor. The cut halves every
+ * 3.01/a dB of SNR (a = 0.31 -> 9.7 dB, a = 0.8 -> 3.8 dB, a = 1.0 ->
+ * 3.0 dB).
+ *
+ * THIS EXPONENT IS WHAT DECIDES HOW MUCH SPEECH THE SLIDER COSTS.
+ * cut_dB is a plain multiple of the slider at EVERY nu, so whatever
+ * fraction of the slider a band pays, raising the slider multiplies
+ * that band's loss. Only this tail separates a noise band (nu ~ 1,
+ * where the full cut belongs) from a speech band (nu ~ 27 on this
+ * material), and a shallow tail cannot: at a = 0.31 a band 10 dB above
+ * the anchor still paid 0.49 x slider and one 20 dB above paid 0.24 x
+ * slider, so speech loss scaled with the knob with no ceiling.
+ *
+ * Measured with speech_cost.py. Its `gain` column feeds the engine
+ * clean speech ALONE - nothing there is noise, so every dB measured is
+ * deletion - and `sel` is the delta's selectivity on the real mix,
+ * dNoise(re. noise) - dSpeech(re. clean), where higher is better.
+ * Cells are gain at red12 / gain at red30, then sel at red12 / red30,
+ * with pause (noise left in pauses) and spRed (noise removed under
+ * speech) at red12:
+ *   a=0.31  -3.9 / -10.5    5.9 /  2.7   pause -11.5  spRed -10.5
+ *   a=0.6   -2.0 /  -6.1    9.8 /  5.6   pause -10.5  spRed  -8.9
+ *   a=0.8   -1.5 /  -4.8   11.4 /  6.9   pause -10.1  spRed  -8.1
+ *   a=1.0   -1.2 /  -4.0   12.5 /  8.0   pause  -9.7  spRed  -7.5
+ * probe (held-out noise-only) is -12.9 at every a and every slider:
+ * noise-only bands sit at nu <= 1, so the floor is untouched by this.
+ * 0.8 is the knee - 1.0 buys a further 0.3 dB of speech for another
+ * 0.4 dB of pause leak - and it is what stops the knob damaging
+ * speech: raising Reduction 12 -> 30 cost 6.6 dB of speech at 0.31
+ * (-3.9 -> -10.5) and costs 3.3 dB at 0.8 (-1.5 -> -4.8), while in the
+ * delta at red30 it removes the same noise (dNoise -0.4 vs -0.3) with
+ * speech inside the delta falling from 50 % to 18 % of clean energy.
+ *
+ * 0.6 (black-box A/B vs RX 10 Voice De-noise, 8-voice corpus):
+ * body distance-to-RX 1.52 -> 0.99 for +0.5 dB of clean-speech cost
+ * (-1.17 -> -1.65 dB broadband on case_20); probe untouched. A
+ * hold-then-decay fit to RX's published tone sweep (hold 1.5x, decay
+ * 0.31, matching every sweep point within 0.4 dB) was also tried and
+ * reverted: static-curve fit does not transfer to dynamic speech
+ * (corpus body 0.99 -> 2.23, clean -1.01 -> -3.70). */
+#define LIVE_GAIN_TAIL_EXP (0.6F)
+#define LIVE_HF_TAIL_TRACK (0.0375F)
+/* Power-subtraction over-subtraction (Berouti-style, SNR-adaptive):
+ * aggressive at low SNR, unity when clean. */
+#define LIVE_SS_ALPHA_HI (4.75F)
+#define LIVE_SS_SNR_LO_DB (-5.0F)
+#define LIVE_SS_SNR_HI_DB (20.0F)
+/* Voice-gated HF residual follower: black-box A/B shows RX holding
+ * HF cut through speech (uniform ~-9 dB/frame Italian body) while
+ * leaving stationary hiss open (probe ~0 dB) - impossible for any
+ * static frozen curve, which fits either the probe or the body but
+ * never both. So under the frozen floor runs a slow voice-keyed
+ * follower: lowband power clearly above its frozen floor means voice
+ * is present, and HF bands then follow HF power up fast and relax
+ * back slowly. Dense speech pins it shut; phrase gaps release it;
+ * noise-only stretches never engage it (probe untouched). Measured
+ * (8-voice corpus, driver): body distance-to-RX 0.99 -> 0.83 with
+ * probe unchanged at 1.26, for +0.5 dB of clean-speech cost; minima
+ * tracking (fast down 0.1 s, slow up 3.0 s) estimates hiss under
+ * sibilance where mean-tracking overshot body HF by 3.6 dB. */
+#define LIVE_FOLLOW_VOICE_HZ (800.0F)  /* voiceband top for the gate */
+#define LIVE_FOLLOW_HF_HZ (9000.0F)    /* follower acts at/above here */
+#define LIVE_FOLLOW_RATIO (4.0F)       /* lowband power/floor = voice */
+#define LIVE_FOLLOW_MIDRATIO (2.0F)    /* midband harmonic richness gate */
+#define LIVE_FOLLOW_DOWN_SEC (0.1F)    /* fall to hiss minima under voice */
+#define LIVE_FOLLOW_UP_SEC (3.0F)      /* climb back above sibilance */
+#define LIVE_FOLLOW_RELEASE_SEC (1.5F) /* relax back after */
+/* Cascade sections whose commanded gain exceeds this are skipped */
+#define LIVE_PEAK_BYPASS_GAIN (0.995F)
+/* Deepest allowed single-section cut (dB). As the peaking cut grows,
+ * the section's pole magnitude approaches unity and a float DF-I
+ * biquad starts amplifying rounding noise (measured runaway within a
+ * few blocks). Flooring the cut keeps every section safely damped;
+ * total depth still accumulates across neighboring sections. */
+#define LIVE_PEAK_CUT_MIN_DB (24.0F) // floor per-section attenuation
+/* Commanded-gain exponent (reference value at 1 kHz; per-band
+ * peak_exp scales it inversely to section overlap so the closed-gate
+ * response is flat). Raising the section gain to a fraction of the
+ * commanded dB makes the white-noise reduction track the Reduction
+ * slider (measured: -1 dB command: -1.0 broadband, -3 dB: -3.0).
+ *
+ * It must also de-compound the SERIAL cascade: at LIVE_BAND_OVERLAP
+ * 2.4 a band's region is covered by ~1.5 peaking sections, so the
+ * sections' dB cuts add. RX 10 Voice De-noise documents Reduction as
+ * "the maximal depth of noise reduction that will occur per frequency
+ * band", and black-boxing it confirms it honours that exactly (same
+ * tone swept through the learned profile, knob = 12 dB):
+ *   level (dBFS)   -55  -50  -45  -40  -35  -30
+ *   RX 10         -12.1 -12.1 -10.7 -7.6 -5.3 -3.6
+ *   ours @0.17    -17.7 -17.6 -12.4 -7.3 -4.3 -2.5
+ * i.e. we hit the floor 5.6 dB DEEPER than the user asked for, which is
+ * the mechanism behind the low-frequency speech being eaten (mixed-part
+ * cut at 119 Hz: ours -13.0 vs RX -7.8) while the knob says 12. Scaling
+ * the exponent down by ~0.71 returns the realized depth to the slider
+ * marking without touching the flatness calibration (peak_exp is scaled
+ * per band, so the whole cascade moves together and stays flat). */
+#define LIVE_PEAK_GAIN_EXP (0.12F)
+/* Direct (1.0) notch Q... analysis slot geometry on synthesis.
+ * NOTE: |H(w0)| = A^2 for this RBJ section (the cookbook's A is the
+ * amplitude square root), so a section's real depth is 2 * peak_exp *
+ * command_dB and LIVE_PEAK_CUT_MIN_DB floors it at 48 dB, not 24. */
+#define LIVE_PEAK_Q_MULT (1.0F)
+/* Joint gate groups: 64 Bark groups over the band bank (RX's "64
+ * Bark gates"). Bands tile Bark uniformly, so groups of consecutive
+ * bands are equal Bark slices. */
+#define LIVE_NUM_GROUPS (64U)
+#define LIVE_GROUP_PEAK_TRIG (0.95F)
+
 /* --------------------------------------------------------------------- */
 /* 8. Core plumbing: numeric floors and circular-buffer capacity.         */
 /* --------------------------------------------------------------------- */

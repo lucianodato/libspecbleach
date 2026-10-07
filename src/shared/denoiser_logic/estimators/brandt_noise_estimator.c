@@ -450,7 +450,7 @@ void brandt_noise_estimator_set_hop_sec(BrandtNoiseEstimator* self,
 
   // Rebuild history storage for the true hop when it differs from the
   // fft-derived approximation used at init. Init-time only: never called
-  // from the audio thread (spectral_denoiser calls it during setup).
+  // from the audio thread (spectral_engine calls it during setup).
   float hop_ms = hop_sec * 1000.0F;
   if (hop_ms < BRANDT_ESTIMATOR_MIN_DURATION_MS) {
     hop_ms = BRANDT_ESTIMATOR_MIN_DURATION_MS;

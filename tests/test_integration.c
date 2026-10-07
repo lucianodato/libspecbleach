@@ -38,7 +38,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "specbleach_denoiser.h"
 
 // Function prototypes
-void test_spectral_denoiser(void);
+void test_spectral_engine(void);
 void test_adaptive_denoiser(void);
 void test_2d_denoiser(void);
 void test_runtime_mode_switch(void);
@@ -89,7 +89,7 @@ float calculate_rms(const float* buffer, size_t length) {
 }
 
 // Test spectral denoiser with synthetic audio
-void test_spectral_denoiser(void) {
+void test_spectral_engine(void) {
   printf("Testing spectral denoiser integration...\n");
 
   // Create test audio with signal + noise
@@ -272,7 +272,7 @@ int main(void) {
   // Seed random number generator for reproducible tests
   srand(42);
 
-  test_spectral_denoiser();
+  test_spectral_engine();
   test_different_noise_levels();
   test_adaptive_denoiser();
 
