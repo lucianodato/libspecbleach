@@ -60,8 +60,15 @@ void test_gain_estimation_wiener(void) {
     beta[i] = 1.0f;
   }
 
-  calculate_gains(real_spectrum_size, fft_size, spectrum, noise_spectrum,
-                  gain_spectrum, alpha, beta, WIENER, NULL);
+  calculate_gains((GainCalcArgs){.real_spectrum_size = real_spectrum_size,
+                                 .fft_size = fft_size,
+                                 .spectrum = spectrum,
+                                 .noise_spectrum = noise_spectrum,
+                                 .gain_spectrum = gain_spectrum,
+                                 .alpha = alpha,
+                                 .beta = beta,
+                                 .type = WIENER,
+                                 .knee = NULL});
 
   // Wiener: gain = sqrt((spectrum - noise) / spectrum) = sqrt(0.5) ≈ 0.7071
   for (uint32_t i = 0; i < real_spectrum_size; i++) {
@@ -76,15 +83,29 @@ void test_gain_estimation_wiener(void) {
     alpha[i] = 1.0f;
     beta[i] = 1.0f;
   }
-  calculate_gains(real_spectrum_size, fft_size, spectrum, noise_spectrum,
-                  gain_spectrum, alpha, beta, WIENER, NULL);
+  calculate_gains((GainCalcArgs){.real_spectrum_size = real_spectrum_size,
+                                 .fft_size = fft_size,
+                                 .spectrum = spectrum,
+                                 .noise_spectrum = noise_spectrum,
+                                 .gain_spectrum = gain_spectrum,
+                                 .alpha = alpha,
+                                 .beta = beta,
+                                 .type = WIENER,
+                                 .knee = NULL});
   TEST_FLOAT_CLOSE(gain_spectrum[0], 0.0f, 0.001f);
   // Per-bin knee: only the bins covered by the knee spectrum get forgiveness
   float knee_spectrum[32] = {0.0f};
   knee_spectrum[0] = 0.5F;
   knee_spectrum[1] = 0.5F; // keep bin 2.. zero-knee for contrast
-  calculate_gains(real_spectrum_size, fft_size, spectrum, noise_spectrum,
-                  gain_spectrum, alpha, beta, WIENER, knee_spectrum);
+  calculate_gains((GainCalcArgs){.real_spectrum_size = real_spectrum_size,
+                                 .fft_size = fft_size,
+                                 .spectrum = spectrum,
+                                 .noise_spectrum = noise_spectrum,
+                                 .gain_spectrum = gain_spectrum,
+                                 .alpha = alpha,
+                                 .beta = beta,
+                                 .type = WIENER,
+                                 .knee = knee_spectrum});
   // denom = 0.95 + 0.5; diff = denom - 1.0; gain = sqrt(diff / denom)
   TEST_FLOAT_CLOSE(gain_spectrum[0], sqrtf(0.45f / 1.45f), 0.01f);
   TEST_FLOAT_CLOSE(gain_spectrum[2], 0.0f, 0.001f);
@@ -111,8 +132,15 @@ void test_gain_estimation_gates(void) {
     beta[i] = 1.0f;
   }
 
-  calculate_gains(real_spectrum_size, fft_size, spectrum, noise_spectrum,
-                  gain_spectrum, alpha, beta, GATES, NULL);
+  calculate_gains((GainCalcArgs){.real_spectrum_size = real_spectrum_size,
+                                 .fft_size = fft_size,
+                                 .spectrum = spectrum,
+                                 .noise_spectrum = noise_spectrum,
+                                 .gain_spectrum = gain_spectrum,
+                                 .alpha = alpha,
+                                 .beta = beta,
+                                 .type = GATES,
+                                 .knee = NULL});
 
   // Gates: gain = 1 if spectrum >= noise, 0 otherwise
   for (uint32_t i = 0; i < 10; i++) {
@@ -144,9 +172,15 @@ void test_gain_estimation_spectral_subtraction(void) {
     beta[i] = 1.0f;
   }
 
-  calculate_gains(real_spectrum_size, fft_size, spectrum, noise_spectrum,
-                  gain_spectrum, alpha, beta, GENERALIZED_SPECTRALSUBTRACTION,
-                  NULL);
+  calculate_gains((GainCalcArgs){.real_spectrum_size = real_spectrum_size,
+                                 .fft_size = fft_size,
+                                 .spectrum = spectrum,
+                                 .noise_spectrum = noise_spectrum,
+                                 .gain_spectrum = gain_spectrum,
+                                 .alpha = alpha,
+                                 .beta = beta,
+                                 .type = GENERALIZED_SPECTRALSUBTRACTION,
+                                 .knee = NULL});
 
   // gain = sqrt(max(0, 1.0 - alpha * (noise_spectrum / spectrum)))
   // gain = sqrt(1.0 - 0.2) = sqrt(0.8) ≈ 0.8944
@@ -157,9 +191,15 @@ void test_gain_estimation_spectral_subtraction(void) {
     spectrum[i] = 1.0f;
     noise_spectrum[i] = 10.0f;
   }
-  calculate_gains(real_spectrum_size, fft_size, spectrum, noise_spectrum,
-                  gain_spectrum, alpha, beta, GENERALIZED_SPECTRALSUBTRACTION,
-                  NULL);
+  calculate_gains((GainCalcArgs){.real_spectrum_size = real_spectrum_size,
+                                 .fft_size = fft_size,
+                                 .spectrum = spectrum,
+                                 .noise_spectrum = noise_spectrum,
+                                 .gain_spectrum = gain_spectrum,
+                                 .alpha = alpha,
+                                 .beta = beta,
+                                 .type = GENERALIZED_SPECTRALSUBTRACTION,
+                                 .knee = NULL});
 
   TEST_FLOAT_CLOSE(gain_spectrum[0], sqrtf(10.0f), 0.01f);
 
@@ -193,22 +233,42 @@ void test_gain_estimation_edge_cases(void) {
   }
 
   // Test with zero spectrum values (division by zero safety)
-  calculate_gains(real_spectrum_size, fft_size, spectrum, noise_spectrum,
-                  gain_spectrum, alpha, beta, WIENER, NULL);
+  calculate_gains((GainCalcArgs){.real_spectrum_size = real_spectrum_size,
+                                 .fft_size = fft_size,
+                                 .spectrum = spectrum,
+                                 .noise_spectrum = noise_spectrum,
+                                 .gain_spectrum = gain_spectrum,
+                                 .alpha = alpha,
+                                 .beta = beta,
+                                 .type = WIENER,
+                                 .knee = NULL});
   TEST_ASSERT(gain_spectrum[0] == 0.0f,
               "Silent spectrum with noise should result in zero gain");
 
-  calculate_gains(real_spectrum_size, fft_size, spectrum, noise_spectrum,
-                  gain_spectrum, alpha, beta, GATES, NULL);
+  calculate_gains((GainCalcArgs){.real_spectrum_size = real_spectrum_size,
+                                 .fft_size = fft_size,
+                                 .spectrum = spectrum,
+                                 .noise_spectrum = noise_spectrum,
+                                 .gain_spectrum = gain_spectrum,
+                                 .alpha = alpha,
+                                 .beta = beta,
+                                 .type = GATES,
+                                 .knee = NULL});
   TEST_ASSERT(gain_spectrum[0] == 0.0f,
               "Silent spectrum with noise should result in zero gain");
 
   // Test with FLT_MIN spectrum
   for (int i = 0; i < 32; i++)
     spectrum[i] = FLT_MIN / 2.0f;
-  calculate_gains(real_spectrum_size, fft_size, spectrum, noise_spectrum,
-                  gain_spectrum, alpha, beta, GENERALIZED_SPECTRALSUBTRACTION,
-                  NULL);
+  calculate_gains((GainCalcArgs){.real_spectrum_size = real_spectrum_size,
+                                 .fft_size = fft_size,
+                                 .spectrum = spectrum,
+                                 .noise_spectrum = noise_spectrum,
+                                 .gain_spectrum = gain_spectrum,
+                                 .alpha = alpha,
+                                 .beta = beta,
+                                 .type = GENERALIZED_SPECTRALSUBTRACTION,
+                                 .knee = NULL});
   TEST_ASSERT(gain_spectrum[0] == 1.0f,
               "Sub-FLT_MIN spectrum should result in unity gain");
 

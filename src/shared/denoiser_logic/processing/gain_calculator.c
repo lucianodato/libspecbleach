@@ -143,24 +143,21 @@ static void generalized_spectral_subtraction(
   sb_apply_spectral_symmetry(gain_spectrum, real_spectrum_size, fft_size);
 }
 
-void calculate_gains(uint32_t real_spectrum_size, uint32_t fft_size,
-                     const float* spectrum, const float* noise_spectrum,
-                     float* gain_spectrum, const float* alpha,
-                     const float* beta, GainCalculationType type,
-                     const float* knee) {
-  switch (type) {
+void calculate_gains(GainCalcArgs args) {
+  switch (args.type) {
     case GATES:
-      spectral_gating(real_spectrum_size, fft_size, spectrum, noise_spectrum,
-                      alpha, gain_spectrum);
+      spectral_gating(args.real_spectrum_size, args.fft_size, args.spectrum,
+                      args.noise_spectrum, args.alpha, args.gain_spectrum);
       break;
     case WIENER:
-      wiener_subtraction(real_spectrum_size, fft_size, spectrum, noise_spectrum,
-                         alpha, gain_spectrum, knee);
+      wiener_subtraction(args.real_spectrum_size, args.fft_size, args.spectrum,
+                         args.noise_spectrum, args.alpha, args.gain_spectrum,
+                         args.knee);
       break;
     case GENERALIZED_SPECTRALSUBTRACTION:
-      generalized_spectral_subtraction(real_spectrum_size, fft_size, spectrum,
-                                       noise_spectrum, gain_spectrum, alpha,
-                                       beta);
+      generalized_spectral_subtraction(
+          args.real_spectrum_size, args.fft_size, args.spectrum,
+          args.noise_spectrum, args.gain_spectrum, args.alpha, args.beta);
       break;
 
     default:

@@ -48,8 +48,14 @@ static float bm3d_patch_ssd_scalar(Bm3dFilter* self, uint32_t target_freq,
         &self->context, (int32_t)dt - (int32_t)half);
     const float* c_row = patch_filter_context_cached_get_frame(
         &self->context, cand_dt + (int32_t)dt - (int32_t)half);
-    ssd = patch_filter_accumulate_patch_row_ssd(ssd, t_row, c_row, target_freq,
-                                                cand_freq, patch, half, n);
+    ssd = patch_filter_accumulate_patch_row_ssd(
+        ssd, (PatchRowArgs){.target_row = t_row,
+                            .candidate_row = c_row,
+                            .target_freq = target_freq,
+                            .candidate_freq = cand_freq,
+                            .patch_size = patch,
+                            .half_patch_size = half,
+                            .spectrum_size = n});
   }
   return ssd;
 }

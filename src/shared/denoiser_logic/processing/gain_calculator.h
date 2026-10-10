@@ -29,10 +29,21 @@ typedef enum GainCalculationType {
   GATES = 1,
   GENERALIZED_SPECTRALSUBTRACTION = 2,
 } GainCalculationType;
-void calculate_gains(uint32_t real_spectrum_size, uint32_t fft_size,
-                     const float* spectrum, const float* noise_spectrum,
-                     float* gain_spectrum, const float* alpha,
-                     const float* beta, GainCalculationType type,
-                     const float* knee);
+
+// Argument bundle: keeps the gain calculation signature under the
+// parameter-count limit. Passed by value (pointers + sizes).
+typedef struct GainCalcArgs {
+  uint32_t real_spectrum_size;
+  uint32_t fft_size;
+  const float* spectrum;
+  const float* noise_spectrum;
+  float* gain_spectrum;
+  const float* alpha;
+  const float* beta;
+  GainCalculationType type;
+  const float* knee;
+} GainCalcArgs;
+
+void calculate_gains(GainCalcArgs args);
 
 #endif // GAIN_CALCULATOR_H
