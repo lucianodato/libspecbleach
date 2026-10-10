@@ -560,13 +560,7 @@ SpectralProcessorHandle spectral_denoiser_initialize_with_hop(
                                             noise_profile, low_latency);
 }
 
-void spectral_denoiser_free(SpectralProcessorHandle instance) {
-  SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
-
-  if (!self) {
-    return;
-  }
-
+static void denoiser_free_objects(SbSpectralDenoiser* self) {
   if (self->noise_estimator) {
     noise_estimation_free(self->noise_estimator);
   }
@@ -608,6 +602,9 @@ void spectral_denoiser_free(SpectralProcessorHandle instance) {
   if (self->transient_detector) {
     transient_detector_free(self->transient_detector);
   }
+}
+
+static void denoiser_free_buffers(SbSpectralDenoiser* self) {
   if (self->band_energies) {
     free(self->band_energies);
   }
@@ -664,6 +661,17 @@ void spectral_denoiser_free(SpectralProcessorHandle instance) {
   if (self->manual_noise_floor) {
     free(self->manual_noise_floor);
   }
+}
+
+void spectral_denoiser_free(SpectralProcessorHandle instance) {
+  SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
+
+  if (!self) {
+    return;
+  }
+
+  denoiser_free_objects(self);
+  denoiser_free_buffers(self);
 
   if (self->circular_buffer) {
     spectral_circular_buffer_free(self->circular_buffer);
@@ -676,87 +684,80 @@ void spectral_denoiser_free(SpectralProcessorHandle instance) {
   free(self);
 }
 
-bool load_reduction_parameters(SpectralProcessorHandle instance,
-                               DenoiserParameters parameters) {
-  if (!instance) {
-    return false;
-  }
-
-  SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
-
+static void denoiser_ensure_adaptive_estimator(SbSpectralDenoiser* self,
+                                               DenoiserParameters parameters) {
   // Check if we need to initialize or re-initialize the adaptive estimator
-  if (parameters.adaptive_noise) {
-    AdaptiveNoiseEstimationMethod requested_method =
-        (AdaptiveNoiseEstimationMethod)parameters.noise_estimation_method;
-
-    bool needs_init = !self->adaptive_estimator ||
-                      adaptive_estimator_get_method(self->adaptive_estimator) !=
-                          requested_method;
-
-    if (needs_init) {
-      adaptive_estimator_free(self->adaptive_estimator);
-      self->adaptive_estimator = adaptive_estimator_initialize(
-          self->real_spectrum_size, self->sample_rate, self->fft_size,
-          requested_method);
-      if (self->adaptive_estimator && self->hop_sec > 0.0F) {
-        adaptive_estimator_set_hop_sec(self->adaptive_estimator, self->hop_sec);
-      }
-      self->last_adaptive_state = 0;
-    }
+  if (!parameters.adaptive_noise) {
+    return;
   }
+  AdaptiveNoiseEstimationMethod requested_method =
+      (AdaptiveNoiseEstimationMethod)parameters.noise_estimation_method;
 
-  self->parameters = parameters;
-  if (self->low_latency) {
-    self->parameters.smoothing_mode = SPECBLEACH_SMOOTHING_TEMPORAL;
-    self->active_mode = SPECBLEACH_SMOOTHING_TEMPORAL;
-    self->pending_mode = SPECBLEACH_SMOOTHING_TEMPORAL;
-    self->previous_mode = SPECBLEACH_SMOOTHING_TEMPORAL;
-    self->in_transition = false;
+  bool needs_init = !self->adaptive_estimator ||
+                    adaptive_estimator_get_method(self->adaptive_estimator) !=
+                        requested_method;
+
+  if (!needs_init) {
+    return;
   }
+  adaptive_estimator_free(self->adaptive_estimator);
+  self->adaptive_estimator =
+      adaptive_estimator_initialize(self->real_spectrum_size, self->sample_rate,
+                                    self->fft_size, requested_method);
+  if (self->adaptive_estimator && self->hop_sec > 0.0F) {
+    adaptive_estimator_set_hop_sec(self->adaptive_estimator, self->hop_sec);
+  }
+  self->last_adaptive_state = 0;
+}
 
+static void denoiser_update_transition(SbSpectralDenoiser* self,
+                                       DenoiserParameters parameters) {
   // Runtime smoothing mode switching (allocation-free): the outgoing mode is
   // crossfaded against the incoming one over SMOOTHING_TRANSITION_SECONDS.
   // Within the 2D family (NLM <-> NLM+DFTT <-> BM3D) the switch is instant:
   // all sides share NLM history, latency and DFTT rings (pushed on every 2D
   // pass), so only the map source flips — no crossfade needed.
+  const int requested = normalize_smoothing_mode(parameters.smoothing_mode);
   if (!self->in_transition) {
-    const int requested = normalize_smoothing_mode(parameters.smoothing_mode);
-    if (requested != self->active_mode) {
-      if (is_2d_family(requested) && is_2d_family(self->active_mode)) {
-        // Crossing BM3D changes the map producer feeding the DFTT rings;
-        // reset so the refinement only ever sees NLM priors (it falls back
-        // to the raw NLM output until the history refills).
-        if ((requested == SPECBLEACH_SMOOTHING_BM3D) !=
-            (self->active_mode == SPECBLEACH_SMOOTHING_BM3D)) {
-          dftt_filter_reset(self->dftt_filter);
-        }
-        self->active_mode = requested;
-        self->pending_mode = requested;
-      } else {
-        self->previous_mode = self->active_mode;
-        self->pending_mode = requested;
-        self->transition_pos = 0U;
-        self->in_transition = true;
+    if (requested == self->active_mode) {
+      return;
+    }
+    if (is_2d_family(requested) && is_2d_family(self->active_mode)) {
+      // Crossing BM3D changes the map producer feeding the DFTT rings;
+      // reset so the refinement only ever sees NLM priors (it falls back
+      // to the raw NLM output until the history refills).
+      if ((requested == SPECBLEACH_SMOOTHING_BM3D) !=
+          (self->active_mode == SPECBLEACH_SMOOTHING_BM3D)) {
+        dftt_filter_reset(self->dftt_filter);
       }
-    }
-  } else {
-    const int requested = normalize_smoothing_mode(parameters.smoothing_mode);
-    if (requested != self->pending_mode && requested == self->previous_mode) {
-      // Reverting to the mode that is fading out: mirror the in-progress
-      // crossfade around its current blend point so the transition reverses
-      // smoothly toward the original chain without a gain discontinuity
-      const int outgoing = self->pending_mode;
-      self->pending_mode = self->previous_mode;
-      self->previous_mode = outgoing;
-      self->transition_pos = self->transition_frames - self->transition_pos;
-      // The chain-slot mapping is keyed on previous_mode, so the two tonal
-      // gain histories must swap along with the mode metadata.
-      tonal_reducer_swap_gain_slots(self->tonal_reducer);
-    } else {
+      self->active_mode = requested;
       self->pending_mode = requested;
+      return;
     }
+    self->previous_mode = self->active_mode;
+    self->pending_mode = requested;
+    self->transition_pos = 0U;
+    self->in_transition = true;
+    return;
   }
+  if (requested != self->pending_mode && requested == self->previous_mode) {
+    // Reverting to the mode that is fading out: mirror the in-progress
+    // crossfade around its current blend point so the transition reverses
+    // smoothly toward the original chain without a gain discontinuity
+    const int outgoing = self->pending_mode;
+    self->pending_mode = self->previous_mode;
+    self->previous_mode = outgoing;
+    self->transition_pos = self->transition_frames - self->transition_pos;
+    // The chain-slot mapping is keyed on previous_mode, so the two tonal
+    // gain histories must swap along with the mode metadata.
+    tonal_reducer_swap_gain_slots(self->tonal_reducer);
+    return;
+  }
+  self->pending_mode = requested;
+}
 
+static void denoiser_push_filter_params(SbSpectralDenoiser* self,
+                                        DenoiserParameters parameters) {
   // Update NLM/BM3D h parameter based on smoothing factor
   const float h_value = (parameters.smoothing_factor > 0.0F)
                             ? (0.5F + (parameters.smoothing_factor * 4.5F))
@@ -772,6 +773,29 @@ bool load_reduction_parameters(SpectralProcessorHandle instance,
   if (self->dftt_filter) {
     dftt_filter_set_strength(self->dftt_filter, parameters.dftt_strength);
   }
+}
+
+bool load_reduction_parameters(SpectralProcessorHandle instance,
+                               DenoiserParameters parameters) {
+  if (!instance) {
+    return false;
+  }
+
+  SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
+
+  denoiser_ensure_adaptive_estimator(self, parameters);
+
+  self->parameters = parameters;
+  if (self->low_latency) {
+    self->parameters.smoothing_mode = SPECBLEACH_SMOOTHING_TEMPORAL;
+    self->active_mode = SPECBLEACH_SMOOTHING_TEMPORAL;
+    self->pending_mode = SPECBLEACH_SMOOTHING_TEMPORAL;
+    self->previous_mode = SPECBLEACH_SMOOTHING_TEMPORAL;
+    self->in_transition = false;
+  }
+
+  denoiser_update_transition(self, parameters);
+  denoiser_push_filter_params(self, parameters);
 
   return true;
 }
