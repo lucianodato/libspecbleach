@@ -17,7 +17,7 @@ jobs:
     name: ${{ matrix.config.name }}
     runs-on: ubuntu-24.04
     env:
-      SONAR_CI_ENABLED: ${{ secrets.SONAR_CI_ENABLED }}
+      SONAR_CI_ENABLED: ${{ vars.SONAR_CI_ENABLED }}
     strategy:
       fail-fast: false
       matrix:
