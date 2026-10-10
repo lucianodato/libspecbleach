@@ -54,11 +54,11 @@ jobs:
       - name: Run CTest Suite
         run: |
           cd build
-          # Sonar needs full-suite coverage on PRs; otherwise keep the fast PR suite.
-          if [ "${{ github.event_name }}" != "pull_request" ] || { [ "${{ matrix.config.run_coverage }}" = "true" ] && [ "${{ github.event.pull_request.head.repo.full_name }}" = "${{ github.repository }}" ]; }; then
-            ctest --output-on-failure --test-dir .
-          else
+          # PRs run the fast suite; integration tests run on main/nightly/dispatch.
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
             ctest --output-on-failure --test-dir . -LE integration
+          else
+            ctest --output-on-failure --test-dir .
           fi
 
       - name: Generate coverage report
