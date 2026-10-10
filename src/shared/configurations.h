@@ -442,42 +442,4 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define SPECTRAL_EPSILON (1e-12F)
 #define MAX_SPECTRAL_CIRCULAR_BUFFER_LAYERS 8
 
-/* --------------------------------------------------------------------- */
-/* Compile-time assertions for configuration validity                     */
-/* --------------------------------------------------------------------- */
-_Static_assert(HANN_WINDOW >= 0 && HANN_WINDOW <= 3,
-               "HANN_WINDOW must be between 0 and 3");
-_Static_assert(HAMMING_WINDOW >= 0 && HAMMING_WINDOW <= 3,
-               "HAMMING_WINDOW must be between 0 and 3");
-_Static_assert(BLACKMAN_WINDOW >= 0 && BLACKMAN_WINDOW <= 3,
-               "BLACKMAN_WINDOW must be between 0 and 3");
-_Static_assert(VORBIS_WINDOW >= 0 && VORBIS_WINDOW <= 3,
-               "VORBIS_WINDOW must be between 0 and 3");
-
-// Additional C17 compile-time validations
-_Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
-
-// Shared init-path helper: resolves patch-geometry defaults shared by NLM and
-// BM3D configs (deduplicates identical init blocks, init context only).
-static inline void sb_resolve_patch_geometry_defaults(
-    uint32_t* patch_size, uint32_t* paste_block_size,
-    uint32_t* search_range_freq, uint32_t* search_range_time_past,
-    uint32_t* search_range_time_future) {
-  if (*patch_size == 0U) {
-    *patch_size = NLM_PATCH_SIZE;
-  }
-  if (*paste_block_size == 0U) {
-    *paste_block_size = NLM_PASTE_BLOCK_SIZE;
-  }
-  if (*search_range_freq == 0U) {
-    *search_range_freq = NLM_SEARCH_RANGE_FREQ;
-  }
-  if (*search_range_time_past == 0U) {
-    *search_range_time_past = NLM_SEARCH_RANGE_TIME_PAST;
-  }
-  if (*search_range_time_future == 0U) {
-    *search_range_time_future = NLM_SEARCH_RANGE_TIME_FUTURE;
-  }
-}
-
 #endif // SPECBLEACH_CONFIGURATIONS_H

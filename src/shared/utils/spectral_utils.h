@@ -33,6 +33,16 @@ typedef enum WindowTypes {
   VORBIS_WINDOW = 3
 } WindowTypes;
 
+// WindowTypes must stay a dense 0..3 range (indexed by config and STFT code).
+_Static_assert(HANN_WINDOW >= 0 && HANN_WINDOW <= 3,
+               "HANN_WINDOW must be between 0 and 3");
+_Static_assert(HAMMING_WINDOW >= 0 && HAMMING_WINDOW <= 3,
+               "HAMMING_WINDOW must be between 0 and 3");
+_Static_assert(BLACKMAN_WINDOW >= 0 && BLACKMAN_WINDOW <= 3,
+               "BLACKMAN_WINDOW must be between 0 and 3");
+_Static_assert(VORBIS_WINDOW >= 0 && VORBIS_WINDOW <= 3,
+               "VORBIS_WINDOW must be between 0 and 3");
+
 bool get_fft_window(float* window, uint32_t fft_size, WindowTypes window_type);
 bool initialize_spectrum_with_value(float* spectrum, uint32_t spectrum_size,
                                     float value);
