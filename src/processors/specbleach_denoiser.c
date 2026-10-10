@@ -315,7 +315,7 @@ bool specbleach_denoiser_load_noise_profile_resampled(
     specbleach_denoiser* instance, const float* restored_profile,
     const uint32_t source_size, const uint32_t block_count,
     const SpecbleachProfileMode mode) {
-  SbDenoiserInstance* self = instance;
+  const SbDenoiserInstance* self = instance;
   if (!self || !self->noise_profile || !restored_profile || source_size == 0) {
     return false;
   }

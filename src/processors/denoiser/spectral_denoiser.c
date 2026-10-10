@@ -1566,7 +1566,7 @@ void spectral_denoiser_reset_noise_profile(SpectralProcessorHandle instance) {
 
 uint32_t spectral_denoiser_get_latency_frames(
     SpectralProcessorHandle instance) {
-  SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
+  const SbSpectralDenoiser* self = (const SbSpectralDenoiser*)instance;
 
   if (!self) {
     return 0;

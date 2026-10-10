@@ -67,7 +67,7 @@ static bool martin_handle_first_frame(MartinNoiseEstimator* self,
   return true;
 }
 
-static void martin_calculate_output(MartinNoiseEstimator* self,
+static void martin_calculate_output(const MartinNoiseEstimator* self,
                                     float* noise_spectrum) {
   for (uint32_t k = 0; k < self->noise_spectrum_size; k++) {
     float min_val = self->current_subwin_min[k];
