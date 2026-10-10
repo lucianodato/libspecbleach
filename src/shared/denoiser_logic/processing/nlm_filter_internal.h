@@ -171,6 +171,142 @@ typedef struct {
   float* target_frame;
 } NlmBlockTask;
 
+// Per-block working state for nlm_process_block_range. Groups the scalars
+// and preloaded target data shared by the stage helpers so each helper stays
+// under the parameter-count limit. All arrays live on the caller's stack
+// (same footprint as the previous inline version); no allocation.
+typedef struct {
+  NlmFilter* filter;
+  float* smoothed_snr;
+  float* weight_sum;
+  uint32_t block_start;
+  uint32_t current_paste_limit;
+  uint32_t block_center;
+  uint32_t patch_size;
+  uint32_t half_patch_size;
+  uint32_t spectrum_size;
+  bool safe_block;
+  sb_vec8_t target_vecs[8];
+  // Flat preloaded target patch for the generalized (non-8) path:
+  // patch_size rows x NLM_MAX_PATCH_FRAMES stride, 1KB max on stack.
+  float target_patch[NLM_MAX_PATCH_FRAMES * NLM_MAX_PATCH_FRAMES];
+  float* tgt_rows[NLM_MAX_PATCH_FRAMES];
+} NlmBlockCtx;
+
+static inline SB_UNUSED bool nlm_preload_target(NlmBlockCtx* b) {
+  NlmFilter* filter = b->filter;
+  const uint32_t block_center = b->block_center;
+  const uint32_t patch_size = b->patch_size;
+  const uint32_t half_patch_size = b->half_patch_size;
+  const uint32_t spectrum_size = b->spectrum_size;
+
+  // Patch rows span [center - half, center + (patch - half) - 1]; for odd
+  // patch sizes the upper reach is half + 1 bins, so the bound must use
+  // (patch_size - half_patch_size), not half_patch_size.
+  b->safe_block =
+      (block_center >= half_patch_size) &&
+      (block_center + (patch_size - half_patch_size) <= spectrum_size);
+
+  if (patch_size == 8) {
+    for (int r = 0; r < 8; r++) {
+      if (b->safe_block) {
+        int32_t t_offset = (int32_t)r - (int32_t)half_patch_size;
+        const float* row_ptr =
+            patch_filter_context_cached_get_frame(&filter->context, t_offset) +
+            (block_center - half_patch_size);
+        b->target_vecs[r] = sb_load8(row_ptr);
+      } else {
+        b->target_vecs[r] = sb_set8(0.0f);
+      }
+    }
+    return b->safe_block;
+  }
+  if (b->safe_block && patch_size <= NLM_MAX_PATCH_FRAMES) {
+    for (uint32_t r = 0; r < patch_size; r++) {
+      int32_t t_offset = (int32_t)r - (int32_t)half_patch_size;
+      const float* row_ptr =
+          patch_filter_context_cached_get_frame(&filter->context, t_offset) +
+          (block_center - half_patch_size);
+      float* dst = &b->target_patch[(size_t)r * NLM_MAX_PATCH_FRAMES];
+      memcpy(dst, row_ptr, patch_size * sizeof(float));
+      b->tgt_rows[r] = dst;
+    }
+  }
+  return b->safe_block;
+}
+
+static inline SB_UNUSED void nlm_load_candidate_rows(NlmBlockCtx* b, int32_t dt,
+                                                     float** cand_rows,
+                                                     float** cand_rows_n) {
+  NlmFilter* filter = b->filter;
+  const uint32_t patch_size = b->patch_size;
+  const uint32_t half_patch_size = b->half_patch_size;
+  if (patch_size == 8) {
+    for (int r = 0; r < 8; r++) {
+      cand_rows[r] =
+          patch_filter_context_cached_get_frame(&filter->context, dt + r - 4);
+    }
+    return;
+  }
+  if (patch_size <= NLM_MAX_PATCH_FRAMES) {
+    for (uint32_t r = 0; r < patch_size; r++) {
+      cand_rows_n[r] = patch_filter_context_cached_get_frame(
+          &filter->context, dt + (int32_t)r - (int32_t)half_patch_size);
+    }
+  }
+}
+
+static inline SB_UNUSED float nlm_dispatch_distance(NlmBlockCtx* b, int32_t dt,
+                                                    uint32_t cand_center,
+                                                    float** cand_rows,
+                                                    float** cand_rows_n) {
+  NlmFilter* filter = b->filter;
+  const uint32_t block_center = b->block_center;
+  const uint32_t patch_size = b->patch_size;
+  const uint32_t half_patch_size = b->half_patch_size;
+  const uint32_t spectrum_size = b->spectrum_size;
+
+  bool safe_bounds =
+      b->safe_block && (cand_center >= half_patch_size) &&
+      (cand_center + (patch_size - half_patch_size) <= spectrum_size);
+
+  if (patch_size == 8 && safe_bounds && cand_rows[0]) {
+    uint32_t cand_f_start = cand_center - 4;
+    float* cand_row_ptrs[8] = {
+        cand_rows[0] + cand_f_start, cand_rows[1] + cand_f_start,
+        cand_rows[2] + cand_f_start, cand_rows[3] + cand_f_start,
+        cand_rows[4] + cand_f_start, cand_rows[5] + cand_f_start,
+        cand_rows[6] + cand_f_start, cand_rows[7] + cand_f_start,
+    };
+    return sb_vec8_patch_ssd(b->target_vecs, cand_row_ptrs);
+  }
+  if (patch_size != 8 && safe_bounds && b->safe_block &&
+      patch_size <= NLM_MAX_PATCH_FRAMES && cand_rows_n[0]) {
+    const uint32_t cand_f_start = cand_center - half_patch_size;
+    float* cand_ptrs[NLM_MAX_PATCH_FRAMES];
+    float* tgt_ptrs[NLM_MAX_PATCH_FRAMES];
+    for (uint32_t r = 0; r < patch_size; r++) {
+      cand_ptrs[r] = cand_rows_n[r] + cand_f_start;
+      tgt_ptrs[r] = b->tgt_rows[r];
+    }
+    return sb_patch_ssd_n(tgt_ptrs, cand_ptrs, patch_size);
+  }
+  return compute_patch_distance(filter, 0, block_center, dt, cand_center);
+}
+
+static inline SB_UNUSED void nlm_accumulate_paste(NlmBlockCtx* b, int32_t df,
+                                                  float weight,
+                                                  const float* cand_frame) {
+  for (uint32_t i = 0; i < b->current_paste_limit; i++) {
+    uint32_t target_bin = b->block_start + i;
+    uint32_t cand_bin =
+        patch_filter_clamp_index((int32_t)target_bin + df, b->spectrum_size);
+
+    b->smoothed_snr[target_bin] += weight * cand_frame[cand_bin];
+    b->weight_sum[target_bin] += weight;
+  }
+}
+
 static inline SB_UNUSED void nlm_process_block_range(void* raw_ctx,
                                                      uint32_t first_block,
                                                      uint32_t block_count) {
@@ -213,58 +349,25 @@ static inline SB_UNUSED void nlm_process_block_range(void* raw_ctx,
       continue;
     }
 
-    sb_vec8_t target_vecs[8];
-    // Flat preloaded target patch for the generalized (non-8) path:
-    // patch_size rows x NLM_MAX_PATCH_FRAMES stride, 1KB max on stack.
-    float target_patch[NLM_MAX_PATCH_FRAMES * NLM_MAX_PATCH_FRAMES];
-    float* tgt_rows[NLM_MAX_PATCH_FRAMES];
-
-    // Patch rows span [center - half, center + (patch - half) - 1]; for odd
-    // patch sizes the upper reach is half + 1 bins, so the bound must use
-    // (patch_size - half_patch_size), not half_patch_size.
-    bool safe_block =
-        (block_center >= half_patch_size) &&
-        (block_center + (patch_size - half_patch_size) <= spectrum_size);
-
-    if (patch_size == 8) {
-      for (int r = 0; r < 8; r++) {
-        if (safe_block) {
-          int32_t t_offset = (int32_t)r - (int32_t)half_patch_size;
-          const float* row_ptr = patch_filter_context_cached_get_frame(
-                                     &filter->context, t_offset) +
-                                 (block_center - half_patch_size);
-          target_vecs[r] = sb_load8(row_ptr);
-        } else {
-          target_vecs[r] = sb_set8(0.0f);
-        }
-      }
-    } else if (safe_block && patch_size <= NLM_MAX_PATCH_FRAMES) {
-      for (uint32_t r = 0; r < patch_size; r++) {
-        int32_t t_offset = (int32_t)r - (int32_t)half_patch_size;
-        const float* row_ptr =
-            patch_filter_context_cached_get_frame(&filter->context, t_offset) +
-            (block_center - half_patch_size);
-        float* dst = &target_patch[(size_t)r * NLM_MAX_PATCH_FRAMES];
-        memcpy(dst, row_ptr, patch_size * sizeof(float));
-        tgt_rows[r] = dst;
-      }
-    }
+    NlmBlockCtx b = {
+        .filter = filter,
+        .smoothed_snr = smoothed_snr,
+        .weight_sum = weight_sum,
+        .block_start = block_start,
+        .current_paste_limit = current_paste_limit,
+        .block_center = block_center,
+        .patch_size = patch_size,
+        .half_patch_size = half_patch_size,
+        .spectrum_size = spectrum_size,
+        .safe_block = false,
+    };
+    nlm_preload_target(&b);
 
     for (int32_t dt = -search_time_past; dt <= search_time_future; dt++) {
       float* cand_rows[8] = {NULL};
       // Candidate row pointers for the generalized path (any patch <= 16).
       float* cand_rows_n[NLM_MAX_PATCH_FRAMES] = {NULL};
-      if (patch_size == 8) {
-        for (int r = 0; r < 8; r++) {
-          cand_rows[r] = patch_filter_context_cached_get_frame(&filter->context,
-                                                               dt + r - 4);
-        }
-      } else if (patch_size <= NLM_MAX_PATCH_FRAMES) {
-        for (uint32_t r = 0; r < patch_size; r++) {
-          cand_rows_n[r] = patch_filter_context_cached_get_frame(
-              &filter->context, dt + (int32_t)r - (int32_t)half_patch_size);
-        }
-      }
+      nlm_load_candidate_rows(&b, dt, cand_rows, cand_rows_n);
 
       for (int32_t df = -(int32_t)search_freq; df <= (int32_t)search_freq;
            df++) {
@@ -272,35 +375,8 @@ static inline SB_UNUSED void nlm_process_block_range(void* raw_ctx,
         uint32_t cand_center =
             patch_filter_clamp_index((int32_t)block_center + df, spectrum_size);
 
-        float distance = 0.0F;
-
-        bool safe_bounds =
-            safe_block && (cand_center >= half_patch_size) &&
-            (cand_center + (patch_size - half_patch_size) <= spectrum_size);
-
-        if (patch_size == 8 && safe_bounds && cand_rows[0]) {
-          uint32_t cand_f_start = cand_center - 4;
-          float* cand_row_ptrs[8] = {
-              cand_rows[0] + cand_f_start, cand_rows[1] + cand_f_start,
-              cand_rows[2] + cand_f_start, cand_rows[3] + cand_f_start,
-              cand_rows[4] + cand_f_start, cand_rows[5] + cand_f_start,
-              cand_rows[6] + cand_f_start, cand_rows[7] + cand_f_start,
-          };
-          distance = sb_vec8_patch_ssd(target_vecs, cand_row_ptrs);
-        } else if (patch_size != 8 && safe_bounds && safe_block &&
-                   patch_size <= NLM_MAX_PATCH_FRAMES && cand_rows_n[0]) {
-          const uint32_t cand_f_start = cand_center - half_patch_size;
-          float* cand_ptrs[NLM_MAX_PATCH_FRAMES];
-          float* tgt_ptrs[NLM_MAX_PATCH_FRAMES];
-          for (uint32_t r = 0; r < patch_size; r++) {
-            cand_ptrs[r] = cand_rows_n[r] + cand_f_start;
-            tgt_ptrs[r] = tgt_rows[r];
-          }
-          distance = sb_patch_ssd_n(tgt_ptrs, cand_ptrs, patch_size);
-        } else {
-          distance =
-              compute_patch_distance(filter, 0, block_center, dt, cand_center);
-        }
+        float distance =
+            nlm_dispatch_distance(&b, dt, cand_center, cand_rows, cand_rows_n);
 
         if (distance > current_dist_threshold) {
           continue;
@@ -314,14 +390,7 @@ static inline SB_UNUSED void nlm_process_block_range(void* raw_ctx,
         const float* cand_frame =
             patch_filter_context_cached_get_frame(&filter->context, dt);
 
-        for (uint32_t i = 0; i < current_paste_limit; i++) {
-          uint32_t target_bin = block_start + i;
-          uint32_t cand_bin =
-              patch_filter_clamp_index((int32_t)target_bin + df, spectrum_size);
-
-          smoothed_snr[target_bin] += weight * cand_frame[cand_bin];
-          weight_sum[target_bin] += weight;
-        }
+        nlm_accumulate_paste(&b, df, weight, cand_frame);
       }
     }
   }
