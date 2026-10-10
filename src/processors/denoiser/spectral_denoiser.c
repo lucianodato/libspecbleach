@@ -250,38 +250,7 @@ static void run_temporal_chain(SbSpectralDenoiser* self,
                                const float* delayed_tonal_mask, uint32_t slot,
                                float* gain_out, float* alpha, float* beta);
 
-static SpectralProcessorHandle spectral_denoiser_initialize_inner(
-    const uint32_t sample_rate, const uint32_t fft_size,
-    const uint32_t overlap_factor, const uint32_t hop_override,
-    NoiseProfile* noise_profile, const bool low_latency) {
-
-  if (!noise_profile || sample_rate == 0 || fft_size == 0 ||
-      overlap_factor == 0) {
-    return NULL;
-  }
-
-  SbSpectralDenoiser* self =
-      (SbSpectralDenoiser*)calloc(1U, sizeof(SbSpectralDenoiser));
-  if (!self) {
-    return NULL;
-  }
-
-  self->fft_size = fft_size;
-  self->real_spectrum_size = (self->fft_size / 2U) + 1U;
-  self->hop =
-      (hop_override > 0U) ? hop_override : (self->fft_size / overlap_factor);
-  if (self->hop == 0U) {
-    goto fail;
-  }
-  self->hop_sec = sb_hop_sec(self->hop, sample_rate);
-  self->sample_rate = sample_rate;
-  self->spectrum_type = SPECTRAL_TYPE;
-  self->gain_calculation_type = GAIN_ESTIMATION_TYPE;
-  self->noise_profile = noise_profile;
-  self->active_mode = SPECBLEACH_SMOOTHING_TEMPORAL;
-  self->pending_mode = SPECBLEACH_SMOOTHING_TEMPORAL;
-  self->previous_mode = SPECBLEACH_SMOOTHING_TEMPORAL;
-
+static bool denoiser_alloc_spectra(SbSpectralDenoiser* self) {
   self->snr_frame = (float*)calloc(self->real_spectrum_size, sizeof(float));
   self->smoothed_snr = (float*)calloc(self->real_spectrum_size, sizeof(float));
   self->dftt_snr = (float*)calloc(self->real_spectrum_size, sizeof(float));
@@ -332,7 +301,7 @@ static SpectralProcessorHandle spectral_denoiser_initialize_inner(
 #endif
       !self->manual_noise_floor || !self->smoothed_magnitude ||
       !self->clean_magnitude || !self->knee_spectrum) {
-    goto fail;
+    return false;
   }
 
   (void)initialize_spectrum_with_value(self->gain_spectrum, self->fft_size,
@@ -348,18 +317,23 @@ static SpectralProcessorHandle spectral_denoiser_initialize_inner(
   (void)initialize_spectrum_with_value(self->alpha_relief,
                                        self->real_spectrum_size, ALPHA_MIN);
 #endif
+  return true;
+}
 
+static bool denoiser_init_early_objects(SbSpectralDenoiser* self,
+                                        NoiseProfile* noise_profile,
+                                        uint32_t fft_size) {
   // Initialize tonal reducer
   self->tonal_reducer = tonal_reducer_initialize(
       self->real_spectrum_size, self->sample_rate, self->fft_size);
   if (!self->tonal_reducer) {
-    goto fail;
+    return false;
   }
 
   // Circular buffer for temporal alignment (provides the common delay)
   self->circular_buffer = spectral_circular_buffer_create(DELAY_BUFFER_FRAMES);
   if (!self->circular_buffer) {
-    goto fail;
+    return false;
   }
 
   self->layer_fft =
@@ -380,7 +354,7 @@ static SpectralProcessorHandle spectral_denoiser_initialize_inner(
       self->layer_noise_bb == 0xFFFFFFFFU ||
       self->layer_noise_tonal == 0xFFFFFFFFU ||
       self->layer_tonal_mask == 0xFFFFFFFFU) {
-    goto fail;
+    return false;
   }
 
   self->was_learning = false;
@@ -390,17 +364,14 @@ static SpectralProcessorHandle spectral_denoiser_initialize_inner(
   // Initialize noise estimator for learning mode
   self->noise_estimator = noise_estimation_initialize(fft_size, noise_profile);
   if (!self->noise_estimator) {
-    goto fail;
+    return false;
   }
+  return true;
+}
 
-  // Frame-rate normalization: fixed-ms / fixed-Hz geometry + per-hop alphas.
-  const float hop_sec = self->hop_sec;
-  // hop = frame/overlap_factor (exact with explicit hop, fft-derived legacy)
-  const float frame_ms = hop_sec * (float)overlap_factor * 1000.0F;
-  const float bin_hz = sb_bin_hz(self->sample_rate, self->fft_size);
-  const SbNlmGeometry nlm_geo =
-      sb_nlm_geometry_for_frame_ms(frame_ms, hop_sec, bin_hz);
-
+static bool denoiser_init_filters(SbSpectralDenoiser* self,
+                                  uint32_t overlap_factor, float hop_sec,
+                                  float bin_hz, SbNlmGeometry nlm_geo) {
   // NLM filter (2D smoothing strategy)
   NlmFilterConfig nlm_config = {
       .spectrum_size = self->real_spectrum_size,
@@ -415,7 +386,7 @@ static SpectralProcessorHandle spectral_denoiser_initialize_inner(
   };
   self->nlm_filter = nlm_filter_initialize(nlm_config);
   if (!self->nlm_filter) {
-    goto fail;
+    return false;
   }
 
   // BM3D-lite shares the NLM geometry/latency so switches stay instant.
@@ -431,7 +402,7 @@ static SpectralProcessorHandle spectral_denoiser_initialize_inner(
   };
   self->bm3d_filter = bm3d_filter_initialize(bm3d_config);
   if (!self->bm3d_filter) {
-    goto fail;
+    return false;
   }
 
   // DFTT post-filter (paper S4.2 lite): past-only time span in ms so it adds
@@ -444,14 +415,14 @@ static SpectralProcessorHandle spectral_denoiser_initialize_inner(
   self->dftt_filter =
       dftt_filter_initialize(self->real_spectrum_size, dftt_span, dftt_block);
   if (!self->dftt_filter) {
-    goto fail;
+    return false;
   }
 
   // Temporal smoother (1D smoothing strategy)
   self->spectrum_smoothing = spectral_smoothing_initialize(
       self->fft_size, self->sample_rate, overlap_factor, FIXED);
   if (!self->spectrum_smoothing) {
-    goto fail;
+    return false;
   }
   spectral_smoothing_set_hop_samples(self->spectrum_smoothing, self->hop);
 
@@ -459,19 +430,19 @@ static SpectralProcessorHandle spectral_denoiser_initialize_inner(
   self->release_shaper =
       release_shaper_initialize(self->sample_rate, self->fft_size);
   if (!self->release_shaper) {
-    goto fail;
+    return false;
   }
   release_shaper_set_hop_sec(self->release_shaper, self->hop_sec);
   self->release_scale = (float*)calloc(self->real_spectrum_size, sizeof(float));
   if (!self->release_scale) {
-    goto fail;
+    return false;
   }
 
   // Initialize spectral features
   self->spectral_features =
       spectral_features_initialize(self->real_spectrum_size);
   if (!self->spectral_features) {
-    goto fail;
+    return false;
   }
 
   self->masking_veto = masking_veto_initialize(
@@ -482,10 +453,14 @@ static SpectralProcessorHandle spectral_denoiser_initialize_inner(
       self->spectrum_type, true, USE_TEMPORAL_MASKING_DEFAULT);
 
   if (!self->masking_veto || !self->suppression_engine) {
-    goto fail;
+    return false;
   }
+  return true;
+}
 
-  self->noise_floor_manager = noise_floor_manager_initialize(fft_size);
+static bool denoiser_init_transient_tail(SbSpectralDenoiser* self,
+                                         float hop_sec) {
+  self->noise_floor_manager = noise_floor_manager_initialize(self->fft_size);
 
   self->critical_bands = critical_bands_initialize(
       self->sample_rate, self->fft_size, CRITICAL_BANDS_TYPE);
@@ -515,7 +490,7 @@ static SpectralProcessorHandle spectral_denoiser_initialize_inner(
       !self->transient_detector || !self->band_energies ||
       !self->onset_weights || !self->transient_mask ||
       !self->transient_band_mask || !self->held_weights) {
-    goto fail;
+    return false;
   }
 
   if (hop_sec > 0.0F) {
@@ -532,6 +507,65 @@ static SpectralProcessorHandle spectral_denoiser_initialize_inner(
       (transition_from_sec < SMOOTHING_TRANSITION_MIN_FRAMES)
           ? SMOOTHING_TRANSITION_MIN_FRAMES
           : transition_from_sec;
+  return true;
+}
+
+static SpectralProcessorHandle spectral_denoiser_initialize_inner(
+    const uint32_t sample_rate, const uint32_t fft_size,
+    const uint32_t overlap_factor, const uint32_t hop_override,
+    NoiseProfile* noise_profile, const bool low_latency) {
+
+  if (!noise_profile || sample_rate == 0 || fft_size == 0 ||
+      overlap_factor == 0) {
+    return NULL;
+  }
+
+  SbSpectralDenoiser* self =
+      (SbSpectralDenoiser*)calloc(1U, sizeof(SbSpectralDenoiser));
+  if (!self) {
+    return NULL;
+  }
+
+  self->fft_size = fft_size;
+  self->real_spectrum_size = (self->fft_size / 2U) + 1U;
+  self->hop =
+      (hop_override > 0U) ? hop_override : (self->fft_size / overlap_factor);
+  if (self->hop == 0U) {
+    goto fail;
+  }
+  self->hop_sec = sb_hop_sec(self->hop, sample_rate);
+  self->sample_rate = sample_rate;
+  self->spectrum_type = SPECTRAL_TYPE;
+  self->gain_calculation_type = GAIN_ESTIMATION_TYPE;
+  self->noise_profile = noise_profile;
+  self->active_mode = SPECBLEACH_SMOOTHING_TEMPORAL;
+  self->pending_mode = SPECBLEACH_SMOOTHING_TEMPORAL;
+  self->previous_mode = SPECBLEACH_SMOOTHING_TEMPORAL;
+
+  if (!denoiser_alloc_spectra(self)) {
+    goto fail;
+  }
+
+  if (!denoiser_init_early_objects(self, noise_profile, fft_size)) {
+    goto fail;
+  }
+
+  // Frame-rate normalization: fixed-ms / fixed-Hz geometry + per-hop alphas.
+  const float hop_sec = self->hop_sec;
+  // hop = frame/overlap_factor (exact with explicit hop, fft-derived legacy)
+  const float frame_ms = hop_sec * (float)overlap_factor * 1000.0F;
+  const float bin_hz = sb_bin_hz(self->sample_rate, self->fft_size);
+  const SbNlmGeometry nlm_geo =
+      sb_nlm_geometry_for_frame_ms(frame_ms, hop_sec, bin_hz);
+
+  if (!denoiser_init_filters(self, overlap_factor, hop_sec, bin_hz, nlm_geo)) {
+    goto fail;
+  }
+
+  if (!denoiser_init_transient_tail(self, hop_sec)) {
+    goto fail;
+  }
+
   self->low_latency = low_latency;
   self->active_mode = SPECBLEACH_SMOOTHING_TEMPORAL;
   self->pending_mode = SPECBLEACH_SMOOTHING_TEMPORAL;
