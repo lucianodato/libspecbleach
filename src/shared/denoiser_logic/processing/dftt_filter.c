@@ -44,17 +44,23 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  * the old-vs-new A/B harness pins the exact delta. */
 #define DFTT_MAX_DIM (32U)
 
-struct DfttFilter {
+typedef struct DfttConfig {
   uint32_t spectrum_size;
   uint32_t time_span;
   uint32_t block_freq;
   uint32_t block_hop;
   float kill_k;
+} DfttConfig;
+
+typedef struct DfttRing {
   float** noisy_ring;
   float** smooth_ring;
   uint32_t head;
   uint32_t filled;
   bool fresh;
+} DfttRing;
+
+typedef struct DfttTables {
   float* win_freq;
   float* win_time;
   float* cos_freq;
@@ -67,11 +73,21 @@ struct DfttFilter {
   float* mod_sin;
   bool pow2_freq;
   bool pow2_time;
+} DfttTables;
+
+typedef struct DfttScratch {
   float* wsum;
   float* tile_re;
   float* tile_im;
   float* ref_re;
   float* ref_im;
+} DfttScratch;
+
+struct DfttFilter {
+  DfttConfig config;
+  DfttRing ring;
+  DfttTables tables;
+  DfttScratch scratch;
 };
 
 static uint32_t dftt_clamp_bin(int32_t bin, uint32_t size) {
@@ -213,14 +229,14 @@ static void dftt_dft_1d(float* re, float* im, uint32_t stride, uint32_t n,
 /* Iterative radix-2 Cooley-Tukey (DIT) over strided data. Twiddles reuse row
  * 1 of the shared table (e^{-2pi i j / n}); inverse flips the sine sign and
  * scales by 1/n, matching the naive DFT conventions. */
-typedef struct DfttFftTables {
+typedef struct DfttKernelTables {
   const uint32_t* br;
   const float* cos_row;
   const float* sin_row;
-} DfttFftTables;
+} DfttKernelTables;
 
 static void dftt_fft_1d(float* re, float* im, uint32_t stride, uint32_t n,
-                        const DfttFftTables* tables, bool inverse) {
+                        const DfttKernelTables* tables, bool inverse) {
   const uint32_t* br = tables->br;
   const float* cos_row = tables->cos_row;
   const float* sin_row = tables->sin_row;
@@ -267,30 +283,32 @@ static void dftt_fft_1d(float* re, float* im, uint32_t stride, uint32_t n,
 }
 
 static void dftt_fwd_rows(const DfttFilter* f, float* re, float* im) {
-  const uint32_t bf = f->block_freq;
-  for (uint32_t r = 0U; r < f->time_span; r++) {
+  const uint32_t bf = f->config.block_freq;
+  for (uint32_t r = 0U; r < f->config.time_span; r++) {
     float* row_r = re + ((size_t)r * bf);
     float* row_i = im + ((size_t)r * bf);
-    if (f->pow2_freq) {
-      const DfttFftTables tables = {f->br_freq, f->cos_freq + bf,
-                                    f->sin_freq + bf};
+    if (f->tables.pow2_freq) {
+      const DfttKernelTables tables = {
+          f->tables.br_freq, f->tables.cos_freq + bf, f->tables.sin_freq + bf};
       dftt_fft_1d(row_r, row_i, 1U, bf, &tables, false);
     } else {
-      dftt_dft_1d(row_r, row_i, 1U, bf, f->cos_freq, f->sin_freq, false);
+      dftt_dft_1d(row_r, row_i, 1U, bf, f->tables.cos_freq, f->tables.sin_freq,
+                  false);
     }
   }
 }
 
 static void dftt_fwd_cols(const DfttFilter* f, float* re, float* im) {
-  const uint32_t bf = f->block_freq;
-  const uint32_t bt = f->time_span;
+  const uint32_t bf = f->config.block_freq;
+  const uint32_t bt = f->config.time_span;
   for (uint32_t c = 0U; c < bf; c++) {
-    if (f->pow2_time) {
-      const DfttFftTables tables = {f->br_time, f->cos_time + bt,
-                                    f->sin_time + bt};
+    if (f->tables.pow2_time) {
+      const DfttKernelTables tables = {
+          f->tables.br_time, f->tables.cos_time + bt, f->tables.sin_time + bt};
       dftt_fft_1d(re + c, im + c, bf, bt, &tables, false);
     } else {
-      dftt_dft_1d(re + c, im + c, bf, bt, f->cos_time, f->sin_time, false);
+      dftt_dft_1d(re + c, im + c, bf, bt, f->tables.cos_time,
+                  f->tables.sin_time, false);
     }
   }
 }
@@ -302,8 +320,8 @@ static void dftt_fwd_cols(const DfttFilter* f, float* re, float* im) {
  * inverse; costs bt*bf MACs + T(bf) instead of bt*T(bf) + bf*T(bt). */
 static void dftt_inv_last_row(const DfttFilter* f, const float* re,
                               const float* im, float* out_re, float* out_im) {
-  const uint32_t bf = f->block_freq;
-  const uint32_t bt = f->time_span;
+  const uint32_t bf = f->config.block_freq;
+  const uint32_t bt = f->config.time_span;
   const float inv_bt = 1.0F / (float)bt;
   for (uint32_t k = 0U; k < bf; k++) {
     float sr = 0.0F;
@@ -311,20 +329,21 @@ static void dftt_inv_last_row(const DfttFilter* f, const float* re,
     for (uint32_t r = 0U; r < bt; r++) {
       const float xr = re[((size_t)r * bf) + k];
       const float xi = im[((size_t)r * bf) + k];
-      const float mc = f->mod_cos[r];
-      const float ms = f->mod_sin[r];
+      const float mc = f->tables.mod_cos[r];
+      const float ms = f->tables.mod_sin[r];
       sr += (xr * mc) + (xi * ms);
       si += (xi * mc) - (xr * ms);
     }
     out_re[k] = sr * inv_bt;
     out_im[k] = si * inv_bt;
   }
-  if (f->pow2_freq) {
-    const DfttFftTables tables = {f->br_freq, f->cos_freq + bf,
-                                  f->sin_freq + bf};
+  if (f->tables.pow2_freq) {
+    const DfttKernelTables tables = {f->tables.br_freq, f->tables.cos_freq + bf,
+                                     f->tables.sin_freq + bf};
     dftt_fft_1d(out_re, out_im, 1U, bf, &tables, true);
   } else {
-    dftt_dft_1d(out_re, out_im, 1U, bf, f->cos_freq, f->sin_freq, true);
+    dftt_dft_1d(out_re, out_im, 1U, bf, f->tables.cos_freq, f->tables.sin_freq,
+                true);
   }
 }
 
@@ -348,39 +367,41 @@ static bool dftt_validate_dims(uint32_t* time_span_frames,
 
 static bool dftt_alloc_buffers(DfttFilter* f, uint32_t spectrum_size,
                                uint32_t bt, uint32_t bf) {
-  f->noisy_ring = (float**)calloc(bt, sizeof(float*));
-  f->smooth_ring = (float**)calloc(bt, sizeof(float*));
-  f->win_freq = (float*)calloc(bf, sizeof(float));
-  f->win_time = (float*)calloc(bt, sizeof(float));
-  f->cos_freq = (float*)calloc((size_t)bf * bf, sizeof(float));
-  f->sin_freq = (float*)calloc((size_t)bf * bf, sizeof(float));
-  f->cos_time = (float*)calloc((size_t)bt * bt, sizeof(float));
-  f->sin_time = (float*)calloc((size_t)bt * bt, sizeof(float));
-  f->mod_cos = (float*)calloc(bt, sizeof(float));
-  f->mod_sin = (float*)calloc(bt, sizeof(float));
-  f->wsum = (float*)calloc(spectrum_size, sizeof(float));
-  f->tile_re = (float*)calloc((size_t)bt * bf, sizeof(float));
-  f->tile_im = (float*)calloc((size_t)bt * bf, sizeof(float));
-  f->ref_re = (float*)calloc((size_t)bt * bf, sizeof(float));
-  f->ref_im = (float*)calloc((size_t)bt * bf, sizeof(float));
-  if (f->pow2_freq) {
-    f->br_freq = (uint32_t*)calloc(bf, sizeof(uint32_t));
+  f->ring.noisy_ring = (float**)calloc(bt, sizeof(float*));
+  f->ring.smooth_ring = (float**)calloc(bt, sizeof(float*));
+  f->tables.win_freq = (float*)calloc(bf, sizeof(float));
+  f->tables.win_time = (float*)calloc(bt, sizeof(float));
+  f->tables.cos_freq = (float*)calloc((size_t)bf * bf, sizeof(float));
+  f->tables.sin_freq = (float*)calloc((size_t)bf * bf, sizeof(float));
+  f->tables.cos_time = (float*)calloc((size_t)bt * bt, sizeof(float));
+  f->tables.sin_time = (float*)calloc((size_t)bt * bt, sizeof(float));
+  f->tables.mod_cos = (float*)calloc(bt, sizeof(float));
+  f->tables.mod_sin = (float*)calloc(bt, sizeof(float));
+  f->scratch.wsum = (float*)calloc(spectrum_size, sizeof(float));
+  f->scratch.tile_re = (float*)calloc((size_t)bt * bf, sizeof(float));
+  f->scratch.tile_im = (float*)calloc((size_t)bt * bf, sizeof(float));
+  f->scratch.ref_re = (float*)calloc((size_t)bt * bf, sizeof(float));
+  f->scratch.ref_im = (float*)calloc((size_t)bt * bf, sizeof(float));
+  if (f->tables.pow2_freq) {
+    f->tables.br_freq = (uint32_t*)calloc(bf, sizeof(uint32_t));
   }
-  if (f->pow2_time) {
-    f->br_time = (uint32_t*)calloc(bt, sizeof(uint32_t));
+  if (f->tables.pow2_time) {
+    f->tables.br_time = (uint32_t*)calloc(bt, sizeof(uint32_t));
   }
-  if (!f->noisy_ring || !f->smooth_ring || !f->win_freq || !f->win_time ||
-      !f->cos_freq || !f->sin_freq || !f->cos_time || !f->sin_time ||
-      !f->mod_cos || !f->mod_sin || !f->wsum || !f->tile_re || !f->tile_im ||
-      !f->ref_re || !f->ref_im || (f->pow2_freq && !f->br_freq) ||
-      (f->pow2_time && !f->br_time)) {
+  if (!f->ring.noisy_ring || !f->ring.smooth_ring || !f->tables.win_freq ||
+      !f->tables.win_time || !f->tables.cos_freq || !f->tables.sin_freq ||
+      !f->tables.cos_time || !f->tables.sin_time || !f->tables.mod_cos ||
+      !f->tables.mod_sin || !f->scratch.wsum || !f->scratch.tile_re ||
+      !f->scratch.tile_im || !f->scratch.ref_re || !f->scratch.ref_im ||
+      (f->tables.pow2_freq && !f->tables.br_freq) ||
+      (f->tables.pow2_time && !f->tables.br_time)) {
     dftt_filter_free(f);
     return false;
   }
   for (uint32_t r = 0U; r < bt; r++) {
-    f->noisy_ring[r] = (float*)calloc(spectrum_size, sizeof(float));
-    f->smooth_ring[r] = (float*)calloc(spectrum_size, sizeof(float));
-    if (!f->noisy_ring[r] || !f->smooth_ring[r]) {
+    f->ring.noisy_ring[r] = (float*)calloc(spectrum_size, sizeof(float));
+    f->ring.smooth_ring[r] = (float*)calloc(spectrum_size, sizeof(float));
+    if (!f->ring.noisy_ring[r] || !f->ring.smooth_ring[r]) {
       dftt_filter_free(f);
       return false;
     }
@@ -389,31 +410,31 @@ static bool dftt_alloc_buffers(DfttFilter* f, uint32_t spectrum_size,
 }
 
 static void dftt_build_static_tables(DfttFilter* f, uint32_t bt, uint32_t bf) {
-  dftt_build_hann(f->win_freq, bf);
-  dftt_build_time_window(f->win_time, bt);
-  dftt_build_twiddles(f->cos_freq, f->sin_freq, bf);
-  dftt_build_twiddles(f->cos_time, f->sin_time, bt);
+  dftt_build_hann(f->tables.win_freq, bf);
+  dftt_build_time_window(f->tables.win_time, bt);
+  dftt_build_twiddles(f->tables.cos_freq, f->tables.sin_freq, bf);
+  dftt_build_twiddles(f->tables.cos_time, f->tables.sin_time, bt);
   for (uint32_t r = 0U; r < bt; r++) {
     const float ph = (DFTT_TWO_PI * (float)r) / (float)bt;
-    f->mod_cos[r] = cosf(ph);
-    f->mod_sin[r] = sinf(ph);
+    f->tables.mod_cos[r] = cosf(ph);
+    f->tables.mod_sin[r] = sinf(ph);
   }
-  if (f->pow2_freq) {
+  if (f->tables.pow2_freq) {
     uint32_t bits = 0U;
     while ((1U << bits) < bf) {
       bits++;
     }
     for (uint32_t i = 0U; i < bf; i++) {
-      f->br_freq[i] = dftt_bit_reverse(i, bits);
+      f->tables.br_freq[i] = dftt_bit_reverse(i, bits);
     }
   }
-  if (f->pow2_time) {
+  if (f->tables.pow2_time) {
     uint32_t bits = 0U;
     while ((1U << bits) < bt) {
       bits++;
     }
     for (uint32_t i = 0U; i < bt; i++) {
-      f->br_time[i] = dftt_bit_reverse(i, bits);
+      f->tables.br_time[i] = dftt_bit_reverse(i, bits);
     }
   }
 }
@@ -424,14 +445,14 @@ static void dftt_init_wsum(DfttFilter* f, uint32_t spectrum_size, uint32_t bt,
    * tile contributes syn*ana = win^2 weights. Tiles are centered (first tile
    * starts at -(BF-HF)) so edge bins are covered by a full-weight tile
    * instead of a near-zero window skirt that normalization would blow up. */
-  const float wt = f->win_time[bt - 1U];
-  const int32_t tile_start = -((int32_t)bf - (int32_t)f->block_hop);
+  const float wt = f->tables.win_time[bt - 1U];
+  const int32_t tile_start = -((int32_t)bf - (int32_t)f->config.block_hop);
   for (int32_t fs = tile_start; fs < (int32_t)spectrum_size;
-       fs += (int32_t)f->block_hop) {
+       fs += (int32_t)f->config.block_hop) {
     for (uint32_t i = 0U; i < bf; i++) {
       const uint32_t bin = dftt_clamp_bin(fs + (int32_t)i, spectrum_size);
-      const float w = wt * f->win_freq[i];
-      f->wsum[bin] += w * w;
+      const float w = wt * f->tables.win_freq[i];
+      f->scratch.wsum[bin] += w * w;
     }
   }
 }
@@ -450,19 +471,19 @@ DfttFilter* dftt_filter_initialize(uint32_t spectrum_size,
   if (!f) {
     return NULL;
   }
-  f->spectrum_size = spectrum_size;
-  f->time_span = time_span_frames;
-  f->block_freq = block_freq_bins;
-  f->block_hop = block_freq_bins / DFTT_FREQ_OVERLAP;
-  f->kill_k = DFTT_KILL_K;
-  f->pow2_freq = dftt_is_pow2(block_freq_bins);
-  f->pow2_time = dftt_is_pow2(time_span_frames);
-  if (f->block_hop == 0U) {
-    f->block_hop = 1U;
+  f->config.spectrum_size = spectrum_size;
+  f->config.time_span = time_span_frames;
+  f->config.block_freq = block_freq_bins;
+  f->config.block_hop = block_freq_bins / DFTT_FREQ_OVERLAP;
+  f->config.kill_k = DFTT_KILL_K;
+  f->tables.pow2_freq = dftt_is_pow2(block_freq_bins);
+  f->tables.pow2_time = dftt_is_pow2(time_span_frames);
+  if (f->config.block_hop == 0U) {
+    f->config.block_hop = 1U;
   }
 
-  const uint32_t bt = f->time_span;
-  const uint32_t bf = f->block_freq;
+  const uint32_t bt = f->config.time_span;
+  const uint32_t bf = f->config.block_freq;
 
   if (!dftt_alloc_buffers(f, spectrum_size, bt, bf)) {
     return NULL;
@@ -478,33 +499,33 @@ void dftt_filter_free(DfttFilter* f) {
   if (!f) {
     return;
   }
-  if (f->noisy_ring) {
-    for (uint32_t r = 0U; r < f->time_span; r++) {
-      free(f->noisy_ring[r]);
+  if (f->ring.noisy_ring) {
+    for (uint32_t r = 0U; r < f->config.time_span; r++) {
+      free(f->ring.noisy_ring[r]);
     }
-    free((void*)f->noisy_ring);
+    free((void*)f->ring.noisy_ring);
   }
-  if (f->smooth_ring) {
-    for (uint32_t r = 0U; r < f->time_span; r++) {
-      free(f->smooth_ring[r]);
+  if (f->ring.smooth_ring) {
+    for (uint32_t r = 0U; r < f->config.time_span; r++) {
+      free(f->ring.smooth_ring[r]);
     }
-    free((void*)f->smooth_ring);
+    free((void*)f->ring.smooth_ring);
   }
-  free(f->win_freq);
-  free(f->win_time);
-  free(f->cos_freq);
-  free(f->sin_freq);
-  free(f->cos_time);
-  free(f->sin_time);
-  free(f->br_freq);
-  free(f->br_time);
-  free(f->mod_cos);
-  free(f->mod_sin);
-  free(f->wsum);
-  free(f->tile_re);
-  free(f->tile_im);
-  free(f->ref_re);
-  free(f->ref_im);
+  free(f->tables.win_freq);
+  free(f->tables.win_time);
+  free(f->tables.cos_freq);
+  free(f->tables.sin_freq);
+  free(f->tables.cos_time);
+  free(f->tables.sin_time);
+  free(f->tables.br_freq);
+  free(f->tables.br_time);
+  free(f->tables.mod_cos);
+  free(f->tables.mod_sin);
+  free(f->scratch.wsum);
+  free(f->scratch.tile_re);
+  free(f->scratch.tile_im);
+  free(f->scratch.ref_re);
+  free(f->scratch.ref_im);
   free(f);
 }
 
@@ -512,7 +533,7 @@ void dftt_filter_set_strength(DfttFilter* f, float strength) {
   if (!f || strength <= 0.0F) {
     return;
   }
-  f->kill_k = DFTT_KILL_K * fminf(strength, DFTT_STRENGTH_MAX);
+  f->config.kill_k = DFTT_KILL_K * fminf(strength, DFTT_STRENGTH_MAX);
 }
 
 void dftt_filter_push(DfttFilter* f, const float* noisy_snr,
@@ -520,29 +541,30 @@ void dftt_filter_push(DfttFilter* f, const float* noisy_snr,
   if (!f || !noisy_snr || !smoothed_snr) {
     return;
   }
-  memcpy(f->noisy_ring[f->head], noisy_snr, f->spectrum_size * sizeof(float));
-  memcpy(f->smooth_ring[f->head], smoothed_snr,
-         f->spectrum_size * sizeof(float));
-  f->head = (f->head + 1U) % f->time_span;
-  f->filled++;
-  f->fresh = true;
+  memcpy(f->ring.noisy_ring[f->ring.head], noisy_snr,
+         f->config.spectrum_size * sizeof(float));
+  memcpy(f->ring.smooth_ring[f->ring.head], smoothed_snr,
+         f->config.spectrum_size * sizeof(float));
+  f->ring.head = (f->ring.head + 1U) % f->config.time_span;
+  f->ring.filled++;
+  f->ring.fresh = true;
 }
 
 bool dftt_filter_is_ready(const DfttFilter* f) {
-  return f && f->filled >= f->time_span;
+  return f && f->ring.filled >= f->config.time_span;
 }
 
 void dftt_filter_reset(DfttFilter* f) {
   if (!f) {
     return;
   }
-  for (uint32_t r = 0U; r < f->time_span; r++) {
-    memset(f->noisy_ring[r], 0, f->spectrum_size * sizeof(float));
-    memset(f->smooth_ring[r], 0, f->spectrum_size * sizeof(float));
+  for (uint32_t r = 0U; r < f->config.time_span; r++) {
+    memset(f->ring.noisy_ring[r], 0, f->config.spectrum_size * sizeof(float));
+    memset(f->ring.smooth_ring[r], 0, f->config.spectrum_size * sizeof(float));
   }
-  f->head = 0U;
-  f->filled = 0U;
-  f->fresh = false;
+  f->ring.head = 0U;
+  f->ring.filled = 0U;
+  f->ring.fresh = false;
 }
 
 static void dftt_gather_tile(DfttFilter* f, int32_t fs, uint32_t spec,
@@ -555,9 +577,9 @@ static void dftt_gather_tile(DfttFilter* f, int32_t fs, uint32_t spec,
   *esum = 0.0F;
   *wsum_r2 = 0.0F;
   for (uint32_t r = 0U; r < bt; r++) {
-    const float* row_n = f->noisy_ring[(f->head + r) % bt];
-    const float* row_s = f->smooth_ring[(f->head + r) % bt];
-    const float wt = f->win_time[r];
+    const float* row_n = f->ring.noisy_ring[(f->ring.head + r) % bt];
+    const float* row_s = f->ring.smooth_ring[(f->ring.head + r) % bt];
+    const float wt = f->tables.win_time[r];
     const size_t row_off = (size_t)r * bf;
     uint32_t i = 0U;
     if (!clamped) {
@@ -566,26 +588,26 @@ static void dftt_gather_tile(DfttFilter* f, int32_t fs, uint32_t spec,
         const sb_vec8_t vn = sb_load8(row_n + fs + i);
         const sb_vec8_t vs = sb_load8(row_s + fs + i);
         *esum += sb_vec8_hsum(vn);
-        const sb_vec8_t w = sb_mul8(sb_load8(f->win_freq + i), vw);
+        const sb_vec8_t w = sb_mul8(sb_load8(f->tables.win_freq + i), vw);
         const sb_vec8_t rd = sb_sub8(vn, vs);
         *wsum_r2 += sb_vec8_hsum(sb_mul8(sb_mul8(w, w), sb_mul8(rd, rd)));
-        sb_store8(f->tile_re + row_off + i, sb_mul8(vn, w));
-        sb_store8(f->tile_im + row_off + i, vzero);
-        sb_store8(f->ref_re + row_off + i, sb_mul8(vs, w));
-        sb_store8(f->ref_im + row_off + i, vzero);
+        sb_store8(f->scratch.tile_re + row_off + i, sb_mul8(vn, w));
+        sb_store8(f->scratch.tile_im + row_off + i, vzero);
+        sb_store8(f->scratch.ref_re + row_off + i, sb_mul8(vs, w));
+        sb_store8(f->scratch.ref_im + row_off + i, vzero);
       }
     }
     for (; i < bf; i++) {
       const uint32_t bin = dftt_clamp_bin(fs + (int32_t)i, spec);
       *esum += row_n[bin];
-      const float w = wt * f->win_freq[i];
+      const float w = wt * f->tables.win_freq[i];
       const float resid = row_n[bin] - row_s[bin];
       *wsum_r2 += (w * w) * (resid * resid);
       const size_t at = row_off + i;
-      f->tile_re[at] = row_n[bin] * w;
-      f->tile_im[at] = 0.0F;
-      f->ref_re[at] = row_s[bin] * w;
-      f->ref_im[at] = 0.0F;
+      f->scratch.tile_re[at] = row_n[bin] * w;
+      f->scratch.tile_im[at] = 0.0F;
+      f->scratch.ref_re[at] = row_s[bin] * w;
+      f->scratch.ref_im[at] = 0.0F;
     }
   }
 }
@@ -605,13 +627,13 @@ static void dftt_shrink_tile(DfttFilter* f, uint32_t bt, uint32_t bf,
    * SD-neutral — the monotone clamp below caps output at the NLM map, so
    * DFTT cannot repair prior undershoots (only overshoots, i.e. speckle). */
   const float sigma2 = wsum_r2;
-  const float speckle_power = f->kill_k * sigma2;
+  const float speckle_power = f->config.kill_k * sigma2;
   for (size_t k = 0U; k < (size_t)bt * bf; k++) {
-    const float pr =
-        (f->ref_re[k] * f->ref_re[k]) + (f->ref_im[k] * f->ref_im[k]);
+    const float pr = (f->scratch.ref_re[k] * f->scratch.ref_re[k]) +
+                     (f->scratch.ref_im[k] * f->scratch.ref_im[k]);
     const float g = pr / (pr + speckle_power);
-    f->tile_re[k] *= g;
-    f->tile_im[k] *= g;
+    f->scratch.tile_re[k] *= g;
+    f->scratch.tile_im[k] *= g;
   }
 }
 
@@ -622,14 +644,15 @@ static void dftt_emit_row(DfttFilter* f, int32_t fs, uint32_t spec, uint32_t bt,
    * gathered tile already carries the analysis weight w, so emitting with
    * w gives syn*ana = w^2 per tile, matching the wsum normalization below
    * (unity gain reconstructs exactly). */
-  dftt_inv_last_row(f, f->tile_re, f->tile_im, crow_re, crow_im);
+  dftt_inv_last_row(f, f->scratch.tile_re, f->scratch.tile_im, crow_re,
+                    crow_im);
   const bool clamped = (fs < 0) || ((fs + (int32_t)bf) > (int32_t)spec);
-  const float wt_last = f->win_time[bt - 1U];
+  const float wt_last = f->tables.win_time[bt - 1U];
   uint32_t i = 0U;
   if (!clamped) {
     const sb_vec8_t vw = sb_set8(wt_last);
     for (; i + 8U <= bf; i += 8U) {
-      const sb_vec8_t w = sb_mul8(sb_load8(f->win_freq + i), vw);
+      const sb_vec8_t w = sb_mul8(sb_load8(f->tables.win_freq + i), vw);
       const sb_vec8_t v = sb_mul8(sb_load8(crow_re + i), w);
       sb_store8(refined_snr + fs + i,
                 sb_add8(sb_load8(refined_snr + fs + i), v));
@@ -637,14 +660,15 @@ static void dftt_emit_row(DfttFilter* f, int32_t fs, uint32_t spec, uint32_t bt,
   }
   for (; i < bf; i++) {
     const uint32_t bin = dftt_clamp_bin(fs + (int32_t)i, spec);
-    refined_snr[bin] += (wt_last * f->win_freq[i]) * crow_re[i];
+    refined_snr[bin] += (wt_last * f->tables.win_freq[i]) * crow_re[i];
   }
 }
 
 static void dftt_normalize_clamp(DfttFilter* f, float* refined_snr,
                                  const float* newest_smooth, uint32_t spec) {
   for (uint32_t k = 0U; k < spec; k++) {
-    refined_snr[k] = f->wsum[k] > 0.0F ? refined_snr[k] / f->wsum[k] : 0.0F;
+    refined_snr[k] =
+        f->scratch.wsum[k] > 0.0F ? refined_snr[k] / f->scratch.wsum[k] : 0.0F;
   }
 
   /* Monotone safety: the refined map may only remove energy relative to
@@ -664,44 +688,45 @@ bool dftt_filter_process(DfttFilter* f, float* refined_snr) {
   if (!f || !refined_snr) {
     return false;
   }
-  if (!f->fresh || f->filled < f->time_span) {
+  if (!f->ring.fresh || f->ring.filled < f->config.time_span) {
     return false;
   }
-  f->fresh = false;
+  f->ring.fresh = false;
 
   sb_simd_state_t old_simd_state = sb_simd_enable_ftz_daz();
 
-  const uint32_t spec = f->spectrum_size;
-  const uint32_t bt = f->time_span;
-  const uint32_t bf = f->block_freq;
+  const uint32_t spec = f->config.spectrum_size;
+  const uint32_t bt = f->config.time_span;
+  const uint32_t bf = f->config.block_freq;
   float crow_re[DFTT_MAX_DIM];
   float crow_im[DFTT_MAX_DIM];
 
   memset(refined_snr, 0, spec * sizeof(float));
-  const float* newest_smooth = f->smooth_ring[((f->head + bt) - 1U) % bt];
+  const float* newest_smooth =
+      f->ring.smooth_ring[((f->ring.head + bt) - 1U) % bt];
 
-  const int32_t tile_start = -((int32_t)bf - (int32_t)f->block_hop);
+  const int32_t tile_start = -((int32_t)bf - (int32_t)f->config.block_hop);
   for (int32_t fs = tile_start; fs < (int32_t)spec;
-       fs += (int32_t)f->block_hop) {
+       fs += (int32_t)f->config.block_hop) {
     float esum = 0.0F;
     float wsum_r2 = 0.0F;
     dftt_gather_tile(f, fs, spec, bt, bf, &esum, &wsum_r2);
 
-    const float wt_last = f->win_time[bt - 1U];
+    const float wt_last = f->tables.win_time[bt - 1U];
     if (esum < DFTT_SILENCE_EPS) {
       /* Silent tile: carry the smoothed row through, OLA-weighted. */
       for (uint32_t i = 0U; i < bf; i++) {
         const uint32_t bin = dftt_clamp_bin(fs + (int32_t)i, spec);
-        const float w = wt_last * f->win_freq[i];
+        const float w = wt_last * f->tables.win_freq[i];
         refined_snr[bin] += (w * w) * newest_smooth[bin];
       }
       continue;
     }
 
-    dftt_fwd_rows(f, f->tile_re, f->tile_im);
-    dftt_fwd_cols(f, f->tile_re, f->tile_im);
-    dftt_fwd_rows(f, f->ref_re, f->ref_im);
-    dftt_fwd_cols(f, f->ref_re, f->ref_im);
+    dftt_fwd_rows(f, f->scratch.tile_re, f->scratch.tile_im);
+    dftt_fwd_cols(f, f->scratch.tile_re, f->scratch.tile_im);
+    dftt_fwd_rows(f, f->scratch.ref_re, f->scratch.ref_im);
+    dftt_fwd_cols(f, f->scratch.ref_re, f->scratch.ref_im);
     dftt_shrink_tile(f, bt, bf, wsum_r2);
     dftt_emit_row(f, fs, spec, bt, bf, crow_re, crow_im, refined_snr);
   }
