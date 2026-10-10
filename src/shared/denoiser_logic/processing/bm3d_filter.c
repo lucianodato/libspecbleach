@@ -65,6 +65,155 @@ typedef struct {
   const float* target_frame;
 } Bm3dBlockTask;
 
+// Per-block working state for bm3d_process_block_range. Groups the scalars,
+// preloaded target vectors and match lists shared by the stage helpers so
+// each helper stays under the parameter-count limit. Same stack footprint
+// as the previous inline version; no allocation.
+typedef struct {
+  Bm3dFilter* filter;
+  const float* target;
+  float* out;
+  uint32_t center;
+  uint32_t limit;
+  uint32_t block_start;
+  uint32_t patch;
+  uint32_t half;
+  uint32_t n;
+  int32_t past;
+  int32_t future;
+  int32_t search_f;
+  float dist_thresh;
+  float thr;
+  bool use_vec8;
+  sb_vec8_t target_vecs[8];
+  int32_t m_dt[BM3D_STACK_MAX - 1];
+  int32_t m_df[BM3D_STACK_MAX - 1];
+  float m_w[BM3D_STACK_MAX - 1];
+  float m_d[BM3D_STACK_MAX - 1];
+} Bm3dBlockCtx;
+
+static inline SB_UNUSED bool bm3d_preload_target(Bm3dBlockCtx* b) {
+  Bm3dFilter* filter = b->filter;
+  // Reference patch at the block center; SIMD fast path for patch == 8.
+  b->use_vec8 = (b->patch == 8) && (b->center >= b->half) &&
+                (b->center + (b->patch - b->half) <= b->n);
+  if (!b->use_vec8) {
+    return false;
+  }
+  for (int r = 0; r < 8; r++) {
+    b->target_vecs[r] = sb_load8(patch_filter_context_cached_get_frame(
+                                     &filter->context, r - (int32_t)b->half) +
+                                 (b->center - b->half));
+  }
+  return true;
+}
+
+static inline SB_UNUSED uint32_t bm3d_worst_slot(const float* m_d) {
+  uint32_t worst = 0;
+  for (uint32_t i = 1; i < BM3D_STACK_MAX - 1; i++) {
+    if (m_d[i] > m_d[worst]) {
+      worst = i;
+    }
+  }
+  return worst;
+}
+
+static inline SB_UNUSED void bm3d_search_block(Bm3dBlockCtx* b) {
+  Bm3dFilter* filter = b->filter;
+  for (uint32_t i = 0; i < BM3D_STACK_MAX - 1; i++) {
+    b->m_d[i] = b->dist_thresh;
+    b->m_w[i] = 0.0F;
+    b->m_dt[i] = 0;
+    b->m_df[i] = 0;
+  }
+  for (int32_t dt = -b->past; dt <= b->future; dt++) {
+    float* cand_rows[8] = {NULL};
+    if (b->use_vec8) {
+      for (int r = 0; r < 8; r++) {
+        cand_rows[r] = patch_filter_context_cached_get_frame(
+            &filter->context, dt + r - (int32_t)b->half);
+      }
+    }
+    for (int32_t df = -b->search_f; df <= b->search_f; df++) {
+      if (dt == 0 && df == 0) {
+        continue;
+      }
+      uint32_t cf = patch_filter_clamp_index((int32_t)b->center + df, b->n);
+      float d;
+      if (b->use_vec8 && cf >= b->half && cf + (b->patch - b->half) <= b->n) {
+        const uint32_t fs = cf - b->half;
+        float* ptrs[8] = {cand_rows[0] + fs, cand_rows[1] + fs,
+                          cand_rows[2] + fs, cand_rows[3] + fs,
+                          cand_rows[4] + fs, cand_rows[5] + fs,
+                          cand_rows[6] + fs, cand_rows[7] + fs};
+        d = sb_vec8_patch_ssd(b->target_vecs, ptrs);
+      } else {
+        d = bm3d_patch_ssd_scalar(filter, b->center, dt, cf);
+      }
+      if (d >= b->dist_thresh) {
+        continue;
+      }
+      float w = sb_fast_expf(-d * filter->inv_h_squared);
+      if (w < NLM_MIN_WEIGHT) {
+        continue;
+      }
+      uint32_t worst = bm3d_worst_slot(b->m_d);
+      if (d < b->m_d[worst]) {
+        b->m_d[worst] = d;
+        b->m_w[worst] = w;
+        b->m_dt[worst] = dt;
+        b->m_df[worst] = df;
+      }
+    }
+  }
+}
+
+static inline SB_UNUSED void bm3d_collab_bin(Bm3dBlockCtx* b, uint32_t k) {
+  Bm3dFilter* filter = b->filter;
+  // Weighted mean of (mean + kept residuals): matches whose residual
+  // survives the hard threshold keep their value, the rest collapse to
+  // the stack mean. Flat regions denoise harder than NLM averaging while
+  // strong structure survives via residuals. Measured better than a
+  // canonical stack-DCT hard-threshold on the low-SNR white-noise case:
+  // SSD-matched stacks have low variance, so the residual-keep preserves
+  // detail the transform-domain cut averages away.
+  float mean = b->target[k]; // anchor weight 1
+  float w_sum = 1.0F;
+  for (uint32_t m = 0; m < BM3D_STACK_MAX - 1; m++) {
+    if (b->m_w[m] <= 0.0F) {
+      continue;
+    }
+    mean +=
+        b->m_w[m] * patch_filter_context_cached_get_frame(
+                        &filter->context, b->m_dt[m])[patch_filter_clamp_index(
+                        (int32_t)k + b->m_df[m], b->n)];
+    w_sum += b->m_w[m];
+  }
+  mean /= w_sum;
+  float num = mean; // anchor: mean * 1
+  float den = 1.0F;
+  for (uint32_t m = 0; m < BM3D_STACK_MAX - 1; m++) {
+    if (b->m_w[m] <= 0.0F) {
+      continue;
+    }
+    float v = patch_filter_context_cached_get_frame(
+        &filter->context,
+        b->m_dt[m])[patch_filter_clamp_index((int32_t)k + b->m_df[m], b->n)];
+    float r = v - mean;
+    if (fabsf(r) > b->thr) {
+      num += b->m_w[m] * (mean + r);
+      den += b->m_w[m];
+    } else {
+      num += b->m_w[m] * mean;
+      den += b->m_w[m];
+    }
+  }
+  // confidence blend-back against the raw bin (trust raw at high SNR)
+  // now happens once at engine level for all 2D modes, on the aligned
+  // delayed map.
+  b->out[k] = num / den;
+}
+
 static void bm3d_process_block_range(void* raw_ctx, uint32_t first_block,
                                      uint32_t block_count) {
   const Bm3dBlockTask* ctx = (const Bm3dBlockTask*)raw_ctx;
@@ -103,123 +252,33 @@ static void bm3d_process_block_range(void* raw_ctx, uint32_t first_block,
       continue;
     }
 
+    Bm3dBlockCtx blk = {
+        .filter = filter,
+        .target = target,
+        .out = out,
+        .center = center,
+        .limit = limit,
+        .block_start = block_start,
+        .patch = patch,
+        .half = half,
+        .n = n,
+        .past = past,
+        .future = future,
+        .search_f = search_f,
+        .dist_thresh = dist_thresh,
+        .thr = thr,
+        .use_vec8 = false,
+    };
+
     // Reference patch at the block center; SIMD fast path for patch == 8.
-    bool use_vec8 =
-        (patch == 8) && (center >= half) && (center + (patch - half) <= n);
-    sb_vec8_t target_vecs[8];
-    if (use_vec8) {
-      for (int r = 0; r < 8; r++) {
-        target_vecs[r] = sb_load8(patch_filter_context_cached_get_frame(
-                                      &filter->context, r - (int32_t)half) +
-                                  (center - half));
-      }
-    }
+    bm3d_preload_target(&blk);
 
     // Top-(STACK_MAX-1) matches; the target anchors the stack at combine.
-    int32_t m_dt[BM3D_STACK_MAX - 1];
-    int32_t m_df[BM3D_STACK_MAX - 1];
-    float m_w[BM3D_STACK_MAX - 1];
-    float m_d[BM3D_STACK_MAX - 1];
-    for (uint32_t i = 0; i < BM3D_STACK_MAX - 1; i++) {
-      m_d[i] = dist_thresh;
-      m_w[i] = 0.0F;
-      m_dt[i] = 0;
-      m_df[i] = 0;
-    }
-    for (int32_t dt = -past; dt <= future; dt++) {
-      float* cand_rows[8] = {NULL};
-      if (use_vec8) {
-        for (int r = 0; r < 8; r++) {
-          cand_rows[r] = patch_filter_context_cached_get_frame(
-              &filter->context, dt + r - (int32_t)half);
-        }
-      }
-      for (int32_t df = -search_f; df <= search_f; df++) {
-        if (dt == 0 && df == 0) {
-          continue;
-        }
-        uint32_t cf = patch_filter_clamp_index((int32_t)center + df, n);
-        float d;
-        if (use_vec8 && cf >= half && cf + (patch - half) <= n) {
-          const uint32_t fs = cf - half;
-          float* ptrs[8] = {cand_rows[0] + fs, cand_rows[1] + fs,
-                            cand_rows[2] + fs, cand_rows[3] + fs,
-                            cand_rows[4] + fs, cand_rows[5] + fs,
-                            cand_rows[6] + fs, cand_rows[7] + fs};
-          d = sb_vec8_patch_ssd(target_vecs, ptrs);
-        } else {
-          d = bm3d_patch_ssd_scalar(filter, center, dt, cf);
-        }
-        if (d >= dist_thresh) {
-          continue;
-        }
-        float w = sb_fast_expf(-d * filter->inv_h_squared);
-        if (w < NLM_MIN_WEIGHT) {
-          continue;
-        }
-        uint32_t worst = 0;
-        for (uint32_t i = 1; i < BM3D_STACK_MAX - 1; i++) {
-          if (m_d[i] > m_d[worst]) {
-            worst = i;
-          }
-        }
-        if (d < m_d[worst]) {
-          m_d[worst] = d;
-          m_w[worst] = w;
-          m_dt[worst] = dt;
-          m_df[worst] = df;
-        }
-      }
-    }
+    bm3d_search_block(&blk);
 
     // Per-bin collaborative shrink with the shared match list.
     for (uint32_t i = 0; i < limit; i++) {
-      const uint32_t k = block_start + i;
-      // Weighted mean of (mean + kept residuals): matches whose residual
-      // survives the hard threshold keep their value, the rest collapse to
-      // the stack mean. Flat regions denoise harder than NLM averaging while
-      // strong structure survives via residuals. Measured better than a
-      // canonical stack-DCT hard-threshold on the low-SNR white-noise case:
-      // SSD-matched stacks have low variance, so the residual-keep preserves
-      // detail the transform-domain cut averages away.
-      {
-        float mean = target[k]; // anchor weight 1
-        float w_sum = 1.0F;
-        for (uint32_t m = 0; m < BM3D_STACK_MAX - 1; m++) {
-          if (m_w[m] <= 0.0F) {
-            continue;
-          }
-          mean +=
-              m_w[m] *
-              patch_filter_context_cached_get_frame(
-                  &filter->context,
-                  m_dt[m])[patch_filter_clamp_index((int32_t)k + m_df[m], n)];
-          w_sum += m_w[m];
-        }
-        mean /= w_sum;
-        float num = mean; // anchor: mean * 1
-        float den = 1.0F;
-        for (uint32_t m = 0; m < BM3D_STACK_MAX - 1; m++) {
-          if (m_w[m] <= 0.0F) {
-            continue;
-          }
-          float v = patch_filter_context_cached_get_frame(
-              &filter->context,
-              m_dt[m])[patch_filter_clamp_index((int32_t)k + m_df[m], n)];
-          float r = v - mean;
-          if (fabsf(r) > thr) {
-            num += m_w[m] * (mean + r);
-            den += m_w[m];
-          } else {
-            num += m_w[m] * mean;
-            den += m_w[m];
-          }
-        }
-        // confidence blend-back against the raw bin (trust raw at high SNR)
-        // now happens once at engine level for all 2D modes, on the aligned
-        // delayed map.
-        out[k] = num / den;
-      }
+      bm3d_collab_bin(&blk, block_start + i);
     }
   }
 }
