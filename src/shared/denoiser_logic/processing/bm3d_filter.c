@@ -233,21 +233,10 @@ Bm3dFilter* bm3d_filter_initialize(Bm3dFilterConfig config) {
     return NULL;
   }
   self->config = config;
-  if (self->config.patch_size == 0) {
-    self->config.patch_size = NLM_PATCH_SIZE;
-  }
-  if (self->config.paste_block_size == 0) {
-    self->config.paste_block_size = NLM_PASTE_BLOCK_SIZE;
-  }
-  if (self->config.search_range_freq == 0) {
-    self->config.search_range_freq = NLM_SEARCH_RANGE_FREQ;
-  }
-  if (self->config.search_range_time_past == 0) {
-    self->config.search_range_time_past = NLM_SEARCH_RANGE_TIME_PAST;
-  }
-  if (self->config.search_range_time_future == 0) {
-    self->config.search_range_time_future = NLM_SEARCH_RANGE_TIME_FUTURE;
-  }
+  sb_resolve_patch_geometry_defaults(
+      &self->config.patch_size, &self->config.paste_block_size,
+      &self->config.search_range_freq, &self->config.search_range_time_past,
+      &self->config.search_range_time_future);
   if (self->config.time_buffer_size == 0) {
     self->config.time_buffer_size = self->config.search_range_time_past +
                                     self->config.search_range_time_future + 1;
