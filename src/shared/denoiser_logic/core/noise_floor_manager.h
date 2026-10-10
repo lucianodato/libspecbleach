@@ -30,12 +30,20 @@ NoiseFloorManager* noise_floor_manager_initialize(uint32_t fft_size);
 
 void noise_floor_manager_free(NoiseFloorManager* self);
 
-void noise_floor_manager_apply(NoiseFloorManager* self,
-                               uint32_t real_spectrum_size, uint32_t fft_size,
-                               float* gain_spectrum, const float* noise_profile,
-                               float reduction_amount,
-                               float tonal_reduction_amount,
-                               const float* tonal_mask, float whitening_factor,
-                               const float* reduction_curve_bias);
+// Argument bundle: keeps the apply signature under the parameter-count
+// limit. Passed by value (pointers + scalars).
+typedef struct NoiseFloorArgs {
+  uint32_t real_spectrum_size;
+  uint32_t fft_size;
+  float* gain_spectrum;
+  const float* noise_profile;
+  float reduction_amount;
+  float tonal_reduction_amount;
+  const float* tonal_mask;
+  float whitening_factor;
+  const float* reduction_curve_bias;
+} NoiseFloorArgs;
+
+void noise_floor_manager_apply(NoiseFloorManager* self, NoiseFloorArgs args);
 
 #endif

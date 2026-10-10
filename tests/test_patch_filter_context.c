@@ -87,7 +87,13 @@ static void test_clamped_patch_row_ssd(void) {
   const float target[3] = {1.0F, 2.0F, 3.0F};
   const float candidate[3] = {0.0F, 2.0F, 4.0F};
   const float distance = patch_filter_accumulate_patch_row_ssd(
-      7.0F, target, candidate, 0U, 2U, 3U, 1U, 3U);
+      7.0F, (PatchRowArgs){.target_row = target,
+                           .candidate_row = candidate,
+                           .target_freq = 0U,
+                           .candidate_freq = 2U,
+                           .patch_size = 3U,
+                           .half_patch_size = 1U,
+                           .spectrum_size = 3U});
   TEST_ASSERT(distance == 21.0F,
               "Clamped SSD should retain the initial sum and bin order");
 }
