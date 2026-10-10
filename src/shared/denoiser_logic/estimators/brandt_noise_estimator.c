@@ -271,34 +271,21 @@ static float calculate_ad_norm(const float* sorted, uint32_t q, float mu,
   return abs_diff_sum * (2.0f * q_inv);
 }
 
-bool brandt_noise_estimator_run(BrandtNoiseEstimator* self,
-                                const float* spectrum, float* noise_spectrum) {
-  if (!self || !spectrum || !noise_spectrum || self->history_size == 0) {
-    return false;
+static void sb_seed_first_frame(BrandtNoiseEstimator* self,
+                                const float* spectrum, float frame_energy) {
+  if (!self->is_first_frame || frame_energy <= ESTIMATOR_SILENCE_THRESHOLD) {
+    return;
   }
-
-  float frame_energy = 0.F;
-  for (uint32_t k = 0U; k < self->spectrum_size; k++) {
-    frame_energy += spectrum[k];
+  float inv_factor = 1.0f / calculate_correction_factor(0.5f);
+  for (uint32_t k = 0; k < self->spectrum_size; k++) {
+    float val = spectrum[k] * inv_factor;
+    self->last_noise_spectrum[k] = spectrum[k];
+    sb_fill_jittered_history(self, k, val);
   }
-  frame_energy /= (float)self->spectrum_size;
+  self->is_first_frame = false;
+}
 
-  if (self->is_first_frame && frame_energy > ESTIMATOR_SILENCE_THRESHOLD) {
-    float inv_factor = 1.0f / calculate_correction_factor(0.5f);
-    for (uint32_t k = 0; k < self->spectrum_size; k++) {
-      float val = spectrum[k] * inv_factor;
-      self->last_noise_spectrum[k] = spectrum[k];
-      sb_fill_jittered_history(self, k, val);
-    }
-    self->is_first_frame = false;
-  }
-
-  if (frame_energy < ESTIMATOR_SILENCE_THRESHOLD) {
-    memcpy(noise_spectrum, self->last_noise_spectrum,
-           self->spectrum_size * sizeof(float));
-    return true;
-  }
-
+static void sb_push_frame(BrandtNoiseEstimator* self, const float* spectrum) {
   // Record current frame into circular buffer
   uint32_t current_idx = self->history_index;
   for (uint32_t k = 0; k < self->spectrum_size; k++) {
@@ -311,6 +298,65 @@ bool brandt_noise_estimator_run(BrandtNoiseEstimator* self,
     }
   }
   self->history_index = (current_idx + 1) % self->history_size;
+}
+
+static void sb_update_bin_estimate(BrandtNoiseEstimator* self, uint32_t k,
+                                   float* noise_spectrum,
+                                   const uint32_t* q_candidates) {
+  const float* sorted = &self->sorted_history[(size_t)k * self->history_size];
+
+  float min_ad_norm = 2.0f;
+  float best_mu = self->last_noise_spectrum[k];
+
+  float prefix_sum = 0.0f;
+  uint32_t candidate_index = 0U;
+  for (uint32_t j = 0; j < self->history_size; j++) {
+    prefix_sum += sorted[j];
+    while (candidate_index < 5U && q_candidates[candidate_index] <= j + 1U) {
+      uint32_t q = q_candidates[candidate_index];
+      if (q >= 10U) {
+        float mu_trunc = prefix_sum / (float)q;
+        if (mu_trunc > ESTIMATOR_SILENCE_THRESHOLD) {
+          float b = sorted[q - 1U];
+          float mu_full = mu_trunc * self->correction_factors[candidate_index];
+          float ad_norm = calculate_ad_norm(sorted, q, mu_full, b);
+          if (ad_norm < min_ad_norm) {
+            min_ad_norm = ad_norm;
+            best_mu = mu_full;
+          }
+        }
+      }
+      candidate_index++;
+    }
+  }
+
+  if (1.0f - min_ad_norm >= BRANDT_MIN_CONFIDENCE) {
+    self->last_noise_spectrum[k] = best_mu;
+  }
+  noise_spectrum[k] = self->last_noise_spectrum[k];
+}
+
+bool brandt_noise_estimator_run(BrandtNoiseEstimator* self,
+                                const float* spectrum, float* noise_spectrum) {
+  if (!self || !spectrum || !noise_spectrum || self->history_size == 0) {
+    return false;
+  }
+
+  float frame_energy = 0.F;
+  for (uint32_t k = 0U; k < self->spectrum_size; k++) {
+    frame_energy += spectrum[k];
+  }
+  frame_energy /= (float)self->spectrum_size;
+
+  sb_seed_first_frame(self, spectrum, frame_energy);
+
+  if (frame_energy < ESTIMATOR_SILENCE_THRESHOLD) {
+    memcpy(noise_spectrum, self->last_noise_spectrum,
+           self->spectrum_size * sizeof(float));
+    return true;
+  }
+
+  sb_push_frame(self, spectrum);
 
   // Subsample expensive statistical update every N frames (or on first frame)
   const uint32_t stats_interval =
@@ -329,40 +375,7 @@ bool brandt_noise_estimator_run(BrandtNoiseEstimator* self,
     }
 
     for (uint32_t k = 0; k < self->spectrum_size; k++) {
-      const float* sorted =
-          &self->sorted_history[(size_t)k * self->history_size];
-
-      float min_ad_norm = 2.0f;
-      float best_mu = self->last_noise_spectrum[k];
-
-      float prefix_sum = 0.0f;
-      uint32_t candidate_index = 0U;
-      for (uint32_t j = 0; j < self->history_size; j++) {
-        prefix_sum += sorted[j];
-        while (candidate_index < 5U &&
-               q_candidates[candidate_index] <= j + 1U) {
-          uint32_t q = q_candidates[candidate_index];
-          if (q >= 10U) {
-            float mu_trunc = prefix_sum / (float)q;
-            if (mu_trunc > ESTIMATOR_SILENCE_THRESHOLD) {
-              float b = sorted[q - 1U];
-              float mu_full =
-                  mu_trunc * self->correction_factors[candidate_index];
-              float ad_norm = calculate_ad_norm(sorted, q, mu_full, b);
-              if (ad_norm < min_ad_norm) {
-                min_ad_norm = ad_norm;
-                best_mu = mu_full;
-              }
-            }
-          }
-          candidate_index++;
-        }
-      }
-
-      if (1.0f - min_ad_norm >= BRANDT_MIN_CONFIDENCE) {
-        self->last_noise_spectrum[k] = best_mu;
-      }
-      noise_spectrum[k] = self->last_noise_spectrum[k];
+      sb_update_bin_estimate(self, k, noise_spectrum, q_candidates);
     }
   } else {
     // Copy persistent noise estimate
