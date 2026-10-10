@@ -161,8 +161,7 @@ static void update_median(NoiseEstimator* self, float* noise_profile,
   calculate_median_profile(self, noise_profile, type);
 }
 
-static void update_welford(NoiseEstimator* self,
-                           const const float* signal_spectrum) {
+static void update_welford(NoiseEstimator* self, const float* signal_spectrum) {
   self->welford_count++;
   const float inv_count = 1.0F / (float)self->welford_count;
   for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {

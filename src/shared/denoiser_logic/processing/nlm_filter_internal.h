@@ -118,7 +118,7 @@ static inline SB_UNUSED float compute_patch_distance(NlmFilter* self,
 
       const float* target_frame =
           patch_filter_context_get_frame(&self->context, t_target);
-      const const float* cand_frame =
+      const float* cand_frame =
           patch_filter_context_get_frame(&self->context, t_cand);
       distance +=
           sb_vec8_ssd(sb_load8(target_frame + (target_freq - half_patch)),
@@ -134,7 +134,7 @@ static inline SB_UNUSED float compute_patch_distance(NlmFilter* self,
 
       const float* target_frame =
           patch_filter_context_get_frame(&self->context, t_target);
-      const const float* cand_frame =
+      const float* cand_frame =
           patch_filter_context_get_frame(&self->context, t_cand);
       distance +=
           sb_row_ssd_n(target_frame + (target_freq - half_patch),
@@ -149,7 +149,7 @@ static inline SB_UNUSED float compute_patch_distance(NlmFilter* self,
 
     const float* target_frame =
         patch_filter_context_get_frame(&self->context, t_target);
-    const const float* cand_frame =
+    const float* cand_frame =
         patch_filter_context_get_frame(&self->context, t_cand);
 
     distance = patch_filter_accumulate_patch_row_ssd(
