@@ -122,15 +122,10 @@ void masking_veto_free(MaskingVeto* self) {
   free(self);
 }
 
-void masking_veto_apply(MaskingVeto* self, const float* smoothed_spectrum,
-                        const float* noise_spectrum,
-                        const float* future_spectrum, float* alpha,
-                        float depth) {
-  if (!self || !smoothed_spectrum || !noise_spectrum || !alpha ||
-      depth < 0.0F || self->real_spectrum_size == 0U) {
-    return;
-  }
-
+static const float* mv_update_clean_est(MaskingVeto* self,
+                                        const float* smoothed_spectrum,
+                                        const float* noise_spectrum,
+                                        const float* future_spectrum) {
   // 1. Estimate clean signal magnitude from SMOOTHED signal
   for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
     const float current_clean = fmaxf(
@@ -148,23 +143,38 @@ void masking_veto_apply(MaskingVeto* self, const float* smoothed_spectrum,
   }
 
   // 1.1 Estimate future clean signal magnitude for backward masking
-  const float* future_clean_estimation = NULL;
-  if (future_spectrum) {
-    for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
-      self->future_clean_estimation_buf[k] = fmaxf(
-          future_spectrum[k] - (MASKING_VETO_NOISE_GATE * noise_spectrum[k]),
-          0.0F);
-    }
-    future_clean_estimation = self->future_clean_estimation_buf;
+  if (!future_spectrum) {
+    return NULL;
   }
-
-  // 2. Compute psychoacoustic masking thresholds
-  if (!compute_masking_thresholds(
-          self->masking_estimator, self->clean_signal_estimation,
-          future_clean_estimation, self->masking_thresholds)) {
-    return;
+  for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
+    self->future_clean_estimation_buf[k] = fmaxf(
+        future_spectrum[k] - (MASKING_VETO_NOISE_GATE * noise_spectrum[k]),
+        0.0F);
   }
+  return self->future_clean_estimation_buf;
+}
 
+static float mv_nmr_to_protection(float band_noise_energy,
+                                  float band_threshold) {
+  const float nmr_db = 10.0F * log10f((band_noise_energy + SPECTRAL_EPSILON) /
+                                      (band_threshold + SPECTRAL_EPSILON));
+
+  // Map NMR to protection (inverse of audibility):
+  //   NMR <= 0dB -> protection = 1.0 (noise masked, preserve energy)
+  //   NMR >= NMR_RANGE -> protection = 0.0 (noise audible, allow suppression)
+  if (nmr_db <= 0.0F) {
+    return 1.0F;
+  }
+  if (nmr_db >= MASKING_VETO_NMR_RANGE) {
+    return 0.0F;
+  }
+  return 1.0F - (nmr_db / MASKING_VETO_NMR_RANGE);
+}
+
+static uint32_t mv_compute_band_protection(MaskingVeto* self,
+                                           const float* noise_spectrum,
+                                           bool* band_valid,
+                                           uint32_t band_valid_cap) {
   /**
    * 3. Calculate Band-wise Protection from NMR
    *
@@ -177,8 +187,8 @@ void masking_veto_apply(MaskingVeto* self, const float* smoothed_spectrum,
   const uint32_t num_bands =
       get_number_of_critical_bands(self->critical_bands_helper);
 
-  bool band_valid[256];
-  const uint32_t valid_count = (num_bands < 256U) ? num_bands : 256U;
+  const uint32_t valid_count =
+      (num_bands < band_valid_cap) ? num_bands : band_valid_cap;
 
   for (uint32_t j = 0U; j < num_bands; j++) {
     const CriticalBandIndexes indexes =
@@ -203,21 +213,7 @@ void masking_veto_apply(MaskingVeto* self, const float* smoothed_spectrum,
       if (band_clean_energy > SPECTRAL_EPSILON &&
           band_threshold > SPECTRAL_EPSILON) {
         is_valid = true;
-        const float nmr_db =
-            10.0F * log10f((band_noise_energy + SPECTRAL_EPSILON) /
-                           (band_threshold + SPECTRAL_EPSILON));
-
-        // Map NMR to protection (inverse of audibility):
-        //   NMR <= 0dB -> protection = 1.0 (noise masked, preserve energy)
-        //   NMR >= NMR_RANGE -> protection = 0.0 (noise audible, allow
-        //   suppression)
-        if (nmr_db <= 0.0F) {
-          protection = 1.0F;
-        } else if (nmr_db >= MASKING_VETO_NMR_RANGE) {
-          protection = 0.0F;
-        } else {
-          protection = 1.0F - (nmr_db / MASKING_VETO_NMR_RANGE);
-        }
+        protection = mv_nmr_to_protection(band_noise_energy, band_threshold);
       }
     }
 
@@ -249,6 +245,11 @@ void masking_veto_apply(MaskingVeto* self, const float* smoothed_spectrum,
     }
   }
 
+  return num_bands;
+}
+
+static void mv_apply_veto(MaskingVeto* self, const float* noise_spectrum,
+                          float* alpha, float depth, uint32_t num_bands) {
   /**
    * 4. Apply Interpolated Veto
    * Interpolate protection for each bin between band centers.
@@ -292,6 +293,33 @@ void masking_veto_apply(MaskingVeto* self, const float* smoothed_spectrum,
     const float veto_amount = bin_protection * bin_snr_scale * depth;
     alpha[k] = fmaxf(ALPHA_MIN, alpha[k] * (1.0F - veto_amount));
   }
+}
+
+void masking_veto_apply(MaskingVeto* self, const float* smoothed_spectrum,
+                        const float* noise_spectrum,
+                        const float* future_spectrum, float* alpha,
+                        float depth) {
+  if (!self || !smoothed_spectrum || !noise_spectrum || !alpha ||
+      depth < 0.0F || self->real_spectrum_size == 0U) {
+    return;
+  }
+
+  // 1. Estimate clean signal magnitude from SMOOTHED signal
+  const float* future_clean_estimation = mv_update_clean_est(
+      self, smoothed_spectrum, noise_spectrum, future_spectrum);
+
+  // 2. Compute psychoacoustic masking thresholds
+  if (!compute_masking_thresholds(
+          self->masking_estimator, self->clean_signal_estimation,
+          future_clean_estimation, self->masking_thresholds)) {
+    return;
+  }
+
+  bool band_valid[256];
+  const uint32_t num_bands =
+      mv_compute_band_protection(self, noise_spectrum, band_valid, 256U);
+
+  mv_apply_veto(self, noise_spectrum, alpha, depth, num_bands);
 }
 
 void masking_veto_set_hop_sec(MaskingVeto* self, float hop_sec) {
