@@ -236,19 +236,41 @@ static void align_bypass_frame(SbSpectralDenoiser* self, float* fft_spectrum,
   spectral_circular_buffer_advance(self->circular_buffer);
 }
 
+// Chain I/O bundles: group the per-frame spectra and outputs so chain
+// signatures stay under the parameter-count limit. Passed by value (a few
+// pointers); no allocation, no lifetime concerns.
+typedef struct DenoiserChainFrames {
+  const float* smoothed_magnitude; // NULL lets the NLM chain fall back
+  const float* noise_bb;
+  const float* noise_tonal;
+  const float* tonal_mask;
+} DenoiserChainFrames;
+
+typedef struct DenoiserChainOut {
+  float* gain_out;
+  float* alpha;
+  float* beta;
+} DenoiserChainOut;
+
+// Aligned delayed frames consumed by the chains and post stage. Filled by
+// the 2D pass (or defaulted to the current frame in low-latency mode).
+typedef struct DenoiserAlignedFrames {
+  const float* spectrum;
+  const float* noise;
+  const float* noise_bb;
+  const float* noise_tonal;
+  const float* tonal_mask;
+  const float* nlm_smoothed;
+} DenoiserAlignedFrames;
+
 static bool run_nlm_chain(SbSpectralDenoiser* self, const float* fft_spectrum,
-                          const float* smoothed_magnitude,
-                          const float* delayed_noise_bb,
-                          const float* delayed_noise_tonal,
-                          const float* delayed_tonal_mask, uint32_t slot,
-                          float* gain_out, float* alpha, float* beta);
+                          DenoiserChainFrames frames, uint32_t slot,
+                          DenoiserChainOut out);
 
 static void run_temporal_chain(SbSpectralDenoiser* self,
                                const float* delayed_fft,
-                               const float* delayed_noise_bb,
-                               const float* delayed_noise_tonal,
-                               const float* delayed_tonal_mask, uint32_t slot,
-                               float* gain_out, float* alpha, float* beta);
+                               DenoiserChainFrames frames, uint32_t slot,
+                               DenoiserChainOut out);
 
 static bool denoiser_alloc_spectra(SbSpectralDenoiser* self) {
   self->snr_frame = (float*)calloc(self->real_spectrum_size, sizeof(float));
@@ -834,6 +856,332 @@ bool load_reduction_parameters(SpectralProcessorHandle instance,
   return true;
 }
 
+static bool denoiser_run_silence_bypass(SbSpectralDenoiser* self,
+                                        float* fft_spectrum,
+                                        const float* reference_spectrum) {
+  // Silence bypass: input essentially silent — profile update already done
+  // so aggressiveness/threshold stay responsive, but skip the heavy chain.
+  float max_val = 0.0f;
+  for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
+    if (reference_spectrum[k] > max_val) {
+      max_val = reference_spectrum[k];
+    }
+    if (max_val > 1e-12F) {
+      break;
+    }
+  }
+  if (max_val > 1e-12F) {
+    return false;
+  }
+  // Keep circular buffer aligned as in idle path
+  align_bypass_frame(self, fft_spectrum, reference_spectrum);
+
+  // Safely publish noise spectrum to inactive double buffer via SPSC
+  // atomic release
+  int published_idx =
+      atomic_load_explicit(&self->active_noise_idx, memory_order_relaxed);
+  int write_noise_idx = 1 - published_idx;
+  memcpy(self->noise_spectrum_buffers[write_noise_idx], self->noise_spectrum,
+         self->real_spectrum_size * sizeof(float));
+  atomic_store_explicit(&self->active_noise_idx, write_noise_idx,
+                        memory_order_release);
+
+  return true;
+}
+
+static void denoiser_run_2d_pass(SbSpectralDenoiser* self, float* fft_spectrum,
+                                 const float* reference_spectrum,
+                                 DenoiserAlignedFrames* frames) {
+  // 2.2 Align internal state and output to the common delayed frame
+  // (skipped in low-latency mode: causal, zero look-ahead)
+  frames->spectrum = fft_spectrum;
+  frames->noise = self->noise_spectrum;
+  frames->noise_bb = self->noise_bb;
+  frames->noise_tonal = self->noise_tonal;
+  frames->tonal_mask = tonal_reducer_get_mask(self->tonal_reducer);
+  frames->nlm_smoothed = NULL;
+  if (self->low_latency) {
+    return;
+  }
+  push_aligned_frame_layers(self, fft_spectrum);
+
+  // Keep both 2D histories warm, even when temporal mode is active.
+  push_filter_histories(self, reference_spectrum);
+
+  const uint32_t nlm_delay = nlm_filter_get_latency_frames(self->nlm_filter);
+
+  // 2D smoothing (runs when a 2D mode is the active or the incoming mode).
+  // The smoothed magnitude is captured explicitly so the temporal chain
+  // cannot overwrite the shared alignment layer before the 2D chain
+  // consumes it.
+  const bool mode_2d_needed =
+      is_2d_family(self->active_mode) ||
+      (self->in_transition && is_2d_family(self->pending_mode));
+  // DFTT refinement follows the DFTT mode: the active chain, or the incoming
+  // side of a temporal crossfade. Rings are pushed on every 2D pass so they
+  // stay warm for instant intra-family flips.
+  const bool use_dftt =
+      (self->active_mode == SPECBLEACH_SMOOTHING_NLM_2D_DFTT) ||
+      (self->in_transition &&
+       self->pending_mode == SPECBLEACH_SMOOTHING_NLM_2D_DFTT);
+  // BM3D source follows the same active/incoming rule; DFTT modes always
+  // read NLM so the refinement rings stay valid.
+  const bool use_bm3d =
+      (self->active_mode == SPECBLEACH_SMOOTHING_BM3D) ||
+      (self->in_transition && self->pending_mode == SPECBLEACH_SMOOTHING_BM3D);
+  const bool filter_ran =
+      mode_2d_needed &&
+      (use_bm3d ? bm3d_filter_process(self->bm3d_filter, self->smoothed_snr)
+                : nlm_filter_process(self->nlm_filter, self->smoothed_snr));
+
+  // Retrieve unified aligned frames at the common delay
+  frames->spectrum = spectral_circular_buffer_retrieve(
+      self->circular_buffer, self->layer_fft, nlm_delay);
+  frames->noise = spectral_circular_buffer_retrieve(
+      self->circular_buffer, self->layer_noise, nlm_delay);
+  frames->noise_bb = spectral_circular_buffer_retrieve(
+      self->circular_buffer, self->layer_noise_bb, nlm_delay);
+  frames->noise_tonal = spectral_circular_buffer_retrieve(
+      self->circular_buffer, self->layer_noise_tonal, nlm_delay);
+  frames->tonal_mask = spectral_circular_buffer_retrieve(
+      self->circular_buffer, self->layer_tonal_mask, nlm_delay);
+
+  if (!frames->spectrum) {
+    frames->spectrum = fft_spectrum;
+  }
+  if (!frames->noise) {
+    frames->noise = self->noise_spectrum;
+  }
+  if (!frames->noise_bb) {
+    frames->noise_bb = self->noise_bb;
+  }
+  if (!frames->noise_tonal) {
+    frames->noise_tonal = self->noise_tonal;
+  }
+  if (!frames->tonal_mask) {
+    frames->tonal_mask = tonal_reducer_get_mask(self->tonal_reducer);
+  }
+
+  if (!filter_ran) {
+    return;
+  }
+  // Noisy SNR row aligned with the 2D-emitted frame, recomputed from the
+  // delayed frames so it describes the same tile the filters just
+  // emitted. Feeds the DFTT rings and the confidence blend below.
+  // Reuses the shared spectral_features scratch (the temporal chain
+  // recomputes it on the same delayed frame anyway).
+  float* delayed_reference =
+      get_spectral_feature(self->spectral_features, frames->spectrum,
+                           self->fft_size, self->spectrum_type);
+  nlm_filter_calculate_snr(self->nlm_filter, delayed_reference,
+                           frames->noise_bb, self->snr_delayed);
+  // DFTT post-filter (paper S4.2): the noisy SNR row aligned with the
+  // 2D-emitted frame — recomputed from the delayed frames so both ring
+  // inputs describe the same tile — is refined while the NLM output sets
+  // the suppression threshold. Falls back to the raw NLM output until the
+  // DFTT history is full, or when the active mode is NLM-only.
+  float* post_nlm = self->smoothed_snr;
+  if (self->dftt_filter) {
+    dftt_filter_push(self->dftt_filter, self->snr_delayed, self->smoothed_snr);
+    if (use_dftt && dftt_filter_process(self->dftt_filter, self->dftt_snr)) {
+      post_nlm = self->dftt_snr;
+    }
+  }
+  // SNR-confidence blend-back (NLM/BM3D maps only): bins the smoother
+  // itself rates far above the noise floor keep their raw value — map
+  // smoothing drags strong harmonics — while the rest take the smoothed
+  // estimate. Confidence is driven by the smoothed estimate (not the
+  // instantaneous bin: noise spikes must not buy raw passthrough, or
+  // gap suppression regresses). Steep 4th-power weighting
+  // raw_w = e^4/(e^4+crossover^4) with crossover
+  // SMOOTHING_CONFIDENCE_SNR. DFTT-refined output is exempt: its
+  // flicker-suppression contract lives in the bins this blend would
+  // restore to raw. Both post_nlm candidates are self-owned scratch
+  // (the DFTT rings were already pushed), so blend in place.
+  if (post_nlm == self->smoothed_snr) {
+    const float conf_sq = SMOOTHING_CONFIDENCE_SNR * SMOOTHING_CONFIDENCE_SNR;
+    const float conf_4th = conf_sq * conf_sq;
+    const uint32_t blend_n = self->real_spectrum_size;
+    for (uint32_t k = 0U; k < blend_n; k++) {
+      const float e = post_nlm[k];
+      const float e_sq = e * e;
+      const float e_4th = e_sq * e_sq;
+      const float raw_w = e_4th / (e_4th + conf_4th);
+      post_nlm[k] = (raw_w * self->snr_delayed[k]) + ((1.0F - raw_w) * e);
+    }
+  }
+  nlm_filter_reconstruct_magnitude(self->nlm_filter, post_nlm, frames->noise_bb,
+                                   self->snr_frame);
+  spectral_circular_buffer_push(self->circular_buffer, self->layer_smoothed,
+                                self->snr_frame);
+  frames->nlm_smoothed = self->snr_frame;
+}
+
+static void denoiser_run_transient(SbSpectralDenoiser* self,
+                                   const float* delayed_spectrum,
+                                   const float* delayed_noise) {
+  // 2.3 Transient Detection via Transient Detector across Critical Bands.
+  // Runs on the ALIGNED (delayed) frame so the transient mask describes the
+  // same frame the gains below modify. Detecting on the current input frame
+  // would fire ~46 ms before the transient is emitted and open gains on the
+  // noise-only frames around it (audible noise pumping at every transient).
+  // A clean signal estimate with scaled-up noise subtraction avoids false
+  // triggering from residual musical noise.
+  bool transient_enabled = (self->parameters.transient_protection_enable != 0);
+  if (!transient_enabled || !self->critical_bands ||
+      !self->transient_detector) {
+    self->is_transient_detected = false;
+    self->transient_intensity = 0.0f;
+    self->transient_protection_active = false;
+    self->transient_hold_remaining = 0U;
+    if (self->critical_bands) {
+      uint32_t bands = get_number_of_critical_bands(self->critical_bands);
+      for (uint32_t b = 0; b < bands; ++b) {
+        self->held_weights[b] = 0.0F;
+      }
+    }
+    memset(self->transient_mask, 0, self->real_spectrum_size * sizeof(float));
+    memset(self->transient_band_mask, 0,
+           self->real_spectrum_size * sizeof(float));
+    return;
+  }
+  const float* delayed_magnitude =
+      get_spectral_feature(self->spectral_features, delayed_spectrum,
+                           self->fft_size, self->spectrum_type);
+  for (uint32_t k = 0U; k < self->real_spectrum_size; ++k) {
+    // Scale noise up using TRANSIENT_CLEAN_NOISE_SCALE to eliminate spurious
+    // noise peaks
+    float clean = fmaxf(
+        delayed_magnitude[k] - (TRANSIENT_CLEAN_NOISE_SCALE * delayed_noise[k]),
+        0.0F);
+    self->clean_magnitude[k] = clean;
+  }
+
+  compute_critical_bands_spectrum(self->critical_bands, self->clean_magnitude,
+                                  self->band_energies);
+  self->is_transient_detected = transient_detector_process(
+      self->transient_detector, self->band_energies, self->onset_weights,
+      &self->transient_intensity);
+
+  // Hold: keep the fired band weights alive (decayed) across the transient
+  // decay tail, so oversubtraction relief outlives the detector's own
+  // trigger window instead of cutting the tail off as soon as the SNR
+  // drops below the trigger.
+  if (self->is_transient_detected) {
+    self->transient_hold_remaining =
+        (self->transient_hold_decay > 0.0F)
+            ? (uint32_t)((TRANSIENT_HOLD_SEC / self->hop_sec) + 0.5F)
+            : 0U;
+  } else if (self->transient_hold_remaining > 0U) {
+    self->transient_hold_remaining--;
+  }
+  self->transient_protection_active =
+      self->is_transient_detected || self->transient_hold_remaining > 0U;
+  uint32_t num_bands = get_number_of_critical_bands(self->critical_bands);
+  for (uint32_t b = 0; b < num_bands; ++b) {
+    self->held_weights[b] =
+        fmaxf(self->onset_weights[b],
+              self->held_weights[b] * self->transient_hold_decay);
+  }
+
+  // Expand held band weights to two per-bin masks:
+  // - transient_band_mask keeps the raw band weight: it only removes
+  //   oversubtraction (alpha -> alpha_min) and shapes smoothing, where the
+  //   Wiener curve itself keeps noise-dominant bins closed.
+  // - transient_mask is additionally scaled by per-bin clean evidence and
+  //   drives the hard gain floor: a band onset must not floor bins whose
+  //   energy is mostly noise (clean estimate ~0 under the scaled
+  //   subtraction), or every transient leaks the noise floor across the
+  //   whole critical band.
+  memset(self->transient_mask, 0, self->real_spectrum_size * sizeof(float));
+  memset(self->transient_band_mask, 0,
+         self->real_spectrum_size * sizeof(float));
+  for (uint32_t b = 0; b < num_bands; ++b) {
+    float bw = self->held_weights[b];
+    if (bw <= 0.0F) {
+      continue;
+    }
+    CriticalBandIndexes idx = get_band_indexes(self->critical_bands, b);
+    uint32_t end = (idx.end_position < self->real_spectrum_size)
+                       ? idx.end_position
+                       : self->real_spectrum_size;
+    for (uint32_t k = idx.start_position; k < end; ++k) {
+      self->transient_band_mask[k] = fmaxf(self->transient_band_mask[k], bw);
+      float evidence = self->clean_magnitude[k] /
+                       (delayed_magnitude[k] + TRANSIENT_BIN_EVIDENCE_EPS);
+      self->transient_mask[k] = fmaxf(self->transient_mask[k], bw * evidence);
+    }
+  }
+}
+
+static void denoiser_run_dispatch(SbSpectralDenoiser* self, float* fft_spectrum,
+                                  const DenoiserAlignedFrames* frames,
+                                  float* gain_a, float* gain_b) {
+  // 3. Denoising Stage: dispatch the active smoothing strategy
+  // both during a runtime mode transition; low-latency is always temporal)
+  if (!self->low_latency && self->in_transition) {
+    const float total = (float)self->transition_frames;
+    const float w = (float)self->transition_pos / total; // 0 → 1
+
+    DenoiserChainFrames frames_in = {
+        .smoothed_magnitude = frames->nlm_smoothed,
+        .noise_bb = frames->noise_bb,
+        .noise_tonal = frames->noise_tonal,
+        .tonal_mask = frames->tonal_mask,
+    };
+    if (is_2d_family(self->previous_mode)) {
+      DenoiserChainOut out_a = {
+          .gain_out = gain_a, .alpha = self->alpha, .beta = self->beta};
+      DenoiserChainOut out_b = {
+          .gain_out = gain_b, .alpha = self->alpha_b, .beta = self->beta_b};
+      (void)run_nlm_chain(self, fft_spectrum, frames_in, 0U, out_a);
+      run_temporal_chain(self, fft_spectrum, frames_in, 1U, out_b);
+    } else {
+      DenoiserChainOut out_a = {
+          .gain_out = gain_a, .alpha = self->alpha, .beta = self->beta};
+      DenoiserChainOut out_b = {
+          .gain_out = gain_b, .alpha = self->alpha_b, .beta = self->beta_b};
+      run_temporal_chain(self, fft_spectrum, frames_in, 0U, out_a);
+      (void)run_nlm_chain(self, fft_spectrum, frames_in, 1U, out_b);
+    }
+
+    for (uint32_t k = 0U; k < self->fft_size; ++k) {
+      gain_a[k] = (gain_a[k] * (1.0F - w)) + (gain_b[k] * w);
+    }
+
+    self->transition_pos++;
+    if (self->transition_pos >= self->transition_frames) {
+      self->active_mode = self->pending_mode;
+      self->in_transition = false;
+      // The incoming chain built its one-pole tonal gain state in slot 1 while
+      // fading in; it now becomes the active chain and reads slot 0.
+      tonal_reducer_promote_gain_slot(self->tonal_reducer);
+    }
+    return;
+  }
+  if (!self->low_latency && is_2d_family(self->active_mode)) {
+    DenoiserChainFrames frames_in = {
+        .smoothed_magnitude = frames->nlm_smoothed,
+        .noise_bb = frames->noise_bb,
+        .noise_tonal = frames->noise_tonal,
+        .tonal_mask = frames->tonal_mask,
+    };
+    DenoiserChainOut out_a = {
+        .gain_out = gain_a, .alpha = self->alpha, .beta = self->beta};
+    (void)run_nlm_chain(self, fft_spectrum, frames_in, 0U, out_a);
+    return;
+  }
+  DenoiserChainFrames frames_in = {
+      .smoothed_magnitude = frames->nlm_smoothed,
+      .noise_bb = frames->noise_bb,
+      .noise_tonal = frames->noise_tonal,
+      .tonal_mask = frames->tonal_mask,
+  };
+  DenoiserChainOut out_a = {
+      .gain_out = gain_a, .alpha = self->alpha, .beta = self->beta};
+  run_temporal_chain(self, fft_spectrum, frames_in, 0U, out_a);
+}
+
 bool spectral_denoiser_run(SpectralProcessorHandle instance,
                            float* fft_spectrum) {
   if (!fft_spectrum || !instance) {
@@ -910,303 +1258,35 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
 
   // Silence bypass: input essentially silent — profile update already done
   // so aggressiveness/threshold stay responsive, but skip the heavy chain.
-  {
-    float max_val = 0.0f;
-    for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
-      if (reference_spectrum[k] > max_val) {
-        max_val = reference_spectrum[k];
-      }
-      if (max_val > 1e-12F) {
-        break;
-      }
-    }
-    if (max_val <= 1e-12F) {
-      // Keep circular buffer aligned as in idle path
-      align_bypass_frame(self, fft_spectrum, reference_spectrum);
-
-      // Safely publish noise spectrum to inactive double buffer via SPSC
-      // atomic release
-      int published_idx =
-          atomic_load_explicit(&self->active_noise_idx, memory_order_relaxed);
-      int write_noise_idx = 1 - published_idx;
-      memcpy(self->noise_spectrum_buffers[write_noise_idx],
-             self->noise_spectrum, self->real_spectrum_size * sizeof(float));
-      atomic_store_explicit(&self->active_noise_idx, write_noise_idx,
-                            memory_order_release);
-
-      return true;
-    }
+  if (denoiser_run_silence_bypass(self, fft_spectrum, reference_spectrum)) {
+    return true;
   }
 
   // 2.2 Align internal state and output to the common delayed frame
   // (skipped in low-latency mode: causal, zero look-ahead)
-  const float* delayed_spectrum = fft_spectrum;
-  const float* delayed_noise = self->noise_spectrum;
-  const float* delayed_noise_bb = self->noise_bb;
-  const float* delayed_noise_tonal = self->noise_tonal;
-  const float* delayed_tonal_mask = tonal_reducer_get_mask(self->tonal_reducer);
-  const float* nlm_smoothed = NULL;
-  if (!self->low_latency) {
-    push_aligned_frame_layers(self, fft_spectrum);
-
-    // Keep both 2D histories warm, even when temporal mode is active.
-    push_filter_histories(self, reference_spectrum);
-
-    const uint32_t nlm_delay = nlm_filter_get_latency_frames(self->nlm_filter);
-
-    // 2D smoothing (runs when a 2D mode is the active or the incoming mode).
-    // The smoothed magnitude is captured explicitly so the temporal chain
-    // cannot overwrite the shared alignment layer before the 2D chain
-    // consumes it.
-    const bool mode_2d_needed =
-        is_2d_family(self->active_mode) ||
-        (self->in_transition && is_2d_family(self->pending_mode));
-    // DFTT refinement follows the DFTT mode: the active chain, or the incoming
-    // side of a temporal crossfade. Rings are pushed on every 2D pass so they
-    // stay warm for instant intra-family flips.
-    const bool use_dftt =
-        (self->active_mode == SPECBLEACH_SMOOTHING_NLM_2D_DFTT) ||
-        (self->in_transition &&
-         self->pending_mode == SPECBLEACH_SMOOTHING_NLM_2D_DFTT);
-    // BM3D source follows the same active/incoming rule; DFTT modes always
-    // read NLM so the refinement rings stay valid.
-    const bool use_bm3d = (self->active_mode == SPECBLEACH_SMOOTHING_BM3D) ||
-                          (self->in_transition &&
-                           self->pending_mode == SPECBLEACH_SMOOTHING_BM3D);
-    const bool filter_ran =
-        mode_2d_needed &&
-        (use_bm3d ? bm3d_filter_process(self->bm3d_filter, self->smoothed_snr)
-                  : nlm_filter_process(self->nlm_filter, self->smoothed_snr));
-
-    // Retrieve unified aligned frames at the common delay
-    delayed_spectrum = spectral_circular_buffer_retrieve(
-        self->circular_buffer, self->layer_fft, nlm_delay);
-    delayed_noise = spectral_circular_buffer_retrieve(
-        self->circular_buffer, self->layer_noise, nlm_delay);
-    delayed_noise_bb = spectral_circular_buffer_retrieve(
-        self->circular_buffer, self->layer_noise_bb, nlm_delay);
-    delayed_noise_tonal = spectral_circular_buffer_retrieve(
-        self->circular_buffer, self->layer_noise_tonal, nlm_delay);
-    delayed_tonal_mask = spectral_circular_buffer_retrieve(
-        self->circular_buffer, self->layer_tonal_mask, nlm_delay);
-
-    if (!delayed_spectrum) {
-      delayed_spectrum = fft_spectrum;
-    }
-    if (!delayed_noise) {
-      delayed_noise = self->noise_spectrum;
-    }
-    if (!delayed_noise_bb) {
-      delayed_noise_bb = self->noise_bb;
-    }
-    if (!delayed_noise_tonal) {
-      delayed_noise_tonal = self->noise_tonal;
-    }
-    if (!delayed_tonal_mask) {
-      delayed_tonal_mask = tonal_reducer_get_mask(self->tonal_reducer);
-    }
-
-    if (filter_ran) {
-      // Noisy SNR row aligned with the 2D-emitted frame, recomputed from the
-      // delayed frames so it describes the same tile the filters just
-      // emitted. Feeds the DFTT rings and the confidence blend below.
-      // Reuses the shared spectral_features scratch (the temporal chain
-      // recomputes it on the same delayed frame anyway).
-      float* delayed_reference =
-          get_spectral_feature(self->spectral_features, delayed_spectrum,
-                               self->fft_size, self->spectrum_type);
-      nlm_filter_calculate_snr(self->nlm_filter, delayed_reference,
-                               delayed_noise_bb, self->snr_delayed);
-      // DFTT post-filter (paper S4.2): the noisy SNR row aligned with the
-      // 2D-emitted frame — recomputed from the delayed frames so both ring
-      // inputs describe the same tile — is refined while the NLM output sets
-      // the suppression threshold. Falls back to the raw NLM output until the
-      // DFTT history is full, or when the active mode is NLM-only.
-      float* post_nlm = self->smoothed_snr;
-      if (self->dftt_filter) {
-        dftt_filter_push(self->dftt_filter, self->snr_delayed,
-                         self->smoothed_snr);
-        if (use_dftt &&
-            dftt_filter_process(self->dftt_filter, self->dftt_snr)) {
-          post_nlm = self->dftt_snr;
-        }
-      }
-      // SNR-confidence blend-back (NLM/BM3D maps only): bins the smoother
-      // itself rates far above the noise floor keep their raw value — map
-      // smoothing drags strong harmonics — while the rest take the smoothed
-      // estimate. Confidence is driven by the smoothed estimate (not the
-      // instantaneous bin: noise spikes must not buy raw passthrough, or
-      // gap suppression regresses). Steep 4th-power weighting
-      // raw_w = e^4/(e^4+crossover^4) with crossover
-      // SMOOTHING_CONFIDENCE_SNR. DFTT-refined output is exempt: its
-      // flicker-suppression contract lives in the bins this blend would
-      // restore to raw. Both post_nlm candidates are self-owned scratch
-      // (the DFTT rings were already pushed), so blend in place.
-      if (post_nlm == self->smoothed_snr) {
-        const float conf_sq =
-            SMOOTHING_CONFIDENCE_SNR * SMOOTHING_CONFIDENCE_SNR;
-        const float conf_4th = conf_sq * conf_sq;
-        const uint32_t blend_n = self->real_spectrum_size;
-        for (uint32_t k = 0U; k < blend_n; k++) {
-          const float e = post_nlm[k];
-          const float e_sq = e * e;
-          const float e_4th = e_sq * e_sq;
-          const float raw_w = e_4th / (e_4th + conf_4th);
-          post_nlm[k] = (raw_w * self->snr_delayed[k]) + ((1.0F - raw_w) * e);
-        }
-      }
-      nlm_filter_reconstruct_magnitude(self->nlm_filter, post_nlm,
-                                       delayed_noise_bb, self->snr_frame);
-      spectral_circular_buffer_push(self->circular_buffer, self->layer_smoothed,
-                                    self->snr_frame);
-      nlm_smoothed = self->snr_frame;
-    }
-  }
+  DenoiserAlignedFrames frames;
+  denoiser_run_2d_pass(self, fft_spectrum, reference_spectrum, &frames);
+  const float* delayed_spectrum = frames.spectrum;
+  const float* delayed_noise = frames.noise;
+  const float* delayed_noise_bb = frames.noise_bb;
+  const float* delayed_noise_tonal = frames.noise_tonal;
+  const float* delayed_tonal_mask = frames.tonal_mask;
+  const float* nlm_smoothed = frames.nlm_smoothed;
+  (void)nlm_smoothed;
 
   // Align output to delayed frame for post-processing
   if (!self->low_latency && delayed_spectrum != fft_spectrum) {
     memcpy(fft_spectrum, delayed_spectrum, self->fft_size * sizeof(float));
   }
 
-  // 2.3 Transient Detection via Transient Detector across Critical Bands.
-  // Runs on the ALIGNED (delayed) frame so the transient mask describes the
-  // same frame the gains below modify. Detecting on the current input frame
-  // would fire ~46 ms before the transient is emitted and open gains on the
-  // noise-only frames around it (audible noise pumping at every transient).
-  // A clean signal estimate with scaled-up noise subtraction avoids false
-  // triggering from residual musical noise.
-  bool transient_enabled = (self->parameters.transient_protection_enable != 0);
-  if (transient_enabled && self->critical_bands && self->transient_detector) {
-    const float* delayed_magnitude =
-        get_spectral_feature(self->spectral_features, delayed_spectrum,
-                             self->fft_size, self->spectrum_type);
-    for (uint32_t k = 0U; k < self->real_spectrum_size; ++k) {
-      // Scale noise up using TRANSIENT_CLEAN_NOISE_SCALE to eliminate spurious
-      // noise peaks
-      float clean = fmaxf(delayed_magnitude[k] -
-                              (TRANSIENT_CLEAN_NOISE_SCALE * delayed_noise[k]),
-                          0.0F);
-      self->clean_magnitude[k] = clean;
-    }
-
-    compute_critical_bands_spectrum(self->critical_bands, self->clean_magnitude,
-                                    self->band_energies);
-    self->is_transient_detected = transient_detector_process(
-        self->transient_detector, self->band_energies, self->onset_weights,
-        &self->transient_intensity);
-
-    // Hold: keep the fired band weights alive (decayed) across the transient
-    // decay tail, so oversubtraction relief outlives the detector's own
-    // trigger window instead of cutting the tail off as soon as the SNR
-    // drops below the trigger.
-    if (self->is_transient_detected) {
-      self->transient_hold_remaining =
-          (self->transient_hold_decay > 0.0F)
-              ? (uint32_t)((TRANSIENT_HOLD_SEC / self->hop_sec) + 0.5F)
-              : 0U;
-    } else if (self->transient_hold_remaining > 0U) {
-      self->transient_hold_remaining--;
-    }
-    self->transient_protection_active =
-        self->is_transient_detected || self->transient_hold_remaining > 0U;
-    uint32_t num_bands = get_number_of_critical_bands(self->critical_bands);
-    for (uint32_t b = 0; b < num_bands; ++b) {
-      self->held_weights[b] =
-          fmaxf(self->onset_weights[b],
-                self->held_weights[b] * self->transient_hold_decay);
-    }
-
-    // Expand held band weights to two per-bin masks:
-    // - transient_band_mask keeps the raw band weight: it only removes
-    //   oversubtraction (alpha -> alpha_min) and shapes smoothing, where the
-    //   Wiener curve itself keeps noise-dominant bins closed.
-    // - transient_mask is additionally scaled by per-bin clean evidence and
-    //   drives the hard gain floor: a band onset must not floor bins whose
-    //   energy is mostly noise (clean estimate ~0 under the scaled
-    //   subtraction), or every transient leaks the noise floor across the
-    //   whole critical band.
-    memset(self->transient_mask, 0, self->real_spectrum_size * sizeof(float));
-    memset(self->transient_band_mask, 0,
-           self->real_spectrum_size * sizeof(float));
-    for (uint32_t b = 0; b < num_bands; ++b) {
-      float bw = self->held_weights[b];
-      if (bw > 0.0F) {
-        CriticalBandIndexes idx = get_band_indexes(self->critical_bands, b);
-        uint32_t end = (idx.end_position < self->real_spectrum_size)
-                           ? idx.end_position
-                           : self->real_spectrum_size;
-        for (uint32_t k = idx.start_position; k < end; ++k) {
-          self->transient_band_mask[k] =
-              fmaxf(self->transient_band_mask[k], bw);
-          float evidence = self->clean_magnitude[k] /
-                           (delayed_magnitude[k] + TRANSIENT_BIN_EVIDENCE_EPS);
-          self->transient_mask[k] =
-              fmaxf(self->transient_mask[k], bw * evidence);
-        }
-      }
-    }
-  } else {
-    self->is_transient_detected = false;
-    self->transient_intensity = 0.0f;
-    self->transient_protection_active = false;
-    self->transient_hold_remaining = 0U;
-    if (self->critical_bands) {
-      uint32_t bands = get_number_of_critical_bands(self->critical_bands);
-      for (uint32_t b = 0; b < bands; ++b) {
-        self->held_weights[b] = 0.0F;
-      }
-    }
-    memset(self->transient_mask, 0, self->real_spectrum_size * sizeof(float));
-    memset(self->transient_band_mask, 0,
-           self->real_spectrum_size * sizeof(float));
-  }
+  denoiser_run_transient(self, delayed_spectrum, delayed_noise);
 
   // 3. Denoising Stage: dispatch the active smoothing strategy
   // both during a runtime mode transition; low-latency is always temporal)
   float* gain_a = self->gain_spectrum;
   float* gain_b = self->gain_spectrum_b;
 
-  if (!self->low_latency && self->in_transition) {
-    const float total = (float)self->transition_frames;
-    const float w = (float)self->transition_pos / total; // 0 → 1
-
-    if (is_2d_family(self->previous_mode)) {
-      (void)run_nlm_chain(self, fft_spectrum, nlm_smoothed, delayed_noise_bb,
-                          delayed_noise_tonal, delayed_tonal_mask, 0U, gain_a,
-                          self->alpha, self->beta);
-      run_temporal_chain(self, fft_spectrum, delayed_noise_bb,
-                         delayed_noise_tonal, delayed_tonal_mask, 1U, gain_b,
-                         self->alpha_b, self->beta_b);
-    } else {
-      run_temporal_chain(self, fft_spectrum, delayed_noise_bb,
-                         delayed_noise_tonal, delayed_tonal_mask, 0U, gain_a,
-                         self->alpha, self->beta);
-      (void)run_nlm_chain(self, fft_spectrum, nlm_smoothed, delayed_noise_bb,
-                          delayed_noise_tonal, delayed_tonal_mask, 1U, gain_b,
-                          self->alpha_b, self->beta_b);
-    }
-
-    for (uint32_t k = 0U; k < self->fft_size; ++k) {
-      gain_a[k] = (gain_a[k] * (1.0F - w)) + (gain_b[k] * w);
-    }
-
-    self->transition_pos++;
-    if (self->transition_pos >= self->transition_frames) {
-      self->active_mode = self->pending_mode;
-      self->in_transition = false;
-      // The incoming chain built its one-pole tonal gain state in slot 1 while
-      // fading in; it now becomes the active chain and reads slot 0.
-      tonal_reducer_promote_gain_slot(self->tonal_reducer);
-    }
-  } else if (!self->low_latency && is_2d_family(self->active_mode)) {
-    (void)run_nlm_chain(self, fft_spectrum, nlm_smoothed, delayed_noise_bb,
-                        delayed_noise_tonal, delayed_tonal_mask, 0U, gain_a,
-                        self->alpha, self->beta);
-  } else {
-    run_temporal_chain(self, fft_spectrum, delayed_noise_bb,
-                       delayed_noise_tonal, delayed_tonal_mask, 0U, gain_a,
-                       self->alpha, self->beta);
-  }
+  denoiser_run_dispatch(self, fft_spectrum, &frames, gain_a, gain_b);
 
   // 4. Post-Processing: Final gain management and mixing
   DenoiserPostProcessParams post_params = {
@@ -1254,11 +1334,15 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
  * gain is unity and the min() is a no-op.
  */
 static bool run_nlm_chain(SbSpectralDenoiser* self, const float* fft_spectrum,
-                          const float* smoothed_magnitude,
-                          const float* delayed_noise_bb,
-                          const float* delayed_noise_tonal,
-                          const float* delayed_tonal_mask, uint32_t slot,
-                          float* gain_out, float* alpha, float* beta) {
+                          DenoiserChainFrames frames, uint32_t slot,
+                          DenoiserChainOut out) {
+  const float* smoothed_magnitude = frames.smoothed_magnitude;
+  const float* delayed_noise_bb = frames.noise_bb;
+  const float* delayed_noise_tonal = frames.noise_tonal;
+  const float* delayed_tonal_mask = frames.tonal_mask;
+  float* gain_out = out.gain_out;
+  float* alpha = out.alpha;
+  float* beta = out.beta;
   if (!smoothed_magnitude) {
     smoothed_magnitude = spectral_circular_buffer_retrieve(
         self->circular_buffer, self->layer_smoothed, 0U);
@@ -1335,15 +1419,13 @@ static bool run_nlm_chain(SbSpectralDenoiser* self, const float* fft_spectrum,
  * shift of the legacy 1D output). Pre-subtraction magnitude smoothing, then
  * suppression/masking/gain, then temporal + spatial gain smoothing.
  */
-static void run_temporal_chain(SbSpectralDenoiser* self,
-                               const float* delayed_fft,
-                               const float* delayed_noise_bb,
-                               const float* delayed_noise_tonal,
-                               const float* delayed_tonal_mask, uint32_t slot,
-                               float* gain_out, float* alpha, float* beta) {
+static void temporal_prepare_magnitude(SbSpectralDenoiser* self,
+                                       const float* delayed_fft,
+                                       const float** effective_magnitude,
+                                       const float** delayed_magnitude) {
   // Extract magnitude of the delayed frame (reuses the spectral features
   // buffer; the current-frame reference spectrum is no longer needed here)
-  const float* delayed_magnitude =
+  *delayed_magnitude =
       get_spectral_feature(self->spectral_features, delayed_fft, self->fft_size,
                            self->spectrum_type);
 
@@ -1353,55 +1435,53 @@ static void run_temporal_chain(SbSpectralDenoiser* self,
   // Gated on smoothing: slider 0 must stay a pristine raw-magnitude bypass.
   // Transient bins are spared bin-by-bin during gain calculation and time
   // smoothing.
-  const float* effective_magnitude;
-
-  if (self->parameters.smoothing_factor > 0.0F) {
-    if (!self->smoothed_magnitude_seeded) {
-      memcpy(self->smoothed_magnitude, delayed_magnitude,
-             self->real_spectrum_size * sizeof(float));
-      self->smoothed_magnitude_seeded = true;
-    } else {
-      const float stabilization_alpha =
-          expf(-1.0F / (float)SPECTRAL_STABILIZATION_HOPS);
-
-      for (uint32_t k = 0U; k < self->real_spectrum_size; ++k) {
-        float raw = delayed_magnitude[k];
-        float prev = self->smoothed_magnitude[k];
-        // Bin-by-bin adaptive smoothing: open immediately on transient bins
-        // while keeping full smoothing elsewhere
-        float t_w = self->transient_band_mask[k];
-        float adapt_alpha = (1.0F - t_w) * stabilization_alpha;
-        self->smoothed_magnitude[k] =
-            (adapt_alpha * prev) + ((1.0F - adapt_alpha) * raw);
-      }
-    }
-
-    int spatial_passes = (int)(self->parameters.smoothing_factor * 2.0F);
-    for (int p = 0; p < spatial_passes; ++p) {
-      spectral_smoothing_apply_spatial(self->smoothed_magnitude,
-                                       self->real_spectrum_size);
-    }
-
-    effective_magnitude = self->smoothed_magnitude;
-
-    // Adaptive release shaping: bands whose recent-energy envelope collapses
-    // close fast (no spectral ghosts on the residual); the rest keep the full
-    // slider release (anti-chirp protection in noise-only stretches)
-    release_shaper_compute(self->release_shaper, effective_magnitude,
-                           self->release_scale);
-  } else {
+  if (self->parameters.smoothing_factor <= 0.0F) {
     // Pristine bypass: raw magnitude everywhere, no smoothing state
-    memcpy(self->smoothed_magnitude, delayed_magnitude,
+    memcpy(self->smoothed_magnitude, *delayed_magnitude,
            self->real_spectrum_size * sizeof(float));
     self->smoothed_magnitude_seeded = false;
-    effective_magnitude = self->smoothed_magnitude;
+    *effective_magnitude = self->smoothed_magnitude;
+    return;
+  }
+  if (!self->smoothed_magnitude_seeded) {
+    memcpy(self->smoothed_magnitude, *delayed_magnitude,
+           self->real_spectrum_size * sizeof(float));
+    self->smoothed_magnitude_seeded = true;
+  } else {
+    const float stabilization_alpha =
+        expf(-1.0F / (float)SPECTRAL_STABILIZATION_HOPS);
+
+    for (uint32_t k = 0U; k < self->real_spectrum_size; ++k) {
+      float raw = (*delayed_magnitude)[k];
+      float prev = self->smoothed_magnitude[k];
+      // Bin-by-bin adaptive smoothing: open immediately on transient bins
+      // while keeping full smoothing elsewhere
+      float t_w = self->transient_band_mask[k];
+      float adapt_alpha = (1.0F - t_w) * stabilization_alpha;
+      self->smoothed_magnitude[k] =
+          (adapt_alpha * prev) + ((1.0F - adapt_alpha) * raw);
+    }
   }
 
-  // Publish the smoothed magnitude so a pending switch to NLM starts from an
-  // aligned frame
-  spectral_circular_buffer_push(self->circular_buffer, self->layer_smoothed,
-                                self->smoothed_magnitude);
+  int spatial_passes = (int)(self->parameters.smoothing_factor * 2.0F);
+  for (int p = 0; p < spatial_passes; ++p) {
+    spectral_smoothing_apply_spatial(self->smoothed_magnitude,
+                                     self->real_spectrum_size);
+  }
 
+  *effective_magnitude = self->smoothed_magnitude;
+
+  // Adaptive release shaping: bands whose recent-energy envelope collapses
+  // close fast (no spectral ghosts on the residual); the rest keep the full
+  // slider release (anti-chirp protection in noise-only stretches)
+  release_shaper_compute(self->release_shaper, *effective_magnitude,
+                         self->release_scale);
+}
+
+static void temporal_apply_suppression(SbSpectralDenoiser* self,
+                                       const float* effective_magnitude,
+                                       DenoiserChainFrames frames,
+                                       DenoiserChainOut out) {
   // Calculate SNR-dependent oversubtraction factors (Alpha/Beta) on the
   // broadband profile: tonal noise no longer depresses the per-bin SNR here.
   SuppressionParameters suppression_params = {
@@ -1409,22 +1489,22 @@ static void run_temporal_chain(SbSpectralDenoiser* self,
       .strength = self->parameters.suppression_strength,
       .undersubtraction = 0.0F};
   suppression_engine_calculate(self->suppression_engine, effective_magnitude,
-                               delayed_noise_bb, suppression_params, alpha,
-                               beta);
+                               frames.noise_bb, suppression_params, out.alpha,
+                               out.beta);
 #if TONAL_DUAL_PATH
   // Apply Structural Veto on the broadband profile. The tonal notch lives in
   // its own parallel gain path, so the veto can no longer partially undo a
   // tonal alpha boost (sequential order-dependence removed).
-  masking_veto_apply(self->masking_veto, effective_magnitude, delayed_noise_bb,
-                     NULL, alpha, self->parameters.masking_depth);
+  masking_veto_apply(self->masking_veto, effective_magnitude, frames.noise_bb,
+                     NULL, out.alpha, self->parameters.masking_depth);
 #else
   // Legacy coupled path: tonal alpha boost applied inline BEFORE the veto,
   // so the veto can partially undo the boost at masked bins (the coupled
   // behavior under measurement).
-  tonal_reducer_apply_alpha_boost(self->tonal_reducer, alpha,
+  tonal_reducer_apply_alpha_boost(self->tonal_reducer, out.alpha,
                                   self->parameters.tonal_reduction);
-  masking_veto_apply(self->masking_veto, effective_magnitude, delayed_noise_bb,
-                     NULL, alpha, self->parameters.masking_depth);
+  masking_veto_apply(self->masking_veto, effective_magnitude, frames.noise_bb,
+                     NULL, out.alpha, self->parameters.masking_depth);
 #endif
 #if !TRANSIENT_RELIEF_PARALLEL
   // When transients are detected and enabled, drop alphas firmly to ALPHA_MIN
@@ -1435,39 +1515,49 @@ static void run_temporal_chain(SbSpectralDenoiser* self,
       float t_weight = self->transient_band_mask[k];
       if (t_weight > 0.0F) {
         float prot_factor = sqrtf(t_weight);
-        alpha[k] =
-            (alpha[k] * (1.0F - prot_factor)) + (ALPHA_MIN * prot_factor);
-        alpha[k] = fmaxf(ALPHA_MIN, alpha[k]);
+        out.alpha[k] =
+            (out.alpha[k] * (1.0F - prot_factor)) + (ALPHA_MIN * prot_factor);
+        out.alpha[k] = fmaxf(ALPHA_MIN, out.alpha[k]);
       }
     }
   }
 #endif
+}
 
+static void temporal_compute_knee(SbSpectralDenoiser* self,
+                                  const float* effective_magnitude,
+                                  const float* delayed_magnitude,
+                                  const float* delayed_noise_bb) {
   // Signal-dependent knee width: bins decaying from recent signal presence
   // (stabilized energy above the current raw hop) get a wider knee so weak
   // component tails are forgiven instead of cut; steady or rising bins keep
   // the base knee. Pristine bypass keeps a zero knee everywhere.
-  if (self->parameters.smoothing_factor > 0.0F) {
-    for (uint32_t k = 0U; k < self->real_spectrum_size; ++k) {
-      float decay_evidence = 0.0F;
-      if (delayed_noise_bb[k] > FLT_MIN) {
-        decay_evidence = (effective_magnitude[k] - delayed_magnitude[k]) /
-                         delayed_noise_bb[k];
-      }
-      self->knee_spectrum[k] =
-          GAIN_WIENER_KNEE +
-          (GAIN_KNEE_DECAY_BOOST *
-           fminf(1.0F, fmaxf(0.0F, decay_evidence) / GAIN_KNEE_DECAY_RANGE));
-    }
-  } else {
+  if (self->parameters.smoothing_factor <= 0.0F) {
     memset(self->knee_spectrum, 0, self->real_spectrum_size * sizeof(float));
+    return;
   }
+  for (uint32_t k = 0U; k < self->real_spectrum_size; ++k) {
+    float decay_evidence = 0.0F;
+    if (delayed_noise_bb[k] > FLT_MIN) {
+      decay_evidence =
+          (effective_magnitude[k] - delayed_magnitude[k]) / delayed_noise_bb[k];
+    }
+    self->knee_spectrum[k] =
+        GAIN_WIENER_KNEE +
+        (GAIN_KNEE_DECAY_BOOST *
+         fminf(1.0F, fmaxf(0.0F, decay_evidence) / GAIN_KNEE_DECAY_RANGE));
+  }
+}
 
+static void temporal_compute_gains(SbSpectralDenoiser* self,
+                                   const float* effective_magnitude,
+                                   DenoiserChainFrames frames,
+                                   DenoiserChainOut out) {
   // Gain Calculation on the broadband profile only: the temporal/spatial
   // smoothers below therefore never see a stationary tonal notch carved into
   // their gain field.
   calculate_gains(self->real_spectrum_size, self->fft_size, effective_magnitude,
-                  delayed_noise_bb, gain_out, alpha, beta,
+                  frames.noise_bb, out.gain_out, out.alpha, out.beta,
                   self->gain_calculation_type, self->knee_spectrum);
 
 #if TRANSIENT_RELIEF_PARALLEL
@@ -1478,13 +1568,14 @@ static void run_temporal_chain(SbSpectralDenoiser* self,
   // curve is nonlinear in alpha, and the shared alpha is no longer mutated.
   if (self->transient_protection_active) {
     calculate_gains(self->real_spectrum_size, self->fft_size,
-                    effective_magnitude, delayed_noise_bb, self->gain_relief,
-                    self->alpha_relief, beta, self->gain_calculation_type,
+                    effective_magnitude, frames.noise_bb, self->gain_relief,
+                    self->alpha_relief, out.beta, self->gain_calculation_type,
                     self->knee_spectrum);
     for (uint32_t k = 0U; k < self->real_spectrum_size; ++k) {
       const float pf = sqrtf(self->transient_band_mask[k]);
       if (pf > 0.0F) {
-        gain_out[k] = ((1.0F - pf) * gain_out[k]) + (pf * self->gain_relief[k]);
+        out.gain_out[k] =
+            ((1.0F - pf) * out.gain_out[k]) + (pf * self->gain_relief[k]);
       }
     }
   }
@@ -1495,11 +1586,14 @@ static void run_temporal_chain(SbSpectralDenoiser* self,
     for (uint32_t k = 0U; k < self->real_spectrum_size; ++k) {
       float t_weight = self->transient_mask[k];
       if (t_weight > 0.0F) {
-        gain_out[k] = fmaxf(gain_out[k], t_weight);
+        out.gain_out[k] = fmaxf(out.gain_out[k], t_weight);
       }
     }
   }
+}
 
+static void temporal_smooth_gains(SbSpectralDenoiser* self,
+                                  DenoiserChainOut out) {
   // Temporal gain smoothing: on detected transients, the time smoother
   // attacks instantly (0 attack time) strictly on transient bins, while
   // non-transient bins receive 100% of full time smoothing. The release is
@@ -1521,25 +1615,35 @@ static void run_temporal_chain(SbSpectralDenoiser* self,
                                : NULL, // Unused while bypassed
       };
   spectral_smoothing_run(self->spectrum_smoothing,
-                         spectral_smoothing_parameters, gain_out);
+                         spectral_smoothing_parameters, out.gain_out);
   if (self->parameters.smoothing_factor > 0.0f) {
     int passes = 1 + (int)(self->parameters.smoothing_factor * 2.0f);
     for (int p = 0; p < passes; ++p) {
-      spectral_smoothing_apply_spatial(gain_out, self->real_spectrum_size);
+      spectral_smoothing_apply_spatial(out.gain_out, self->real_spectrum_size);
     }
   }
+}
 
+static void temporal_apply_tonal_min(SbSpectralDenoiser* self, uint32_t slot,
+                                     const float* effective_magnitude,
+                                     DenoiserChainFrames frames,
+                                     DenoiserChainOut out) {
   // Parallel tonal gain path + decision criterion, applied AFTER the
   // time/spatial smoothers: the notch enters the final gain at full depth
   // without being smeared into neighbors by the spatial FIR, and the
   // smoother state is never dragged around by mask flicker.
 #if TONAL_DUAL_PATH
   tonal_reducer_compute_tonal_gains(
-      self->tonal_reducer, slot, effective_magnitude, delayed_noise_tonal,
-      delayed_tonal_mask, self->parameters.tonal_reduction, self->gain_tonal);
+      self->tonal_reducer, slot, effective_magnitude, frames.noise_tonal,
+      frames.tonal_mask, self->parameters.tonal_reduction, self->gain_tonal);
   for (uint32_t k = 0U; k < self->real_spectrum_size; ++k) {
-    gain_out[k] = fminf(gain_out[k], self->gain_tonal[k]);
+    out.gain_out[k] = fminf(out.gain_out[k], self->gain_tonal[k]);
   }
+#else
+  (void)slot;
+  (void)effective_magnitude;
+  (void)frames;
+  (void)out;
 #endif
 
   // Transient Protection re-asserted after the combine: a band onset must
@@ -1551,10 +1655,33 @@ static void run_temporal_chain(SbSpectralDenoiser* self,
     for (uint32_t k = 0U; k < self->real_spectrum_size; ++k) {
       float t_weight = self->transient_mask[k];
       if (t_weight > 0.0F) {
-        gain_out[k] = fmaxf(gain_out[k], t_weight);
+        out.gain_out[k] = fmaxf(out.gain_out[k], t_weight);
       }
     }
   }
+}
+static void run_temporal_chain(SbSpectralDenoiser* self,
+                               const float* delayed_fft,
+                               DenoiserChainFrames frames, uint32_t slot,
+                               DenoiserChainOut out) {
+  const float* delayed_noise_bb = frames.noise_bb;
+
+  const float* effective_magnitude = NULL;
+  const float* delayed_magnitude = NULL;
+  temporal_prepare_magnitude(self, delayed_fft, &effective_magnitude,
+                             &delayed_magnitude);
+
+  // Publish the smoothed magnitude so a pending switch to NLM starts from an
+  // aligned frame
+  spectral_circular_buffer_push(self->circular_buffer, self->layer_smoothed,
+                                self->smoothed_magnitude);
+
+  temporal_apply_suppression(self, effective_magnitude, frames, out);
+  temporal_compute_knee(self, effective_magnitude, delayed_magnitude,
+                        delayed_noise_bb);
+  temporal_compute_gains(self, effective_magnitude, frames, out);
+  temporal_smooth_gains(self, out);
+  temporal_apply_tonal_min(self, slot, effective_magnitude, frames, out);
 }
 
 const float* spectral_denoiser_get_tonal_mask(
