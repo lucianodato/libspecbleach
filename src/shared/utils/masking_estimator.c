@@ -47,36 +47,48 @@ static float evaluate_spreading_gain(float dz, const SpreadingParams* params);
 static float compute_tonality_factor(MaskingEstimator* self,
                                      const float* spectrum, uint32_t band);
 
-struct MaskingEstimator {
+typedef struct MaskingConfig {
   uint32_t fft_size;
   uint32_t sample_rate;
+  uint32_t number_critical_bands;
+  uint32_t real_spectrum_size;
+  float spectral_additivity_exponent;
+  bool use_temporal_masking;
+  float backward_decay;
+  bool absolute_threshold_enabled;
+} MaskingConfig;
 
+typedef struct MaskingOwned {
   AbsoluteHearingThresholds* reference_spectrum;
   CriticalBands* critical_bands;
   CriticalBandIndexes band_indexes;
+} MaskingOwned;
 
-  uint32_t number_critical_bands;
-  uint32_t real_spectrum_size;
-
+typedef struct MaskingState {
   float* critical_bands_spectrum;
   float* critical_bands_reference_spectrum;
   float* spreading_matrix; // Matrix for simultaneous masking
   float* masking_offset;
   float* previous_thresholds;
   float* forward_decays;
-  float spectral_additivity_exponent;
-  bool use_temporal_masking;
-  float backward_decay;
   float* future_thresholds;
-  bool absolute_threshold_enabled;
   float* absolute_threshold_cb;
+} MaskingState;
 
+typedef struct MaskingScratch {
   // Temporary buffers to avoid VLAs and stack overflows
   float* future_cb_spectrum_buf;
   float* bark_levels_buf;
   float* spreaded_future_buf;
   float* spreaded_current_buf;
   SpreadingParams* spreading_params_buf;
+} MaskingScratch;
+
+struct MaskingEstimator {
+  MaskingConfig config;
+  MaskingOwned owned;
+  MaskingState state;
+  MaskingScratch scratch;
 };
 
 MaskingEstimator* masking_estimation_initialize(
@@ -91,63 +103,65 @@ MaskingEstimator* masking_estimation_initialize(
     return NULL;
   }
 
-  self->fft_size = fft_size;
-  self->real_spectrum_size = (self->fft_size / 2U) + 1U;
-  self->sample_rate = sample_rate;
+  self->config.fft_size = fft_size;
+  self->config.real_spectrum_size = (self->config.fft_size / 2U) + 1U;
+  self->config.sample_rate = sample_rate;
 
-  self->critical_bands = critical_bands_initialize(
-      self->sample_rate, self->fft_size, critical_band_type);
-  if (!self->critical_bands) {
+  self->owned.critical_bands = critical_bands_initialize(
+      self->config.sample_rate, self->config.fft_size, critical_band_type);
+  if (!self->owned.critical_bands) {
     masking_estimation_free(self);
     return NULL;
   }
-  self->number_critical_bands =
-      get_number_of_critical_bands(self->critical_bands);
+  self->config.number_critical_bands =
+      get_number_of_critical_bands(self->owned.critical_bands);
 
-  self->critical_bands_spectrum =
-      (float*)calloc(self->number_critical_bands, sizeof(float));
-  self->critical_bands_reference_spectrum =
-      (float*)calloc(self->number_critical_bands, sizeof(float));
-  self->spreading_matrix = (float*)calloc(
-      (size_t)self->number_critical_bands * (size_t)self->number_critical_bands,
-      sizeof(float));
-  self->masking_offset =
-      (float*)calloc(self->number_critical_bands, sizeof(float));
-  self->previous_thresholds =
-      (float*)calloc(self->number_critical_bands, sizeof(float));
-  self->future_thresholds =
-      (float*)calloc(self->number_critical_bands, sizeof(float));
-  self->forward_decays =
-      (float*)calloc(self->number_critical_bands, sizeof(float));
-  self->absolute_threshold_cb =
-      (float*)calloc(self->number_critical_bands, sizeof(float));
+  self->state.critical_bands_spectrum =
+      (float*)calloc(self->config.number_critical_bands, sizeof(float));
+  self->state.critical_bands_reference_spectrum =
+      (float*)calloc(self->config.number_critical_bands, sizeof(float));
+  self->state.spreading_matrix =
+      (float*)calloc((size_t)self->config.number_critical_bands *
+                         (size_t)self->config.number_critical_bands,
+                     sizeof(float));
+  self->state.masking_offset =
+      (float*)calloc(self->config.number_critical_bands, sizeof(float));
+  self->state.previous_thresholds =
+      (float*)calloc(self->config.number_critical_bands, sizeof(float));
+  self->state.future_thresholds =
+      (float*)calloc(self->config.number_critical_bands, sizeof(float));
+  self->state.forward_decays =
+      (float*)calloc(self->config.number_critical_bands, sizeof(float));
+  self->state.absolute_threshold_cb =
+      (float*)calloc(self->config.number_critical_bands, sizeof(float));
 
-  self->future_cb_spectrum_buf =
-      (float*)calloc(self->number_critical_bands, sizeof(float));
-  self->bark_levels_buf =
-      (float*)calloc(self->number_critical_bands, sizeof(float));
-  self->spreaded_future_buf =
-      (float*)calloc(self->number_critical_bands, sizeof(float));
-  self->spreaded_current_buf =
-      (float*)calloc(self->number_critical_bands, sizeof(float));
-  self->spreading_params_buf = (SpreadingParams*)calloc(
-      self->number_critical_bands, sizeof(SpreadingParams));
+  self->scratch.future_cb_spectrum_buf =
+      (float*)calloc(self->config.number_critical_bands, sizeof(float));
+  self->scratch.bark_levels_buf =
+      (float*)calloc(self->config.number_critical_bands, sizeof(float));
+  self->scratch.spreaded_future_buf =
+      (float*)calloc(self->config.number_critical_bands, sizeof(float));
+  self->scratch.spreaded_current_buf =
+      (float*)calloc(self->config.number_critical_bands, sizeof(float));
+  self->scratch.spreading_params_buf = (SpreadingParams*)calloc(
+      self->config.number_critical_bands, sizeof(SpreadingParams));
 
-  self->reference_spectrum = absolute_hearing_thresholds_initialize(
-      self->sample_rate, self->fft_size, spectrum_type);
+  self->owned.reference_spectrum = absolute_hearing_thresholds_initialize(
+      self->config.sample_rate, self->config.fft_size, spectrum_type);
 
-  self->spectral_additivity_exponent = SPECTRAL_ADDITIVITY_EXPONENT_PEAQ;
-  self->use_temporal_masking = use_temporal_masking;
-  self->absolute_threshold_enabled = use_absolute_threshold;
+  self->config.spectral_additivity_exponent = SPECTRAL_ADDITIVITY_EXPONENT_PEAQ;
+  self->config.use_temporal_masking = use_temporal_masking;
+  self->config.absolute_threshold_enabled = use_absolute_threshold;
 
-  if (!self->critical_bands_spectrum ||
-      !self->critical_bands_reference_spectrum || !self->spreading_matrix ||
-      !self->masking_offset || !self->previous_thresholds ||
-      !self->future_thresholds || !self->forward_decays ||
-      !self->absolute_threshold_cb || !self->future_cb_spectrum_buf ||
-      !self->bark_levels_buf || !self->spreaded_future_buf ||
-      !self->spreaded_current_buf || !self->spreading_params_buf ||
-      !self->reference_spectrum) {
+  if (!self->state.critical_bands_spectrum ||
+      !self->state.critical_bands_reference_spectrum ||
+      !self->state.spreading_matrix || !self->state.masking_offset ||
+      !self->state.previous_thresholds || !self->state.future_thresholds ||
+      !self->state.forward_decays || !self->state.absolute_threshold_cb ||
+      !self->scratch.future_cb_spectrum_buf || !self->scratch.bark_levels_buf ||
+      !self->scratch.spreaded_future_buf ||
+      !self->scratch.spreaded_current_buf ||
+      !self->scratch.spreading_params_buf || !self->owned.reference_spectrum) {
     masking_estimation_free(self);
     return NULL;
   }
@@ -158,54 +172,54 @@ MaskingEstimator* masking_estimation_initialize(
   const float hop_time = (float)fft_size / (4.0F * (float)sample_rate);
 
   // Frequency-dependent forward masking (Low: 100ms, High: 25ms)
-  for (uint32_t j = 0U; j < self->number_critical_bands; j++) {
+  for (uint32_t j = 0U; j < self->config.number_critical_bands; j++) {
     const float bark = fminf((float)j, 24.0F);
     const float weight = bark / 24.0F; // 0 to 1
     const float tau = ((1.0F - weight) * FORWARD_MASKING_TAU_LOW_SEC) +
                       (weight * FORWARD_MASKING_TAU_HIGH_SEC);
-    self->forward_decays[j] = expf(-hop_time / tau);
+    self->state.forward_decays[j] = expf(-hop_time / tau);
   }
 
   // Backward masking (10ms) remains constant across frequency
-  self->backward_decay = expf(-hop_time / BACKWARD_MASKING_TAU_SEC);
+  self->config.backward_decay = expf(-hop_time / BACKWARD_MASKING_TAU_SEC);
 
   return self;
 }
 
 void masking_estimation_set_hop_sec(MaskingEstimator* self, float hop_sec) {
-  if (!self || !(hop_sec > 0.0F) || !self->forward_decays) {
+  if (!self || !(hop_sec > 0.0F) || !self->state.forward_decays) {
     return;
   }
-  for (uint32_t j = 0U; j < self->number_critical_bands; j++) {
+  for (uint32_t j = 0U; j < self->config.number_critical_bands; j++) {
     const float bark = fminf((float)j, 24.0F);
     const float weight = bark / 24.0F;
     const float tau = ((1.0F - weight) * FORWARD_MASKING_TAU_LOW_SEC) +
                       (weight * FORWARD_MASKING_TAU_HIGH_SEC);
-    self->forward_decays[j] = expf(-hop_sec / tau);
+    self->state.forward_decays[j] = expf(-hop_sec / tau);
   }
-  self->backward_decay = expf(-hop_sec / BACKWARD_MASKING_TAU_SEC);
+  self->config.backward_decay = expf(-hop_sec / BACKWARD_MASKING_TAU_SEC);
 }
 
 void masking_estimation_free(MaskingEstimator* self) {
   if (!self) {
     return;
   }
-  absolute_hearing_thresholds_free(self->reference_spectrum);
-  critical_bands_free(self->critical_bands);
+  absolute_hearing_thresholds_free(self->owned.reference_spectrum);
+  critical_bands_free(self->owned.critical_bands);
 
-  free(self->critical_bands_spectrum);
-  free(self->critical_bands_reference_spectrum);
-  free(self->spreading_matrix);
-  free(self->masking_offset);
-  free(self->previous_thresholds);
-  free(self->future_thresholds);
-  free(self->forward_decays);
-  free(self->absolute_threshold_cb);
-  free(self->future_cb_spectrum_buf);
-  free(self->bark_levels_buf);
-  free(self->spreaded_future_buf);
-  free(self->spreaded_current_buf);
-  free(self->spreading_params_buf);
+  free(self->state.critical_bands_spectrum);
+  free(self->state.critical_bands_reference_spectrum);
+  free(self->state.spreading_matrix);
+  free(self->state.masking_offset);
+  free(self->state.previous_thresholds);
+  free(self->state.future_thresholds);
+  free(self->state.forward_decays);
+  free(self->state.absolute_threshold_cb);
+  free(self->scratch.future_cb_spectrum_buf);
+  free(self->scratch.bark_levels_buf);
+  free(self->scratch.spreaded_future_buf);
+  free(self->scratch.spreaded_current_buf);
+  free(self->scratch.spreading_params_buf);
 
   free(self);
 }
@@ -217,37 +231,39 @@ bool compute_masking_thresholds(MaskingEstimator* self, const float* spectrum,
     return false;
   }
 
-  compute_critical_bands_spectrum(self->critical_bands, spectrum,
-                                  self->critical_bands_spectrum);
+  compute_critical_bands_spectrum(self->owned.critical_bands, spectrum,
+                                  self->state.critical_bands_spectrum);
 
-  const float spectral_p = self->spectral_additivity_exponent;
+  const float spectral_p = self->config.spectral_additivity_exponent;
   const float spectral_inv_p = 1.0F / spectral_p;
 
   // 1. Calculate spreaded future spectrum (Frequency Masking only)
   if (future_spectrum) {
-    compute_critical_bands_spectrum(self->critical_bands, future_spectrum,
-                                    self->future_cb_spectrum_buf);
+    compute_critical_bands_spectrum(self->owned.critical_bands, future_spectrum,
+                                    self->scratch.future_cb_spectrum_buf);
 
-    for (uint32_t j = 0U; j < self->number_critical_bands; j++) {
-      self->bark_levels_buf[j] =
-          (10.F * log10f(self->future_cb_spectrum_buf[j] + SPECTRAL_EPSILON)) +
+    for (uint32_t j = 0U; j < self->config.number_critical_bands; j++) {
+      self->scratch.bark_levels_buf[j] =
+          (10.F *
+           log10f(self->scratch.future_cb_spectrum_buf[j] + SPECTRAL_EPSILON)) +
           DB_FS_TO_SPL_REF;
-      self->spreading_params_buf[j] =
-          compute_spreading_params(self->bark_levels_buf[j]);
+      self->scratch.spreading_params_buf[j] =
+          compute_spreading_params(self->scratch.bark_levels_buf[j]);
     }
 
-    for (uint32_t i = 0U; i < self->number_critical_bands; i++) {
+    for (uint32_t i = 0U; i < self->config.number_critical_bands; i++) {
       float spreaded_p = 0.F;
-      for (uint32_t j = 0U; j < self->number_critical_bands; j++) {
+      for (uint32_t j = 0U; j < self->config.number_critical_bands; j++) {
         const float dz = (float)i - (float)j;
         const float gain =
-            evaluate_spreading_gain(dz, &self->spreading_params_buf[j]);
-        spreaded_p += powf(self->future_cb_spectrum_buf[j] * gain, spectral_p);
+            evaluate_spreading_gain(dz, &self->scratch.spreading_params_buf[j]);
+        spreaded_p +=
+            powf(self->scratch.future_cb_spectrum_buf[j] * gain, spectral_p);
       }
-      self->spreaded_future_buf[i] = powf(spreaded_p, spectral_inv_p);
+      self->scratch.spreaded_future_buf[i] = powf(spreaded_p, spectral_inv_p);
     }
 
-    for (uint32_t j = 0U; j < self->number_critical_bands; j++) {
+    for (uint32_t j = 0U; j < self->config.number_critical_bands; j++) {
       const float tonality_factor =
           compute_tonality_factor(self, future_spectrum, j);
       const float bark_idx = fminf((float)(j + 1), 25.0F);
@@ -256,78 +272,85 @@ bool compute_masking_thresholds(MaskingEstimator* self, const float* spectrum,
       const float offset = (tonality_factor * (TMN_OFFSET_BASE + bark_idx)) +
                            (NMT_OFFSET_DB * (1.F - tonality_factor));
 
-      self->future_thresholds[j] =
-          powf(10.F, (log10f(self->spreaded_future_buf[j] + SPECTRAL_EPSILON) -
-                      (offset / 10.F)));
+      self->state.future_thresholds[j] = powf(
+          10.F,
+          (log10f(self->scratch.spreaded_future_buf[j] + SPECTRAL_EPSILON) -
+           (offset / 10.F)));
     }
   }
 
-  for (uint32_t j = 0U; j < self->number_critical_bands; j++) {
-    self->bark_levels_buf[j] =
-        (10.F * log10f(self->critical_bands_spectrum[j] + SPECTRAL_EPSILON)) +
+  for (uint32_t j = 0U; j < self->config.number_critical_bands; j++) {
+    self->scratch.bark_levels_buf[j] =
+        (10.F *
+         log10f(self->state.critical_bands_spectrum[j] + SPECTRAL_EPSILON)) +
         DB_FS_TO_SPL_REF;
-    self->spreading_params_buf[j] =
-        compute_spreading_params(self->bark_levels_buf[j]);
+    self->scratch.spreading_params_buf[j] =
+        compute_spreading_params(self->scratch.bark_levels_buf[j]);
   }
 
-  for (uint32_t i = 0U; i < self->number_critical_bands; i++) {
+  for (uint32_t i = 0U; i < self->config.number_critical_bands; i++) {
     float spreaded_p = 0.F;
-    for (uint32_t j = 0U; j < self->number_critical_bands; j++) {
+    for (uint32_t j = 0U; j < self->config.number_critical_bands; j++) {
       const float dz = (float)i - (float)j;
       const float gain =
-          evaluate_spreading_gain(dz, &self->spreading_params_buf[j]);
-      spreaded_p += powf(self->critical_bands_spectrum[j] * gain, spectral_p);
+          evaluate_spreading_gain(dz, &self->scratch.spreading_params_buf[j]);
+      spreaded_p +=
+          powf(self->state.critical_bands_spectrum[j] * gain, spectral_p);
     }
-    self->spreaded_current_buf[i] = powf(spreaded_p, spectral_inv_p);
+    self->scratch.spreaded_current_buf[i] = powf(spreaded_p, spectral_inv_p);
   }
 
-  for (uint32_t j = 0U; j < self->number_critical_bands; j++) {
+  for (uint32_t j = 0U; j < self->config.number_critical_bands; j++) {
 
     const float tonality_factor = compute_tonality_factor(self, spectrum, j);
     const float bark_idx = fminf((float)(j + 1), 25.0F);
 
-    self->masking_offset[j] = (tonality_factor * (TMN_OFFSET_BASE + bark_idx)) +
-                              (NMT_OFFSET_DB * (1.F - tonality_factor));
+    self->state.masking_offset[j] =
+        (tonality_factor * (TMN_OFFSET_BASE + bark_idx)) +
+        (NMT_OFFSET_DB * (1.F - tonality_factor));
 
     // 1. Calculate frequency masking threshold for current frame
     float threshold =
-        powf(10.F, (log10f(self->spreaded_current_buf[j] + SPECTRAL_EPSILON) -
-                    (self->masking_offset[j] / 10.F)));
+        powf(10.F,
+             (log10f(self->scratch.spreaded_current_buf[j] + SPECTRAL_EPSILON) -
+              (self->state.masking_offset[j] / 10.F)));
 
     // 2. Combine with temporal masking using Power Law (p=0.6)
     // Total_T = (T_freq^p + T_forward^p + T_backward^p)^(1/p)
     // This model (Johnston, 1988) better reflects the non-linear summation
     // of multiple maskers compared to simple linear addition.
-    if (self->use_temporal_masking) {
+    if (self->config.use_temporal_masking) {
       float threshold_p = powf(threshold, POWER_LAW_EXPONENT);
 
       // Add forward masking contribution
       float forward_threshold =
-          self->previous_thresholds[j] * self->forward_decays[j];
+          self->state.previous_thresholds[j] * self->state.forward_decays[j];
       threshold_p += powf(forward_threshold, POWER_LAW_EXPONENT);
 
       // Add backward masking contribution if available
       if (future_spectrum) {
         float backward_threshold =
-            self->future_thresholds[j] * self->backward_decay;
+            self->state.future_thresholds[j] * self->config.backward_decay;
         threshold_p += powf(backward_threshold, POWER_LAW_EXPONENT);
       }
 
       threshold = powf(threshold_p, 1.0F / POWER_LAW_EXPONENT);
     }
 
-    self->previous_thresholds[j] = threshold; // Update state for next frame
+    self->state.previous_thresholds[j] =
+        threshold; // Update state for next frame
 
-    self->band_indexes = get_band_indexes(self->critical_bands, j);
+    self->owned.band_indexes = get_band_indexes(self->owned.critical_bands, j);
 
-    for (uint32_t k = self->band_indexes.start_position;
-         k < self->band_indexes.end_position; k++) {
+    for (uint32_t k = self->owned.band_indexes.start_position;
+         k < self->owned.band_indexes.end_position; k++) {
       masking_thresholds[k] = threshold;
     }
   }
 
-  if (self->absolute_threshold_enabled) {
-    apply_thresholds_as_floor(self->reference_spectrum, masking_thresholds);
+  if (self->config.absolute_threshold_enabled) {
+    apply_thresholds_as_floor(self->owned.reference_spectrum,
+                              masking_thresholds);
   }
 
   return true;
@@ -369,17 +392,17 @@ static float compute_tonality_factor(MaskingEstimator* self,
   float sum_bins = 0.F;
   float sum_log_bins = 0.F;
 
-  self->band_indexes = get_band_indexes(self->critical_bands, band);
+  self->owned.band_indexes = get_band_indexes(self->owned.critical_bands, band);
 
-  for (uint32_t k = self->band_indexes.start_position;
-       k < self->band_indexes.end_position; k++) {
+  for (uint32_t k = self->owned.band_indexes.start_position;
+       k < self->owned.band_indexes.end_position; k++) {
     const float val = fmaxf(spectrum[k], SPECTRAL_EPSILON);
     sum_bins += val;
     sum_log_bins += log10f(val);
   }
 
-  float bins_in_band = (float)self->band_indexes.end_position -
-                       (float)self->band_indexes.start_position;
+  float bins_in_band = (float)self->owned.band_indexes.end_position -
+                       (float)self->owned.band_indexes.start_position;
 
   if (bins_in_band <= 1.0F) {
     return 1.0F;
