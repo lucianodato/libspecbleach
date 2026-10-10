@@ -1116,6 +1116,8 @@ static void denoiser_run_transient(SbSpectralDenoiser* self,
 
 static void denoiser_run_dispatch(SbSpectralDenoiser* self, float* fft_spectrum,
                                   const DenoiserAlignedFrames* frames,
+                                  // NOLINTNEXTLINE(readability-non-const-parameter):
+                                  // chains write gain_b via out structs
                                   float* gain_a, float* gain_b) {
   // 3. Denoising Stage: dispatch the active smoothing strategy
   // both during a runtime mode transition; low-latency is always temporal)
@@ -1268,9 +1270,6 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
   denoiser_run_2d_pass(self, fft_spectrum, reference_spectrum, &frames);
   const float* delayed_spectrum = frames.spectrum;
   const float* delayed_noise = frames.noise;
-  const float* delayed_noise_bb = frames.noise_bb;
-  const float* delayed_noise_tonal = frames.noise_tonal;
-  const float* delayed_tonal_mask = frames.tonal_mask;
   const float* nlm_smoothed = frames.nlm_smoothed;
   (void)nlm_smoothed;
 
@@ -1337,9 +1336,6 @@ static bool run_nlm_chain(SbSpectralDenoiser* self, const float* fft_spectrum,
                           DenoiserChainFrames frames, uint32_t slot,
                           DenoiserChainOut out) {
   const float* smoothed_magnitude = frames.smoothed_magnitude;
-  const float* delayed_noise_bb = frames.noise_bb;
-  const float* delayed_noise_tonal = frames.noise_tonal;
-  const float* delayed_tonal_mask = frames.tonal_mask;
   float* gain_out = out.gain_out;
   float* alpha = out.alpha;
   float* beta = out.beta;
@@ -1358,7 +1354,7 @@ static bool run_nlm_chain(SbSpectralDenoiser* self, const float* fft_spectrum,
       .strength = self->parameters.suppression_strength,
       .undersubtraction = 0.0F};
   suppression_engine_calculate(self->suppression_engine, smoothed_magnitude,
-                               delayed_noise_bb, suppression_params, alpha,
+                               frames.noise_bb, suppression_params, alpha,
                                beta);
 
 #if TONAL_DUAL_PATH
@@ -1366,7 +1362,7 @@ static bool run_nlm_chain(SbSpectralDenoiser* self, const float* fft_spectrum,
   // psychoacoustically masked. With the tonal notch decoupled into its own
   // gain path, the veto can no longer partially undo a tonal boost
   // (order-dependence removed).
-  masking_veto_apply(self->masking_veto, smoothed_magnitude, delayed_noise_bb,
+  masking_veto_apply(self->masking_veto, smoothed_magnitude, frames.noise_bb,
                      fft_spectrum, alpha, self->parameters.masking_depth);
 #else
   // Legacy coupled path: parallel branches from the same Berouti base (the
@@ -1375,7 +1371,7 @@ static bool run_nlm_chain(SbSpectralDenoiser* self, const float* fft_spectrum,
   memcpy(self->alpha_tonal, alpha, self->real_spectrum_size * sizeof(float));
   tonal_reducer_apply_alpha_boost(self->tonal_reducer, self->alpha_tonal,
                                   self->parameters.tonal_reduction);
-  masking_veto_apply(self->masking_veto, smoothed_magnitude, delayed_noise_bb,
+  masking_veto_apply(self->masking_veto, smoothed_magnitude, frames.noise_bb,
                      fft_spectrum, alpha, self->parameters.masking_depth);
   for (uint32_t k = 0U; k < self->real_spectrum_size; ++k) {
     const float boost = self->alpha_tonal[k] - self->alpha_base[k];
@@ -1397,15 +1393,15 @@ static bool run_nlm_chain(SbSpectralDenoiser* self, const float* fft_spectrum,
   // detection still runs globally for the UI; relief is applied only by the 1D
   // temporal chain, where the gain smoother owns the result.
   calculate_gains(self->real_spectrum_size, self->fft_size, smoothed_magnitude,
-                  delayed_noise_bb, gain_out, alpha, beta,
+                  frames.noise_bb, gain_out, alpha, beta,
                   self->gain_calculation_type, NULL);
 
 #if TONAL_DUAL_PATH
   // Parallel tonal gain path + decision criterion. Ran on the same
   // smoothed magnitude so the min() compares like with like.
   tonal_reducer_compute_tonal_gains(
-      self->tonal_reducer, slot, smoothed_magnitude, delayed_noise_tonal,
-      delayed_tonal_mask, self->parameters.tonal_reduction, self->gain_tonal);
+      self->tonal_reducer, slot, smoothed_magnitude, frames.noise_tonal,
+      frames.tonal_mask, self->parameters.tonal_reduction, self->gain_tonal);
   for (uint32_t k = 0U; k < self->real_spectrum_size; ++k) {
     gain_out[k] = fminf(gain_out[k], self->gain_tonal[k]);
   }
