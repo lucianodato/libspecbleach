@@ -69,6 +69,9 @@ jobs:
         run: |
           gcovr --xml build/coverage.xml -r . -e tests/ -e examples/ -e thirdparty/ \
             --gcov-ignore-parse-errors negative_hits.warn_once_per_file
+          # shortcut: Sonar's Cobertura parser reads "hits" as int32 and hard-fails on
+          # gcovr's >2^31 execution counts (hot DSP loops). Cap them until handled upstream.
+          sed -i -E 's/hits="[0-9]{10,}"/hits="2147483647"/g' build/coverage.xml
 
       - name: Cache SonarQube packages
         if: matrix.config.run_coverage && env.SONAR_CI_ENABLED == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
