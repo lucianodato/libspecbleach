@@ -16,6 +16,8 @@ jobs:
   build:
     name: ${{ matrix.config.name }}
     runs-on: ubuntu-24.04
+    env:
+      SONAR_CI_ENABLED: ${{ secrets.SONAR_CI_ENABLED }}
     strategy:
       fail-fast: false
       matrix:
@@ -33,6 +35,7 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up dependencies
         run: |
@@ -54,21 +57,21 @@ jobs:
       - name: Run CTest Suite
         run: |
           cd build
-          # PRs run the fast suite; integration tests run on main/nightly/dispatch.
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
+          # PRs run the fast suite only when Sonar CI is disabled.
+          if [ "${{ github.event_name }}" = "pull_request" ] && [ "$SONAR_CI_ENABLED" != "true" ]; then
             ctest --output-on-failure --test-dir . -LE integration
           else
             ctest --output-on-failure --test-dir .
           fi
 
       - name: Generate coverage report
-        if: matrix.config.run_coverage && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        if: matrix.config.run_coverage && env.SONAR_CI_ENABLED == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         run: |
           gcovr --xml build/coverage.xml -r . -e tests/ -e examples/ -e thirdparty/ \
             --gcov-ignore-parse-errors negative_hits.warn_once_per_file
 
       - name: Cache SonarQube packages
-        if: matrix.config.run_coverage && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        if: matrix.config.run_coverage && env.SONAR_CI_ENABLED == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         uses: actions/cache@v4.3.0
         with:
           path: ~/.sonar/cache
@@ -76,7 +79,7 @@ jobs:
           restore-keys: ${{ runner.os }}-sonar
 
       - name: SonarCloud analysis
-        if: matrix.config.run_coverage && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        if: matrix.config.run_coverage && env.SONAR_CI_ENABLED == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         uses: SonarSource/sonarqube-scan-action@v8.3.0
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
