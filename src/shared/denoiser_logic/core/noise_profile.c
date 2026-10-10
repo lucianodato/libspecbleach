@@ -78,7 +78,7 @@ bool is_noise_estimation_available(const NoiseProfile* self, int mode) {
   return self->noise_spectrum_available[index];
 }
 
-float* get_noise_profile(NoiseProfile* self, int mode) {
+float* get_noise_profile(const NoiseProfile* self, int mode) {
   uint32_t index;
   if (!noise_profile_mode_index(mode, &index)) {
     return NULL;
