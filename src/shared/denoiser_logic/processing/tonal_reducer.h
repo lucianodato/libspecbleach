@@ -100,7 +100,7 @@ void tonal_reducer_swap_gain_slots(TonalReducer* self);
  * Used by the build with TONAL_DUAL_PATH=0 to reproduce the pre-decoupling
  * behavior for the A/B measurement; not part of the default path.
  */
-void tonal_reducer_apply_alpha_boost(TonalReducer* self, float* alpha,
+void tonal_reducer_apply_alpha_boost(const TonalReducer* self, float* alpha,
                                      float tonal_reduction_gain);
 
 /**

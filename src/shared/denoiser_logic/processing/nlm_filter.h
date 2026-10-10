@@ -96,7 +96,7 @@ bool nlm_filter_process(NlmFilter* filter, float* smoothed_snr);
  * @param filter Pointer to filter
  * @return true if buffer is full and ready
  */
-bool nlm_filter_is_ready(NlmFilter* filter);
+bool nlm_filter_is_ready(const NlmFilter* filter);
 
 /**
  * Reset the filter state, clearing all buffered frames.
@@ -109,7 +109,7 @@ void nlm_filter_reset(NlmFilter* filter);
  * @param filter Pointer to filter
  * @return Number of frames of look-ahead latency
  */
-uint32_t nlm_filter_get_latency_frames(NlmFilter* filter);
+uint32_t nlm_filter_get_latency_frames(const NlmFilter* filter);
 
 /**
  * Calculate the SNR frame from reference and noise spectra.
@@ -119,7 +119,7 @@ uint32_t nlm_filter_get_latency_frames(NlmFilter* filter);
  * @param noise_spectrum Noise profile spectrum
  * @param snr_frame Output SNR frame
  */
-void nlm_filter_calculate_snr(NlmFilter* filter,
+void nlm_filter_calculate_snr(const NlmFilter* filter,
                               const float* reference_spectrum,
                               const float* noise_spectrum, float* snr_frame);
 
@@ -131,7 +131,7 @@ void nlm_filter_calculate_snr(NlmFilter* filter,
  * @param noise_spectrum Noise profile spectrum
  * @param magnitude_spectrum Output reconstructed magnitude
  */
-void nlm_filter_reconstruct_magnitude(NlmFilter* filter,
+void nlm_filter_reconstruct_magnitude(const NlmFilter* filter,
                                       const float* smoothed_snr,
                                       const float* noise_spectrum,
                                       float* magnitude_spectrum);

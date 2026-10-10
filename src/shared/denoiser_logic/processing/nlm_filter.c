@@ -149,7 +149,7 @@ void nlm_filter_push_frame(NlmFilter* filter, const float* snr_frame) {
   patch_filter_context_push_frame(&filter->context, snr_frame);
 }
 
-bool nlm_filter_is_ready(NlmFilter* filter) {
+bool nlm_filter_is_ready(const NlmFilter* filter) {
   if (!filter) {
     return false;
   }
@@ -180,14 +180,14 @@ void nlm_filter_reset(NlmFilter* filter) {
   patch_filter_context_reset(&filter->context);
 }
 
-uint32_t nlm_filter_get_latency_frames(NlmFilter* filter) {
+uint32_t nlm_filter_get_latency_frames(const NlmFilter* filter) {
   if (!filter) {
     return 0;
   }
   return patch_filter_context_get_latency_frames(&filter->context);
 }
 
-void nlm_filter_calculate_snr(NlmFilter* filter,
+void nlm_filter_calculate_snr(const NlmFilter* filter,
                               const float* reference_spectrum,
                               const float* noise_spectrum, float* snr_frame) {
   if (!filter || !reference_spectrum || !noise_spectrum || !snr_frame) {
@@ -216,7 +216,7 @@ void nlm_filter_calculate_snr(NlmFilter* filter,
   }
 }
 
-void nlm_filter_reconstruct_magnitude(NlmFilter* filter,
+void nlm_filter_reconstruct_magnitude(const NlmFilter* filter,
                                       const float* smoothed_snr,
                                       const float* noise_spectrum,
                                       float* magnitude_spectrum) {

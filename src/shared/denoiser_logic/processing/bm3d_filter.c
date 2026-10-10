@@ -307,7 +307,7 @@ void bm3d_filter_push_frame(Bm3dFilter* filter, const float* snr_frame) {
   patch_filter_context_push_frame(&filter->context, snr_frame);
 }
 
-bool bm3d_filter_is_ready(Bm3dFilter* filter) {
+bool bm3d_filter_is_ready(const Bm3dFilter* filter) {
   return filter && patch_filter_context_is_ready(&filter->context);
 }
 
@@ -318,7 +318,7 @@ void bm3d_filter_reset(Bm3dFilter* filter) {
   patch_filter_context_reset(&filter->context);
 }
 
-uint32_t bm3d_filter_get_latency_frames(Bm3dFilter* filter) {
+uint32_t bm3d_filter_get_latency_frames(const Bm3dFilter* filter) {
   if (!filter) {
     return 0;
   }
@@ -331,7 +331,8 @@ bool bm3d_filter_process(Bm3dFilter* filter, float* smoothed_snr) {
   }
   sb_simd_state_t old_state = sb_simd_enable_ftz_daz();
   patch_filter_context_populate_frame_ptrs(&filter->context);
-  float* target = patch_filter_context_cached_get_frame(&filter->context, 0);
+  const float* target =
+      patch_filter_context_cached_get_frame(&filter->context, 0);
 
   if (filter->config.h_parameter <= 0.0F) {
     memcpy(smoothed_snr, target, filter->config.spectrum_size * sizeof(float));
@@ -353,7 +354,7 @@ bool bm3d_filter_process(Bm3dFilter* filter, float* smoothed_snr) {
   return true;
 }
 
-void bm3d_filter_calculate_snr(Bm3dFilter* filter,
+void bm3d_filter_calculate_snr(const Bm3dFilter* filter,
                                const float* reference_spectrum,
                                const float* noise_spectrum, float* snr_frame) {
   if (!filter || !reference_spectrum || !noise_spectrum || !snr_frame) {
@@ -368,7 +369,7 @@ void bm3d_filter_calculate_snr(Bm3dFilter* filter,
   }
 }
 
-void bm3d_filter_reconstruct_magnitude(Bm3dFilter* filter,
+void bm3d_filter_reconstruct_magnitude(const Bm3dFilter* filter,
                                        const float* smoothed_snr,
                                        const float* noise_spectrum,
                                        float* magnitude_spectrum) {

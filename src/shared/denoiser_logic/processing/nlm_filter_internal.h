@@ -118,7 +118,7 @@ static inline SB_UNUSED float compute_patch_distance(NlmFilter* self,
 
       const float* target_frame =
           patch_filter_context_get_frame(&self->context, t_target);
-      const float* cand_frame =
+      const const float* cand_frame =
           patch_filter_context_get_frame(&self->context, t_cand);
       distance +=
           sb_vec8_ssd(sb_load8(target_frame + (target_freq - half_patch)),
@@ -134,7 +134,7 @@ static inline SB_UNUSED float compute_patch_distance(NlmFilter* self,
 
       const float* target_frame =
           patch_filter_context_get_frame(&self->context, t_target);
-      const float* cand_frame =
+      const const float* cand_frame =
           patch_filter_context_get_frame(&self->context, t_cand);
       distance +=
           sb_row_ssd_n(target_frame + (target_freq - half_patch),
@@ -149,7 +149,7 @@ static inline SB_UNUSED float compute_patch_distance(NlmFilter* self,
 
     const float* target_frame =
         patch_filter_context_get_frame(&self->context, t_target);
-    const float* cand_frame =
+    const const float* cand_frame =
         patch_filter_context_get_frame(&self->context, t_cand);
 
     distance = patch_filter_accumulate_patch_row_ssd(
@@ -230,9 +230,9 @@ static inline SB_UNUSED void nlm_process_block_range(void* raw_ctx,
       for (int r = 0; r < 8; r++) {
         if (safe_block) {
           int32_t t_offset = (int32_t)r - (int32_t)half_patch_size;
-          float* row_ptr = patch_filter_context_cached_get_frame(
-                               &filter->context, t_offset) +
-                           (block_center - half_patch_size);
+          const float* row_ptr = patch_filter_context_cached_get_frame(
+                                     &filter->context, t_offset) +
+                                 (block_center - half_patch_size);
           target_vecs[r] = sb_load8(row_ptr);
         } else {
           target_vecs[r] = sb_set8(0.0f);
@@ -311,7 +311,7 @@ static inline SB_UNUSED void nlm_process_block_range(void* raw_ctx,
           continue;
         }
 
-        float* cand_frame =
+        const float* cand_frame =
             patch_filter_context_cached_get_frame(&filter->context, dt);
 
         for (uint32_t i = 0; i < current_paste_limit; i++) {

@@ -70,7 +70,7 @@ void noise_profile_free(NoiseProfile* self) {
   }
 }
 
-bool is_noise_estimation_available(NoiseProfile* self, int mode) {
+bool is_noise_estimation_available(const NoiseProfile* self, int mode) {
   uint32_t index;
   if (!noise_profile_mode_index(mode, &index)) {
     return false;
@@ -86,11 +86,11 @@ float* get_noise_profile(NoiseProfile* self, int mode) {
   return self->noise_profiles[index];
 }
 
-uint32_t get_noise_profile_size(NoiseProfile* self) {
+uint32_t get_noise_profile_size(const NoiseProfile* self) {
   return self->noise_profile_size;
 }
 
-uint32_t get_noise_profile_block_count(NoiseProfile* self, int mode) {
+uint32_t get_noise_profile_block_count(const NoiseProfile* self, int mode) {
   uint32_t index;
   if (!noise_profile_mode_index(mode, &index)) {
     return 0;

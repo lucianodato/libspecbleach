@@ -24,6 +24,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "shared/utils/general_utils.h"
+
 typedef enum WindowTypes {
   HANN_WINDOW = 0,
   HAMMING_WINDOW = 1,
@@ -80,8 +82,6 @@ bool get_morphed_profile(float* output_profile, const float* mean_profile,
  */
 bool sb_spectral_envelope_opening(const float* spectrum, float* scratch,
                                   float* out, uint32_t size, uint32_t window);
-
-#include "shared/utils/general_utils.h"
 
 static inline SB_UNUSED void sb_apply_spectral_symmetry(
     float* spectrum, uint32_t real_spectrum_size, uint32_t fft_size) {
