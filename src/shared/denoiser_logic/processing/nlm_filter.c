@@ -26,7 +26,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "shared/configurations.h"
 #include "shared/denoiser_logic/processing/nlm_filter_internal.h"
 #include "shared/utils/simd_utils.h"
-#include "shared/utils/thread_pool.h"
 
 NlmFilter* nlm_filter_initialize(NlmFilterConfig config) {
   if (config.spectrum_size == 0) {
@@ -75,53 +74,17 @@ NlmFilter* nlm_filter_initialize(NlmFilterConfig config) {
 
   self->target_frame_offset = self->config.search_range_time_past;
 
-  self->num_threads = self->config.num_threads > 0U ? self->config.num_threads
-                                                    : NLM_NUM_THREADS_DEFAULT;
-  if (self->num_threads > NLM_MAX_THREADS) {
-    self->num_threads = NLM_MAX_THREADS;
-  }
-  if (self->num_threads > 1U) {
-    // The calling thread participates in every dispatch, so the pool only
-    // needs num_threads - 1 dedicated workers.
-    self->pool = sb_thread_pool_create(self->num_threads - 1U);
-    if (!self->pool) {
-      self->num_threads = 1U; // Graceful fallback to sequential processing
-    }
-  } else {
-    self->num_threads = 1U;
-  }
-
-  self->frame_buffer =
-      (float**)calloc(self->config.time_buffer_size, sizeof(float*));
-  if (!self->frame_buffer) {
+  if (!patch_filter_context_initialize(
+          &self->context, self->config.spectrum_size,
+          self->config.time_buffer_size, self->config.search_range_time_past,
+          self->config.search_range_time_future, self->config.num_threads)) {
     nlm_filter_free(self);
     return NULL;
   }
-
-  for (uint32_t i = 0; i < self->config.time_buffer_size; i++) {
-    self->frame_buffer[i] =
-        (float*)calloc(self->config.spectrum_size, sizeof(float));
-    if (!self->frame_buffer[i]) {
-      nlm_filter_free(self);
-      return NULL;
-    }
-  }
-
-  self->buffer_head = 0;
-  self->frames_filled = 0;
 
   self->weight_accum =
       (float*)calloc(self->config.spectrum_size, sizeof(float));
   if (!self->weight_accum) {
-    nlm_filter_free(self);
-    return NULL;
-  }
-
-  self->total_time_span = self->config.search_range_time_past +
-                          self->config.search_range_time_future + 1U +
-                          2U * NLM_HALO_FRAMES;
-  self->frame_ptrs = (float**)calloc(self->total_time_span, sizeof(float*));
-  if (!self->frame_ptrs) {
     nlm_filter_free(self);
     return NULL;
   }
@@ -142,25 +105,10 @@ void nlm_filter_free(NlmFilter* filter) {
     return;
   }
 
-  if (filter->frame_buffer) {
-    for (uint32_t i = 0; i < filter->config.time_buffer_size; i++) {
-      if (filter->frame_buffer[i]) {
-        free((void*)filter->frame_buffer[i]);
-      }
-    }
-    free((void*)filter->frame_buffer);
-  }
-
+  patch_filter_context_free(&filter->context);
   if (filter->weight_accum) {
     free(filter->weight_accum);
   }
-
-  if (filter->frame_ptrs) {
-    free((void*)filter->frame_ptrs);
-  }
-
-  sb_thread_pool_free(filter->pool);
-  filter->pool = NULL;
 
   free(filter);
 }
@@ -198,22 +146,14 @@ void nlm_filter_push_frame(NlmFilter* filter, const float* snr_frame) {
     return;
   }
 
-  memcpy(filter->frame_buffer[filter->buffer_head], snr_frame,
-         filter->config.spectrum_size * sizeof(float));
-
-  filter->buffer_head =
-      (filter->buffer_head + 1) % filter->config.time_buffer_size;
-
-  if (filter->frames_filled < filter->config.time_buffer_size) {
-    filter->frames_filled++;
-  }
+  patch_filter_context_push_frame(&filter->context, snr_frame);
 }
 
 bool nlm_filter_is_ready(NlmFilter* filter) {
   if (!filter) {
     return false;
   }
-  return filter->frames_filled >= filter->config.time_buffer_size;
+  return patch_filter_context_is_ready(&filter->context);
 }
 
 bool nlm_filter_process(NlmFilter* filter, float* smoothed_snr) {
@@ -237,20 +177,14 @@ void nlm_filter_reset(NlmFilter* filter) {
     return;
   }
 
-  for (uint32_t i = 0; i < filter->config.time_buffer_size; i++) {
-    memset(filter->frame_buffer[i], 0,
-           filter->config.spectrum_size * sizeof(float));
-  }
-
-  filter->buffer_head = 0;
-  filter->frames_filled = 0;
+  patch_filter_context_reset(&filter->context);
 }
 
 uint32_t nlm_filter_get_latency_frames(NlmFilter* filter) {
   if (!filter) {
     return 0;
   }
-  return filter->config.search_range_time_future;
+  return patch_filter_context_get_latency_frames(&filter->context);
 }
 
 void nlm_filter_calculate_snr(NlmFilter* filter,

@@ -46,6 +46,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #define SR 48000u
 #define FRAME_MS (512.0F * 1000.0F / 48000.0F)
+#define PADDED_FRAME_MS (480.0F * 1000.0F / 48000.0F)
 
 static bool identity_proc(SpectralProcessorHandle handle, float* spectrum) {
   (void)handle;
@@ -65,15 +66,17 @@ static float max_err_db(const float* in, const float* out, uint32_t n,
   return 20.0F * log10f(peak + 1e-12F);
 }
 
-static void run_config(const char* name, uint32_t overlap, ZeroPaddingType pad,
-                       uint32_t pad_amount, uint32_t expect_fft,
-                       uint32_t expect_hop) {
+static void run_config(const char* name, float frame_size_ms,
+                       uint32_t frame_size, uint32_t overlap,
+                       ZeroPaddingType pad, uint32_t pad_amount,
+                       uint32_t expect_fft, uint32_t expect_hop) {
   StftProcessor* stft = stft_processor_initialize(
-      SR, FRAME_MS, overlap, pad, pad_amount, HANN_WINDOW, HANN_WINDOW);
+      SR, frame_size_ms, overlap, pad, pad_amount, HANN_WINDOW, HANN_WINDOW);
   TEST_ASSERT(stft != NULL, "STFT init must succeed");
   TEST_ASSERT(get_stft_fft_size(stft) == expect_fft, "unexpected FFT size");
   TEST_ASSERT(get_stft_hop_size(stft) == expect_hop, "unexpected hop");
-  TEST_ASSERT(get_stft_latency(stft) == 512u, "latency must equal the frame");
+  TEST_ASSERT(get_stft_latency(stft) == frame_size,
+              "latency must equal the frame");
 
   const uint32_t n = 4u * SR;
   const uint32_t flush = SR / 2u;
@@ -101,7 +104,7 @@ static void run_config(const char* name, uint32_t overlap, ZeroPaddingType pad,
     done += chunk;
   }
 
-  const float err = max_err_db(in, out, n + flush, 512u, 512u);
+  const float err = max_err_db(in, out, n + flush, frame_size, frame_size);
   printf("%s: round-trip error %.1f dBFS\n", name, err);
   TEST_ASSERT(err < -100.0F, "identity round-trip must reconstruct exactly");
   free(in);
@@ -112,9 +115,14 @@ static void run_config(const char* name, uint32_t overlap, ZeroPaddingType pad,
 
 int main(void) {
   // Current low-latency geometry.
-  run_config("512/4x/512fft", 4u, PAD_TO_VALID_SIZE, 0u, 512u, 128u);
+  run_config("512/4x/512fft", FRAME_MS, 512u, 4u, PAD_TO_VALID_SIZE, 0u, 512u,
+             128u);
   // Low-latency geometry: 8x overlap, standard padding.
-  run_config("512/8x/512fft", 8u, PAD_TO_VALID_SIZE, 0u, 512u, 64u);
+  run_config("512/8x/512fft", FRAME_MS, 512u, 8u, PAD_TO_VALID_SIZE, 0u, 512u,
+             64u);
+  // A 480-sample frame exercises window generation at a non-zero FFT offset.
+  run_config("480/4x/512fft", PADDED_FRAME_MS, 480u, 4u, NEXT_POWER_OF_TWO, 0u,
+             512u, 120u);
   printf("STFT round-trip tests passed.\n");
   return 0;
 }

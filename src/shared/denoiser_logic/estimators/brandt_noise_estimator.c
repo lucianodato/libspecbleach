@@ -422,23 +422,6 @@ void brandt_noise_estimator_apply_floor(BrandtNoiseEstimator* self,
   }
 }
 
-void brandt_noise_estimator_set_history_duration(
-    const BrandtNoiseEstimator* self, float history_duration_ms,
-    uint32_t sample_rate, uint32_t fft_size) {
-  if (!self) {
-    return;
-  }
-
-  // To avoid frequent reallocations, we only update if it's a significant
-  // change For now, let's just update the internal logic if we don't want to
-  // realloc. Actually, changing history size at runtime is best done by
-  // pre-allocating a MAX size. Given we are in the middle of a fix, I will only
-  // expose Percentile as "Sensitivity" first.
-  (void)history_duration_ms;
-  (void)sample_rate;
-  (void)fft_size;
-}
-
 void brandt_noise_estimator_set_hop_sec(BrandtNoiseEstimator* self,
                                         float hop_sec) {
   if (!self || !(hop_sec > 0.0F)) {

@@ -465,25 +465,27 @@ void test_nlm_filter_thread_config(void) {
   NlmFilterConfig config = {.spectrum_size = 32};
   NlmFilter* filter = nlm_filter_initialize(config);
   TEST_ASSERT(filter != NULL, "Initialization failed");
-  TEST_ASSERT(filter->num_threads == NLM_NUM_THREADS_DEFAULT,
+  TEST_ASSERT(filter->context.num_threads == NLM_NUM_THREADS_DEFAULT,
               "Zero thread count should fall back to default");
   nlm_filter_free(filter);
 
   NlmFilterConfig single_config = {.spectrum_size = 32, .num_threads = 1};
   NlmFilter* single_filter = nlm_filter_initialize(single_config);
   TEST_ASSERT(single_filter != NULL, "Single-threaded initialization failed");
-  TEST_ASSERT(single_filter->num_threads == 1U, "Thread count should be 1");
-  TEST_ASSERT(single_filter->pool == NULL,
+  TEST_ASSERT(single_filter->context.num_threads == 1U,
+              "Thread count should be 1");
+  TEST_ASSERT(single_filter->context.pool == NULL,
               "Single-threaded filter should not create a worker pool");
   nlm_filter_free(single_filter);
 
   NlmFilterConfig multi_config = {.spectrum_size = 32, .num_threads = 3};
   NlmFilter* multi_filter = nlm_filter_initialize(multi_config);
   TEST_ASSERT(multi_filter != NULL, "Multi-threaded initialization failed");
-  TEST_ASSERT(multi_filter->num_threads == 3U, "Thread count should be 3");
-  TEST_ASSERT(multi_filter->pool != NULL,
+  TEST_ASSERT(multi_filter->context.num_threads == 3U,
+              "Thread count should be 3");
+  TEST_ASSERT(multi_filter->context.pool != NULL,
               "Multi-threaded filter should create a worker pool");
-  TEST_ASSERT(sb_thread_pool_num_workers(multi_filter->pool) == 2U,
+  TEST_ASSERT(sb_thread_pool_num_workers(multi_filter->context.pool) == 2U,
               "Pool should have num_threads - 1 workers");
   nlm_filter_free(multi_filter);
 
@@ -557,13 +559,13 @@ void test_nlm_filter_frame_cache(void) {
   }
 
   // Precompute cache
-  populate_frame_ptrs(filter);
+  patch_filter_context_populate_frame_ptrs(&filter->context);
 
   // Check offsets in cache range (-past-4 to +future+4)
   // For past=8, future=8, range is -12 to 12.
   for (int32_t dt = -12; dt <= 12; dt++) {
-    float* cached = cached_get_frame(filter, dt);
-    float* direct = get_frame(filter, dt);
+    float* cached = patch_filter_context_cached_get_frame(&filter->context, dt);
+    float* direct = patch_filter_context_get_frame(&filter->context, dt);
     TEST_ASSERT(cached == direct, "Cached pointer should match direct lookup");
   }
 

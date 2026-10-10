@@ -23,13 +23,11 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include <float.h> // For FLT_EPSILON
 
-static float get_windows_scale_factor(StftWindows* self);
+static float get_windows_scale_factor(StftWindows* self, uint32_t copy_pos);
 
 struct StftWindows {
   float* input_window;
   float* output_window;
-  float* analysis_input_window;
-  float* analysis_output_window;
   float scale_factor;
 
   uint32_t stft_fft_size;
@@ -53,30 +51,21 @@ StftWindows* stft_window_initialize(uint32_t stft_fft_size,
 
   self->input_window = (float*)calloc(self->stft_fft_size, sizeof(float));
   self->output_window = (float*)calloc(self->stft_fft_size, sizeof(float));
-  self->analysis_input_window =
-      (float*)calloc(self->stft_frame_size, sizeof(float));
-  self->analysis_output_window =
-      (float*)calloc(self->stft_frame_size, sizeof(float));
 
-  if (!self->input_window || !self->output_window ||
-      !self->analysis_input_window || !self->analysis_output_window) {
+  if (!self->input_window || !self->output_window) {
     stft_window_free(self);
     return NULL;
   }
 
-  (void)get_fft_window(self->analysis_input_window, self->stft_frame_size,
+  // Center and zero-pad windows in fft_size buffer
+  const uint32_t copy_pos =
+      (self->stft_fft_size / 2U) - (self->stft_frame_size / 2U);
+  (void)get_fft_window(self->input_window + copy_pos, self->stft_frame_size,
                        input_window);
-  (void)get_fft_window(self->analysis_output_window, self->stft_frame_size,
+  (void)get_fft_window(self->output_window + copy_pos, self->stft_frame_size,
                        output_window);
 
-  // Center and zero-pad windows in fft_size buffer
-  uint32_t copy_pos = (self->stft_fft_size / 2U) - (self->stft_frame_size / 2U);
-  for (uint32_t i = 0; i < self->stft_frame_size; i++) {
-    self->input_window[copy_pos + i] = self->analysis_input_window[i];
-    self->output_window[copy_pos + i] = self->analysis_output_window[i];
-  }
-
-  self->scale_factor = get_windows_scale_factor(self);
+  self->scale_factor = get_windows_scale_factor(self, copy_pos);
 
   return self;
 }
@@ -91,23 +80,18 @@ void stft_window_free(StftWindows* self) {
   if (self->output_window) {
     free(self->output_window);
   }
-  if (self->analysis_input_window) {
-    free(self->analysis_input_window);
-  }
-  if (self->analysis_output_window) {
-    free(self->analysis_output_window);
-  }
   free(self);
 }
 
-static float get_windows_scale_factor(StftWindows* self) {
+static float get_windows_scale_factor(StftWindows* self, uint32_t copy_pos) {
   if (!self->output_window || self->stft_hop_size == 0) {
     return 1.0f;
   }
 
   float sum = 0.0f;
   for (uint32_t k = 0U; k < self->stft_frame_size; k++) {
-    sum += (self->analysis_input_window[k] * self->analysis_output_window[k]);
+    sum +=
+        (self->input_window[copy_pos + k] * self->output_window[copy_pos + k]);
   }
 
   if (sum < FLT_EPSILON) {
