@@ -7,9 +7,6 @@ on:
   pull_request:
     branches:
       - "*"
-  schedule:
-    # Nightly full-suite run (including the slow integration suites)
-    - cron: "0 3 * * *"
   workflow_dispatch:
 
 jobs:
@@ -57,12 +54,8 @@ jobs:
       - name: Run CTest Suite
         run: |
           cd build
-          # PRs run the fast suite only when Sonar CI is disabled.
-          if [ "${{ github.event_name }}" = "pull_request" ] && [ "$SONAR_CI_ENABLED" != "true" ]; then
-            ctest --output-on-failure --test-dir . -LE integration
-          else
-            ctest --output-on-failure --test-dir .
-          fi
+          # Full suite (including integration) on every PR and main push.
+          ctest --output-on-failure --test-dir . --parallel 4
 
       - name: Generate coverage report
         if: matrix.config.run_coverage && env.SONAR_CI_ENABLED == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)

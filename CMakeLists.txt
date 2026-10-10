@@ -85,7 +85,8 @@ if(ENABLE_SANITIZERS AND NOT MSVC)
 endif()
 
 if(ENABLE_COVERAGE AND NOT MSVC)
-    add_compile_options(--coverage -O0)
+    # Keep -O2 under coverage: -O0 made hot DSP loops ~5-10x slower in CI.
+    add_compile_options(--coverage -O2)
     add_link_options(--coverage)
 endif()
 
@@ -280,14 +281,13 @@ if(ENABLE_TESTS)
             target_link_libraries(${test_name} PRIVATE ${MATH_LIB})
         endif()
         add_test(NAME ${test_name} COMMAND ${test_name})
-        # PR CI runs `ctest -LE integration`; engine-flow/slow suites are
-        # labeled separately (see mark_integration_test below).
+        # Slower engine-flow suites are labeled separately
+        # (see mark_integration_test below) for selective local runs.
         set_tests_properties(${test_name} PROPERTIES LABELS "unit")
     endmacro()
 
     # Engine-driven suites (STFT round-trips, quality metrics, audio
-    # regressions) are slower: they run on main pushes and nightly, and are
-    # excluded from PR checks via ctest -LE integration.
+    # regressions) are slower but run in CI on every PR and main push.
     macro(mark_integration_test test_name)
         if(TARGET ${test_name})
             set_tests_properties(${test_name} PROPERTIES LABELS "integration")
