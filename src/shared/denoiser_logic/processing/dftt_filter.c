@@ -149,6 +149,34 @@ static uint32_t dftt_bit_reverse(uint32_t x, uint32_t bits) {
  * scales by 1/n. The stride-1 path (frequency rows, ~2/3 of the work) runs
  * 8-wide MACs through the shared sb_vec8 kit; strided time columns stay
  * scalar. Bit-level results differ from scalar reassociation (~1e-7). */
+static uint32_t dftt_dft_vec8_sum(const float* re, const float* im,
+                                  const float* cos_tab, const float* sin_tab,
+                                  uint32_t k, uint32_t n, bool inverse,
+                                  float* sr, float* si) {
+  const sb_vec8_t vzero = sb_set8(0.0F);
+  sb_vec8_t acc_rc = vzero;
+  sb_vec8_t acc_is = vzero;
+  sb_vec8_t acc_ic = vzero;
+  sb_vec8_t acc_rs = vzero;
+  uint32_t m = 0U;
+  for (; m + 8U <= n; m += 8U) {
+    sb_vec8_t xr = sb_load8(re + m);
+    sb_vec8_t xi = sb_load8(im + m);
+    sb_vec8_t c = sb_load8(cos_tab + ((size_t)k * n) + m);
+    sb_vec8_t s = sb_load8(sin_tab + ((size_t)k * n) + m);
+    if (inverse) {
+      s = sb_sub8(vzero, s);
+    }
+    acc_rc = sb_add8(acc_rc, sb_mul8(xr, c));
+    acc_is = sb_add8(acc_is, sb_mul8(xi, s));
+    acc_ic = sb_add8(acc_ic, sb_mul8(xi, c));
+    acc_rs = sb_add8(acc_rs, sb_mul8(xr, s));
+  }
+  *sr = sb_vec8_hsum(acc_rc) + sb_vec8_hsum(acc_is);
+  *si = sb_vec8_hsum(acc_ic) - sb_vec8_hsum(acc_rs);
+  return m;
+}
+
 static void dftt_dft_1d(float* re, float* im, uint32_t stride, uint32_t n,
                         const float* cos_tab, const float* sin_tab,
                         bool inverse) {
@@ -159,26 +187,7 @@ static void dftt_dft_1d(float* re, float* im, uint32_t stride, uint32_t n,
     float si = 0.0F;
     uint32_t m = 0U;
     if (stride == 1U) {
-      const sb_vec8_t vzero = sb_set8(0.0F);
-      sb_vec8_t acc_rc = vzero;
-      sb_vec8_t acc_is = vzero;
-      sb_vec8_t acc_ic = vzero;
-      sb_vec8_t acc_rs = vzero;
-      for (; m + 8U <= n; m += 8U) {
-        sb_vec8_t xr = sb_load8(re + m);
-        sb_vec8_t xi = sb_load8(im + m);
-        sb_vec8_t c = sb_load8(cos_tab + ((size_t)k * n) + m);
-        sb_vec8_t s = sb_load8(sin_tab + ((size_t)k * n) + m);
-        if (inverse) {
-          s = sb_sub8(vzero, s);
-        }
-        acc_rc = sb_add8(acc_rc, sb_mul8(xr, c));
-        acc_is = sb_add8(acc_is, sb_mul8(xi, s));
-        acc_ic = sb_add8(acc_ic, sb_mul8(xi, c));
-        acc_rs = sb_add8(acc_rs, sb_mul8(xr, s));
-      }
-      sr = sb_vec8_hsum(acc_rc) + sb_vec8_hsum(acc_is);
-      si = sb_vec8_hsum(acc_ic) - sb_vec8_hsum(acc_rs);
+      m = dftt_dft_vec8_sum(re, im, cos_tab, sin_tab, k, n, inverse, &sr, &si);
     }
     for (; m < n; m++) {
       const float c = cos_tab[((size_t)k * n) + m];
@@ -204,9 +213,17 @@ static void dftt_dft_1d(float* re, float* im, uint32_t stride, uint32_t n,
 /* Iterative radix-2 Cooley-Tukey (DIT) over strided data. Twiddles reuse row
  * 1 of the shared table (e^{-2pi i j / n}); inverse flips the sine sign and
  * scales by 1/n, matching the naive DFT conventions. */
+typedef struct DfttFftTables {
+  const uint32_t* br;
+  const float* cos_row;
+  const float* sin_row;
+} DfttFftTables;
+
 static void dftt_fft_1d(float* re, float* im, uint32_t stride, uint32_t n,
-                        const uint32_t* br, const float* cos_row,
-                        const float* sin_row, bool inverse) {
+                        const DfttFftTables* tables, bool inverse) {
+  const uint32_t* br = tables->br;
+  const float* cos_row = tables->cos_row;
+  const float* sin_row = tables->sin_row;
   for (uint32_t i = 0U; i < n; i++) {
     const uint32_t j = br[i];
     if (j > i) {
@@ -255,8 +272,9 @@ static void dftt_fwd_rows(const DfttFilter* f, float* re, float* im) {
     float* row_r = re + ((size_t)r * bf);
     float* row_i = im + ((size_t)r * bf);
     if (f->pow2_freq) {
-      dftt_fft_1d(row_r, row_i, 1U, bf, f->br_freq, f->cos_freq + bf,
-                  f->sin_freq + bf, false);
+      const DfttFftTables tables = {f->br_freq, f->cos_freq + bf,
+                                    f->sin_freq + bf};
+      dftt_fft_1d(row_r, row_i, 1U, bf, &tables, false);
     } else {
       dftt_dft_1d(row_r, row_i, 1U, bf, f->cos_freq, f->sin_freq, false);
     }
@@ -268,8 +286,9 @@ static void dftt_fwd_cols(const DfttFilter* f, float* re, float* im) {
   const uint32_t bt = f->time_span;
   for (uint32_t c = 0U; c < bf; c++) {
     if (f->pow2_time) {
-      dftt_fft_1d(re + c, im + c, bf, bt, f->br_time, f->cos_time + bt,
-                  f->sin_time + bt, false);
+      const DfttFftTables tables = {f->br_time, f->cos_time + bt,
+                                    f->sin_time + bt};
+      dftt_fft_1d(re + c, im + c, bf, bt, &tables, false);
     } else {
       dftt_dft_1d(re + c, im + c, bf, bt, f->cos_time, f->sin_time, false);
     }
@@ -301,49 +320,34 @@ static void dftt_inv_last_row(const DfttFilter* f, const float* re,
     out_im[k] = si * inv_bt;
   }
   if (f->pow2_freq) {
-    dftt_fft_1d(out_re, out_im, 1U, bf, f->br_freq, f->cos_freq + bf,
-                f->sin_freq + bf, true);
+    const DfttFftTables tables = {f->br_freq, f->cos_freq + bf,
+                                  f->sin_freq + bf};
+    dftt_fft_1d(out_re, out_im, 1U, bf, &tables, true);
   } else {
     dftt_dft_1d(out_re, out_im, 1U, bf, f->cos_freq, f->sin_freq, true);
   }
 }
 
-DfttFilter* dftt_filter_initialize(uint32_t spectrum_size,
-                                   uint32_t time_span_frames,
-                                   uint32_t block_freq_bins) {
-  if (spectrum_size == 0U || time_span_frames == 0U || block_freq_bins == 0U) {
-    return NULL;
+static bool dftt_validate_dims(uint32_t* time_span_frames,
+                               uint32_t* block_freq_bins) {
+  if (*time_span_frames == 0U || *block_freq_bins == 0U) {
+    return false;
   }
-  if (time_span_frames > DFTT_MAX_TIME_FRAMES) {
-    time_span_frames = DFTT_MAX_TIME_FRAMES;
+  if (*time_span_frames > DFTT_MAX_TIME_FRAMES) {
+    *time_span_frames = DFTT_MAX_TIME_FRAMES;
   }
-  if (block_freq_bins > DFTT_MAX_DIM) {
-    block_freq_bins = DFTT_MAX_DIM;
+  if (*block_freq_bins > DFTT_MAX_DIM) {
+    *block_freq_bins = DFTT_MAX_DIM;
   }
   /* Fixed-size stack temporaries cap both DFT dimensions. */
-  if (time_span_frames > DFTT_MAX_DIM) {
-    return NULL;
+  if (*time_span_frames > DFTT_MAX_DIM) {
+    return false;
   }
+  return true;
+}
 
-  DfttFilter* f = (DfttFilter*)calloc(1U, sizeof(DfttFilter));
-  if (!f) {
-    return NULL;
-  }
-  f->spectrum_size = spectrum_size;
-  f->time_span = time_span_frames;
-  f->block_freq = block_freq_bins;
-  f->block_hop = block_freq_bins / DFTT_FREQ_OVERLAP;
-  f->kill_k = DFTT_KILL_K;
-  f->pow2_freq = dftt_is_pow2(block_freq_bins);
-  f->pow2_time = dftt_is_pow2(time_span_frames);
-  if (f->block_hop == 0U) {
-    f->block_hop = 1U;
-  }
-
-  const uint32_t bt = f->time_span;
-  const uint32_t bf = f->block_freq;
-  const size_t tile = (size_t)bt * bf;
-
+static bool dftt_alloc_buffers(DfttFilter* f, uint32_t spectrum_size,
+                               uint32_t bt, uint32_t bf) {
   f->noisy_ring = (float**)calloc(bt, sizeof(float*));
   f->smooth_ring = (float**)calloc(bt, sizeof(float*));
   f->win_freq = (float*)calloc(bf, sizeof(float));
@@ -355,10 +359,10 @@ DfttFilter* dftt_filter_initialize(uint32_t spectrum_size,
   f->mod_cos = (float*)calloc(bt, sizeof(float));
   f->mod_sin = (float*)calloc(bt, sizeof(float));
   f->wsum = (float*)calloc(spectrum_size, sizeof(float));
-  f->tile_re = (float*)calloc(tile, sizeof(float));
-  f->tile_im = (float*)calloc(tile, sizeof(float));
-  f->ref_re = (float*)calloc(tile, sizeof(float));
-  f->ref_im = (float*)calloc(tile, sizeof(float));
+  f->tile_re = (float*)calloc((size_t)bt * bf, sizeof(float));
+  f->tile_im = (float*)calloc((size_t)bt * bf, sizeof(float));
+  f->ref_re = (float*)calloc((size_t)bt * bf, sizeof(float));
+  f->ref_im = (float*)calloc((size_t)bt * bf, sizeof(float));
   if (f->pow2_freq) {
     f->br_freq = (uint32_t*)calloc(bf, sizeof(uint32_t));
   }
@@ -371,17 +375,20 @@ DfttFilter* dftt_filter_initialize(uint32_t spectrum_size,
       !f->ref_re || !f->ref_im || (f->pow2_freq && !f->br_freq) ||
       (f->pow2_time && !f->br_time)) {
     dftt_filter_free(f);
-    return NULL;
+    return false;
   }
   for (uint32_t r = 0U; r < bt; r++) {
     f->noisy_ring[r] = (float*)calloc(spectrum_size, sizeof(float));
     f->smooth_ring[r] = (float*)calloc(spectrum_size, sizeof(float));
     if (!f->noisy_ring[r] || !f->smooth_ring[r]) {
       dftt_filter_free(f);
-      return NULL;
+      return false;
     }
   }
+  return true;
+}
 
+static void dftt_build_static_tables(DfttFilter* f, uint32_t bt, uint32_t bf) {
   dftt_build_hann(f->win_freq, bf);
   dftt_build_time_window(f->win_time, bt);
   dftt_build_twiddles(f->cos_freq, f->sin_freq, bf);
@@ -409,7 +416,10 @@ DfttFilter* dftt_filter_initialize(uint32_t spectrum_size,
       f->br_time[i] = dftt_bit_reverse(i, bits);
     }
   }
+}
 
+static void dftt_init_wsum(DfttFilter* f, uint32_t spectrum_size, uint32_t bt,
+                           uint32_t bf) {
   /* Overlap-add normalization: only the newest time row is emitted, so each
    * tile contributes syn*ana = win^2 weights. Tiles are centered (first tile
    * starts at -(BF-HF)) so edge bins are covered by a full-weight tile
@@ -424,6 +434,42 @@ DfttFilter* dftt_filter_initialize(uint32_t spectrum_size,
       f->wsum[bin] += w * w;
     }
   }
+}
+
+DfttFilter* dftt_filter_initialize(uint32_t spectrum_size,
+                                   uint32_t time_span_frames,
+                                   uint32_t block_freq_bins) {
+  if (spectrum_size == 0U) {
+    return NULL;
+  }
+  if (!dftt_validate_dims(&time_span_frames, &block_freq_bins)) {
+    return NULL;
+  }
+
+  DfttFilter* f = (DfttFilter*)calloc(1U, sizeof(DfttFilter));
+  if (!f) {
+    return NULL;
+  }
+  f->spectrum_size = spectrum_size;
+  f->time_span = time_span_frames;
+  f->block_freq = block_freq_bins;
+  f->block_hop = block_freq_bins / DFTT_FREQ_OVERLAP;
+  f->kill_k = DFTT_KILL_K;
+  f->pow2_freq = dftt_is_pow2(block_freq_bins);
+  f->pow2_time = dftt_is_pow2(time_span_frames);
+  if (f->block_hop == 0U) {
+    f->block_hop = 1U;
+  }
+
+  const uint32_t bt = f->time_span;
+  const uint32_t bf = f->block_freq;
+
+  if (!dftt_alloc_buffers(f, spectrum_size, bt, bf)) {
+    return NULL;
+  }
+
+  dftt_build_static_tables(f, bt, bf);
+  dftt_init_wsum(f, spectrum_size, bt, bf);
 
   return f;
 }
@@ -499,6 +545,121 @@ void dftt_filter_reset(DfttFilter* f) {
   f->fresh = false;
 }
 
+static void dftt_gather_tile(DfttFilter* f, int32_t fs, uint32_t spec,
+                             uint32_t bt, uint32_t bf, float* esum,
+                             float* wsum_r2) {
+  /* Gather past-only tile, oldest row first. Interior tiles need no bin
+   * clamping and run through the 8-wide kit; edge tiles stay scalar. */
+  const bool clamped = (fs < 0) || ((fs + (int32_t)bf) > (int32_t)spec);
+  const sb_vec8_t vzero = sb_set8(0.0F);
+  *esum = 0.0F;
+  *wsum_r2 = 0.0F;
+  for (uint32_t r = 0U; r < bt; r++) {
+    const float* row_n = f->noisy_ring[(f->head + r) % bt];
+    const float* row_s = f->smooth_ring[(f->head + r) % bt];
+    const float wt = f->win_time[r];
+    const size_t row_off = (size_t)r * bf;
+    uint32_t i = 0U;
+    if (!clamped) {
+      const sb_vec8_t vw = sb_set8(wt);
+      for (; i + 8U <= bf; i += 8U) {
+        const sb_vec8_t vn = sb_load8(row_n + fs + i);
+        const sb_vec8_t vs = sb_load8(row_s + fs + i);
+        *esum += sb_vec8_hsum(vn);
+        const sb_vec8_t w = sb_mul8(sb_load8(f->win_freq + i), vw);
+        const sb_vec8_t rd = sb_sub8(vn, vs);
+        *wsum_r2 += sb_vec8_hsum(sb_mul8(sb_mul8(w, w), sb_mul8(rd, rd)));
+        sb_store8(f->tile_re + row_off + i, sb_mul8(vn, w));
+        sb_store8(f->tile_im + row_off + i, vzero);
+        sb_store8(f->ref_re + row_off + i, sb_mul8(vs, w));
+        sb_store8(f->ref_im + row_off + i, vzero);
+      }
+    }
+    for (; i < bf; i++) {
+      const uint32_t bin = dftt_clamp_bin(fs + (int32_t)i, spec);
+      *esum += row_n[bin];
+      const float w = wt * f->win_freq[i];
+      const float resid = row_n[bin] - row_s[bin];
+      *wsum_r2 += (w * w) * (resid * resid);
+      const size_t at = row_off + i;
+      f->tile_re[at] = row_n[bin] * w;
+      f->tile_im[at] = 0.0F;
+      f->ref_re[at] = row_s[bin] * w;
+      f->ref_im[at] = 0.0F;
+    }
+  }
+}
+
+static void dftt_shrink_tile(DfttFilter* f, uint32_t bt, uint32_t bf,
+                             float wsum_r2) {
+  /* Per-coefficient quefrency-domain rule (paper S4.2): the NLM-smoothed
+   * tile provides the per-coefficient SNR estimate of the suppression
+   * rule. Speckle is white in the tile-DFT domain, so its per-coefficient
+   * power follows directly from Parseval on the spatial residual
+   * (noisy - NLM): sigma2 = sum(w^2 * r^2) over the tile. Gain: Wiener
+   * against the structure prior — coefficients where the NLM tile shows
+   * structure (pr >> sigma2) pass the noisy (sharp) value, coefficients
+   * where it shows none (pr ~ 0) die. The tile's flat level and slow
+   * envelopes live at huge pr, so they pass without exemptions. Prior
+   * stays absolute by design: a noisy-witness rescue was measured
+   * SD-neutral — the monotone clamp below caps output at the NLM map, so
+   * DFTT cannot repair prior undershoots (only overshoots, i.e. speckle). */
+  const float sigma2 = wsum_r2;
+  const float speckle_power = f->kill_k * sigma2;
+  for (size_t k = 0U; k < (size_t)bt * bf; k++) {
+    const float pr =
+        (f->ref_re[k] * f->ref_re[k]) + (f->ref_im[k] * f->ref_im[k]);
+    const float g = pr / (pr + speckle_power);
+    f->tile_re[k] *= g;
+    f->tile_im[k] *= g;
+  }
+}
+
+static void dftt_emit_row(DfttFilter* f, int32_t fs, uint32_t spec, uint32_t bt,
+                          uint32_t bf, float* crow_re, float* crow_im,
+                          float* refined_snr) {
+  /* Emit the newest time row only; past rows were emitted before. The
+   * gathered tile already carries the analysis weight w, so emitting with
+   * w gives syn*ana = w^2 per tile, matching the wsum normalization below
+   * (unity gain reconstructs exactly). */
+  dftt_inv_last_row(f, f->tile_re, f->tile_im, crow_re, crow_im);
+  const bool clamped = (fs < 0) || ((fs + (int32_t)bf) > (int32_t)spec);
+  const float wt_last = f->win_time[bt - 1U];
+  uint32_t i = 0U;
+  if (!clamped) {
+    const sb_vec8_t vw = sb_set8(wt_last);
+    for (; i + 8U <= bf; i += 8U) {
+      const sb_vec8_t w = sb_mul8(sb_load8(f->win_freq + i), vw);
+      const sb_vec8_t v = sb_mul8(sb_load8(crow_re + i), w);
+      sb_store8(refined_snr + fs + i,
+                sb_add8(sb_load8(refined_snr + fs + i), v));
+    }
+  }
+  for (; i < bf; i++) {
+    const uint32_t bin = dftt_clamp_bin(fs + (int32_t)i, spec);
+    refined_snr[bin] += (wt_last * f->win_freq[i]) * crow_re[i];
+  }
+}
+
+static void dftt_normalize_clamp(DfttFilter* f, float* refined_snr,
+                                 const float* newest_smooth, uint32_t spec) {
+  for (uint32_t k = 0U; k < spec; k++) {
+    refined_snr[k] = f->wsum[k] > 0.0F ? refined_snr[k] / f->wsum[k] : 0.0F;
+  }
+
+  /* Monotone safety: the refined map may only remove energy relative to
+   * NLM's verdict, never add it — windowing cross-talk from neighbouring
+   * tiles can never creep energy back in (no hum creep). With the
+   * structure-prior rule this is a no-op except in edge cases: refined
+   * already sits below NLM on the diffuse floor and matches it on
+   * structure. */
+  for (uint32_t k = 0U; k < spec; k++) {
+    if (refined_snr[k] > newest_smooth[k]) {
+      refined_snr[k] = newest_smooth[k];
+    }
+  }
+}
+
 bool dftt_filter_process(DfttFilter* f, float* refined_snr) {
   if (!f || !refined_snr) {
     return false;
@@ -513,7 +674,6 @@ bool dftt_filter_process(DfttFilter* f, float* refined_snr) {
   const uint32_t spec = f->spectrum_size;
   const uint32_t bt = f->time_span;
   const uint32_t bf = f->block_freq;
-  const sb_vec8_t vzero = sb_set8(0.0F);
   float crow_re[DFTT_MAX_DIM];
   float crow_im[DFTT_MAX_DIM];
 
@@ -523,45 +683,9 @@ bool dftt_filter_process(DfttFilter* f, float* refined_snr) {
   const int32_t tile_start = -((int32_t)bf - (int32_t)f->block_hop);
   for (int32_t fs = tile_start; fs < (int32_t)spec;
        fs += (int32_t)f->block_hop) {
-    /* Gather past-only tile, oldest row first. Interior tiles need no bin
-     * clamping and run through the 8-wide kit; edge tiles stay scalar. */
-    const bool clamped = (fs < 0) || ((fs + (int32_t)bf) > (int32_t)spec);
     float esum = 0.0F;
     float wsum_r2 = 0.0F;
-    for (uint32_t r = 0U; r < bt; r++) {
-      const float* row_n = f->noisy_ring[(f->head + r) % bt];
-      const float* row_s = f->smooth_ring[(f->head + r) % bt];
-      const float wt = f->win_time[r];
-      const size_t row_off = (size_t)r * bf;
-      uint32_t i = 0U;
-      if (!clamped) {
-        const sb_vec8_t vw = sb_set8(wt);
-        for (; i + 8U <= bf; i += 8U) {
-          const sb_vec8_t vn = sb_load8(row_n + fs + i);
-          const sb_vec8_t vs = sb_load8(row_s + fs + i);
-          esum += sb_vec8_hsum(vn);
-          const sb_vec8_t w = sb_mul8(sb_load8(f->win_freq + i), vw);
-          const sb_vec8_t rd = sb_sub8(vn, vs);
-          wsum_r2 += sb_vec8_hsum(sb_mul8(sb_mul8(w, w), sb_mul8(rd, rd)));
-          sb_store8(f->tile_re + row_off + i, sb_mul8(vn, w));
-          sb_store8(f->tile_im + row_off + i, vzero);
-          sb_store8(f->ref_re + row_off + i, sb_mul8(vs, w));
-          sb_store8(f->ref_im + row_off + i, vzero);
-        }
-      }
-      for (; i < bf; i++) {
-        const uint32_t bin = dftt_clamp_bin(fs + (int32_t)i, spec);
-        esum += row_n[bin];
-        const float w = wt * f->win_freq[i];
-        const float resid = row_n[bin] - row_s[bin];
-        wsum_r2 += (w * w) * (resid * resid);
-        const size_t at = row_off + i;
-        f->tile_re[at] = row_n[bin] * w;
-        f->tile_im[at] = 0.0F;
-        f->ref_re[at] = row_s[bin] * w;
-        f->ref_im[at] = 0.0F;
-      }
-    }
+    dftt_gather_tile(f, fs, spec, bt, bf, &esum, &wsum_r2);
 
     const float wt_last = f->win_time[bt - 1U];
     if (esum < DFTT_SILENCE_EPS) {
@@ -578,64 +702,11 @@ bool dftt_filter_process(DfttFilter* f, float* refined_snr) {
     dftt_fwd_cols(f, f->tile_re, f->tile_im);
     dftt_fwd_rows(f, f->ref_re, f->ref_im);
     dftt_fwd_cols(f, f->ref_re, f->ref_im);
-    /* Per-coefficient quefrency-domain rule (paper S4.2): the NLM-smoothed
-     * tile provides the per-coefficient SNR estimate of the suppression
-     * rule. Speckle is white in the tile-DFT domain, so its per-coefficient
-     * power follows directly from Parseval on the spatial residual
-     * (noisy - NLM): sigma2 = sum(w^2 * r^2) over the tile. Gain: Wiener
-     * against the structure prior — coefficients where the NLM tile shows
-     * structure (pr >> sigma2) pass the noisy (sharp) value, coefficients
-     * where it shows none (pr ~ 0) die. The tile's flat level and slow
-     * envelopes live at huge pr, so they pass without exemptions. Prior
-     * stays absolute by design: a noisy-witness rescue was measured
-     * SD-neutral — the monotone clamp below caps output at the NLM map, so
-     * DFTT cannot repair prior undershoots (only overshoots, i.e. speckle). */
-    const float sigma2 = wsum_r2;
-    const float speckle_power = f->kill_k * sigma2;
-    for (size_t k = 0U; k < (size_t)bt * bf; k++) {
-      const float pr =
-          (f->ref_re[k] * f->ref_re[k]) + (f->ref_im[k] * f->ref_im[k]);
-      const float g = pr / (pr + speckle_power);
-      f->tile_re[k] *= g;
-      f->tile_im[k] *= g;
-    }
-
-    /* Emit the newest time row only; past rows were emitted before. The
-     * gathered tile already carries the analysis weight w, so emitting with
-     * w gives syn*ana = w^2 per tile, matching the wsum normalization below
-     * (unity gain reconstructs exactly). */
-    dftt_inv_last_row(f, f->tile_re, f->tile_im, crow_re, crow_im);
-    uint32_t i = 0U;
-    if (!clamped) {
-      const sb_vec8_t vw = sb_set8(wt_last);
-      for (; i + 8U <= bf; i += 8U) {
-        const sb_vec8_t w = sb_mul8(sb_load8(f->win_freq + i), vw);
-        const sb_vec8_t v = sb_mul8(sb_load8(crow_re + i), w);
-        sb_store8(refined_snr + fs + i,
-                  sb_add8(sb_load8(refined_snr + fs + i), v));
-      }
-    }
-    for (; i < bf; i++) {
-      const uint32_t bin = dftt_clamp_bin(fs + (int32_t)i, spec);
-      refined_snr[bin] += (wt_last * f->win_freq[i]) * crow_re[i];
-    }
+    dftt_shrink_tile(f, bt, bf, wsum_r2);
+    dftt_emit_row(f, fs, spec, bt, bf, crow_re, crow_im, refined_snr);
   }
 
-  for (uint32_t k = 0U; k < spec; k++) {
-    refined_snr[k] = f->wsum[k] > 0.0F ? refined_snr[k] / f->wsum[k] : 0.0F;
-  }
-
-  /* Monotone safety: the refined map may only remove energy relative to
-   * NLM's verdict, never add it — windowing cross-talk from neighbouring
-   * tiles can never creep energy back in (no hum creep). With the
-   * structure-prior rule this is a no-op except in edge cases: refined
-   * already sits below NLM on the diffuse floor and matches it on
-   * structure. */
-  for (uint32_t k = 0U; k < spec; k++) {
-    if (refined_snr[k] > newest_smooth[k]) {
-      refined_snr[k] = newest_smooth[k];
-    }
-  }
+  dftt_normalize_clamp(f, refined_snr, newest_smooth, spec);
 
   sb_simd_restore_state(old_simd_state);
   return true;
