@@ -81,10 +81,6 @@ void brandt_noise_estimator_update_seed(BrandtNoiseEstimator* self,
 void brandt_noise_estimator_apply_floor(BrandtNoiseEstimator* self,
                                         const float* floor_profile);
 
-void brandt_noise_estimator_set_history_duration(
-    const BrandtNoiseEstimator* self, float history_duration_ms,
-    uint32_t sample_rate, uint32_t fft_size);
-
 /* Init-time only (never the audio thread): retune the stats update interval
  * for the hop duration and rebuild history storage for the true hop when it
  * differs from the fft-derived init approximation. Keeps existing storage on

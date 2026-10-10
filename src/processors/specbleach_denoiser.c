@@ -197,32 +197,7 @@ specbleach_denoiser* specbleach_denoiser_initialize(uint32_t sample_rate,
   self->frame_size_ms = frame_size_ms;
   self->frame_size_samples = (uint32_t)frame_samples;
   self->init_flags = flags;
-  self->stft_processor = stft_processor_initialize(
-      sample_rate, frame_size_ms, init_overlap_factor(flags),
-      PADDING_CONFIGURATION, ZEROPADDING_AMOUNT, INPUT_WINDOW_TYPE,
-      OUTPUT_WINDOW_TYPE);
-
-  if (!self->stft_processor) {
-    specbleach_denoiser_free(self);
-    return NULL;
-  }
-
-  self->fft_size = get_stft_fft_size(self->stft_processor);
-  self->hop = get_stft_hop_size(self->stft_processor);
-
-  self->noise_profile = noise_profile_initialize(
-      get_stft_real_spectrum_size(self->stft_processor));
-  if (!self->noise_profile) {
-    specbleach_denoiser_free(self);
-    return NULL;
-  }
-
-  self->spectral_denoiser = spectral_denoiser_initialize_with_hop(
-      self->sample_rate, self->fft_size, init_overlap_factor(flags), self->hop,
-      self->noise_profile,
-      (flags & SPECBLEACH_INIT_LOW_LATENCY) ? true : false);
-
-  if (!self->spectral_denoiser) {
+  if (!rebuild_engines(self)) {
     specbleach_denoiser_free(self);
     return NULL;
   }

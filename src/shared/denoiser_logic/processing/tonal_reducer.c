@@ -51,6 +51,15 @@ struct TonalReducer {
   bool gain_seeded[2];
 };
 
+static inline float tonal_alpha_needed(float tonal_reduction_gain) {
+  const float tonal_reduction_strength = 1.0f - tonal_reduction_gain;
+  return ALPHA_MIN + (tonal_reduction_strength * (ALPHA_MAX_TONAL - ALPHA_MIN));
+}
+
+static inline float tonal_alpha_for_mask(float mask, float alpha_needed) {
+  return ALPHA_MIN + (mask * (alpha_needed - ALPHA_MIN));
+}
+
 static void publish_mask(TonalReducer* self) {
   int published_idx =
       atomic_load_explicit(&self->active_mask_idx, memory_order_relaxed);
@@ -193,12 +202,10 @@ void tonal_reducer_compute_tonal_gains(TonalReducer* self, uint32_t slot,
 
   // Alpha mapping identical to the legacy tonal alpha boost: mask-weighted
   // interpolation between ALPHA_MIN and the reduction-depth alpha.
-  const float tonal_reduction_strength = 1.0f - tonal_reduction_gain;
-  const float alpha_needed =
-      ALPHA_MIN + (tonal_reduction_strength * (ALPHA_MAX_TONAL - ALPHA_MIN));
+  const float alpha_needed = tonal_alpha_needed(tonal_reduction_gain);
   for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
     const float mask = fminf(tonal_mask[k], 1.0f);
-    self->alpha_tonal[k] = ALPHA_MIN + (mask * (alpha_needed - ALPHA_MIN));
+    self->alpha_tonal[k] = tonal_alpha_for_mask(mask, alpha_needed);
   }
 
   // Second Wiener evaluation on the tonal residual: plain subtraction curve
@@ -262,15 +269,13 @@ void tonal_reducer_apply_alpha_boost(TonalReducer* self, float* alpha,
     return;
   }
 
-  const float tonal_reduction_strength = 1.0f - tonal_reduction_gain;
-  const float alpha_needed =
-      ALPHA_MIN + (tonal_reduction_strength * (ALPHA_MAX_TONAL - ALPHA_MIN));
+  const float alpha_needed = tonal_alpha_needed(tonal_reduction_gain);
   for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
     if (self->tonal_mask[k] <= 0.0f) {
       continue;
     }
-    const float target_alpha = ALPHA_MIN + (fminf(self->tonal_mask[k], 1.0f) *
-                                            (alpha_needed - ALPHA_MIN));
+    const float target_alpha =
+        tonal_alpha_for_mask(fminf(self->tonal_mask[k], 1.0f), alpha_needed);
     alpha[k] = fmaxf(alpha[k], target_alpha);
   }
 }

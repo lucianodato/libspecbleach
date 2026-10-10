@@ -126,6 +126,22 @@ static void update_rolling_mean(NoiseEstimator* self, float* noise_profile,
   increment_block_count(self->noise_profile, type);
 }
 
+static void calculate_median_profile(NoiseEstimator* self, float* noise_profile,
+                                     NoiseEstimatorType type) {
+  const uint32_t blocks = self->median_blocks;
+  const float* history_frames[NUMBER_OF_MEDIAN_SPECTRUM_MAX];
+
+  for (uint32_t i = 0; i < blocks; i++) {
+    history_frames[i] = spectral_circular_buffer_retrieve(
+        self->median_buffer, self->layer_median, i + 1);
+  }
+
+  if (get_rolling_median_spectrum(noise_profile, history_frames, blocks,
+                                  self->real_spectrum_size)) {
+    set_noise_profile_available(self->noise_profile, type);
+  }
+}
+
 static void update_median(NoiseEstimator* self, float* noise_profile,
                           const float* signal_spectrum,
                           NoiseEstimatorType type) {
@@ -142,18 +158,7 @@ static void update_median(NoiseEstimator* self, float* noise_profile,
     return;
   }
 
-  const uint32_t blocks = self->median_blocks;
-  const float* history_frames[NUMBER_OF_MEDIAN_SPECTRUM_MAX];
-
-  for (uint32_t i = 0; i < blocks; i++) {
-    history_frames[i] = spectral_circular_buffer_retrieve(
-        self->median_buffer, self->layer_median, i + 1);
-  }
-
-  if (get_rolling_median_spectrum(noise_profile, history_frames, blocks,
-                                  self->real_spectrum_size)) {
-    set_noise_profile_available(self->noise_profile, type);
-  }
+  calculate_median_profile(self, noise_profile, type);
 }
 
 static void update_welford(NoiseEstimator* self, const float* signal_spectrum) {
@@ -242,16 +247,7 @@ void noise_estimation_finalize(NoiseEstimator* self,
     // decimation counter so finalize precision is bit-identical.
     float* median_profile = get_noise_profile(self->noise_profile, MEDIAN);
     if (median_profile) {
-      const uint32_t blocks = self->median_blocks;
-      const float* history_frames[NUMBER_OF_MEDIAN_SPECTRUM_MAX];
-      for (uint32_t i = 0; i < blocks; i++) {
-        history_frames[i] = spectral_circular_buffer_retrieve(
-            self->median_buffer, self->layer_median, i + 1);
-      }
-      if (get_rolling_median_spectrum(median_profile, history_frames, blocks,
-                                      self->real_spectrum_size)) {
-        set_noise_profile_available(self->noise_profile, MEDIAN);
-      }
+      calculate_median_profile(self, median_profile, MEDIAN);
     }
   }
 

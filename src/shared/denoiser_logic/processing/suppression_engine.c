@@ -143,6 +143,17 @@ static void calculate_berouti_per_bin(SuppressionEngine* self,
   }
 }
 
+static inline float get_oversubtraction_factor(float snr_db, float strength) {
+  if (snr_db <= 0.F) {
+    return strength;
+  }
+  if (snr_db >= 20.F) {
+    return ALPHA_MIN;
+  }
+  const float normalized_snr = snr_db / 20.F;
+  return ((1.F - normalized_snr) * strength) + (normalized_snr * ALPHA_MIN);
+}
+
 static void calculate_global_snr(SuppressionEngine* self, const float* spectrum,
                                  const float* noise_spectrum,
                                  SuppressionParameters parameters, float* alpha,
@@ -158,17 +169,8 @@ static void calculate_global_snr(SuppressionEngine* self, const float* spectrum,
   const float snr_db = 10.F * log10f(noisy_spectrum_sum /
                                      (noise_spectrum_sum + SPECTRAL_EPSILON));
 
-  float oversubtraction_factor;
-
-  if (snr_db <= 0.F) {
-    oversubtraction_factor = parameters.strength;
-  } else if (snr_db >= 20.F) {
-    oversubtraction_factor = ALPHA_MIN;
-  } else {
-    const float normalized_snr = snr_db / 20.F;
-    oversubtraction_factor = ((1.F - normalized_snr) * parameters.strength) +
-                             (normalized_snr * ALPHA_MIN);
-  }
+  const float oversubtraction_factor =
+      get_oversubtraction_factor(snr_db, parameters.strength);
 
   for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
     alpha[k] = oversubtraction_factor;
@@ -195,17 +197,8 @@ static void calculate_critical_bands_snr(SuppressionEngine* self,
         log10f(self->critical_bands_reference_spectrum[j] /
                (self->critical_bands_noise_profile[j] + SPECTRAL_EPSILON));
 
-    float oversubtraction_factor;
-
-    if (snr_db <= 0.F) {
-      oversubtraction_factor = parameters.strength;
-    } else if (snr_db >= 20.F) {
-      oversubtraction_factor = ALPHA_MIN;
-    } else {
-      const float normalized_snr = snr_db / 20.F;
-      oversubtraction_factor = ((1.F - normalized_snr) * parameters.strength) +
-                               (normalized_snr * ALPHA_MIN);
-    }
+    const float oversubtraction_factor =
+        get_oversubtraction_factor(snr_db, parameters.strength);
 
     for (uint32_t k = band_indexes.start_position;
          k < band_indexes.end_position; k++) {

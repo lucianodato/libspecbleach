@@ -183,6 +183,32 @@ static int normalize_smoothing_mode(const int mode) {
   return SPECBLEACH_SMOOTHING_TEMPORAL;
 }
 
+static void push_aligned_frame_layers(SbSpectralDenoiser* self,
+                                      const float* fft_spectrum) {
+  spectral_circular_buffer_push(self->circular_buffer, self->layer_fft,
+                                fft_spectrum);
+  spectral_circular_buffer_push(self->circular_buffer, self->layer_noise,
+                                self->noise_spectrum);
+  spectral_circular_buffer_push(self->circular_buffer, self->layer_noise_bb,
+                                self->noise_bb);
+  spectral_circular_buffer_push(self->circular_buffer, self->layer_noise_tonal,
+                                self->noise_tonal);
+  // The mask must ride with this frame's tonal residual.
+  const float* tonal_mask = tonal_reducer_get_mask(self->tonal_reducer);
+  if (tonal_mask) {
+    spectral_circular_buffer_push(self->circular_buffer, self->layer_tonal_mask,
+                                  tonal_mask);
+  }
+}
+
+static void push_filter_histories(SbSpectralDenoiser* self,
+                                  const float* reference_spectrum) {
+  nlm_filter_calculate_snr(self->nlm_filter, reference_spectrum, self->noise_bb,
+                           self->snr_frame);
+  nlm_filter_push_frame(self->nlm_filter, self->snr_frame);
+  bm3d_filter_push_frame(self->bm3d_filter, self->snr_frame);
+}
+
 /**
  * Bypass alignment: keeps the circular buffer, NLM history and output
  * rolling during idle/silence stretches so idle→active transitions stay
@@ -197,25 +223,10 @@ static void align_bypass_frame(SbSpectralDenoiser* self, float* fft_spectrum,
   // The bypass happens after the dual-path split, so the aligned layers stay
   // in the same domain as the active chain (SNR fields must not mix domains
   // across the idle→active boundary).
-  spectral_circular_buffer_push(self->circular_buffer, self->layer_fft,
-                                fft_spectrum);
-  spectral_circular_buffer_push(self->circular_buffer, self->layer_noise,
-                                self->noise_spectrum);
-  spectral_circular_buffer_push(self->circular_buffer, self->layer_noise_bb,
-                                self->noise_bb);
-  spectral_circular_buffer_push(self->circular_buffer, self->layer_noise_tonal,
-                                self->noise_tonal);
-  const float* bypass_tonal_mask = tonal_reducer_get_mask(self->tonal_reducer);
-  if (bypass_tonal_mask) {
-    spectral_circular_buffer_push(self->circular_buffer, self->layer_tonal_mask,
-                                  bypass_tonal_mask);
-  }
+  push_aligned_frame_layers(self, fft_spectrum);
   spectral_circular_buffer_push(self->circular_buffer, self->layer_smoothed,
                                 reference_spectrum);
-  nlm_filter_calculate_snr(self->nlm_filter, reference_spectrum, self->noise_bb,
-                           self->snr_frame);
-  nlm_filter_push_frame(self->nlm_filter, self->snr_frame);
-  bm3d_filter_push_frame(self->bm3d_filter, self->snr_frame);
+  push_filter_histories(self, reference_spectrum);
   const float* delayed_spectrum = spectral_circular_buffer_retrieve(
       self->circular_buffer, self->layer_fft,
       nlm_filter_get_latency_frames(self->nlm_filter));
@@ -260,8 +271,7 @@ static SpectralProcessorHandle spectral_denoiser_initialize_inner(
   self->hop =
       (hop_override > 0U) ? hop_override : (self->fft_size / overlap_factor);
   if (self->hop == 0U) {
-    spectral_denoiser_free(self);
-    return NULL;
+    goto fail;
   }
   self->hop_sec = sb_hop_sec(self->hop, sample_rate);
   self->sample_rate = sample_rate;
@@ -322,8 +332,7 @@ static SpectralProcessorHandle spectral_denoiser_initialize_inner(
 #endif
       !self->manual_noise_floor || !self->smoothed_magnitude ||
       !self->clean_magnitude || !self->knee_spectrum) {
-    spectral_denoiser_free(self);
-    return NULL;
+    goto fail;
   }
 
   (void)initialize_spectrum_with_value(self->gain_spectrum, self->fft_size,
@@ -344,15 +353,13 @@ static SpectralProcessorHandle spectral_denoiser_initialize_inner(
   self->tonal_reducer = tonal_reducer_initialize(
       self->real_spectrum_size, self->sample_rate, self->fft_size);
   if (!self->tonal_reducer) {
-    spectral_denoiser_free(self);
-    return NULL;
+    goto fail;
   }
 
   // Circular buffer for temporal alignment (provides the common delay)
   self->circular_buffer = spectral_circular_buffer_create(DELAY_BUFFER_FRAMES);
   if (!self->circular_buffer) {
-    spectral_denoiser_free(self);
-    return NULL;
+    goto fail;
   }
 
   self->layer_fft =
@@ -373,8 +380,7 @@ static SpectralProcessorHandle spectral_denoiser_initialize_inner(
       self->layer_noise_bb == 0xFFFFFFFFU ||
       self->layer_noise_tonal == 0xFFFFFFFFU ||
       self->layer_tonal_mask == 0xFFFFFFFFU) {
-    spectral_denoiser_free(self);
-    return NULL;
+    goto fail;
   }
 
   self->was_learning = false;
@@ -384,8 +390,7 @@ static SpectralProcessorHandle spectral_denoiser_initialize_inner(
   // Initialize noise estimator for learning mode
   self->noise_estimator = noise_estimation_initialize(fft_size, noise_profile);
   if (!self->noise_estimator) {
-    spectral_denoiser_free(self);
-    return NULL;
+    goto fail;
   }
 
   // Frame-rate normalization: fixed-ms / fixed-Hz geometry + per-hop alphas.
@@ -410,8 +415,7 @@ static SpectralProcessorHandle spectral_denoiser_initialize_inner(
   };
   self->nlm_filter = nlm_filter_initialize(nlm_config);
   if (!self->nlm_filter) {
-    spectral_denoiser_free(self);
-    return NULL;
+    goto fail;
   }
 
   // BM3D-lite shares the NLM geometry/latency so switches stay instant.
@@ -427,8 +431,7 @@ static SpectralProcessorHandle spectral_denoiser_initialize_inner(
   };
   self->bm3d_filter = bm3d_filter_initialize(bm3d_config);
   if (!self->bm3d_filter) {
-    spectral_denoiser_free(self);
-    return NULL;
+    goto fail;
   }
 
   // DFTT post-filter (paper S4.2 lite): past-only time span in ms so it adds
@@ -441,16 +444,14 @@ static SpectralProcessorHandle spectral_denoiser_initialize_inner(
   self->dftt_filter =
       dftt_filter_initialize(self->real_spectrum_size, dftt_span, dftt_block);
   if (!self->dftt_filter) {
-    spectral_denoiser_free(self);
-    return NULL;
+    goto fail;
   }
 
   // Temporal smoother (1D smoothing strategy)
   self->spectrum_smoothing = spectral_smoothing_initialize(
       self->fft_size, self->sample_rate, overlap_factor, FIXED);
   if (!self->spectrum_smoothing) {
-    spectral_denoiser_free(self);
-    return NULL;
+    goto fail;
   }
   spectral_smoothing_set_hop_samples(self->spectrum_smoothing, self->hop);
 
@@ -458,22 +459,19 @@ static SpectralProcessorHandle spectral_denoiser_initialize_inner(
   self->release_shaper =
       release_shaper_initialize(self->sample_rate, self->fft_size);
   if (!self->release_shaper) {
-    spectral_denoiser_free(self);
-    return NULL;
+    goto fail;
   }
   release_shaper_set_hop_sec(self->release_shaper, self->hop_sec);
   self->release_scale = (float*)calloc(self->real_spectrum_size, sizeof(float));
   if (!self->release_scale) {
-    spectral_denoiser_free(self);
-    return NULL;
+    goto fail;
   }
 
   // Initialize spectral features
   self->spectral_features =
       spectral_features_initialize(self->real_spectrum_size);
   if (!self->spectral_features) {
-    spectral_denoiser_free(self);
-    return NULL;
+    goto fail;
   }
 
   self->masking_veto = masking_veto_initialize(
@@ -484,8 +482,7 @@ static SpectralProcessorHandle spectral_denoiser_initialize_inner(
       self->spectrum_type, true, USE_TEMPORAL_MASKING_DEFAULT);
 
   if (!self->masking_veto || !self->suppression_engine) {
-    spectral_denoiser_free(self);
-    return NULL;
+    goto fail;
   }
 
   self->noise_floor_manager = noise_floor_manager_initialize(fft_size);
@@ -518,8 +515,7 @@ static SpectralProcessorHandle spectral_denoiser_initialize_inner(
       !self->transient_detector || !self->band_energies ||
       !self->onset_weights || !self->transient_mask ||
       !self->transient_band_mask || !self->held_weights) {
-    spectral_denoiser_free(self);
-    return NULL;
+    goto fail;
   }
 
   if (hop_sec > 0.0F) {
@@ -542,6 +538,10 @@ static SpectralProcessorHandle spectral_denoiser_initialize_inner(
   self->previous_mode = SPECBLEACH_SMOOTHING_TEMPORAL;
 
   return self;
+
+fail:
+  spectral_denoiser_free(self);
+  return NULL;
 }
 
 SpectralProcessorHandle spectral_denoiser_initialize(
@@ -889,32 +889,10 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
   const float* delayed_tonal_mask = tonal_reducer_get_mask(self->tonal_reducer);
   const float* nlm_smoothed = NULL;
   if (!self->low_latency) {
-    spectral_circular_buffer_push(self->circular_buffer, self->layer_fft,
-                                  fft_spectrum);
-    spectral_circular_buffer_push(self->circular_buffer, self->layer_noise,
-                                  self->noise_spectrum);
-    spectral_circular_buffer_push(self->circular_buffer, self->layer_noise_bb,
-                                  self->noise_bb);
-    spectral_circular_buffer_push(self->circular_buffer,
-                                  self->layer_noise_tonal, self->noise_tonal);
+    push_aligned_frame_layers(self, fft_spectrum);
 
-    // The tonal mask must ride with the residual it belongs to: the chains
-    // run on the delayed noise_tonal, so the mask they evaluate must be the
-    // one from that same frame, not the current one.
-    const float* current_tonal_mask =
-        tonal_reducer_get_mask(self->tonal_reducer);
-    if (current_tonal_mask) {
-      spectral_circular_buffer_push(self->circular_buffer,
-                                    self->layer_tonal_mask, current_tonal_mask);
-    }
-
-    // Compute SNR for 2D filters using the broadband split (current frame)
-    // and push frame. This keeps both NLM and BM3D histories rolling even in
-    // temporal mode so a runtime mode switch is seamless and allocation-free.
-    nlm_filter_calculate_snr(self->nlm_filter, reference_spectrum,
-                             self->noise_bb, self->snr_frame);
-    nlm_filter_push_frame(self->nlm_filter, self->snr_frame);
-    bm3d_filter_push_frame(self->bm3d_filter, self->snr_frame);
+    // Keep both 2D histories warm, even when temporal mode is active.
+    push_filter_histories(self, reference_spectrum);
 
     const uint32_t nlm_delay = nlm_filter_get_latency_frames(self->nlm_filter);
 
