@@ -341,7 +341,7 @@ static SpreadingParams compute_spreading_params(float level_db) {
   const float s_total = (S_DOWNWARD + s_up) * 0.5F;
   const float s_offset = (S_DOWNWARD - s_up) * 0.5F;
 
-  // norm_factor = sqrtf(s_total^2 - s_offset^2) = sqrtf(S_DOWNWARD * s_up)
+  // By algebra, norm equals sqrt(S_DOWNWARD*s_up)
   const float norm_factor = sqrtf(S_DOWNWARD * s_up);
   const float inv_norm_factor = 1.0F / norm_factor;
   const float y_shift = s_offset * inv_norm_factor;

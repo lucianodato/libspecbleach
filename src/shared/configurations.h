@@ -442,19 +442,4 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define SPECTRAL_EPSILON (1e-12F)
 #define MAX_SPECTRAL_CIRCULAR_BUFFER_LAYERS 8
 
-/* --------------------------------------------------------------------- */
-/* Compile-time assertions for configuration validity                     */
-/* --------------------------------------------------------------------- */
-_Static_assert(HANN_WINDOW >= 0 && HANN_WINDOW <= 3,
-               "HANN_WINDOW must be between 0 and 3");
-_Static_assert(HAMMING_WINDOW >= 0 && HAMMING_WINDOW <= 3,
-               "HAMMING_WINDOW must be between 0 and 3");
-_Static_assert(BLACKMAN_WINDOW >= 0 && BLACKMAN_WINDOW <= 3,
-               "BLACKMAN_WINDOW must be between 0 and 3");
-_Static_assert(VORBIS_WINDOW >= 0 && VORBIS_WINDOW <= 3,
-               "VORBIS_WINDOW must be between 0 and 3");
-
-// Additional C17 compile-time validations
-_Static_assert(sizeof(uint32_t) == 4, "uint32_t must be exactly 32 bits");
-
 #endif // SPECBLEACH_CONFIGURATIONS_H

@@ -65,7 +65,7 @@ void stft_buffer_free(StftBuffer* self) {
   free(self);
 }
 
-bool is_buffer_full(StftBuffer* self) {
+bool is_buffer_full(const StftBuffer* self) {
   if (self->read_position == self->stft_frame_size) {
     return true;
   }

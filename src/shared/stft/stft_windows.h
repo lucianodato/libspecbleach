@@ -35,6 +35,7 @@ StftWindows* stft_window_initialize(uint32_t stft_fft_size,
                                     WindowTypes input_window,
                                     WindowTypes output_window);
 void stft_window_free(StftWindows* self);
-bool stft_window_apply(StftWindows* self, float* frame, WindowPlace place);
+bool stft_window_apply(const StftWindows* self, float* frame,
+                       WindowPlace place);
 
 #endif

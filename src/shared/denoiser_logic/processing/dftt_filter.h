@@ -88,7 +88,7 @@ bool dftt_filter_process(DfttFilter* filter, float* refined_snr);
  * @param filter Pointer to filter
  * @return true if enough frames were pushed
  */
-bool dftt_filter_is_ready(DfttFilter* filter);
+bool dftt_filter_is_ready(const DfttFilter* filter);
 
 /**
  * Reset the filter state, clearing all buffered frames.

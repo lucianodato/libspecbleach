@@ -112,7 +112,7 @@ void suppression_engine_set_hop_sec(SuppressionEngine* self, float hop_sec) {
   masking_estimation_set_hop_sec(self->masking_estimation, hop_sec);
 }
 
-static void calculate_berouti_per_bin(SuppressionEngine* self,
+static void calculate_berouti_per_bin(const SuppressionEngine* self,
                                       const float* reference_spectrum,
                                       const float* noise_spectrum,
                                       float strength, float* alpha,
@@ -154,7 +154,8 @@ static inline float get_oversubtraction_factor(float snr_db, float strength) {
   return ((1.F - normalized_snr) * strength) + (normalized_snr * ALPHA_MIN);
 }
 
-static void calculate_global_snr(SuppressionEngine* self, const float* spectrum,
+static void calculate_global_snr(const SuppressionEngine* self,
+                                 const float* spectrum,
                                  const float* noise_spectrum,
                                  SuppressionParameters parameters, float* alpha,
                                  float* beta) {

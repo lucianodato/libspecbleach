@@ -51,7 +51,7 @@ static DenoiserParameters sanitize_denoiser_parameters(
       smoothing_mode = (int)parameters->smoothing_mode;
       break;
     default:
-      smoothing_mode = (int)SPECBLEACH_SMOOTHING_TEMPORAL;
+      smoothing_mode = SPECBLEACH_SMOOTHING_TEMPORAL;
       break;
   }
   return (DenoiserParameters){
@@ -315,7 +315,7 @@ bool specbleach_denoiser_load_noise_profile_resampled(
     specbleach_denoiser* instance, const float* restored_profile,
     const uint32_t source_size, const uint32_t block_count,
     const SpecbleachProfileMode mode) {
-  SbDenoiserInstance* self = instance;
+  const SbDenoiserInstance* self = instance;
   if (!self || !self->noise_profile || !restored_profile || source_size == 0) {
     return false;
   }
@@ -448,7 +448,7 @@ bool specbleach_denoiser_load_parameters(
       sanitize_denoiser_parameters(parameters);
   denoise_parameters.reduction_curve_bias = owned_bias;
   if ((self->init_flags & SPECBLEACH_INIT_LOW_LATENCY) != 0u) {
-    denoise_parameters.smoothing_mode = (int)SPECBLEACH_SMOOTHING_TEMPORAL;
+    denoise_parameters.smoothing_mode = SPECBLEACH_SMOOTHING_TEMPORAL;
   }
 
   return load_reduction_parameters(self->spectral_denoiser, denoise_parameters);

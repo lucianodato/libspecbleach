@@ -137,8 +137,7 @@ bool spectral_smoothing_run(SpectralSmoother* self,
 
   const float* t_mask = parameters.transient_mask;
 
-  uint32_t k = 0U;
-  for (k = 0U; k < self->real_spectrum_size; k++) {
+  for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
     float target = gains[k];
     float prev = self->smoothed_spectrum_previous[k];
     if (target >= prev) {
@@ -176,8 +175,7 @@ void spectral_smoothing_apply_spatial(float* data, uint32_t size) {
   }
 
   float prev = data[0];
-  uint32_t i = 0U;
-  for (i = 1U; i < size; i++) {
+  for (uint32_t i = 1U; i < size; i++) {
     float curr = data[i];
     data[i] = (0.25F * prev) + (0.5F * curr) +
               (0.25F * (i + 1 < size ? data[i + 1] : curr));
@@ -191,8 +189,7 @@ void spectral_smoothing_apply_simple_temporal(float* current, float* memory,
     return;
   }
 
-  uint32_t i = 0U;
-  for (i = 0U; i < size; i++) {
+  for (uint32_t i = 0U; i < size; i++) {
     current[i] = (smoothing * memory[i]) + ((1.0F - smoothing) * current[i]);
     memory[i] = current[i];
   }

@@ -70,9 +70,10 @@ static void publish_mask(TonalReducer* self) {
                         memory_order_release);
 }
 
-void tonal_reducer_compute_mask(TonalReducer* self, const float* noise_spectrum,
-                                const float* cv_mask_profile,
-                                bool cv_mask_available) {
+static void tonal_reducer_compute_mask(TonalReducer* self,
+                                       const float* noise_spectrum,
+                                       const float* cv_mask_profile,
+                                       bool cv_mask_available) {
   if (!self || !noise_spectrum) {
     return;
   }
@@ -263,7 +264,7 @@ void tonal_reducer_swap_gain_slots(TonalReducer* self) {
   self->gain_seeded[1] = seeded_tmp;
 }
 
-void tonal_reducer_apply_alpha_boost(TonalReducer* self, float* alpha,
+void tonal_reducer_apply_alpha_boost(const TonalReducer* self, float* alpha,
                                      float tonal_reduction_gain) {
   if (!self || !alpha || tonal_reduction_gain >= 0.999f) {
     return;

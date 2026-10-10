@@ -38,21 +38,10 @@ NlmFilter* nlm_filter_initialize(NlmFilterConfig config) {
   }
 
   self->config = config;
-  if (self->config.patch_size == 0) {
-    self->config.patch_size = NLM_PATCH_SIZE;
-  }
-  if (self->config.paste_block_size == 0) {
-    self->config.paste_block_size = NLM_PASTE_BLOCK_SIZE;
-  }
-  if (self->config.search_range_freq == 0) {
-    self->config.search_range_freq = NLM_SEARCH_RANGE_FREQ;
-  }
-  if (self->config.search_range_time_past == 0) {
-    self->config.search_range_time_past = NLM_SEARCH_RANGE_TIME_PAST;
-  }
-  if (self->config.search_range_time_future == 0) {
-    self->config.search_range_time_future = NLM_SEARCH_RANGE_TIME_FUTURE;
-  }
+  sb_resolve_patch_geometry_defaults(
+      &self->config.patch_size, &self->config.paste_block_size,
+      &self->config.search_range_freq, &self->config.search_range_time_past,
+      &self->config.search_range_time_future);
   if (self->config.h_parameter <= 0.0F) {
     self->config.h_parameter = NLM_DEFAULT_H_PARAMETER;
   } else if (self->config.h_parameter > NLM_MAX_H_PARAMETER) {
@@ -149,7 +138,7 @@ void nlm_filter_push_frame(NlmFilter* filter, const float* snr_frame) {
   patch_filter_context_push_frame(&filter->context, snr_frame);
 }
 
-bool nlm_filter_is_ready(NlmFilter* filter) {
+bool nlm_filter_is_ready(const NlmFilter* filter) {
   if (!filter) {
     return false;
   }
@@ -180,14 +169,14 @@ void nlm_filter_reset(NlmFilter* filter) {
   patch_filter_context_reset(&filter->context);
 }
 
-uint32_t nlm_filter_get_latency_frames(NlmFilter* filter) {
+uint32_t nlm_filter_get_latency_frames(const NlmFilter* filter) {
   if (!filter) {
     return 0;
   }
   return patch_filter_context_get_latency_frames(&filter->context);
 }
 
-void nlm_filter_calculate_snr(NlmFilter* filter,
+void nlm_filter_calculate_snr(const NlmFilter* filter,
                               const float* reference_spectrum,
                               const float* noise_spectrum, float* snr_frame) {
   if (!filter || !reference_spectrum || !noise_spectrum || !snr_frame) {
@@ -216,7 +205,7 @@ void nlm_filter_calculate_snr(NlmFilter* filter,
   }
 }
 
-void nlm_filter_reconstruct_magnitude(NlmFilter* filter,
+void nlm_filter_reconstruct_magnitude(const NlmFilter* filter,
                                       const float* smoothed_snr,
                                       const float* noise_spectrum,
                                       float* magnitude_spectrum) {

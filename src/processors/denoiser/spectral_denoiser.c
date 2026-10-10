@@ -236,7 +236,7 @@ static void align_bypass_frame(SbSpectralDenoiser* self, float* fft_spectrum,
   spectral_circular_buffer_advance(self->circular_buffer);
 }
 
-static bool run_nlm_chain(SbSpectralDenoiser* self, float* fft_spectrum,
+static bool run_nlm_chain(SbSpectralDenoiser* self, const float* fft_spectrum,
                           const float* smoothed_magnitude,
                           const float* delayed_noise_bb,
                           const float* delayed_noise_tonal,
@@ -1195,7 +1195,7 @@ bool spectral_denoiser_run(SpectralProcessorHandle instance,
  * When the tonal path is inactive (reduction >= ~1.0 or zero mask) the tonal
  * gain is unity and the min() is a no-op.
  */
-static bool run_nlm_chain(SbSpectralDenoiser* self, float* fft_spectrum,
+static bool run_nlm_chain(SbSpectralDenoiser* self, const float* fft_spectrum,
                           const float* smoothed_magnitude,
                           const float* delayed_noise_bb,
                           const float* delayed_noise_tonal,
@@ -1285,7 +1285,7 @@ static void run_temporal_chain(SbSpectralDenoiser* self,
                                float* gain_out, float* alpha, float* beta) {
   // Extract magnitude of the delayed frame (reuses the spectral features
   // buffer; the current-frame reference spectrum is no longer needed here)
-  float* delayed_magnitude =
+  const float* delayed_magnitude =
       get_spectral_feature(self->spectral_features, delayed_fft, self->fft_size,
                            self->spectrum_type);
 
@@ -1566,7 +1566,7 @@ void spectral_denoiser_reset_noise_profile(SpectralProcessorHandle instance) {
 
 uint32_t spectral_denoiser_get_latency_frames(
     SpectralProcessorHandle instance) {
-  SbSpectralDenoiser* self = (SbSpectralDenoiser*)instance;
+  const SbSpectralDenoiser* self = (const SbSpectralDenoiser*)instance;
 
   if (!self) {
     return 0;

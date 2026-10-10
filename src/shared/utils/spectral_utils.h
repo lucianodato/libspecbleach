@@ -24,12 +24,24 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "shared/utils/general_utils.h"
+
 typedef enum WindowTypes {
   HANN_WINDOW = 0,
   HAMMING_WINDOW = 1,
   BLACKMAN_WINDOW = 2,
   VORBIS_WINDOW = 3
 } WindowTypes;
+
+// WindowTypes must stay a dense 0..3 range (indexed by config and STFT code).
+_Static_assert(HANN_WINDOW >= 0 && HANN_WINDOW <= 3,
+               "HANN_WINDOW must be between 0 and 3");
+_Static_assert(HAMMING_WINDOW >= 0 && HAMMING_WINDOW <= 3,
+               "HAMMING_WINDOW must be between 0 and 3");
+_Static_assert(BLACKMAN_WINDOW >= 0 && BLACKMAN_WINDOW <= 3,
+               "BLACKMAN_WINDOW must be between 0 and 3");
+_Static_assert(VORBIS_WINDOW >= 0 && VORBIS_WINDOW <= 3,
+               "VORBIS_WINDOW must be between 0 and 3");
 
 bool get_fft_window(float* window, uint32_t fft_size, WindowTypes window_type);
 bool initialize_spectrum_with_value(float* spectrum, uint32_t spectrum_size,
@@ -80,8 +92,6 @@ bool get_morphed_profile(float* output_profile, const float* mean_profile,
  */
 bool sb_spectral_envelope_opening(const float* spectrum, float* scratch,
                                   float* out, uint32_t size, uint32_t window);
-
-#include "shared/utils/general_utils.h"
 
 static inline SB_UNUSED void sb_apply_spectral_symmetry(
     float* spectrum, uint32_t real_spectrum_size, uint32_t fft_size) {

@@ -187,7 +187,7 @@ SbThreadPool* sb_thread_pool_create(uint32_t num_workers) {
   pool->worker_count = num_workers;
 
   pool->workers = (SbWorker*)calloc(num_workers, sizeof(SbWorker));
-  pool->threads = (void*)calloc(num_workers, sizeof(*pool->threads));
+  pool->threads = calloc(num_workers, sizeof(*pool->threads));
   if (!pool->workers || !pool->threads) {
     sb_thread_pool_free(pool);
     return NULL;

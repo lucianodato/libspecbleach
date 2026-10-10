@@ -42,6 +42,45 @@ struct MartinNoiseEstimator {
   bool is_first_frame;
 };
 
+static bool martin_handle_first_frame(MartinNoiseEstimator* self,
+                                      const float* spectrum,
+                                      float* noise_spectrum,
+                                      float frame_energy) {
+  if (!self->is_first_frame) {
+    return false;
+  }
+  if (frame_energy < ESTIMATOR_SILENCE_THRESHOLD) {
+    memset(noise_spectrum, 0, self->noise_spectrum_size * sizeof(float));
+    return true;
+  }
+  for (uint32_t k = 0; k < self->noise_spectrum_size; k++) {
+    float val = spectrum[k] / MARTIN_BIAS_CORR;
+    self->smoothed_psd[k] = val;
+    self->current_subwin_min[k] = val;
+    for (uint32_t d = 0; d < MARTIN_SUBWIN_COUNT; d++) {
+      self->subwin_history[((size_t)k * MARTIN_SUBWIN_COUNT) + d] = val;
+    }
+    noise_spectrum[k] = spectrum[k];
+  }
+  self->is_first_frame = false;
+  self->frame_count = 1;
+  return true;
+}
+
+static void martin_calculate_output(const MartinNoiseEstimator* self,
+                                    float* noise_spectrum) {
+  for (uint32_t k = 0; k < self->noise_spectrum_size; k++) {
+    float min_val = self->current_subwin_min[k];
+    for (uint32_t d = 0; d < MARTIN_SUBWIN_COUNT; d++) {
+      float h_val = self->subwin_history[((size_t)k * MARTIN_SUBWIN_COUNT) + d];
+      if (h_val < min_val) {
+        min_val = h_val;
+      }
+    }
+    noise_spectrum[k] = min_val * MARTIN_BIAS_CORR;
+  }
+}
+
 MartinNoiseEstimator* martin_noise_estimator_initialize(
     uint32_t noise_spectrum_size, uint32_t sample_rate, uint32_t fft_size) {
   (void)sample_rate;
@@ -96,74 +135,34 @@ bool martin_noise_estimator_run(MartinNoiseEstimator* self,
   }
   frame_energy /= (float)self->noise_spectrum_size;
 
-  if (self->is_first_frame) {
-    if (frame_energy < ESTIMATOR_SILENCE_THRESHOLD) {
-      memset(noise_spectrum, 0, self->noise_spectrum_size * sizeof(float));
-      return true;
-    }
-    for (uint32_t k = 0; k < self->noise_spectrum_size; k++) {
-      float val = spectrum[k] / MARTIN_BIAS_CORR;
-      self->smoothed_psd[k] = val;
-      self->current_subwin_min[k] = val;
-      // Initialize history with current value
-      for (uint32_t d = 0; d < MARTIN_SUBWIN_COUNT; d++) {
-        self->subwin_history[((size_t)k * MARTIN_SUBWIN_COUNT) + d] = val;
-      }
-      noise_spectrum[k] = spectrum[k];
-    }
-    self->is_first_frame = false;
-    self->frame_count = 1;
+  if (martin_handle_first_frame(self, spectrum, noise_spectrum, frame_energy)) {
     return true;
   }
 
-  // Silence check for subsequent frames
-  if (frame_energy < ESTIMATOR_SILENCE_THRESHOLD) {
-    // Return existing estimate without updating internal state
-    goto calculate_output;
-  }
-
-  // 1. Update smoothed PSD
-  for (uint32_t k = 0; k < self->noise_spectrum_size; k++) {
-    self->smoothed_psd[k] = (self->smooth_alpha * self->smoothed_psd[k]) +
-                            ((1.0F - self->smooth_alpha) * spectrum[k]);
-  }
-
-  // 2. Track minimum in current sub-window
-  for (uint32_t k = 0; k < self->noise_spectrum_size; k++) {
-    if (self->smoothed_psd[k] < self->current_subwin_min[k]) {
-      self->current_subwin_min[k] = self->smoothed_psd[k];
-    }
-  }
-
-  // 3. Check if sub-window is complete
-  if (self->frame_count >= self->subwin_len) {
-    // Store sub-window minimum in history
+  if (frame_energy >= ESTIMATOR_SILENCE_THRESHOLD) {
     for (uint32_t k = 0; k < self->noise_spectrum_size; k++) {
-      self->subwin_history[((size_t)k * MARTIN_SUBWIN_COUNT) +
-                           self->subwin_index] = self->current_subwin_min[k];
-
-      // Reset current sub-window min for next cycle
-      self->current_subwin_min[k] = self->smoothed_psd[k];
+      self->smoothed_psd[k] = (self->smooth_alpha * self->smoothed_psd[k]) +
+                              ((1.0F - self->smooth_alpha) * spectrum[k]);
     }
 
-    self->subwin_index = (self->subwin_index + 1) % MARTIN_SUBWIN_COUNT;
-    self->frame_count = 0;
-  }
-
-calculate_output:
-  // 4. Calculate global minimum from history
-  for (uint32_t k = 0; k < self->noise_spectrum_size; k++) {
-    float min_val = self->current_subwin_min[k];
-    for (uint32_t d = 0; d < MARTIN_SUBWIN_COUNT; d++) {
-      float h_val = self->subwin_history[((size_t)k * MARTIN_SUBWIN_COUNT) + d];
-      if (h_val < min_val) {
-        min_val = h_val;
+    for (uint32_t k = 0; k < self->noise_spectrum_size; k++) {
+      if (self->smoothed_psd[k] < self->current_subwin_min[k]) {
+        self->current_subwin_min[k] = self->smoothed_psd[k];
       }
     }
 
-    // Apply bias correction to estimate the mean noise power from its minimum
-    noise_spectrum[k] = min_val * MARTIN_BIAS_CORR;
+    if (self->frame_count >= self->subwin_len) {
+      for (uint32_t k = 0; k < self->noise_spectrum_size; k++) {
+        self->subwin_history[((size_t)k * MARTIN_SUBWIN_COUNT) +
+                             self->subwin_index] = self->current_subwin_min[k];
+        self->current_subwin_min[k] = self->smoothed_psd[k];
+      }
+      self->subwin_index = (self->subwin_index + 1) % MARTIN_SUBWIN_COUNT;
+      self->frame_count = 0;
+    }
   }
+
+  martin_calculate_output(self, noise_spectrum);
 
   self->frame_count++;
   return true;
