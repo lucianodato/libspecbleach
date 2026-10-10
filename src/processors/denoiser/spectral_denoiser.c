@@ -1392,9 +1392,15 @@ static bool run_nlm_chain(SbSpectralDenoiser* self, const float* fft_spectrum,
   // note's sustain (measured ~1.5x sustain MNI on pluck+noise). Transient
   // detection still runs globally for the UI; relief is applied only by the 1D
   // temporal chain, where the gain smoother owns the result.
-  calculate_gains(self->real_spectrum_size, self->fft_size, smoothed_magnitude,
-                  frames.noise_bb, gain_out, alpha, beta,
-                  self->gain_calculation_type, NULL);
+  calculate_gains((GainCalcArgs){.real_spectrum_size = self->real_spectrum_size,
+                                   .fft_size = self->fft_size,
+                                   .spectrum = smoothed_magnitude,
+                                   .noise_spectrum = frames.noise_bb,
+                                   .gain_spectrum = gain_out,
+                                   .alpha = alpha,
+                                   .beta = beta,
+                                   .type = self->gain_calculation_type,
+                                   .knee = NULL});
 
 #if TONAL_DUAL_PATH
   // Parallel tonal gain path + decision criterion. Ran on the same
@@ -1552,9 +1558,15 @@ static void temporal_compute_gains(SbSpectralDenoiser* self,
   // Gain Calculation on the broadband profile only: the temporal/spatial
   // smoothers below therefore never see a stationary tonal notch carved into
   // their gain field.
-  calculate_gains(self->real_spectrum_size, self->fft_size, effective_magnitude,
-                  frames.noise_bb, out.gain_out, out.alpha, out.beta,
-                  self->gain_calculation_type, self->knee_spectrum);
+  calculate_gains((GainCalcArgs){.real_spectrum_size = self->real_spectrum_size,
+                                 .fft_size = self->fft_size,
+                                 .spectrum = effective_magnitude,
+                                 .noise_spectrum = frames.noise_bb,
+                                 .gain_spectrum = out.gain_out,
+                                 .alpha = out.alpha,
+                                 .beta = out.beta,
+                                 .type = self->gain_calculation_type,
+                                 .knee = self->knee_spectrum});
 
 #if TRANSIENT_RELIEF_PARALLEL
   // Transient relief as a parallel GAIN-domain branch: blend the base gain
@@ -1563,10 +1575,16 @@ static void temporal_compute_gains(SbSpectralDenoiser* self,
   // band weights it is softer than the legacy alpha lerp because the Wiener
   // curve is nonlinear in alpha, and the shared alpha is no longer mutated.
   if (self->transient_protection_active) {
-    calculate_gains(self->real_spectrum_size, self->fft_size,
-                    effective_magnitude, frames.noise_bb, self->gain_relief,
-                    self->alpha_relief, out.beta, self->gain_calculation_type,
-                    self->knee_spectrum);
+    calculate_gains(
+        (GainCalcArgs){.real_spectrum_size = self->real_spectrum_size,
+                       .fft_size = self->fft_size,
+                       .spectrum = effective_magnitude,
+                       .noise_spectrum = frames.noise_bb,
+                       .gain_spectrum = self->gain_relief,
+                       .alpha = self->alpha_relief,
+                       .beta = out.beta,
+                       .type = self->gain_calculation_type,
+                       .knee = self->knee_spectrum});
     for (uint32_t k = 0U; k < self->real_spectrum_size; ++k) {
       const float pf = sqrtf(self->transient_band_mask[k]);
       if (pf > 0.0F) {

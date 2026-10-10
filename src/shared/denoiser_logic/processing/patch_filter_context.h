@@ -67,18 +67,30 @@ static inline SB_UNUSED uint32_t patch_filter_clamp_index(int32_t idx,
 
 // Keep ring/cache lookup with each filter; only the identical row sum is
 // shared.
+// Row geometry bundle: keeps the patch-row SSD signature under the
+// parameter-count limit. Passed by value.
+typedef struct PatchRowArgs {
+  const float* target_row;
+  const float* candidate_row;
+  uint32_t target_freq;
+  uint32_t candidate_freq;
+  uint32_t patch_size;
+  uint32_t half_patch_size;
+  uint32_t spectrum_size;
+} PatchRowArgs;
+
 static inline SB_UNUSED float patch_filter_accumulate_patch_row_ssd(
-    float distance, const float* target_row, const float* candidate_row,
-    uint32_t target_freq, uint32_t candidate_freq, uint32_t patch_size,
-    uint32_t half_patch_size, uint32_t spectrum_size) {
-  for (uint32_t df = 0; df < patch_size; df++) {
+    float distance, PatchRowArgs args) {
+  for (uint32_t df = 0; df < args.patch_size; df++) {
     const uint32_t target_bin = patch_filter_clamp_index(
-        (int32_t)target_freq + (int32_t)df - (int32_t)half_patch_size,
-        spectrum_size);
-    const uint32_t candidate_bin = patch_filter_clamp_index(
-        (int32_t)candidate_freq + (int32_t)df - (int32_t)half_patch_size,
-        spectrum_size);
-    const float diff = target_row[target_bin] - candidate_row[candidate_bin];
+        (int32_t)args.target_freq + (int32_t)df - (int32_t)args.half_patch_size,
+        args.spectrum_size);
+    const uint32_t candidate_bin =
+        patch_filter_clamp_index((int32_t)args.candidate_freq + (int32_t)df -
+                                     (int32_t)args.half_patch_size,
+                                 args.spectrum_size);
+    const float diff =
+        args.target_row[target_bin] - args.candidate_row[candidate_bin];
     distance += diff * diff;
   }
   return distance;

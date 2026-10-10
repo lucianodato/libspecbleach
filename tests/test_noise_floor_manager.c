@@ -73,12 +73,36 @@ void test_noise_floor_manager_apply(void) {
   }
 
   // Coverage: NULL inputs
-  noise_floor_manager_apply(NULL, real_size, fft_size, gain_spectrum,
-                            noise_profile, 0.1f, 0.1f, NULL, 0.5f, NULL);
-  noise_floor_manager_apply(nfm, real_size, fft_size, NULL, noise_profile, 0.1f,
-                            0.1f, NULL, 0.5f, NULL);
-  noise_floor_manager_apply(nfm, real_size, fft_size, gain_spectrum, NULL, 0.1f,
-                            0.1f, NULL, 0.5f, NULL);
+  noise_floor_manager_apply(NULL,
+                            (NoiseFloorArgs){.real_spectrum_size = real_size,
+                                             .fft_size = fft_size,
+                                             .gain_spectrum = gain_spectrum,
+                                             .noise_profile = noise_profile,
+                                             .reduction_amount = 0.1f,
+                                             .tonal_reduction_amount = 0.1f,
+                                             .tonal_mask = NULL,
+                                             .whitening_factor = 0.5f,
+                                             .reduction_curve_bias = NULL});
+  noise_floor_manager_apply(nfm,
+                            (NoiseFloorArgs){.real_spectrum_size = real_size,
+                                             .fft_size = fft_size,
+                                             .gain_spectrum = NULL,
+                                             .noise_profile = noise_profile,
+                                             .reduction_amount = 0.1f,
+                                             .tonal_reduction_amount = 0.1f,
+                                             .tonal_mask = NULL,
+                                             .whitening_factor = 0.5f,
+                                             .reduction_curve_bias = NULL});
+  noise_floor_manager_apply(nfm,
+                            (NoiseFloorArgs){.real_spectrum_size = real_size,
+                                             .fft_size = fft_size,
+                                             .gain_spectrum = gain_spectrum,
+                                             .noise_profile = NULL,
+                                             .reduction_amount = 0.1f,
+                                             .tonal_reduction_amount = 0.1f,
+                                             .tonal_mask = NULL,
+                                             .whitening_factor = 0.5f,
+                                             .reduction_curve_bias = NULL});
 
   // Coverage: Mismatched sizes
   // Force 0.0 gain, apply 0.1 reduction, with wrong sizes given.
@@ -86,10 +110,26 @@ void test_noise_floor_manager_apply(void) {
   for (uint32_t k = 0; k < fft_size; k++) {
     gain_spectrum[k] = 0.0f;
   }
-  noise_floor_manager_apply(nfm, 999, 999, gain_spectrum, noise_profile, 0.1f,
-                            0.1f, NULL, 0.0f, NULL);
-  noise_floor_manager_apply(nfm, real_size, 999, gain_spectrum, noise_profile,
-                            0.1f, 0.1f, NULL, 0.0f, NULL);
+  noise_floor_manager_apply(nfm,
+                            (NoiseFloorArgs){.real_spectrum_size = 999,
+                                             .fft_size = 999,
+                                             .gain_spectrum = gain_spectrum,
+                                             .noise_profile = noise_profile,
+                                             .reduction_amount = 0.1f,
+                                             .tonal_reduction_amount = 0.1f,
+                                             .tonal_mask = NULL,
+                                             .whitening_factor = 0.0f,
+                                             .reduction_curve_bias = NULL});
+  noise_floor_manager_apply(nfm,
+                            (NoiseFloorArgs){.real_spectrum_size = real_size,
+                                             .fft_size = 999,
+                                             .gain_spectrum = gain_spectrum,
+                                             .noise_profile = noise_profile,
+                                             .reduction_amount = 0.1f,
+                                             .tonal_reduction_amount = 0.1f,
+                                             .tonal_mask = NULL,
+                                             .whitening_factor = 0.0f,
+                                             .reduction_curve_bias = NULL});
   TEST_FLOAT_CLOSE(gain_spectrum[0], 0.1f, 0.001f);
   TEST_FLOAT_CLOSE(gain_spectrum[fft_size - 1], 0.1f,
                    0.001f); // symmetric copy checks out
@@ -98,8 +138,16 @@ void test_noise_floor_manager_apply(void) {
   for (uint32_t k = 0; k < fft_size; k++) {
     gain_spectrum[k] = 0.5f;
   }
-  noise_floor_manager_apply(nfm, real_size, fft_size, gain_spectrum,
-                            noise_profile, 1.0f, 1.0f, NULL, 0.0f, NULL);
+  noise_floor_manager_apply(nfm,
+                            (NoiseFloorArgs){.real_spectrum_size = real_size,
+                                             .fft_size = fft_size,
+                                             .gain_spectrum = gain_spectrum,
+                                             .noise_profile = noise_profile,
+                                             .reduction_amount = 1.0f,
+                                             .tonal_reduction_amount = 1.0f,
+                                             .tonal_mask = NULL,
+                                             .whitening_factor = 0.0f,
+                                             .reduction_curve_bias = NULL});
   TEST_FLOAT_CLOSE(gain_spectrum[0], 1.0f, 0.001f);
 
   // Test with 0.1 linear reduction (equivalent to 20dB)
@@ -107,8 +155,16 @@ void test_noise_floor_manager_apply(void) {
     gain_spectrum[k] = 0.0f; // Original gain is 0
   }
   // No whitening (0.0) -> floor should be 0.1
-  noise_floor_manager_apply(nfm, real_size, fft_size, gain_spectrum,
-                            noise_profile, 0.1f, 0.1f, NULL, 0.0f, NULL);
+  noise_floor_manager_apply(nfm,
+                            (NoiseFloorArgs){.real_spectrum_size = real_size,
+                                             .fft_size = fft_size,
+                                             .gain_spectrum = gain_spectrum,
+                                             .noise_profile = noise_profile,
+                                             .reduction_amount = 0.1f,
+                                             .tonal_reduction_amount = 0.1f,
+                                             .tonal_mask = NULL,
+                                             .whitening_factor = 0.0f,
+                                             .reduction_curve_bias = NULL});
   // floor + (1-floor)*gain = 0.1 + 0.9*0 = 0.1
   TEST_FLOAT_CLOSE(gain_spectrum[0], 0.1f, 0.001f);
 
@@ -118,16 +174,32 @@ void test_noise_floor_manager_apply(void) {
   for (uint32_t k = 0; k < fft_size; k++) {
     gain_spectrum[k] = 0.0f;
   }
-  noise_floor_manager_apply(nfm, real_size, fft_size, gain_spectrum,
-                            noise_profile, 0.1f, 0.1f, NULL, 1.0f, NULL);
+  noise_floor_manager_apply(nfm,
+                            (NoiseFloorArgs){.real_spectrum_size = real_size,
+                                             .fft_size = fft_size,
+                                             .gain_spectrum = gain_spectrum,
+                                             .noise_profile = noise_profile,
+                                             .reduction_amount = 0.1f,
+                                             .tonal_reduction_amount = 0.1f,
+                                             .tonal_mask = NULL,
+                                             .whitening_factor = 1.0f,
+                                             .reduction_curve_bias = NULL});
   TEST_FLOAT_CLOSE(gain_spectrum[0], 0.1f, 0.001f);
 
   // Test Clamping: Gain is 0.05, Floor is 0.1 -> Result should be 0.1
   for (uint32_t k = 0; k < fft_size; k++) {
     gain_spectrum[k] = 0.05f;
   }
-  noise_floor_manager_apply(nfm, real_size, fft_size, gain_spectrum,
-                            noise_profile, 0.1f, 0.1f, NULL, 0.0f, NULL);
+  noise_floor_manager_apply(nfm,
+                            (NoiseFloorArgs){.real_spectrum_size = real_size,
+                                             .fft_size = fft_size,
+                                             .gain_spectrum = gain_spectrum,
+                                             .noise_profile = noise_profile,
+                                             .reduction_amount = 0.1f,
+                                             .tonal_reduction_amount = 0.1f,
+                                             .tonal_mask = NULL,
+                                             .whitening_factor = 0.0f,
+                                             .reduction_curve_bias = NULL});
   TEST_FLOAT_CLOSE(gain_spectrum[0], 0.1f, 0.001f);
 
   // Test Transparency Guard: Even if original gain is low, 0dB reduction
@@ -135,8 +207,16 @@ void test_noise_floor_manager_apply(void) {
   for (uint32_t k = 0; k < fft_size; k++) {
     gain_spectrum[k] = 0.5f;
   }
-  noise_floor_manager_apply(nfm, real_size, fft_size, gain_spectrum,
-                            noise_profile, 1.0f, 1.0f, NULL, 1.0f, NULL);
+  noise_floor_manager_apply(nfm,
+                            (NoiseFloorArgs){.real_spectrum_size = real_size,
+                                             .fft_size = fft_size,
+                                             .gain_spectrum = gain_spectrum,
+                                             .noise_profile = noise_profile,
+                                             .reduction_amount = 1.0f,
+                                             .tonal_reduction_amount = 1.0f,
+                                             .tonal_mask = NULL,
+                                             .whitening_factor = 1.0f,
+                                             .reduction_curve_bias = NULL});
   TEST_FLOAT_CLOSE(gain_spectrum[0], 1.0f, 0.001f);
 
   // Test RX Alignment: 100% Whitening overrides tonal path
@@ -150,16 +230,31 @@ void test_noise_floor_manager_apply(void) {
   for (uint32_t k = 0; k < fft_size; k++) {
     gain_spectrum[k] = 0.0f;
   }
-  noise_floor_manager_apply(nfm, real_size, fft_size, gain_spectrum,
-                            noise_profile, 0.1f, 1.0f, tonal_mask_test, 1.0f,
-                            NULL);
+  noise_floor_manager_apply(nfm,
+                            (NoiseFloorArgs){.real_spectrum_size = real_size,
+                                             .fft_size = fft_size,
+                                             .gain_spectrum = gain_spectrum,
+                                             .noise_profile = noise_profile,
+                                             .reduction_amount = 0.1f,
+                                             .tonal_reduction_amount = 1.0f,
+                                             .tonal_mask = tonal_mask_test,
+                                             .whitening_factor = 1.0f,
+                                             .reduction_curve_bias = NULL});
   TEST_FLOAT_CLOSE(gain_spectrum[0], 1.0f, 0.001f);
   // Test r_dp_db < 0.0f (dual_path_reduction >= 1.0f with tonal path < 1.0f)
   for (uint32_t k = 0; k < fft_size; k++) {
     gain_spectrum[k] = 0.0f;
   }
-  noise_floor_manager_apply(nfm, real_size, fft_size, gain_spectrum,
-                            noise_profile, 1.0f, 0.1f, NULL, 0.0f, NULL);
+  noise_floor_manager_apply(nfm,
+                            (NoiseFloorArgs){.real_spectrum_size = real_size,
+                                             .fft_size = fft_size,
+                                             .gain_spectrum = gain_spectrum,
+                                             .noise_profile = noise_profile,
+                                             .reduction_amount = 1.0f,
+                                             .tonal_reduction_amount = 0.1f,
+                                             .tonal_mask = NULL,
+                                             .whitening_factor = 0.0f,
+                                             .reduction_curve_bias = NULL});
 
   free(tonal_mask_test);
 
@@ -190,8 +285,16 @@ void test_noise_floor_manager_band_limited(void) {
   }
 
   // 100% Whitening factor with 0.1f target reduction (20dB reduction)
-  noise_floor_manager_apply(nfm, real_size, fft_size, gain_spectrum,
-                            noise_profile, 0.1f, 0.1f, NULL, 1.0f, NULL);
+  noise_floor_manager_apply(nfm,
+                            (NoiseFloorArgs){.real_spectrum_size = real_size,
+                                             .fft_size = fft_size,
+                                             .gain_spectrum = gain_spectrum,
+                                             .noise_profile = noise_profile,
+                                             .reduction_amount = 0.1f,
+                                             .tonal_reduction_amount = 0.1f,
+                                             .tonal_mask = NULL,
+                                             .whitening_factor = 1.0f,
+                                             .reduction_curve_bias = NULL});
 
   // Bins at median level (1.0f) get 0 reduction weight -> 1.0 gain (left alone)
   TEST_FLOAT_CLOSE(gain_spectrum[50], 0.1f, 0.005f);
@@ -228,8 +331,16 @@ void test_noise_floor_manager_reduction_curve(void) {
     gain_spectrum[k] = 0.0f;
   }
 
-  noise_floor_manager_apply(nfm, real_size, fft_size, gain_spectrum,
-                            noise_profile, 0.5f, 0.5f, NULL, 0.0f, curve_bias);
+  noise_floor_manager_apply(
+      nfm, (NoiseFloorArgs){.real_spectrum_size = real_size,
+                            .fft_size = fft_size,
+                            .gain_spectrum = gain_spectrum,
+                            .noise_profile = noise_profile,
+                            .reduction_amount = 0.5f,
+                            .tonal_reduction_amount = 0.5f,
+                            .tonal_mask = NULL,
+                            .whitening_factor = 0.0f,
+                            .reduction_curve_bias = curve_bias});
 
   // Bin 10 should have deeper reduction (lower floor ~ 0.25)
   TEST_ASSERT(gain_spectrum[10] < gain_spectrum[0],

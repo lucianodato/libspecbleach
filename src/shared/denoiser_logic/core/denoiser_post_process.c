@@ -28,10 +28,16 @@ void denoiser_post_process_apply(DenoiserPostProcessParams params) {
   const float* tonal_mask = tonal_reducer_get_mask(params.tonal_reducer);
   if (params.noise_floor_manager && params.noise_spectrum) {
     noise_floor_manager_apply(
-        params.noise_floor_manager, params.real_spectrum_size, params.fft_size,
-        params.gain_spectrum, params.noise_spectrum, params.reduction_amount,
-        params.tonal_reduction, tonal_mask, params.whitening_factor,
-        params.reduction_curve_bias);
+        params.noise_floor_manager,
+        (NoiseFloorArgs){.real_spectrum_size = params.real_spectrum_size,
+                         .fft_size = params.fft_size,
+                         .gain_spectrum = params.gain_spectrum,
+                         .noise_profile = params.noise_spectrum,
+                         .reduction_amount = params.reduction_amount,
+                         .tonal_reduction_amount = params.tonal_reduction,
+                         .tonal_mask = tonal_mask,
+                         .whitening_factor = params.whitening_factor,
+                         .reduction_curve_bias = params.reduction_curve_bias});
   }
 
   // 2. Mixing Logic (formerly denoise_mixer)
