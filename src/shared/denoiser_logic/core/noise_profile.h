@@ -31,7 +31,7 @@ typedef struct NoiseProfile NoiseProfile;
 
 NoiseProfile* noise_profile_initialize(uint32_t size);
 void noise_profile_free(NoiseProfile* self);
-float* get_noise_profile(NoiseProfile* self, int mode);
+float* get_noise_profile(const NoiseProfile* self, int mode);
 uint32_t get_noise_profile_size(const NoiseProfile* self);
 uint32_t get_noise_profile_block_count(const NoiseProfile* self, int mode);
 bool increment_block_count(NoiseProfile* self, int mode);
