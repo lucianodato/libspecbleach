@@ -118,6 +118,19 @@ static inline SB_UNUSED uint32_t bm3d_worst_slot(const float* m_d) {
   return worst;
 }
 
+static inline SB_UNUSED float bm3d_candidate_distance(Bm3dBlockCtx* b,
+                                                      int32_t dt, uint32_t cf,
+                                                      float** cand_rows) {
+  if (b->use_vec8 && cf >= b->half && cf + (b->patch - b->half) <= b->n) {
+    const uint32_t fs = cf - b->half;
+    float* ptrs[8] = {cand_rows[0] + fs, cand_rows[1] + fs, cand_rows[2] + fs,
+                      cand_rows[3] + fs, cand_rows[4] + fs, cand_rows[5] + fs,
+                      cand_rows[6] + fs, cand_rows[7] + fs};
+    return sb_vec8_patch_ssd(b->target_vecs, ptrs);
+  }
+  return bm3d_patch_ssd_scalar(b->filter, b->center, dt, cf);
+}
+
 static inline SB_UNUSED void bm3d_search_block(Bm3dBlockCtx* b) {
   Bm3dFilter* filter = b->filter;
   for (uint32_t i = 0; i < BM3D_STACK_MAX - 1; i++) {
@@ -139,17 +152,7 @@ static inline SB_UNUSED void bm3d_search_block(Bm3dBlockCtx* b) {
         continue;
       }
       uint32_t cf = patch_filter_clamp_index((int32_t)b->center + df, b->n);
-      float d;
-      if (b->use_vec8 && cf >= b->half && cf + (b->patch - b->half) <= b->n) {
-        const uint32_t fs = cf - b->half;
-        float* ptrs[8] = {cand_rows[0] + fs, cand_rows[1] + fs,
-                          cand_rows[2] + fs, cand_rows[3] + fs,
-                          cand_rows[4] + fs, cand_rows[5] + fs,
-                          cand_rows[6] + fs, cand_rows[7] + fs};
-        d = sb_vec8_patch_ssd(b->target_vecs, ptrs);
-      } else {
-        d = bm3d_patch_ssd_scalar(filter, b->center, dt, cf);
-      }
+      float d = bm3d_candidate_distance(b, dt, cf, cand_rows);
       if (d >= b->dist_thresh) {
         continue;
       }
