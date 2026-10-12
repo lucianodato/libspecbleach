@@ -1119,10 +1119,10 @@ static void denoiser_run_transient(SbSpectralDenoiser* self,
 
 // chains write gain_b via DenoiserChainOut.out structs; clang-tidy's
 // pointer-to-const hint does not see that write path.
-// NOLINTNEXTLINE(readability-non-const-parameter)
-static void denoiser_run_dispatch(SbSpectralDenoiser* self, float* fft_spectrum,
-                                  const DenoiserAlignedFrames* frames,
-                                  float* gain_a, float* gain_b) {
+static void denoiser_run_dispatch(
+    SbSpectralDenoiser* self, const float* fft_spectrum,
+    const DenoiserAlignedFrames* frames, float* gain_a,
+    float* gain_b) { // NOLINT(readability-non-const-parameter)
   // 3. Denoising Stage: dispatch the active smoothing strategy
   // both during a runtime mode transition; low-latency is always temporal)
   if (!self->low_latency && self->in_transition) {
