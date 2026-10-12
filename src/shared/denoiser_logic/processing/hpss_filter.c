@@ -90,6 +90,74 @@ uint32_t hpss_filter_get_latency_frames(const HpssFilter* self) {
   return 0U; // Sliding HPSS is strictly causal with zero lookahead frames
 }
 
+static void hpss_slide_iterate(HpssFilter* self, const float* current_magnitude,
+                               uint32_t spectrum_size) {
+  // 2. Sliding HPSS Iterations (Ono / Tachibana ISMIR 2008)
+  // Harmonic continuity: H_{t,k} aligns with H_{t-1,k} (temporal continuity)
+  // Percussive continuity: P_{t,k} aligns with (P_{t,k-1} + P_{t,k+1})/2
+  // (frequency continuity)
+  for (uint32_t iter = 0U; iter < HPSS_SLIDING_ITERATIONS; ++iter) {
+    for (uint32_t k = 0U; k < spectrum_size; ++k) {
+      float mag = current_magnitude[k];
+      if (mag <= SPECTRAL_EPSILON) {
+        self->h[k] = 0.0f;
+        self->p[k] = 0.0f;
+        continue;
+      }
+
+      // Harmonic reference from previous frame
+      float h_ref = self->prev_h[k];
+
+      // Percussive reference from adjacent frequency bins
+      float p_prev = (k > 0U) ? self->p[k - 1U] : self->p[k];
+      float p_next = (k + 1U < spectrum_size) ? self->p[k + 1U] : self->p[k];
+      float p_ref = HPSS_SLIDING_SMOOTH_FACTOR * (p_prev + p_next);
+
+      // Auxiliary function update (Wiener-style soft masks)
+      float h_sq = h_ref * h_ref;
+      float p_sq = p_ref * p_ref;
+      float denom = h_sq + p_sq;
+
+      float w_h = (denom > SPECTRAL_EPSILON) ? (h_sq / denom)
+                                             : HPSS_SLIDING_SMOOTH_FACTOR;
+      float w_p = 1.0f - w_h;
+
+      self->h[k] = w_h * mag;
+      self->p[k] = w_p * mag;
+    }
+  }
+}
+
+static void hpss_masks_track(HpssFilter* self, const float* current_magnitude,
+                             float* mask_harmonic_out,
+                             float* mask_percussive_out,
+                             uint32_t spectrum_size) {
+  // 3. Compute Soft Masks and update temporal state
+  for (uint32_t k = 0U; k < spectrum_size; ++k) {
+    float h_val = self->h[k];
+    float p_val = self->p[k];
+    float denom = (h_val * h_val) + (p_val * p_val);
+
+    float w_h = 1.0f;
+    float w_p = 0.0f;
+    if (denom > SPECTRAL_EPSILON) {
+      w_h = (h_val * h_val) / denom;
+      w_p = (p_val * p_val) / denom;
+    }
+
+    if (mask_harmonic_out) {
+      mask_harmonic_out[k] = w_h;
+    }
+    if (mask_percussive_out) {
+      mask_percussive_out[k] = w_p;
+    }
+
+    // Update state for next frame with exponential temporal tracking
+    self->prev_h[k] =
+        HPSS_SLIDING_SMOOTH_FACTOR * (self->prev_h[k] + current_magnitude[k]);
+  }
+}
+
 bool hpss_filter_process(HpssFilter* self, const float* current_magnitude,
                          float* mask_harmonic_out, float* mask_percussive_out) {
   if (!self || !current_magnitude) {
@@ -132,61 +200,11 @@ bool hpss_filter_process(HpssFilter* self, const float* current_magnitude,
   // Harmonic continuity: H_{t,k} aligns with H_{t-1,k} (temporal continuity)
   // Percussive continuity: P_{t,k} aligns with (P_{t,k-1} + P_{t,k+1})/2
   // (frequency continuity)
-  for (uint32_t iter = 0U; iter < HPSS_SLIDING_ITERATIONS; ++iter) {
-    for (uint32_t k = 0U; k < spectrum_size; ++k) {
-      float mag = current_magnitude[k];
-      if (mag <= SPECTRAL_EPSILON) {
-        self->h[k] = 0.0f;
-        self->p[k] = 0.0f;
-        continue;
-      }
-
-      // Harmonic reference from previous frame
-      float h_ref = self->prev_h[k];
-
-      // Percussive reference from adjacent frequency bins
-      float p_prev = (k > 0U) ? self->p[k - 1U] : self->p[k];
-      float p_next = (k + 1U < spectrum_size) ? self->p[k + 1U] : self->p[k];
-      float p_ref = HPSS_SLIDING_SMOOTH_FACTOR * (p_prev + p_next);
-
-      // Auxiliary function update (Wiener-style soft masks)
-      float h_sq = h_ref * h_ref;
-      float p_sq = p_ref * p_ref;
-      float denom = h_sq + p_sq;
-
-      float w_h = (denom > SPECTRAL_EPSILON) ? (h_sq / denom)
-                                             : HPSS_SLIDING_SMOOTH_FACTOR;
-      float w_p = 1.0f - w_h;
-
-      self->h[k] = w_h * mag;
-      self->p[k] = w_p * mag;
-    }
-  }
+  hpss_slide_iterate(self, current_magnitude, spectrum_size);
 
   // 3. Compute Soft Masks and update temporal state
-  for (uint32_t k = 0U; k < spectrum_size; ++k) {
-    float h_val = self->h[k];
-    float p_val = self->p[k];
-    float denom = (h_val * h_val) + (p_val * p_val);
-
-    float w_h = 1.0f;
-    float w_p = 0.0f;
-    if (denom > SPECTRAL_EPSILON) {
-      w_h = (h_val * h_val) / denom;
-      w_p = (p_val * p_val) / denom;
-    }
-
-    if (mask_harmonic_out) {
-      mask_harmonic_out[k] = w_h;
-    }
-    if (mask_percussive_out) {
-      mask_percussive_out[k] = w_p;
-    }
-
-    // Update state for next frame with exponential temporal tracking
-    self->prev_h[k] =
-        HPSS_SLIDING_SMOOTH_FACTOR * (self->prev_h[k] + current_magnitude[k]);
-  }
+  hpss_masks_track(self, current_magnitude, mask_harmonic_out,
+                   mask_percussive_out, spectrum_size);
 
   sb_simd_restore_state(simd_state);
 
