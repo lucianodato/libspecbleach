@@ -171,7 +171,6 @@ typedef struct DenoiserMode {
   uint32_t transition_pos;
 
   int last_adaptive_state;
-  int last_noise_estimation_method;
   float aggressiveness;
   bool was_learning;
 } DenoiserMode;
@@ -1511,9 +1510,9 @@ static bool run_nlm_chain(SbSpectralDenoiser* self, const float* fft_spectrum,
   // Parallel tonal gain path + decision criterion. Ran on the same
   // smoothed magnitude so the min() compares like with like.
   tonal_reducer_compute_tonal_gains(
-      self->engines.tonal_reducer, slot, smoothed_magnitude,
-      frames.noise_tonal, frames.tonal_mask,
-      self->config.parameters.tonal_reduction, self->spectra.gain_tonal);
+      self->engines.tonal_reducer, slot, smoothed_magnitude, frames.noise_tonal,
+      frames.tonal_mask, self->config.parameters.tonal_reduction,
+      self->spectra.gain_tonal);
   for (uint32_t k = 0U; k < self->config.real_spectrum_size; ++k) {
     gain_out[k] = fminf(gain_out[k], self->spectra.gain_tonal[k]);
   }
