@@ -149,10 +149,19 @@ static uint32_t dftt_bit_reverse(uint32_t x, uint32_t bits) {
  * scales by 1/n. The stride-1 path (frequency rows, ~2/3 of the work) runs
  * 8-wide MACs through the shared sb_vec8 kit; strided time columns stay
  * scalar. Bit-level results differ from scalar reassociation (~1e-7). */
+// Per-row scalar state for the vec8 DFT accumulator; grouped so the helper
+// stays under the parameter-count limit.
+typedef struct DfttRowState {
+  uint32_t k;
+  uint32_t n;
+  bool inverse;
+} DfttRowState;
+
 static uint32_t dftt_dft_vec8_sum(const float* re, const float* im,
                                   const float* cos_tab, const float* sin_tab,
-                                  uint32_t k, uint32_t n, bool inverse,
-                                  float* sr, float* si) {
+                                  DfttRowState row, float* sr, float* si) {
+  const uint32_t k = row.k;
+  const uint32_t n = row.n;
   const sb_vec8_t vzero = sb_set8(0.0F);
   sb_vec8_t acc_rc = vzero;
   sb_vec8_t acc_is = vzero;
@@ -164,7 +173,7 @@ static uint32_t dftt_dft_vec8_sum(const float* re, const float* im,
     sb_vec8_t xi = sb_load8(im + m);
     sb_vec8_t c = sb_load8(cos_tab + ((size_t)k * n) + m);
     sb_vec8_t s = sb_load8(sin_tab + ((size_t)k * n) + m);
-    if (inverse) {
+    if (row.inverse) {
       s = sb_sub8(vzero, s);
     }
     acc_rc = sb_add8(acc_rc, sb_mul8(xr, c));
@@ -187,7 +196,9 @@ static void dftt_dft_1d(float* re, float* im, uint32_t stride, uint32_t n,
     float si = 0.0F;
     uint32_t m = 0U;
     if (stride == 1U) {
-      m = dftt_dft_vec8_sum(re, im, cos_tab, sin_tab, k, n, inverse, &sr, &si);
+      m = dftt_dft_vec8_sum(re, im, cos_tab, sin_tab,
+                            (DfttRowState){.k = k, .n = n, .inverse = inverse},
+                            &sr, &si);
     }
     for (; m < n; m++) {
       const float c = cos_tab[((size_t)k * n) + m];
@@ -615,9 +626,11 @@ static void dftt_shrink_tile(DfttFilter* f, uint32_t bt, uint32_t bf,
   }
 }
 
-static void dftt_emit_row(DfttFilter* f, int32_t fs, uint32_t spec, uint32_t bt,
-                          uint32_t bf, float* crow_re, float* crow_im,
-                          float* refined_snr) {
+static void dftt_emit_row(const DfttFilter* f, int32_t fs, float* crow_re,
+                          float* crow_im, float* refined_snr) {
+  const uint32_t spec = f->spectrum_size;
+  const uint32_t bt = f->time_span;
+  const uint32_t bf = f->block_freq;
   /* Emit the newest time row only; past rows were emitted before. The
    * gathered tile already carries the analysis weight w, so emitting with
    * w gives syn*ana = w^2 per tile, matching the wsum normalization below
@@ -641,7 +654,7 @@ static void dftt_emit_row(DfttFilter* f, int32_t fs, uint32_t spec, uint32_t bt,
   }
 }
 
-static void dftt_normalize_clamp(DfttFilter* f, float* refined_snr,
+static void dftt_normalize_clamp(const DfttFilter* f, float* refined_snr,
                                  const float* newest_smooth, uint32_t spec) {
   for (uint32_t k = 0U; k < spec; k++) {
     refined_snr[k] = f->wsum[k] > 0.0F ? refined_snr[k] / f->wsum[k] : 0.0F;
@@ -703,7 +716,7 @@ bool dftt_filter_process(DfttFilter* f, float* refined_snr) {
     dftt_fwd_rows(f, f->ref_re, f->ref_im);
     dftt_fwd_cols(f, f->ref_re, f->ref_im);
     dftt_shrink_tile(f, bt, bf, wsum_r2);
-    dftt_emit_row(f, fs, spec, bt, bf, crow_re, crow_im, refined_snr);
+    dftt_emit_row(f, fs, crow_re, crow_im, refined_snr);
   }
 
   dftt_normalize_clamp(f, refined_snr, newest_smooth, spec);
