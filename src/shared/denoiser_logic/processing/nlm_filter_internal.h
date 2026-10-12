@@ -153,8 +153,13 @@ static inline SB_UNUSED float compute_patch_distance(NlmFilter* self,
         patch_filter_context_get_frame(&self->context, t_cand);
 
     distance = patch_filter_accumulate_patch_row_ssd(
-        distance, target_frame, cand_frame, target_freq, candidate_freq,
-        patch_size, half_patch, spectrum_size);
+        distance, (PatchRowArgs){.target_row = target_frame,
+                                 .candidate_row = cand_frame,
+                                 .target_freq = target_freq,
+                                 .candidate_freq = candidate_freq,
+                                 .patch_size = patch_size,
+                                 .half_patch_size = half_patch,
+                                 .spectrum_size = spectrum_size});
   }
 
   return distance;

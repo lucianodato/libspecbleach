@@ -75,13 +75,16 @@ void noise_floor_manager_free(NoiseFloorManager* self) {
   free(self);
 }
 
-void noise_floor_manager_apply(NoiseFloorManager* self,
-                               uint32_t real_spectrum_size, uint32_t fft_size,
-                               float* gain_spectrum, const float* noise_profile,
-                               float reduction_amount,
-                               float tonal_reduction_amount,
-                               const float* tonal_mask, float whitening_factor,
-                               const float* reduction_curve_bias) {
+void noise_floor_manager_apply(NoiseFloorManager* self, NoiseFloorArgs args) {
+  uint32_t real_spectrum_size = args.real_spectrum_size;
+  uint32_t fft_size = args.fft_size;
+  float* gain_spectrum = args.gain_spectrum;
+  const float* noise_profile = args.noise_profile;
+  float reduction_amount = args.reduction_amount;
+  float tonal_reduction_amount = args.tonal_reduction_amount;
+  const float* tonal_mask = args.tonal_mask;
+  float whitening_factor = args.whitening_factor;
+  const float* reduction_curve_bias = args.reduction_curve_bias;
   if (!self || !gain_spectrum || !noise_profile) {
     return;
   }
