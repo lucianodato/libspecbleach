@@ -38,6 +38,9 @@ typedef struct SpreadingParams {
 
 static SpreadingParams compute_spreading_params(float level_db);
 static float evaluate_spreading_gain(float dz, const SpreadingParams* params);
+static void spread_critical_bands(MaskingEstimator* self,
+                                  const float* cb_spectrum, float* spreaded_out,
+                                  float spectral_p, float spectral_inv_p);
 
 /**
  * compute_tonality_factor: SFM-based NMT/TMN classification.
@@ -242,26 +245,9 @@ bool compute_masking_thresholds(MaskingEstimator* self, const float* spectrum,
     compute_critical_bands_spectrum(self->owned.critical_bands, future_spectrum,
                                     self->scratch.future_cb_spectrum_buf);
 
-    for (uint32_t j = 0U; j < self->config.number_critical_bands; j++) {
-      self->scratch.bark_levels_buf[j] =
-          (10.F *
-           log10f(self->scratch.future_cb_spectrum_buf[j] + SPECTRAL_EPSILON)) +
-          DB_FS_TO_SPL_REF;
-      self->scratch.spreading_params_buf[j] =
-          compute_spreading_params(self->scratch.bark_levels_buf[j]);
-    }
-
-    for (uint32_t i = 0U; i < self->config.number_critical_bands; i++) {
-      float spreaded_p = 0.F;
-      for (uint32_t j = 0U; j < self->config.number_critical_bands; j++) {
-        const float dz = (float)i - (float)j;
-        const float gain =
-            evaluate_spreading_gain(dz, &self->scratch.spreading_params_buf[j]);
-        spreaded_p +=
-            powf(self->scratch.future_cb_spectrum_buf[j] * gain, spectral_p);
-      }
-      self->scratch.spreaded_future_buf[i] = powf(spreaded_p, spectral_inv_p);
-    }
+    spread_critical_bands(self, self->scratch.future_cb_spectrum_buf,
+                          self->scratch.spreaded_future_buf, spectral_p,
+                          spectral_inv_p);
 
     for (uint32_t j = 0U; j < self->config.number_critical_bands; j++) {
       const float tonality_factor =
@@ -279,26 +265,9 @@ bool compute_masking_thresholds(MaskingEstimator* self, const float* spectrum,
     }
   }
 
-  for (uint32_t j = 0U; j < self->config.number_critical_bands; j++) {
-    self->scratch.bark_levels_buf[j] =
-        (10.F *
-         log10f(self->state.critical_bands_spectrum[j] + SPECTRAL_EPSILON)) +
-        DB_FS_TO_SPL_REF;
-    self->scratch.spreading_params_buf[j] =
-        compute_spreading_params(self->scratch.bark_levels_buf[j]);
-  }
-
-  for (uint32_t i = 0U; i < self->config.number_critical_bands; i++) {
-    float spreaded_p = 0.F;
-    for (uint32_t j = 0U; j < self->config.number_critical_bands; j++) {
-      const float dz = (float)i - (float)j;
-      const float gain =
-          evaluate_spreading_gain(dz, &self->scratch.spreading_params_buf[j]);
-      spreaded_p +=
-          powf(self->state.critical_bands_spectrum[j] * gain, spectral_p);
-    }
-    self->scratch.spreaded_current_buf[i] = powf(spreaded_p, spectral_inv_p);
-  }
+  spread_critical_bands(self, self->state.critical_bands_spectrum,
+                        self->scratch.spreaded_current_buf, spectral_p,
+                        spectral_inv_p);
 
   for (uint32_t j = 0U; j < self->config.number_critical_bands; j++) {
 
@@ -354,6 +323,32 @@ bool compute_masking_thresholds(MaskingEstimator* self, const float* spectrum,
   }
 
   return true;
+}
+
+// Shared bark-level/spreading-parameter setup and spreading pass over one
+// critical-band spectrum (used for both the future and the current frame).
+static void spread_critical_bands(MaskingEstimator* self,
+                                  const float* cb_spectrum, float* spreaded_out,
+                                  float spectral_p, float spectral_inv_p) {
+  const uint32_t bands = self->config.number_critical_bands;
+
+  for (uint32_t j = 0U; j < bands; j++) {
+    self->scratch.bark_levels_buf[j] =
+        (10.F * log10f(cb_spectrum[j] + SPECTRAL_EPSILON)) + DB_FS_TO_SPL_REF;
+    self->scratch.spreading_params_buf[j] =
+        compute_spreading_params(self->scratch.bark_levels_buf[j]);
+  }
+
+  for (uint32_t i = 0U; i < bands; i++) {
+    float spreaded_p = 0.F;
+    for (uint32_t j = 0U; j < bands; j++) {
+      const float dz = (float)i - (float)j;
+      const float gain =
+          evaluate_spreading_gain(dz, &self->scratch.spreading_params_buf[j]);
+      spreaded_p += powf(cb_spectrum[j] * gain, spectral_p);
+    }
+    spreaded_out[i] = powf(spreaded_p, spectral_inv_p);
+  }
 }
 
 static SpreadingParams compute_spreading_params(float level_db) {

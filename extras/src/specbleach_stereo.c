@@ -78,9 +78,9 @@ void specbleach_stereo_free(specbleach_stereo* instance) {
 }
 
 bool specbleach_stereo_load_parameters(
-    specbleach_stereo* instance, const SpecbleachDenoiserParameters* parameters,
-    uint32_t parameters_size) {
-  SpecbleachStereoState* self = instance;
+    const specbleach_stereo* instance,
+    const SpecbleachDenoiserParameters* parameters, uint32_t parameters_size) {
+  const SpecbleachStereoState* self = instance;
 
   if (!self || !parameters ||
       parameters_size != sizeof(SpecbleachDenoiserParameters)) {
@@ -98,10 +98,10 @@ bool specbleach_stereo_load_parameters(
   return result;
 }
 
-bool specbleach_stereo_process(specbleach_stereo* instance,
+bool specbleach_stereo_process(const specbleach_stereo* instance,
                                uint32_t number_of_samples, const float** input,
                                float** output) {
-  SpecbleachStereoState* self = instance;
+  const SpecbleachStereoState* self = instance;
 
   if (!self || number_of_samples == 0 || !input || !output) {
     return false;
@@ -138,8 +138,8 @@ uint32_t specbleach_stereo_get_latency(const specbleach_stereo* instance) {
       (const specbleach_denoiser*)self->instances[0]);
 }
 
-bool specbleach_stereo_sync_profiles(specbleach_stereo* instance) {
-  SpecbleachStereoState* self = instance;
+bool specbleach_stereo_sync_profiles(const specbleach_stereo* instance) {
+  const SpecbleachStereoState* self = instance;
 
   if (!self) {
     return false;
@@ -187,8 +187,8 @@ bool specbleach_stereo_sync_profiles(specbleach_stereo* instance) {
   return complete;
 }
 
-void specbleach_stereo_reset_profiles(specbleach_stereo* instance) {
-  SpecbleachStereoState* self = instance;
+void specbleach_stereo_reset_profiles(const specbleach_stereo* instance) {
+  const SpecbleachStereoState* self = instance;
 
   if (!self) {
     return;
@@ -214,10 +214,10 @@ const float* specbleach_stereo_get_noise_profile_for_channel(
 }
 
 bool specbleach_stereo_load_noise_profile_for_channel(
-    specbleach_stereo* instance, const uint32_t channel, const float* profile,
-    const uint32_t profile_size, const uint32_t block_count,
-    const SpecbleachProfileMode mode) {
-  SpecbleachStereoState* self = instance;
+    const specbleach_stereo* instance, const uint32_t channel,
+    const float* profile, const uint32_t profile_size,
+    const uint32_t block_count, const SpecbleachProfileMode mode) {
+  const SpecbleachStereoState* self = instance;
 
   if (!self || channel >= self->channels) {
     return false;
@@ -229,10 +229,10 @@ bool specbleach_stereo_load_noise_profile_for_channel(
 }
 
 bool specbleach_stereo_load_noise_profile_resampled_for_channel(
-    specbleach_stereo* instance, const uint32_t channel, const float* profile,
-    const uint32_t source_size, const uint32_t block_count,
-    const SpecbleachProfileMode mode) {
-  SpecbleachStereoState* self = instance;
+    const specbleach_stereo* instance, const uint32_t channel,
+    const float* profile, const uint32_t source_size,
+    const uint32_t block_count, const SpecbleachProfileMode mode) {
+  const SpecbleachStereoState* self = instance;
 
   if (!self || channel >= self->channels) {
     return false;

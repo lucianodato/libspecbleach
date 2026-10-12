@@ -58,7 +58,7 @@ typedef struct DenoiserProfileCoreParams {
  * otherwise.
  */
 bool denoiser_profile_core_handle_learning_mode(NoiseEstimator* noise_estimator,
-                                                float* reference_spectrum,
+                                                const float* reference_spectrum,
                                                 int learn_noise_flag,
                                                 bool* was_learning);
 
