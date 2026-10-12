@@ -300,6 +300,26 @@ static void sb_push_frame(BrandtNoiseEstimator* self, const float* spectrum) {
   self->history_index = (current_idx + 1) % self->history_size;
 }
 
+static void sb_evaluate_candidate(const BrandtNoiseEstimator* self,
+                                  const float* sorted, uint32_t q,
+                                  uint32_t candidate_index, float prefix_sum,
+                                  float* min_ad_norm, float* best_mu) {
+  if (q < 10U) {
+    return;
+  }
+  float mu_trunc = prefix_sum / (float)q;
+  if (mu_trunc <= ESTIMATOR_SILENCE_THRESHOLD) {
+    return;
+  }
+  float b = sorted[q - 1U];
+  float mu_full = mu_trunc * self->correction_factors[candidate_index];
+  float ad_norm = calculate_ad_norm(sorted, q, mu_full, b);
+  if (ad_norm < *min_ad_norm) {
+    *min_ad_norm = ad_norm;
+    *best_mu = mu_full;
+  }
+}
+
 static void sb_update_bin_estimate(BrandtNoiseEstimator* self, uint32_t k,
                                    float* noise_spectrum,
                                    const uint32_t* q_candidates) {
@@ -313,19 +333,9 @@ static void sb_update_bin_estimate(BrandtNoiseEstimator* self, uint32_t k,
   for (uint32_t j = 0; j < self->history_size; j++) {
     prefix_sum += sorted[j];
     while (candidate_index < 5U && q_candidates[candidate_index] <= j + 1U) {
-      uint32_t q = q_candidates[candidate_index];
-      if (q >= 10U) {
-        float mu_trunc = prefix_sum / (float)q;
-        if (mu_trunc > ESTIMATOR_SILENCE_THRESHOLD) {
-          float b = sorted[q - 1U];
-          float mu_full = mu_trunc * self->correction_factors[candidate_index];
-          float ad_norm = calculate_ad_norm(sorted, q, mu_full, b);
-          if (ad_norm < min_ad_norm) {
-            min_ad_norm = ad_norm;
-            best_mu = mu_full;
-          }
-        }
-      }
+      sb_evaluate_candidate(self, sorted, q_candidates[candidate_index],
+                            candidate_index, prefix_sum, &min_ad_norm,
+                            &best_mu);
       candidate_index++;
     }
   }
