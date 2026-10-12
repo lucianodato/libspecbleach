@@ -124,7 +124,7 @@ static inline SB_UNUSED uint32_t bm3d_worst_slot(const float* m_d) {
   return worst;
 }
 
-static inline SB_UNUSED float bm3d_candidate_distance(Bm3dBlockCtx* b,
+static inline SB_UNUSED float bm3d_candidate_distance(const Bm3dBlockCtx* b,
                                                       int32_t dt, uint32_t cf,
                                                       float** const cand_rows) {
   if (b->use_vec8 && cf >= b->half && cf + (b->patch - b->half) <= b->n) {

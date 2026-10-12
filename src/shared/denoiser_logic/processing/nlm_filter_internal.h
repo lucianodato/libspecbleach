@@ -262,7 +262,8 @@ static inline SB_UNUSED void nlm_load_candidate_rows(const NlmBlockCtx* b,
   }
 }
 
-static inline SB_UNUSED float nlm_dispatch_distance(NlmBlockCtx* b, int32_t dt,
+static inline SB_UNUSED float nlm_dispatch_distance(const NlmBlockCtx* b,
+                                                    int32_t dt,
                                                     uint32_t cand_center,
                                                     float** cand_rows,
                                                     float** cand_rows_n) {
