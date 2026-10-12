@@ -56,11 +56,19 @@ TransientDetector* transient_detector_initialize(const uint32_t num_items) {
   return self;
 }
 
+// Scan accumulators grouped so the per-band scan stays under the
+// parameter-count limit.
+typedef struct TdScanAccum {
+  float max_weight;
+  float sum_energy;
+  float transient_energy;
+  uint32_t active_bands_count;
+  uint32_t high_bands_count;
+} TdScanAccum;
+
 static void td_scan_bands(TransientDetector* self, const float* band_energies,
                           float* onset_weights, uint32_t mid_high_start_band,
-                          float* max_weight, float* sum_energy,
-                          float* transient_energy, uint32_t* active_bands_count,
-                          uint32_t* high_bands_count) {
+                          TdScanAccum* accum) {
   for (uint32_t j = 0; j < self->num_items; j++) {
     const float current = band_energies[j];
     const float smoothed = self->smoothed_items[j];
@@ -82,9 +90,9 @@ static void td_scan_bands(TransientDetector* self, const float* band_energies,
     }
 
     if (weight >= 0.25F) {
-      (*active_bands_count)++;
+      accum->active_bands_count++;
       if (j >= mid_high_start_band) {
-        (*high_bands_count)++;
+        accum->high_bands_count++;
       }
     }
 
@@ -92,11 +100,11 @@ static void td_scan_bands(TransientDetector* self, const float* band_energies,
       onset_weights[j] = weight;
     }
 
-    if (weight > *max_weight) {
-      *max_weight = weight;
+    if (weight > accum->max_weight) {
+      accum->max_weight = weight;
     }
-    *sum_energy += current;
-    *transient_energy += weight * current;
+    accum->sum_energy += current;
+    accum->transient_energy += weight * current;
 
     // Asymmetric background floor adaptation:
     // - On attack (current > smoothed): adapt floor slower to preserve onset
@@ -108,10 +116,8 @@ static void td_scan_bands(TransientDetector* self, const float* band_energies,
   }
 }
 
-static float td_score_intensity(const TransientDetector* self, float max_weight,
-                                float sum_energy, float transient_energy,
-                                uint32_t active_bands_count,
-                                uint32_t high_bands_count,
+static float td_score_intensity(const TransientDetector* self,
+                                const TdScanAccum* accum,
                                 uint32_t mid_high_start_band) {
   // Discriminate against speech vowels / voiced phonemes vs genuine
   // plosives/clicks/plucks: Voiced speech vowels have strong low-frequency
@@ -119,15 +125,15 @@ static float td_score_intensity(const TransientDetector* self, float max_weight,
   // transients (mouth clicks, plucks, plosives, snaps) exhibit high-frequency
   // onset energy across mid/high bands.
   float hf_ratio = (self->num_items > mid_high_start_band)
-                       ? ((float)high_bands_count /
+                       ? ((float)accum->high_bands_count /
                           (float)(self->num_items - mid_high_start_band))
                        : 0.0f;
   float band_fraction =
       (self->num_items > 0U)
-          ? ((float)active_bands_count / (float)self->num_items)
+          ? ((float)accum->active_bands_count / (float)self->num_items)
           : 0.0f;
-  float energy_fraction = (sum_energy > MIN_INNOVATION_ENERGY)
-                              ? (transient_energy / sum_energy)
+  float energy_fraction = (accum->sum_energy > MIN_INNOVATION_ENERGY)
+                              ? (accum->transient_energy / accum->sum_energy)
                               : 0.0f;
 
   // True transients: broadband onset OR high-frequency localized snap/click
@@ -136,17 +142,17 @@ static float td_score_intensity(const TransientDetector* self, float max_weight,
   // 0 to score Fricative onsets hit only 1 upper band slowly; mouth clicks hit
   // 2+ upper bands simultaneously
   float localized_hf_score =
-      (high_bands_count >= 2U) ? (max_weight * hf_ratio) : 0.0f;
+      (accum->high_bands_count >= 2U) ? (accum->max_weight * hf_ratio) : 0.0f;
   float intensity = fmaxf(broadband_score, localized_hf_score);
 
   // If high frequency onset is completely absent and bandwidth is narrow
   // (voiced vowel onset), suppress
-  if (high_bands_count == 0 && band_fraction < 0.25f) {
+  if (accum->high_bands_count == 0 && band_fraction < 0.25f) {
     intensity = 0.0f;
   }
 
   // Strict zeroing of weak/ambiguous background fluctuations
-  if (intensity < 0.25f && max_weight < 0.70f) {
+  if (intensity < 0.25f && accum->max_weight < 0.70f) {
     intensity = 0.0f;
   }
 
@@ -186,20 +192,15 @@ bool transient_detector_process(TransientDetector* self,
     return false;
   }
 
-  float max_weight = 0.0f;
-  float sum_energy = 0.0f;
-  float transient_energy = 0.0f;
-  uint32_t active_bands_count = 0;
-  uint32_t high_bands_count = 0;
+  TdScanAccum accum = {0};
   uint32_t mid_high_start_band =
       self->num_items / 3U; // upper 2/3 of critical spectrum
 
   td_scan_bands(self, band_energies, onset_weights, mid_high_start_band,
-                &max_weight, &sum_energy, &transient_energy,
-                &active_bands_count, &high_bands_count);
+                &accum);
 
   // Reject noise-only or silent frames:
-  if (sum_energy < (0.05F * (float)self->num_items * 2.0F)) {
+  if (accum.sum_energy < (0.05F * (float)self->num_items * 2.0F)) {
     if (onset_weights) {
       memset(onset_weights, 0, sizeof(float) * self->num_items);
     }
@@ -209,9 +210,7 @@ bool transient_detector_process(TransientDetector* self,
     return false;
   }
 
-  float intensity = td_score_intensity(self, max_weight, sum_energy,
-                                       transient_energy, active_bands_count,
-                                       high_bands_count, mid_high_start_band);
+  float intensity = td_score_intensity(self, &accum, mid_high_start_band);
 
   if (out_intensity) {
     *out_intensity = intensity;
@@ -220,7 +219,7 @@ bool transient_detector_process(TransientDetector* self,
   // Localized HF path requires 2+ upper bands with strong weight to avoid
   // fricative false triggers
   return (intensity >= 0.25f ||
-          (max_weight >= 0.70f && high_bands_count >= 2U));
+          (accum.max_weight >= 0.70f && accum.high_bands_count >= 2U));
 }
 
 void transient_detector_set_hop_sec(TransientDetector* self, float hop_sec) {
