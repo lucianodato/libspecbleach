@@ -37,10 +37,125 @@ static void insertion_sort(float* arr, int n) {
   }
 }
 
-void detect_tonal_components(const float* profile, const float* median_profile,
-                             uint32_t size, uint32_t sample_rate,
-                             uint32_t fft_size, float* tonal_mask,
-                             uint32_t* deque_workspace) {
+static void tonal_estimate_floor(const float* detection_profile, uint32_t size,
+                                 float* tonal_mask) {
+  uint32_t half_win = TONAL_MEDIAN_FILTER_WINDOW / 2U;
+  float win_buf[TONAL_MEDIAN_FILTER_WINDOW];
+
+  for (uint32_t k = 0U; k < size; k++) {
+    int start_idx = (int)k - (int)half_win;
+    if (start_idx < 0) {
+      start_idx = 0;
+    }
+    int end_idx = (int)k + (int)half_win;
+    if (end_idx >= (int)size) {
+      end_idx = (int)size - 1;
+    }
+    int count = end_idx - start_idx + 1;
+
+    for (int i = 0; i < count; i++) {
+      win_buf[i] = detection_profile[start_idx + i];
+    }
+    insertion_sort(win_buf, count);
+    tonal_mask[k] = win_buf[count / 2];
+  }
+}
+
+// Monotonic deque for the sliding 1-Octave max. Grouped so the per-bin
+// decision stays under the parameter-count limit.
+typedef struct TonalDequeState {
+  uint32_t* deque;
+  uint32_t head;
+  uint32_t tail;
+  uint32_t current_end;
+} TonalDequeState;
+
+// Loop-invariant arguments for tonal_decide_bin, bundled to keep the
+// signature under the parameter-count limit.
+typedef struct TonalBinCtx {
+  const float* detection_profile;
+  uint32_t size;
+  float global_max_power;
+  float base_threshold;
+} TonalBinCtx;
+
+static float tonal_decide_bin(uint32_t k, TonalBinCtx ctx, float floor_val,
+                              float peak_val, TonalDequeState* dq) {
+  const float* detection_profile = ctx.detection_profile;
+  const uint32_t size = ctx.size;
+  const float global_max_power = ctx.global_max_power;
+  const float base_threshold = ctx.base_threshold;
+  // Prominence Guard: Peak must stand out in absolute terms
+  if (peak_val - floor_val < MIN_PEAK_PROMINENCE) {
+    return 0.0f;
+  }
+
+  // 1-Octave sliding window max profile calculation
+  int start_octave = (int)((float)k * TONAL_OCTAVE_LOWER_RATIO);
+  int end_octave = (int)((float)k * TONAL_OCTAVE_UPPER_RATIO);
+  if (end_octave - start_octave < TONAL_OCTAVE_MIN_WIDTH_BINS) {
+    start_octave = (int)k - TONAL_OCTAVE_FALLBACK_HALF_WIDTH;
+    end_octave = (int)k + TONAL_OCTAVE_FALLBACK_HALF_WIDTH;
+  }
+  if (start_octave < 0) {
+    start_octave = 0;
+  }
+  if (end_octave >= (int)size) {
+    end_octave = (int)size - 1;
+  }
+
+  while (dq->current_end <= (uint32_t)end_octave) {
+    float val = detection_profile[dq->current_end];
+    while (dq->tail > dq->head &&
+           detection_profile[dq->deque[dq->tail - 1]] <= val) {
+      dq->tail--;
+    }
+    dq->deque[dq->tail++] = dq->current_end++;
+  }
+
+  while (dq->head < dq->tail && dq->deque[dq->head] < (uint32_t)start_octave) {
+    dq->head++;
+  }
+
+  float octave_max_val =
+      (dq->head < dq->tail) ? detection_profile[dq->deque[dq->head]] : 0.0f;
+
+  float peak_power = peak_val * peak_val;
+  float octave_max_power = octave_max_val * octave_max_val;
+
+  // Reject candidates more than 20 dB below the max peak in their octave band
+  if (peak_power < octave_max_power * TONAL_PEAK_MIN_OCTAVE_RELATIVE_POWER) {
+    return 0.0f;
+  }
+
+  // Reject candidates that fall significantly below the global broadband peak
+  // energy
+  if (peak_power < global_max_power * TONAL_PEAK_MIN_GLOBAL_RELATIVE_POWER) {
+    return 0.0f;
+  }
+
+  float ratio = peak_val / (floor_val + 1e-20f);
+
+  if (ratio <= base_threshold) {
+    return 0.0f;
+  }
+
+  // In learned mode, the profile is captured from a noise-only segment, so
+  // any peak is guaranteed to be a hum component. We do not need a
+  // stationarity check.
+
+  // Calculate the fraction of energy belonging to the tone
+  float tonal_energy = peak_val - floor_val;
+  float tonal_fraction = tonal_energy / (peak_val + 1e-20f);
+
+  // Final mask value is the product of stationarity and tonal fraction
+  return tonal_fraction;
+}
+
+void detect_tonal_components(
+    const float* profile, const float* median_profile, uint32_t size,
+    uint32_t sample_rate, uint32_t fft_size, float* tonal_mask,
+    uint32_t* deque_workspace) { // NOLINT(readability-non-const-parameter)
   if (!profile || !tonal_mask || size < 5 || !median_profile ||
       sample_rate == 0 || fft_size == 0 ||
       (!deque_workspace && size > TONAL_DETECTOR_DEQUE_CAPACITY)) {
@@ -75,120 +190,88 @@ void detect_tonal_components(const float* profile, const float* median_profile,
   // 2. Perform frequency-domain median filtering to estimate the broadband
   // colored noise floor using boundary-safe windowing (no DC padding
   // duplication).
-  uint32_t half_win = TONAL_MEDIAN_FILTER_WINDOW / 2U;
-  float win_buf[TONAL_MEDIAN_FILTER_WINDOW];
-
-  for (uint32_t k = 0U; k < size; k++) {
-    int start_idx = (int)k - (int)half_win;
-    if (start_idx < 0) {
-      start_idx = 0;
-    }
-    int end_idx = (int)k + (int)half_win;
-    if (end_idx >= (int)size) {
-      end_idx = (int)size - 1;
-    }
-    int count = end_idx - start_idx + 1;
-
-    for (int i = 0; i < count; i++) {
-      win_buf[i] = detection_profile[start_idx + i];
-    }
-    insertion_sort(win_buf, count);
-    tonal_mask[k] = win_buf[count / 2];
-  }
+  tonal_estimate_floor(detection_profile, size, tonal_mask);
 
   // 2. Compute the tonal mask based on the ratio of the spectrum to the
   // broadband floor and octave-band relative dynamic range.
   //    In this pass, we overwrite the tonal_mask in-place.
   // 1-Octave sliding window max profile calculation via monotonic queue (O(N)
   // total)
-  uint32_t deque_head = 0;
-  uint32_t deque_tail = 0;
-  uint32_t current_end = 0;
-
   uint32_t deque_stack[TONAL_DETECTOR_DEQUE_CAPACITY];
-  uint32_t* deque = deque_workspace ? deque_workspace : deque_stack;
+  TonalDequeState dq = {
+      .deque = deque_workspace ? deque_workspace : deque_stack,
+      .head = 0,
+      .tail = 0,
+      .current_end = 0,
+  };
+  TonalBinCtx ctx = {
+      .detection_profile = detection_profile,
+      .size = size,
+      .global_max_power = global_max_power,
+      .base_threshold = base_threshold,
+  };
 
   for (uint32_t k = 0U; k < size; k++) {
-    float floor_val = tonal_mask[k];
-    float peak_val = detection_profile[k];
-
-    // Prominence Guard: Peak must stand out in absolute terms
-    if (peak_val - floor_val < MIN_PEAK_PROMINENCE) {
-      tonal_mask[k] = 0.0f;
-      continue;
-    }
-
-    // 1-Octave sliding window max profile calculation
-    int start_octave = (int)((float)k * TONAL_OCTAVE_LOWER_RATIO);
-    int end_octave = (int)((float)k * TONAL_OCTAVE_UPPER_RATIO);
-    if (end_octave - start_octave < TONAL_OCTAVE_MIN_WIDTH_BINS) {
-      start_octave = (int)k - TONAL_OCTAVE_FALLBACK_HALF_WIDTH;
-      end_octave = (int)k + TONAL_OCTAVE_FALLBACK_HALF_WIDTH;
-    }
-    if (start_octave < 0) {
-      start_octave = 0;
-    }
-    if (end_octave >= (int)size) {
-      end_octave = (int)size - 1;
-    }
-
-    while (current_end <= (uint32_t)end_octave) {
-      float val = detection_profile[current_end];
-      while (deque_tail > deque_head &&
-             detection_profile[deque[deque_tail - 1]] <= val) {
-        deque_tail--;
-      }
-      deque[deque_tail++] = current_end++;
-    }
-
-    while (deque_head < deque_tail &&
-           deque[deque_head] < (uint32_t)start_octave) {
-      deque_head++;
-    }
-
-    float octave_max_val =
-        (deque_head < deque_tail) ? detection_profile[deque[deque_head]] : 0.0f;
-
-    float peak_power = peak_val * peak_val;
-    float octave_max_power = octave_max_val * octave_max_val;
-
-    // Reject candidates more than 20 dB below the max peak in their octave band
-    if (peak_power < octave_max_power * TONAL_PEAK_MIN_OCTAVE_RELATIVE_POWER) {
-      tonal_mask[k] = 0.0f;
-      continue;
-    }
-
-    // Reject candidates that fall significantly below the global broadband peak
-    // energy
-    if (peak_power < global_max_power * TONAL_PEAK_MIN_GLOBAL_RELATIVE_POWER) {
-      tonal_mask[k] = 0.0f;
-      continue;
-    }
-
-    float ratio = peak_val / (floor_val + 1e-20f);
-
-    // Since we are detecting directly on the median_profile (the most stable
-    // version), we don't need a separate stationarity cross-check or dynamic
-    // scaling.
-
-    if (ratio > base_threshold) {
-      // In learned mode, the profile is captured from a noise-only segment, so
-      // any peak is guaranteed to be a hum component. We do not need a
-      // stationarity check.
-      float stationarity_weight = 1.0f;
-
-      // Calculate the fraction of energy belonging to the tone
-      float tonal_energy = peak_val - floor_val;
-      float tonal_fraction = tonal_energy / (peak_val + 1e-20f);
-
-      // Final mask value is the product of stationarity and tonal fraction
-      tonal_mask[k] = stationarity_weight * tonal_fraction;
-    } else {
-      tonal_mask[k] = 0.0f;
-    }
+    tonal_mask[k] =
+        tonal_decide_bin(k, ctx, tonal_mask[k], detection_profile[k], &dq);
   }
 
   sb_simd_restore_state(old_simd_state);
+}
+
+typedef struct {
+  float freq_hz;
+  float strength;
+} TonalPeakCandidate;
+
+static bool tonal_refine_peak(uint32_t k, const float* tonal_mask,
+                              float bin_width_hz, uint32_t sample_rate,
+                              float* freq_hz_out) {
+  // Parabolic interpolation for sub-bin frequency accuracy
+  float mask_val = tonal_mask[k];
+  float left = tonal_mask[k - 1];
+  float right = tonal_mask[k + 1];
+  float denom = (left - (2.0f * mask_val)) + right;
+  float delta = 0.0f;
+  if (fabsf(denom) > 1e-9f) {
+    delta = 0.5f * (left - right) / denom;
+    if (delta < -0.5f) {
+      delta = -0.5f;
+    } else if (delta > 0.5f) {
+      delta = 0.5f;
+    }
+  }
+
+  float peak_bin = (float)k + delta;
+  float freq_hz = peak_bin * bin_width_hz;
+
+  if (freq_hz < TONAL_PEAK_MIN_FREQ_HZ ||
+      freq_hz > (float)sample_rate * TONAL_PEAK_NYQUIST_SAFETY_FACTOR) {
+    return false;
+  }
+  *freq_hz_out = freq_hz;
+  return true;
+}
+
+static void tonal_insert_candidate(TonalPeakCandidate* candidates,
+                                   uint32_t* candidate_count, float freq_hz,
+                                   float strength) {
+  if (*candidate_count < MAX_TONAL_PEAKS_REPORTED) {
+    candidates[*candidate_count].freq_hz = freq_hz;
+    candidates[*candidate_count].strength = strength;
+    (*candidate_count)++;
+    return;
+  }
+  uint32_t weakest_idx = 0;
+  for (uint32_t c = 1; c < *candidate_count; c++) {
+    if (candidates[c].strength < candidates[weakest_idx].strength) {
+      weakest_idx = c;
+    }
+  }
+  if (strength > candidates[weakest_idx].strength) {
+    candidates[weakest_idx].freq_hz = freq_hz;
+    candidates[weakest_idx].strength = strength;
+  }
 }
 
 uint32_t tonal_detector_get_peaks(const float* tonal_mask, uint32_t size,
@@ -198,11 +281,6 @@ uint32_t tonal_detector_get_peaks(const float* tonal_mask, uint32_t size,
       fft_size == 0 || max_peaks == 0) {
     return 0;
   }
-
-  typedef struct {
-    float freq_hz;
-    float strength;
-  } TonalPeakCandidate;
 
   TonalPeakCandidate candidates[MAX_TONAL_PEAKS_REPORTED];
   uint32_t candidate_count = 0;
@@ -233,44 +311,12 @@ uint32_t tonal_detector_get_peaks(const float* tonal_mask, uint32_t size,
         mask_val > tonal_mask[k - 1] && mask_val >= tonal_mask[k + 1] &&
         local_prominence >= TONAL_PEAK_MIN_LOCAL_PROMINENCE &&
         wider_prominence >= required_wider_prominence) {
-
-      // Parabolic interpolation for sub-bin frequency accuracy
-      float left = tonal_mask[k - 1];
-      float right = tonal_mask[k + 1];
-      float denom = (left - (2.0f * mask_val)) + right;
-      float delta = 0.0f;
-      if (fabsf(denom) > 1e-9f) {
-        delta = 0.5f * (left - right) / denom;
-        if (delta < -0.5f) {
-          delta = -0.5f;
-        }
-        if (delta > 0.5f) {
-          delta = 0.5f;
-        }
+      float freq_hz = 0.0f;
+      if (!tonal_refine_peak(k, tonal_mask, bin_width_hz, sample_rate,
+                             &freq_hz)) {
+        continue;
       }
-
-      float peak_bin = (float)k + delta;
-      float freq_hz = peak_bin * bin_width_hz;
-
-      if (freq_hz >= TONAL_PEAK_MIN_FREQ_HZ &&
-          freq_hz <= (float)sample_rate * TONAL_PEAK_NYQUIST_SAFETY_FACTOR) {
-        if (candidate_count < MAX_TONAL_PEAKS_REPORTED) {
-          candidates[candidate_count].freq_hz = freq_hz;
-          candidates[candidate_count].strength = mask_val;
-          candidate_count++;
-        } else {
-          uint32_t weakest_idx = 0;
-          for (uint32_t c = 1; c < candidate_count; c++) {
-            if (candidates[c].strength < candidates[weakest_idx].strength) {
-              weakest_idx = c;
-            }
-          }
-          if (mask_val > candidates[weakest_idx].strength) {
-            candidates[weakest_idx].freq_hz = freq_hz;
-            candidates[weakest_idx].strength = mask_val;
-          }
-        }
-      }
+      tonal_insert_candidate(candidates, &candidate_count, freq_hz, mask_val);
     }
   }
 
