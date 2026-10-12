@@ -339,6 +339,21 @@ void interpolate_spectrum_gaps(float* spectrum, uint32_t size,
 // [i-window+1, i]. Both clamp at the array edges. O(N*W) with W <=
 // TONAL_DETONE_MAX_BINS (16): a few thousand comparisons per frame — negligible
 // against the STFT/NLM cost, and immune to deque edge cases.
+static float sb_window_extreme(const float* src, uint32_t lo, uint32_t hi,
+                               bool is_min) {
+  float ext = src[lo];
+  for (uint32_t j = lo + 1U; j <= hi; j++) {
+    if (is_min) {
+      if (src[j] < ext) {
+        ext = src[j];
+      }
+    } else if (src[j] > ext) {
+      ext = src[j];
+    }
+  }
+  return ext;
+}
+
 static void sb_slide_extreme(const float* src, float* dst, uint32_t size,
                              uint32_t window, const bool is_min,
                              const bool forward) {
@@ -352,19 +367,7 @@ static void sb_slide_extreme(const float* src, float* dst, uint32_t size,
       lo = (window > (i + 1U)) ? 0U : (i + 1U - window);
       hi = i;
     }
-    float ext = src[lo];
-    for (uint32_t j = lo + 1U; j <= hi; j++) {
-      if (is_min) {
-        if (src[j] < ext) {
-          ext = src[j];
-        }
-      } else {
-        if (src[j] > ext) {
-          ext = src[j];
-        }
-      }
-    }
-    dst[i] = ext;
+    dst[i] = sb_window_extreme(src, lo, hi, is_min);
   }
 }
 
