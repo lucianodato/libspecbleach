@@ -242,7 +242,9 @@ static void align_bypass_frame(SbSpectralDenoiser* self, float* fft_spectrum,
 typedef struct DenoiserChainFrames {
   const float* smoothed_magnitude; // NULL lets the NLM chain fall back
   const float* noise_bb;
+  // cppcheck-suppress unusedStructMember ; only read when TONAL_DUAL_PATH=1
   const float* noise_tonal;
+  // cppcheck-suppress unusedStructMember ; only read when TONAL_DUAL_PATH=1
   const float* tonal_mask;
 } DenoiserChainFrames;
 
@@ -1114,11 +1116,12 @@ static void denoiser_run_transient(SbSpectralDenoiser* self,
   }
 }
 
-static void denoiser_run_dispatch(SbSpectralDenoiser* self, const float* fft_spectrum,
-                                  const DenoiserAlignedFrames* frames,
-                                  // NOLINTNEXTLINE(readability-non-const-parameter):
-                                  // chains write gain_b via out structs
-                                  float* gain_a, float* gain_b) {
+// chains write gain_b via DenoiserChainOut.out structs; clang-tidy's
+// pointer-to-const hint does not see that write path.
+static void denoiser_run_dispatch(
+    SbSpectralDenoiser* self, const float* fft_spectrum,
+    const DenoiserAlignedFrames* frames, float* gain_a,
+    float* gain_b) { // NOLINT(readability-non-const-parameter)
   // 3. Denoising Stage: dispatch the active smoothing strategy
   // both during a runtime mode transition; low-latency is always temporal)
   if (!self->low_latency && self->in_transition) {
