@@ -61,11 +61,19 @@ static void tonal_estimate_floor(const float* detection_profile, uint32_t size,
   }
 }
 
+// Monotonic deque for the sliding 1-Octave max. Grouped so the per-bin
+// decision stays under the parameter-count limit.
+typedef struct TonalDequeState {
+  uint32_t* deque;
+  uint32_t head;
+  uint32_t tail;
+  uint32_t current_end;
+} TonalDequeState;
+
 static float tonal_decide_bin(uint32_t k, const float* detection_profile,
                               uint32_t size, float floor_val, float peak_val,
                               float global_max_power, float base_threshold,
-                              uint32_t* deque, uint32_t* deque_head,
-                              uint32_t* deque_tail, uint32_t* current_end) {
+                              TonalDequeState* dq) {
   // Prominence Guard: Peak must stand out in absolute terms
   if (peak_val - floor_val < MIN_PEAK_PROMINENCE) {
     return 0.0f;
@@ -85,23 +93,21 @@ static float tonal_decide_bin(uint32_t k, const float* detection_profile,
     end_octave = (int)size - 1;
   }
 
-  while (*current_end <= (uint32_t)end_octave) {
-    float val = detection_profile[*current_end];
-    while (*deque_tail > *deque_head &&
-           detection_profile[deque[*deque_tail - 1]] <= val) {
-      (*deque_tail)--;
+  while (dq->current_end <= (uint32_t)end_octave) {
+    float val = detection_profile[dq->current_end];
+    while (dq->tail > dq->head &&
+           detection_profile[dq->deque[dq->tail - 1]] <= val) {
+      dq->tail--;
     }
-    deque[(*deque_tail)++] = (*current_end)++;
+    dq->deque[dq->tail++] = dq->current_end++;
   }
 
-  while (*deque_head < *deque_tail &&
-         deque[*deque_head] < (uint32_t)start_octave) {
-    (*deque_head)++;
+  while (dq->head < dq->tail && dq->deque[dq->head] < (uint32_t)start_octave) {
+    dq->head++;
   }
 
-  float octave_max_val = (*deque_head < *deque_tail)
-                             ? detection_profile[deque[*deque_head]]
-                             : 0.0f;
+  float octave_max_val =
+      (dq->head < dq->tail) ? detection_profile[dq->deque[dq->head]] : 0.0f;
 
   float peak_power = peak_val * peak_val;
   float octave_max_power = octave_max_val * octave_max_val;
@@ -180,18 +186,18 @@ void detect_tonal_components(const float* profile, const float* median_profile,
   //    In this pass, we overwrite the tonal_mask in-place.
   // 1-Octave sliding window max profile calculation via monotonic queue (O(N)
   // total)
-  uint32_t deque_head = 0;
-  uint32_t deque_tail = 0;
-  uint32_t current_end = 0;
-
   uint32_t deque_stack[TONAL_DETECTOR_DEQUE_CAPACITY];
-  uint32_t* deque = deque_workspace ? deque_workspace : deque_stack;
+  TonalDequeState dq = {
+      .deque = deque_workspace ? deque_workspace : deque_stack,
+      .head = 0,
+      .tail = 0,
+      .current_end = 0,
+  };
 
   for (uint32_t k = 0U; k < size; k++) {
-    tonal_mask[k] =
-        tonal_decide_bin(k, detection_profile, size, tonal_mask[k],
-                         detection_profile[k], global_max_power, base_threshold,
-                         deque, &deque_head, &deque_tail, &current_end);
+    tonal_mask[k] = tonal_decide_bin(k, detection_profile, size, tonal_mask[k],
+                                     detection_profile[k], global_max_power,
+                                     base_threshold, &dq);
   }
 
   sb_simd_restore_state(old_simd_state);
