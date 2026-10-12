@@ -891,7 +891,8 @@ static bool denoiser_run_silence_bypass(SbSpectralDenoiser* self,
   return true;
 }
 
-static void denoiser_run_2d_pass(SbSpectralDenoiser* self, float* fft_spectrum,
+static void denoiser_run_2d_pass(SbSpectralDenoiser* self,
+                                 const float* fft_spectrum,
                                  const float* reference_spectrum,
                                  DenoiserAlignedFrames* frames) {
   // 2.2 Align internal state and output to the common delayed frame
