@@ -248,7 +248,7 @@ static uint32_t mv_compute_band_protection(MaskingVeto* self,
   return num_bands;
 }
 
-static void mv_apply_veto(MaskingVeto* self, const float* noise_spectrum,
+static void mv_apply_veto(const MaskingVeto* self, const float* noise_spectrum,
                           float* alpha, float depth, uint32_t num_bands) {
   /**
    * 4. Apply Interpolated Veto
