@@ -232,14 +232,14 @@ void fft_transform_free(FftTransform* self) {
   free(self);
 }
 
-uint32_t get_fft_size(FftTransform* self) {
+uint32_t get_fft_size(const FftTransform* self) {
   if (!self) {
     return 0;
   }
   return self->fft_size;
 }
 
-uint32_t get_fft_real_spectrum_size(FftTransform* self) {
+uint32_t get_fft_real_spectrum_size(const FftTransform* self) {
   if (!self) {
     return 0;
   }
@@ -268,7 +268,7 @@ bool fft_load_input_samples(FftTransform* self, const float* input) {
   return true;
 }
 
-bool fft_get_output_samples(FftTransform* self, float* output) {
+bool fft_get_output_samples(const FftTransform* self, float* output) {
   if (!self || !output) {
     return false;
   }
@@ -287,7 +287,8 @@ bool fft_get_output_samples(FftTransform* self, float* output) {
   return true;
 }
 
-bool fft_accumulate_output_samples(FftTransform* self, float* accumulator) {
+bool fft_accumulate_output_samples(const FftTransform* self,
+                                   float* accumulator) {
   if (!self || !accumulator) {
     return false;
   }

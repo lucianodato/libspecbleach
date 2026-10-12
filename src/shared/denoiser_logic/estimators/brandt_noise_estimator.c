@@ -204,7 +204,8 @@ static inline bool sb_update_sorted_history(float* sorted, uint32_t n,
 
 static void sb_rebuild_sorted_history(BrandtNoiseEstimator* self,
                                       uint32_t bin) {
-  float* history = &self->history_buffer[(size_t)bin * self->history_size];
+  const float* history =
+      &self->history_buffer[(size_t)bin * self->history_size];
   float* sorted = &self->sorted_history[(size_t)bin * self->history_size];
   memcpy(sorted, history, self->history_size * sizeof(float));
   sb_sort_floats_inline(sorted, self->history_size);
@@ -282,16 +283,14 @@ bool brandt_noise_estimator_run(BrandtNoiseEstimator* self,
   }
   frame_energy /= (float)self->spectrum_size;
 
-  if (self->is_first_frame) {
-    if (frame_energy > ESTIMATOR_SILENCE_THRESHOLD) {
-      float inv_factor = 1.0f / calculate_correction_factor(0.5f);
-      for (uint32_t k = 0; k < self->spectrum_size; k++) {
-        float val = spectrum[k] * inv_factor;
-        self->last_noise_spectrum[k] = spectrum[k];
-        sb_fill_jittered_history(self, k, val);
-      }
-      self->is_first_frame = false;
+  if (self->is_first_frame && frame_energy > ESTIMATOR_SILENCE_THRESHOLD) {
+    float inv_factor = 1.0f / calculate_correction_factor(0.5f);
+    for (uint32_t k = 0; k < self->spectrum_size; k++) {
+      float val = spectrum[k] * inv_factor;
+      self->last_noise_spectrum[k] = spectrum[k];
+      sb_fill_jittered_history(self, k, val);
     }
+    self->is_first_frame = false;
   }
 
   if (frame_energy < ESTIMATOR_SILENCE_THRESHOLD) {

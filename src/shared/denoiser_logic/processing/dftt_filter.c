@@ -186,8 +186,8 @@ static void dftt_dft_1d(float* re, float* im, uint32_t stride, uint32_t n,
       if (inverse) {
         s = -s;
       }
-      const float xr = re[((size_t)m * stride)];
-      const float xi = im[((size_t)m * stride)];
+      const float xr = re[(size_t)m * stride];
+      const float xi = im[(size_t)m * stride];
       sr += (xr * c) + (xi * s);
       si += (xi * c) - (xr * s);
     }
@@ -196,8 +196,8 @@ static void dftt_dft_1d(float* re, float* im, uint32_t stride, uint32_t n,
   }
   const float scale = inverse ? (1.0F / (float)n) : 1.0F;
   for (uint32_t k = 0U; k < n; k++) {
-    re[((size_t)k * stride)] = tmp_re[k] * scale;
-    im[((size_t)k * stride)] = tmp_im[k] * scale;
+    re[(size_t)k * stride] = tmp_re[k] * scale;
+    im[(size_t)k * stride] = tmp_im[k] * scale;
   }
 }
 
@@ -249,7 +249,7 @@ static void dftt_fft_1d(float* re, float* im, uint32_t stride, uint32_t n,
   }
 }
 
-static void dftt_fwd_rows(DfttFilter* f, float* re, float* im) {
+static void dftt_fwd_rows(const DfttFilter* f, float* re, float* im) {
   const uint32_t bf = f->block_freq;
   for (uint32_t r = 0U; r < f->time_span; r++) {
     float* row_r = re + ((size_t)r * bf);
@@ -263,7 +263,7 @@ static void dftt_fwd_rows(DfttFilter* f, float* re, float* im) {
   }
 }
 
-static void dftt_fwd_cols(DfttFilter* f, float* re, float* im) {
+static void dftt_fwd_cols(const DfttFilter* f, float* re, float* im) {
   const uint32_t bf = f->block_freq;
   const uint32_t bt = f->time_span;
   for (uint32_t c = 0U; c < bf; c++) {
@@ -281,8 +281,8 @@ static void dftt_fwd_cols(DfttFilter* f, float* re, float* im) {
  * e^{+2pi i (bt-1) r / bt} reduces to e^{-2pi i r / bt}), then one inverse
  * transform along quefrency frequency. Same separable math as the full 2D
  * inverse; costs bt*bf MACs + T(bf) instead of bt*T(bf) + bf*T(bt). */
-static void dftt_inv_last_row(DfttFilter* f, const float* re, const float* im,
-                              float* out_re, float* out_im) {
+static void dftt_inv_last_row(const DfttFilter* f, const float* re,
+                              const float* im, float* out_re, float* out_im) {
   const uint32_t bf = f->block_freq;
   const uint32_t bt = f->time_span;
   const float inv_bt = 1.0F / (float)bt;
@@ -482,7 +482,7 @@ void dftt_filter_push(DfttFilter* f, const float* noisy_snr,
   f->fresh = true;
 }
 
-bool dftt_filter_is_ready(DfttFilter* f) {
+bool dftt_filter_is_ready(const DfttFilter* f) {
   return f && f->filled >= f->time_span;
 }
 

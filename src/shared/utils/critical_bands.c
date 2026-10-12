@@ -33,13 +33,13 @@ static const float opus_bands[20] = {200.F,  400.F,  600.F,  800.F,   1000.F,
                                      6800.F, 8000.F, 9600.F, 12000.F, 15600.F};
 static void compute_mapping_spectrum(CriticalBands* self);
 static void compute_band_indexes(CriticalBands* self);
-static uint32_t get_last_valid_band_for_samplerate(CriticalBands* self,
+static uint32_t get_last_valid_band_for_samplerate(const CriticalBands* self,
                                                    uint32_t number_of_bands);
 
 struct CriticalBands {
   uint32_t* band_delimiter_bins;
   uint32_t* number_bins_per_band;
-  float* current_critical_bands;
+  const float* current_critical_bands;
 
   uint32_t fft_size;
   uint32_t real_spectrum_size;
@@ -116,14 +116,14 @@ static void compute_band_indexes(CriticalBands* self) {
 static void compute_mapping_spectrum(CriticalBands* self) {
   switch (self->type) {
     case BARK_SCALE: {
-      self->current_critical_bands = (float*)bark_bands;
+      self->current_critical_bands = bark_bands;
       uint32_t number_of_bark_bands = sizeof(bark_bands) / sizeof(float);
       self->number_bands =
           get_last_valid_band_for_samplerate(self, number_of_bark_bands);
       break;
     }
     case OPUS_SCALE: {
-      self->current_critical_bands = (float*)opus_bands;
+      self->current_critical_bands = opus_bands;
       uint32_t number_of_opus_bands = sizeof(opus_bands) / sizeof(float);
       self->number_bands =
           get_last_valid_band_for_samplerate(self, number_of_opus_bands);
@@ -134,7 +134,7 @@ static void compute_mapping_spectrum(CriticalBands* self) {
   }
 }
 
-static uint32_t get_last_valid_band_for_samplerate(CriticalBands* self,
+static uint32_t get_last_valid_band_for_samplerate(const CriticalBands* self,
                                                    uint32_t number_of_bands) {
   float nyquist_frequency = (float)self->sample_rate / 2.F;
   uint32_t last_valid_band = 0U;
@@ -167,7 +167,7 @@ bool compute_critical_bands_spectrum(CriticalBands* self, const float* spectrum,
   return true;
 }
 
-CriticalBandIndexes get_band_indexes(CriticalBands* self,
+CriticalBandIndexes get_band_indexes(const CriticalBands* self,
                                      const uint32_t band_number) {
   return (CriticalBandIndexes){
       .start_position = self->band_delimiter_bins[band_number] -
@@ -176,6 +176,6 @@ CriticalBandIndexes get_band_indexes(CriticalBands* self,
   };
 }
 
-uint32_t get_number_of_critical_bands(CriticalBands* self) {
+uint32_t get_number_of_critical_bands(const CriticalBands* self) {
   return self->number_bands;
 }

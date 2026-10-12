@@ -123,7 +123,7 @@ static void compute_spl_reference_spectrum(AbsoluteHearingThresholds* self) {
 
   compute_forward_fft(self->fft_transform);
 
-  float* reference_spectrum = get_spectral_feature(
+  const float* reference_spectrum = get_spectral_feature(
       self->spectral_features, get_fft_output_buffer(self->fft_transform),
       self->fft_size, self->spectrum_type);
 
@@ -138,7 +138,7 @@ static void compute_spl_reference_spectrum(AbsoluteHearingThresholds* self) {
       self->reference_level - (10.F * log10f(max_val + SPECTRAL_EPSILON));
 }
 
-bool apply_thresholds_as_floor(AbsoluteHearingThresholds* self,
+bool apply_thresholds_as_floor(const AbsoluteHearingThresholds* self,
                                float* spectrum) {
   if (!self || !spectrum) {
     return false;

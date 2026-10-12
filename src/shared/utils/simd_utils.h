@@ -120,11 +120,13 @@ SB_SIMD_INLINE void sb_simd_restore_state(sb_simd_state_t state) {
 typedef __m256 sb_vec8_t;
 #elif defined(__SSE__)
 typedef struct {
-  __m128 v1, v2;
+  __m128 v1;
+  __m128 v2;
 } sb_vec8_t;
 #elif defined(__ARM_NEON)
 typedef struct {
-  float32x4_t v1, v2;
+  float32x4_t v1;
+  float32x4_t v2;
 } sb_vec8_t;
 #else
 typedef struct {

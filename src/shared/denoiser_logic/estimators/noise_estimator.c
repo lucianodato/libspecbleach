@@ -174,7 +174,7 @@ static void update_welford(NoiseEstimator* self, const float* signal_spectrum) {
 
 bool noise_estimation_run(NoiseEstimator* self,
                           const NoiseEstimatorType noise_estimator_type,
-                          float* signal_spectrum) {
+                          const float* signal_spectrum) {
   if (!self || !signal_spectrum) {
     return false;
   }

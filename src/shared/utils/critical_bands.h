@@ -42,7 +42,8 @@ CriticalBands* critical_bands_initialize(uint32_t sample_rate,
 void critical_bands_free(CriticalBands* self);
 bool compute_critical_bands_spectrum(CriticalBands* self, const float* spectrum,
                                      float* critical_bands);
-CriticalBandIndexes get_band_indexes(CriticalBands* self, uint32_t band_number);
-uint32_t get_number_of_critical_bands(CriticalBands* self);
+CriticalBandIndexes get_band_indexes(const CriticalBands* self,
+                                     uint32_t band_number);
+uint32_t get_number_of_critical_bands(const CriticalBands* self);
 
 #endif

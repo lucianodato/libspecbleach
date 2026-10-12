@@ -306,25 +306,30 @@ void interpolate_spectrum_gaps(float* spectrum, uint32_t size,
     return;
   }
 
-  for (uint32_t i = 1; i < size - 1; i++) {
-    if (spectrum[i] < gap_threshold) {
-      // Find next non-gap bin
-      uint32_t j = i + 1;
-      while (j < size && spectrum[j] < gap_threshold) {
-        j++;
-      }
+  uint32_t i = 1;
+  while (i < size - 1) {
+    if (spectrum[i] >= gap_threshold) {
+      i++;
+      continue;
+    }
+    // Find next non-gap bin
+    uint32_t j = i + 1;
+    while (j < size && spectrum[j] < gap_threshold) {
+      j++;
+    }
 
-      if (j < size) {
-        // Interpolate between i-1 and j
-        float start_val = spectrum[i - 1];
-        float end_val = spectrum[j];
-        float step = (end_val - start_val) / (float)(j - (i - 1));
+    if (j < size) {
+      // Interpolate between i-1 and j
+      float start_val = spectrum[i - 1];
+      float end_val = spectrum[j];
+      float step = (end_val - start_val) / (float)(j - (i - 1));
 
-        for (uint32_t k = i; k < j; k++) {
-          spectrum[k] = start_val + (step * (float)(k - (i - 1)));
-        }
-        i = j;
+      for (uint32_t k = i; k < j; k++) {
+        spectrum[k] = start_val + (step * (float)(k - (i - 1)));
       }
+      i = j;
+    } else {
+      i++;
     }
   }
 }

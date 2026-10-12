@@ -111,4 +111,27 @@ static inline SB_UNUSED float* patch_filter_context_cached_get_frame(
                              (int32_t)NLM_HALO_FRAMES + dt];
 }
 
+// Shared init-path helper: resolves patch-geometry defaults shared by NLM and
+// BM3D configs (deduplicates identical init blocks, init context only).
+static inline SB_UNUSED void sb_resolve_patch_geometry_defaults(
+    uint32_t* patch_size, uint32_t* paste_block_size,
+    uint32_t* search_range_freq, uint32_t* search_range_time_past,
+    uint32_t* search_range_time_future) {
+  if (*patch_size == 0U) {
+    *patch_size = NLM_PATCH_SIZE;
+  }
+  if (*paste_block_size == 0U) {
+    *paste_block_size = NLM_PASTE_BLOCK_SIZE;
+  }
+  if (*search_range_freq == 0U) {
+    *search_range_freq = NLM_SEARCH_RANGE_FREQ;
+  }
+  if (*search_range_time_past == 0U) {
+    *search_range_time_past = NLM_SEARCH_RANGE_TIME_PAST;
+  }
+  if (*search_range_time_future == 0U) {
+    *search_range_time_future = NLM_SEARCH_RANGE_TIME_FUTURE;
+  }
+}
+
 #endif

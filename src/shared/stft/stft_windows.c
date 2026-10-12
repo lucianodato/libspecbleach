@@ -23,7 +23,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include <float.h> // For FLT_EPSILON
 
-static float get_windows_scale_factor(StftWindows* self, uint32_t copy_pos);
+static float get_windows_scale_factor(const StftWindows* self,
+                                      uint32_t copy_pos);
 
 struct StftWindows {
   float* input_window;
@@ -83,7 +84,8 @@ void stft_window_free(StftWindows* self) {
   free(self);
 }
 
-static float get_windows_scale_factor(StftWindows* self, uint32_t copy_pos) {
+static float get_windows_scale_factor(const StftWindows* self,
+                                      uint32_t copy_pos) {
   if (!self->output_window || self->stft_hop_size == 0) {
     return 1.0f;
   }
@@ -101,12 +103,13 @@ static float get_windows_scale_factor(StftWindows* self, uint32_t copy_pos) {
   return sum * ((float)self->stft_fft_size / (float)self->stft_hop_size);
 }
 
-bool stft_window_apply(StftWindows* self, float* frame, WindowPlace place) {
+bool stft_window_apply(const StftWindows* self, float* frame,
+                       WindowPlace place) {
   if (!self || !frame) {
     return false;
   }
 
-  float* window =
+  const float* window =
       (place == INPUT_WINDOW) ? self->input_window : self->output_window;
 
   if (place == OUTPUT_WINDOW) {

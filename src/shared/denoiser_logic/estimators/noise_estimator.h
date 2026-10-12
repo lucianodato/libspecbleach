@@ -41,7 +41,7 @@ void noise_estimation_free(NoiseEstimator* self);
 void noise_estimation_reset(NoiseEstimator* self);
 bool noise_estimation_run(NoiseEstimator* self,
                           NoiseEstimatorType noise_estimator_type,
-                          float* signal_spectrum);
+                          const float* signal_spectrum);
 void noise_estimation_finalize(NoiseEstimator* self,
                                NoiseEstimatorType noise_estimator_type);
 

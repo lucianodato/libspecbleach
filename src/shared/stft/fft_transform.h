@@ -50,15 +50,16 @@ FftTransform* fft_transform_initialize(uint32_t frame_size,
 FftTransform* fft_transform_initialize_bins(uint32_t fft_size);
 void fft_transform_free(FftTransform* self);
 bool fft_load_input_samples(FftTransform* self, const float* input);
-bool fft_get_output_samples(FftTransform* self, float* output);
+bool fft_get_output_samples(const FftTransform* self, float* output);
 /**
  * Accumulates FFT output samples into an accumulator buffer.
  * @param accumulator Target buffer containing at least frame_size float
  * elements.
  */
-bool fft_accumulate_output_samples(FftTransform* self, float* accumulator);
-uint32_t get_fft_size(FftTransform* self);
-uint32_t get_fft_real_spectrum_size(FftTransform* self);
+bool fft_accumulate_output_samples(const FftTransform* self,
+                                   float* accumulator);
+uint32_t get_fft_size(const FftTransform* self);
+uint32_t get_fft_real_spectrum_size(const FftTransform* self);
 bool compute_forward_fft(FftTransform* self);
 bool compute_backward_fft(FftTransform* self);
 float* get_fft_input_buffer(FftTransform* self);

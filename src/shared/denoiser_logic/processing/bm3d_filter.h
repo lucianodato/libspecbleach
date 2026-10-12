@@ -48,13 +48,13 @@ void bm3d_filter_free(Bm3dFilter* filter);
 void bm3d_filter_set_h_parameter(Bm3dFilter* filter, float h);
 void bm3d_filter_push_frame(Bm3dFilter* filter, const float* snr_frame);
 bool bm3d_filter_process(Bm3dFilter* filter, float* smoothed_snr);
-bool bm3d_filter_is_ready(Bm3dFilter* filter);
+bool bm3d_filter_is_ready(const Bm3dFilter* filter);
 void bm3d_filter_reset(Bm3dFilter* filter);
-uint32_t bm3d_filter_get_latency_frames(Bm3dFilter* filter);
-void bm3d_filter_calculate_snr(Bm3dFilter* filter,
+uint32_t bm3d_filter_get_latency_frames(const Bm3dFilter* filter);
+void bm3d_filter_calculate_snr(const Bm3dFilter* filter,
                                const float* reference_spectrum,
                                const float* noise_spectrum, float* snr_frame);
-void bm3d_filter_reconstruct_magnitude(Bm3dFilter* filter,
+void bm3d_filter_reconstruct_magnitude(const Bm3dFilter* filter,
                                        const float* smoothed_snr,
                                        const float* noise_spectrum,
                                        float* magnitude_spectrum);
