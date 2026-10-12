@@ -94,7 +94,7 @@ static inline SB_UNUSED float sb_patch_ssd_n(float* const* tgt_rows,
 }
 
 // Helper: compute squared Euclidean distance between two patches
-static inline SB_UNUSED float compute_patch_distance(NlmFilter* self,
+static inline SB_UNUSED float compute_patch_distance(const NlmFilter* self,
                                                      int32_t target_time,
                                                      uint32_t target_freq,
                                                      int32_t candidate_time,
@@ -199,7 +199,7 @@ typedef struct {
 } NlmBlockCtx;
 
 static inline SB_UNUSED bool nlm_preload_target(NlmBlockCtx* b) {
-  NlmFilter* filter = b->filter;
+  const NlmFilter* filter = b->filter;
   const uint32_t block_center = b->block_center;
   const uint32_t patch_size = b->patch_size;
   const uint32_t half_patch_size = b->half_patch_size;
@@ -240,10 +240,11 @@ static inline SB_UNUSED bool nlm_preload_target(NlmBlockCtx* b) {
   return b->safe_block;
 }
 
-static inline SB_UNUSED void nlm_load_candidate_rows(NlmBlockCtx* b, int32_t dt,
+static inline SB_UNUSED void nlm_load_candidate_rows(const NlmBlockCtx* b,
+                                                     int32_t dt,
                                                      float** cand_rows,
                                                      float** cand_rows_n) {
-  NlmFilter* filter = b->filter;
+  const NlmFilter* filter = b->filter;
   const uint32_t patch_size = b->patch_size;
   const uint32_t half_patch_size = b->half_patch_size;
   if (patch_size == 8) {
@@ -265,7 +266,7 @@ static inline SB_UNUSED float nlm_dispatch_distance(NlmBlockCtx* b, int32_t dt,
                                                     uint32_t cand_center,
                                                     float** cand_rows,
                                                     float** cand_rows_n) {
-  NlmFilter* filter = b->filter;
+  const NlmFilter* filter = b->filter;
   const uint32_t block_center = b->block_center;
   const uint32_t patch_size = b->patch_size;
   const uint32_t half_patch_size = b->half_patch_size;
@@ -309,6 +310,41 @@ static inline SB_UNUSED void nlm_accumulate_paste(NlmBlockCtx* b, int32_t df,
 
     b->smoothed_snr[target_bin] += weight * cand_frame[cand_bin];
     b->weight_sum[target_bin] += weight;
+  }
+}
+
+// One candidate time step: search every frequency offset for a block at time
+// offset dt and accumulate matches. Extracted so the search loops stay within
+// the nesting limit.
+static inline SB_UNUSED void nlm_search_time_step(NlmBlockCtx* b, int32_t dt,
+                                                  uint32_t search_freq,
+                                                  float dist_threshold,
+                                                  float inv_h2) {
+  float* cand_rows[8] = {NULL};
+  // Candidate row pointers for the generalized path (any patch <= 16).
+  float* cand_rows_n[NLM_MAX_PATCH_FRAMES] = {NULL};
+  nlm_load_candidate_rows(b, dt, cand_rows, cand_rows_n);
+
+  for (int32_t df = -(int32_t)search_freq; df <= (int32_t)search_freq; df++) {
+    uint32_t cand_center = patch_filter_clamp_index(
+        (int32_t)b->block_center + df, b->spectrum_size);
+
+    float distance =
+        nlm_dispatch_distance(b, dt, cand_center, cand_rows, cand_rows_n);
+
+    if (distance > dist_threshold) {
+      continue;
+    }
+
+    float weight = sb_fast_expf(-distance * inv_h2);
+    if (weight < NLM_MIN_WEIGHT) {
+      continue;
+    }
+
+    const float* cand_frame =
+        patch_filter_context_cached_get_frame(&b->filter->context, dt);
+
+    nlm_accumulate_paste(b, df, weight, cand_frame);
   }
 }
 
@@ -369,34 +405,8 @@ static inline SB_UNUSED void nlm_process_block_range(void* raw_ctx,
     nlm_preload_target(&b);
 
     for (int32_t dt = -search_time_past; dt <= search_time_future; dt++) {
-      float* cand_rows[8] = {NULL};
-      // Candidate row pointers for the generalized path (any patch <= 16).
-      float* cand_rows_n[NLM_MAX_PATCH_FRAMES] = {NULL};
-      nlm_load_candidate_rows(&b, dt, cand_rows, cand_rows_n);
-
-      for (int32_t df = -(int32_t)search_freq; df <= (int32_t)search_freq;
-           df++) {
-
-        uint32_t cand_center =
-            patch_filter_clamp_index((int32_t)block_center + df, spectrum_size);
-
-        float distance =
-            nlm_dispatch_distance(&b, dt, cand_center, cand_rows, cand_rows_n);
-
-        if (distance > current_dist_threshold) {
-          continue;
-        }
-
-        float weight = sb_fast_expf(-distance * current_inv_h2);
-        if (weight < NLM_MIN_WEIGHT) {
-          continue;
-        }
-
-        const float* cand_frame =
-            patch_filter_context_cached_get_frame(&filter->context, dt);
-
-        nlm_accumulate_paste(&b, df, weight, cand_frame);
-      }
+      nlm_search_time_step(&b, dt, search_freq, current_dist_threshold,
+                           current_inv_h2);
     }
   }
 }

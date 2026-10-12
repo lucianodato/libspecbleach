@@ -114,8 +114,8 @@ SPECBLEACH_API void specbleach_stereo_free(specbleach_stereo* instance);
  * @return true if loaded on every channel.
  */
 SPECBLEACH_API bool specbleach_stereo_load_parameters(
-    specbleach_stereo* instance, const SpecbleachDenoiserParameters* parameters,
-    uint32_t parameters_size);
+    const specbleach_stereo* instance,
+    const SpecbleachDenoiserParameters* parameters, uint32_t parameters_size);
 
 /**
  * Processes all channels. Buffers are deinterleaved (planar): input[i] /
@@ -132,7 +132,7 @@ SPECBLEACH_API bool specbleach_stereo_load_parameters(
  * @param output Array of channel pointers (size = channel count).
  * @return true if every channel processed successfully.
  */
-SPECBLEACH_API bool specbleach_stereo_process(specbleach_stereo* instance,
+SPECBLEACH_API bool specbleach_stereo_process(const specbleach_stereo* instance,
                                               uint32_t number_of_samples,
                                               const float** input,
                                               float** output);
@@ -176,7 +176,7 @@ specbleach_stereo_get_latency(const specbleach_stereo* instance);
  * available to copy) — the already-populated modes are still synced.
  */
 SPECBLEACH_API bool specbleach_stereo_sync_profiles(
-    specbleach_stereo* instance);
+    const specbleach_stereo* instance);
 
 /**
  * Resets stored noise profiles on every channel.
@@ -186,7 +186,7 @@ SPECBLEACH_API bool specbleach_stereo_sync_profiles(
  * @param instance Instance handle (NULL is a no-op).
  */
 SPECBLEACH_API void specbleach_stereo_reset_profiles(
-    specbleach_stereo* instance);
+    const specbleach_stereo* instance);
 
 /**
  * Returns a read-only pointer to the stored noise profile for a channel
@@ -206,7 +206,7 @@ SPECBLEACH_API const float* specbleach_stereo_get_noise_profile_for_channel(
  * @return false on out-of-range channel/mode, size mismatch, or NULL args.
  */
 SPECBLEACH_API bool specbleach_stereo_load_noise_profile_for_channel(
-    specbleach_stereo* instance, uint32_t channel, const float* profile,
+    const specbleach_stereo* instance, uint32_t channel, const float* profile,
     uint32_t profile_size, uint32_t block_count, SpecbleachProfileMode mode);
 
 /**
@@ -218,7 +218,7 @@ SPECBLEACH_API bool specbleach_stereo_load_noise_profile_for_channel(
  * @return false on out-of-range channel/mode, NULL args, or OOM.
  */
 SPECBLEACH_API bool specbleach_stereo_load_noise_profile_resampled_for_channel(
-    specbleach_stereo* instance, uint32_t channel, const float* profile,
+    const specbleach_stereo* instance, uint32_t channel, const float* profile,
     uint32_t source_size, uint32_t block_count, SpecbleachProfileMode mode);
 
 /**

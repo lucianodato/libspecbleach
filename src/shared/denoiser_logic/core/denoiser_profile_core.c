@@ -28,7 +28,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <string.h>
 
 bool denoiser_profile_core_handle_learning_mode(NoiseEstimator* noise_estimator,
-                                                float* reference_spectrum,
+                                                const float* reference_spectrum,
                                                 int learn_noise_flag,
                                                 bool* was_learning) {
   if (learn_noise_flag > 0) {

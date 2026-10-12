@@ -37,7 +37,7 @@ struct Bm3dFilter {
 };
 
 // Scalar clamped patch SSD (edges / non-8 patch sizes).
-static float bm3d_patch_ssd_scalar(Bm3dFilter* self, uint32_t target_freq,
+static float bm3d_patch_ssd_scalar(const Bm3dFilter* self, uint32_t target_freq,
                                    int32_t cand_dt, uint32_t cand_freq) {
   const uint32_t patch = self->config.patch_size;
   const uint32_t half = patch / 2;
@@ -99,7 +99,7 @@ typedef struct {
 } Bm3dBlockCtx;
 
 static inline SB_UNUSED bool bm3d_preload_target(Bm3dBlockCtx* b) {
-  Bm3dFilter* filter = b->filter;
+  const Bm3dFilter* filter = b->filter;
   // Reference patch at the block center; SIMD fast path for patch == 8.
   b->use_vec8 = (b->patch == 8) && (b->center >= b->half) &&
                 (b->center + (b->patch - b->half) <= b->n);
@@ -138,7 +138,7 @@ static inline SB_UNUSED float bm3d_candidate_distance(Bm3dBlockCtx* b,
 }
 
 static inline SB_UNUSED void bm3d_search_block(Bm3dBlockCtx* b) {
-  Bm3dFilter* filter = b->filter;
+  const Bm3dFilter* filter = b->filter;
   for (uint32_t i = 0; i < BM3D_STACK_MAX - 1; i++) {
     b->m_d[i] = b->dist_thresh;
     b->m_w[i] = 0.0F;
@@ -178,7 +178,7 @@ static inline SB_UNUSED void bm3d_search_block(Bm3dBlockCtx* b) {
 }
 
 static inline SB_UNUSED void bm3d_collab_bin(Bm3dBlockCtx* b, uint32_t k) {
-  Bm3dFilter* filter = b->filter;
+  const Bm3dFilter* filter = b->filter;
   // Weighted mean of (mean + kept residuals): matches whose residual
   // survives the hard threshold keep their value, the rest collapse to
   // the stack mean. Flat regions denoise harder than NLM averaging while
