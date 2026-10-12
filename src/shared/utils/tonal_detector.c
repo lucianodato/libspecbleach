@@ -141,10 +141,12 @@ static float tonal_decide_bin(uint32_t k, const float* detection_profile,
   return tonal_fraction;
 }
 
-void detect_tonal_components(const float* profile, const float* median_profile,
-                             uint32_t size, uint32_t sample_rate,
-                             uint32_t fft_size, float* tonal_mask,
-                             uint32_t* deque_workspace) {
+void detect_tonal_components(
+    const float* profile, const float* median_profile, uint32_t size,
+    uint32_t sample_rate, uint32_t fft_size, float* tonal_mask,
+    // NOLINTNEXTLINE(readability-non-const-parameter): deque buffer is written
+    // via TonalDequeState alias
+    uint32_t* deque_workspace) {
   if (!profile || !tonal_mask || size < 5 || !median_profile ||
       sample_rate == 0 || fft_size == 0 ||
       (!deque_workspace && size > TONAL_DETECTOR_DEQUE_CAPACITY)) {
