@@ -270,6 +270,46 @@ static void test_bm3d_worst_slot_replacement(void) {
   bm3d_filter_free(filter);
 }
 
+static void test_bm3d_vec8_patch_full_stack(void) {
+  // patch == 8 exercises the SIMD fast path (target preload, candidate row
+  // loads and vec8 SSD) plus both residual branches of the collaborative
+  // shrink when matches land under and over the hard threshold.
+  Bm3dFilterConfig config = {
+      .spectrum_size = 48,
+      .time_buffer_size = 9,
+      .patch_size = 8,
+      .paste_block_size = 4,
+      .search_range_freq = 4,
+      .search_range_time_past = 4,
+      .search_range_time_future = 1,
+      .h_parameter = 1.0f,
+      .num_threads = 1,
+  };
+  Bm3dFilter* filter = bm3d_filter_initialize(config);
+  TEST_ASSERT(filter != NULL, "BM3D init should succeed");
+
+  // Mixed content: smooth background plus one sharp peak so some match
+  // residuals survive the hard threshold and others collapse to the mean.
+  float frame[48];
+  for (int f = 0; f < 9; f++) {
+    for (int i = 0; i < 48; i++) {
+      frame[i] = 2.0f + 0.1f * (float)((i + f) % 7);
+    }
+    frame[24] = 30.0f; // sharp stationary peak across frames
+    bm3d_filter_push_frame(filter, frame);
+  }
+  TEST_ASSERT(bm3d_filter_is_ready(filter), "Ready after fill");
+
+  float output[48];
+  TEST_ASSERT(bm3d_filter_process(filter, output),
+              "Vec8 patch path must process");
+  for (int i = 0; i < 48; i++) {
+    TEST_ASSERT(isfinite(output[i]), "Output must be finite");
+    TEST_ASSERT(output[i] >= 0.0f, "Output must be >= 0");
+  }
+  bm3d_filter_free(filter);
+}
+
 int main(void) {
   printf("Running BM3D filter tests...\n\n");
   test_bm3d_lifecycle();
@@ -278,6 +318,7 @@ int main(void) {
   test_bm3d_spike_reduction();
   test_bm3d_edge_blocks_scalar_path();
   test_bm3d_worst_slot_replacement();
+  test_bm3d_vec8_patch_full_stack();
   printf("\nAll BM3D filter tests passed!\n");
   return 0;
 }
