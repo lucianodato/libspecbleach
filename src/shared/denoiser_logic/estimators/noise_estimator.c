@@ -220,7 +220,8 @@ void noise_estimation_finalize(NoiseEstimator* self,
 
   if (noise_estimator_type == CV_MASK) {
     float* cv_mask = get_noise_profile(self->noise_profile, CV_MASK);
-    float* std_dev_profile = get_noise_profile(self->noise_profile, STD_DEV);
+    const float* std_dev_profile =
+        get_noise_profile(self->noise_profile, STD_DEV);
     if (!cv_mask || !std_dev_profile) {
       return;
     }

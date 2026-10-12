@@ -97,7 +97,7 @@ static inline SB_UNUSED float patch_filter_accumulate_patch_row_ssd(
 }
 
 static inline SB_UNUSED float* patch_filter_context_get_frame(
-    PatchFilterContext* context, int32_t relative_offset) {
+    const PatchFilterContext* context, int32_t relative_offset) {
   const int32_t size = (int32_t)context->time_buffer_size;
   int32_t idx = (int32_t)context->buffer_head -
                 (int32_t)context->search_range_time_future - 1 +
@@ -118,7 +118,7 @@ static inline SB_UNUSED void patch_filter_context_populate_frame_ptrs(
 }
 
 static inline SB_UNUSED float* patch_filter_context_cached_get_frame(
-    PatchFilterContext* context, int32_t dt) {
+    const PatchFilterContext* context, int32_t dt) {
   return context->frame_ptrs[(int32_t)context->search_range_time_past +
                              (int32_t)NLM_HALO_FRAMES + dt];
 }
