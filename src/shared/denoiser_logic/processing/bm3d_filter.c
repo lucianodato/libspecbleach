@@ -120,7 +120,7 @@ static inline SB_UNUSED uint32_t bm3d_worst_slot(const float* m_d) {
 
 static inline SB_UNUSED float bm3d_candidate_distance(Bm3dBlockCtx* b,
                                                       int32_t dt, uint32_t cf,
-                                                      float** cand_rows) {
+                                                      float** const cand_rows) {
   if (b->use_vec8 && cf >= b->half && cf + (b->patch - b->half) <= b->n) {
     const uint32_t fs = cf - b->half;
     float* ptrs[8] = {cand_rows[0] + fs, cand_rows[1] + fs, cand_rows[2] + fs,
