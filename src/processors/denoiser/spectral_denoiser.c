@@ -1119,10 +1119,10 @@ static void denoiser_run_transient(SbSpectralDenoiser* self,
 
 // chains write gain_b via DenoiserChainOut.out structs; clang-tidy's
 // pointer-to-const hint does not see that write path.
-static void denoiser_run_dispatch(
-    SbSpectralDenoiser* self, const float* fft_spectrum,
-    const DenoiserAlignedFrames* frames, float* gain_a,
-    float* gain_b) { // NOLINT(readability-non-const-parameter)
+// NOLINTNEXTLINE(readability-non-const-parameter)
+static void denoiser_run_dispatch(SbSpectralDenoiser* self, float* fft_spectrum,
+                                  const DenoiserAlignedFrames* frames,
+                                  float* gain_a, float* gain_b) {
   // 3. Denoising Stage: dispatch the active smoothing strategy
   // both during a runtime mode transition; low-latency is always temporal)
   if (!self->low_latency && self->in_transition) {
@@ -1397,14 +1397,14 @@ static bool run_nlm_chain(SbSpectralDenoiser* self, const float* fft_spectrum,
   // detection still runs globally for the UI; relief is applied only by the 1D
   // temporal chain, where the gain smoother owns the result.
   calculate_gains((GainCalcArgs){.real_spectrum_size = self->real_spectrum_size,
-                                   .fft_size = self->fft_size,
-                                   .spectrum = smoothed_magnitude,
-                                   .noise_spectrum = frames.noise_bb,
-                                   .gain_spectrum = gain_out,
-                                   .alpha = alpha,
-                                   .beta = beta,
-                                   .type = self->gain_calculation_type,
-                                   .knee = NULL});
+                                 .fft_size = self->fft_size,
+                                 .spectrum = smoothed_magnitude,
+                                 .noise_spectrum = frames.noise_bb,
+                                 .gain_spectrum = gain_out,
+                                 .alpha = alpha,
+                                 .beta = beta,
+                                 .type = self->gain_calculation_type,
+                                 .knee = NULL});
 
 #if TONAL_DUAL_PATH
   // Parallel tonal gain path + decision criterion. Ran on the same
