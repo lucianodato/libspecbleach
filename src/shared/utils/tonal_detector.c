@@ -70,10 +70,21 @@ typedef struct TonalDequeState {
   uint32_t current_end;
 } TonalDequeState;
 
-static float tonal_decide_bin(uint32_t k, const float* detection_profile,
-                              uint32_t size, float floor_val, float peak_val,
-                              float global_max_power, float base_threshold,
-                              TonalDequeState* dq) {
+// Loop-invariant arguments for tonal_decide_bin, bundled to keep the
+// signature under the parameter-count limit.
+typedef struct TonalBinCtx {
+  const float* detection_profile;
+  uint32_t size;
+  float global_max_power;
+  float base_threshold;
+} TonalBinCtx;
+
+static float tonal_decide_bin(uint32_t k, TonalBinCtx ctx, float floor_val,
+                              float peak_val, TonalDequeState* dq) {
+  const float* detection_profile = ctx.detection_profile;
+  const uint32_t size = ctx.size;
+  const float global_max_power = ctx.global_max_power;
+  const float base_threshold = ctx.base_threshold;
   // Prominence Guard: Peak must stand out in absolute terms
   if (peak_val - floor_val < MIN_PEAK_PROMINENCE) {
     return 0.0f;
@@ -144,9 +155,7 @@ static float tonal_decide_bin(uint32_t k, const float* detection_profile,
 void detect_tonal_components(
     const float* profile, const float* median_profile, uint32_t size,
     uint32_t sample_rate, uint32_t fft_size, float* tonal_mask,
-    // NOLINTNEXTLINE(readability-non-const-parameter): deque buffer is written
-    // via TonalDequeState alias
-    uint32_t* deque_workspace) {
+    uint32_t* deque_workspace) { // NOLINT(readability-non-const-parameter)
   if (!profile || !tonal_mask || size < 5 || !median_profile ||
       sample_rate == 0 || fft_size == 0 ||
       (!deque_workspace && size > TONAL_DETECTOR_DEQUE_CAPACITY)) {
@@ -195,11 +204,16 @@ void detect_tonal_components(
       .tail = 0,
       .current_end = 0,
   };
+  TonalBinCtx ctx = {
+      .detection_profile = detection_profile,
+      .size = size,
+      .global_max_power = global_max_power,
+      .base_threshold = base_threshold,
+  };
 
   for (uint32_t k = 0U; k < size; k++) {
-    tonal_mask[k] = tonal_decide_bin(k, detection_profile, size, tonal_mask[k],
-                                     detection_profile[k], global_max_power,
-                                     base_threshold, &dq);
+    tonal_mask[k] =
+        tonal_decide_bin(k, ctx, tonal_mask[k], detection_profile[k], &dq);
   }
 
   sb_simd_restore_state(old_simd_state);
