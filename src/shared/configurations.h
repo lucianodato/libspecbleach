@@ -441,7 +441,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 // Voice-style): causal biquad bank, per-band envelope + adaptive floor,
 // no worker thread, no FFT in the audio path.
 #define LIVE_NUM_BANDS 256U     // psychoacoustically spaced bandpass filters
-#define LIVE_BAND_OVERLAP (2.4) // bandwidth overlap factor between bands
+#define LIVE_BAND_OVERLAP (2.4F) // bandwidth overlap factor between bands
 #define LIVE_BAND_Q_MIN (0.5F)  // widest LF bands (stability, no ringing)
 #define LIVE_BAND_Q_MAX (24)    // narrowest mid bands: capped below design
 // need (~32) so capped bands widen and inter-band valleys stay

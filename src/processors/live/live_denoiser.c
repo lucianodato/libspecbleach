@@ -467,7 +467,8 @@ static void live_derive_control_coeffs(specbleach_live_denoiser* self) {
   self->follow_release =
       live_time_to_coeff(LIVE_FOLLOW_RELEASE_SEC, sample_rate);
   /* Voice/HF split from design-time geometric centers (ascending). */
-  uint32_t nv = 0U, ih = LIVE_NUM_BANDS;
+  uint32_t nv = 0U;
+  uint32_t ih = LIVE_NUM_BANDS;
   uint32_t k;
   for (k = 0U; k < LIVE_NUM_BANDS; k++) {
     if (!self->active[k] || self->band_lo_hz[k] <= 0.0F ||
