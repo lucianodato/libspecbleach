@@ -676,8 +676,110 @@ void test_specbleach_adaptive_method_switch(void) {
     specbleach_denoiser_process(handle, 1024, in_buf, out_buf);
   }
 
-  specbleach_denoiser_free(handle);
   printf("✓ Adaptive method switch test passed\n");
+}
+
+void test_specbleach_reduction_blend_flow(void) {
+  printf("Testing reduction blend parameter flow...\n");
+
+  specbleach_denoiser* handle =
+      specbleach_denoiser_initialize(44100, 20.0f, 0u);
+  TEST_ASSERT(handle != NULL, "Denoiser initialization should succeed");
+
+  float in_buf[1024];
+  float out_buf[1024];
+  for (int i = 0; i < 1024; ++i) {
+    // Stationary noise plus periodic onsets: exercises the neighborhood
+    // blend and its per-bin transient gate together
+    in_buf[i] = 0.1f * ((float)(i % 97) / 97.0f) +
+                (((i / 1024) % 8U) == 0U ? 0.35f : 0.0f);
+  }
+
+  SpecbleachDenoiserParameters params = (SpecbleachDenoiserParameters){
+      .learn_noise = SPECBLEACH_LEARN_OFF,
+      .reduction_gain = 0.3f,
+      .smoothing_factor = 0.0f,
+      .smoothing_mode = SPECBLEACH_SMOOTHING_TEMPORAL,
+      .reduction_blend = 0.9f,
+  };
+  TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &params,
+                                                  sizeof(params)) == true,
+              "Loading blend parameters should succeed");
+
+  uint32_t profile_size = specbleach_denoiser_get_noise_profile_size(handle);
+  float* profile = (float*)malloc(profile_size * sizeof(float));
+  TEST_ASSERT(profile != NULL, "Profile allocation should succeed");
+  for (uint32_t i = 0; i < profile_size; i++) {
+    profile[i] = 0.1f;
+  }
+  TEST_ASSERT(specbleach_denoiser_load_noise_profile_for_mode(
+                  handle, profile, profile_size, 10, ROLLING_MEAN) == true,
+              "Loading noise profile should succeed");
+
+  // Temporal chain with blend + transient gate active
+  params.transient_protection_enable = true;
+  TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &params,
+                                                  sizeof(params)) == true,
+              "Loading transient protection should succeed");
+  for (int f = 0; f < 20; ++f) {
+    TEST_ASSERT(specbleach_denoiser_process(handle, 1024, in_buf, out_buf),
+                "Temporal blend processing must succeed");
+  }
+  for (int i = 0; i < 1024; ++i) {
+    TEST_ASSERT(isfinite(out_buf[i]) && out_buf[i] < 100.0f,
+                "Temporal blend output must be finite");
+  }
+
+  // Runtime crossfade into the 2D chain with the blend still on: exercises
+  // the NLM-chain statistic blend and the shared neighborhood ring warm-up
+  params.transient_protection_enable = false;
+  params.smoothing_mode = SPECBLEACH_SMOOTHING_NLM_2D;
+  TEST_ASSERT(specbleach_denoiser_load_parameters(handle, &params,
+                                                  sizeof(params)) == true,
+              "Loading NLM blend should succeed");
+  for (int f = 0; f < 20; ++f) {
+    TEST_ASSERT(specbleach_denoiser_process(handle, 1024, in_buf, out_buf),
+                "NLM blend processing must succeed");
+  }
+  for (int i = 0; i < 1024; ++i) {
+    TEST_ASSERT(isfinite(out_buf[i]) && out_buf[i] < 100.0f,
+                "NLM blend output must be finite");
+  }
+
+  specbleach_denoiser_free(handle);
+  free(profile);
+
+  // Low latency mode: neighborhood degrades to frequency-only on the
+  // current frame (no ring history exists there)
+  specbleach_denoiser* ll_handle =
+      specbleach_denoiser_initialize(44100, 20.0f, SPECBLEACH_INIT_LOW_LATENCY);
+  TEST_ASSERT(ll_handle != NULL, "Low latency initialization should succeed");
+  TEST_ASSERT(specbleach_denoiser_load_parameters(ll_handle, &params,
+                                                  sizeof(params)) == true,
+              "Loading blend parameters in low latency should succeed");
+  uint32_t ll_profile_size =
+      specbleach_denoiser_get_noise_profile_size(ll_handle);
+  float* ll_profile = (float*)malloc(ll_profile_size * sizeof(float));
+  TEST_ASSERT(ll_profile != NULL, "LL profile allocation should succeed");
+  for (uint32_t i = 0; i < ll_profile_size; i++) {
+    ll_profile[i] = 0.1f;
+  }
+  TEST_ASSERT(
+      specbleach_denoiser_load_noise_profile_for_mode(
+          ll_handle, ll_profile, ll_profile_size, 10, ROLLING_MEAN) == true,
+      "Loading LL noise profile should succeed");
+  for (int f = 0; f < 10; ++f) {
+    TEST_ASSERT(specbleach_denoiser_process(ll_handle, 1024, in_buf, out_buf),
+                "Low latency blend processing must succeed");
+  }
+  for (int i = 0; i < 1024; ++i) {
+    TEST_ASSERT(isfinite(out_buf[i]) && out_buf[i] < 100.0f,
+                "Low latency blend output must be finite");
+  }
+
+  free(ll_profile);
+  specbleach_denoiser_free(ll_handle);
+  printf("✓ Reduction blend flow test passed\n");
 }
 
 void test_specbleach_redesigned_api_coverage(void) {
@@ -903,6 +1005,7 @@ int main(void) {
   test_specbleach_silence_bypass();
   test_specbleach_smoothing_transition_and_validation();
   test_specbleach_adaptive_method_switch();
+  test_specbleach_reduction_blend_flow();
   test_specbleach_redesigned_api_coverage();
   test_specbleach_low_latency_mode();
 
