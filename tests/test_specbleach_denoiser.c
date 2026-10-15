@@ -42,6 +42,19 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define TEST_FLOAT_CLOSE(a, b, tolerance)                                      \
   TEST_ASSERT(fabsf((a) - (b)) < (tolerance), "Float values not close enough")
 
+// Sanitizer-build phase probe: prints the cumulative LeakSanitizer state at
+// a boundary on the sanitizer CI; compiles to nothing elsewhere.
+#if defined(__SANITIZE_ADDRESS__)
+#include <sanitizer/lsan_interface.h>
+#define SB_TEST_LEAK_PROBE(label)                                              \
+  do {                                                                         \
+    fprintf(stderr, "----- SB_TEST_LEAK_PROBE(%s) -----\n", label);            \
+    __lsan_do_leak_check();                                                    \
+  } while (0)
+#else
+#define SB_TEST_LEAK_PROBE(label) ((void)0)
+#endif
+
 void test_specbleach_noise_profile_mode_functions(void) {
   printf("Testing specbleach noise profile mode functions...\n");
 
@@ -748,6 +761,7 @@ void test_specbleach_reduction_blend_flow(void) {
 
   specbleach_denoiser_free(handle);
   free(profile);
+  SB_TEST_LEAK_PROBE("after-first-handle");
 
   // Low latency mode: neighborhood degrades to frequency-only on the
   // current frame (no ring history exists there)
@@ -779,6 +793,7 @@ void test_specbleach_reduction_blend_flow(void) {
 
   free(ll_profile);
   specbleach_denoiser_free(ll_handle);
+  SB_TEST_LEAK_PROBE("after-ll-handle");
   printf("✓ Reduction blend flow test passed\n");
 }
 
