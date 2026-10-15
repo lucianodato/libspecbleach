@@ -1736,7 +1736,7 @@ static void temporal_smooth_gains(SbSpectralEngine* self,
           .release_scale = (self->config.parameters.smoothing_factor > 0.0F)
                                ? self->engines.release_scale
                                : NULL, // Unused while bypassed
-  };
+      };
   spectral_smoothing_run(self->engines.spectrum_smoothing,
                          spectral_smoothing_parameters, out.gain_out);
   if (self->config.parameters.smoothing_factor > 0.0f) {
