@@ -18,8 +18,8 @@ License along with this library; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#ifndef SPECTRAL_DENOISER_H
-#define SPECTRAL_DENOISER_H
+#ifndef SPECTRAL_ENGINE_H
+#define SPECTRAL_ENGINE_H
 
 #include "shared/denoiser_logic/core/noise_profile.h"
 #include "shared/spectral_processor.h"
@@ -30,9 +30,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 /**
  * Parameters for the unified spectral denoiser. The smoothing strategy is
  * selected with smoothing_mode and can be changed at runtime (allocation-free,
- * see load_reduction_parameters).
+ * see spectral_engine_load_parameters).
  */
-typedef struct DenoiserParameters {
+typedef struct SpectralEngineParameters {
   int learn_noise;        /**< Learning mode: 0=disabled, 1=learn all modes */
   bool residual_listen;   /**< Output residue instead of denoised signal */
   float reduction_amount; /**< Gain floor / reduction amount (linear) */
@@ -51,32 +51,31 @@ typedef struct DenoiserParameters {
   float tonal_noise_profile_offset_linear; /**< Linear scalar at tonal bins */
   const float* reduction_curve_bias;       /**< Per-bin dB bias, NULL = off */
   bool reduction_curve_enabled;
-} DenoiserParameters;
+} SpectralEngineParameters;
 
-SpectralProcessorHandle spectral_denoiser_initialize(
-    uint32_t sample_rate, uint32_t fft_size, uint32_t overlap_factor,
-    NoiseProfile* noise_profile);
+SpectralProcessorHandle spectral_engine_initialize(uint32_t sample_rate,
+                                                   uint32_t fft_size,
+                                                   uint32_t overlap_factor,
+                                                   NoiseProfile* noise_profile);
 /* Preferred: pass the true STFT hop (frame/overlap) so time constants stay
  * frame-rate independent even when the FFT is padded above the frame.
  * low_latency selects the causal 1D-only mode (zero look-ahead; NLM/DFTT
  * clamped to temporal). */
-SpectralProcessorHandle spectral_denoiser_initialize_with_hop(
+SpectralProcessorHandle spectral_engine_initialize_with_hop(
     uint32_t sample_rate, uint32_t fft_size, uint32_t overlap_factor,
     uint32_t hop_samples, NoiseProfile* noise_profile, bool low_latency);
-void spectral_denoiser_free(SpectralProcessorHandle instance);
-bool load_reduction_parameters(SpectralProcessorHandle instance,
-                               DenoiserParameters parameters);
-bool spectral_denoiser_run(SpectralProcessorHandle instance,
-                           float* fft_spectrum);
-const float* spectral_denoiser_get_tonal_mask(SpectralProcessorHandle instance);
-uint32_t spectral_denoiser_get_peaks(SpectralProcessorHandle instance,
-                                     float* peak_freqs_hz, uint32_t max_peaks);
-const float* spectral_denoiser_get_active_noise_profile(
+void spectral_engine_free(SpectralProcessorHandle instance);
+bool spectral_engine_load_parameters(SpectralProcessorHandle instance,
+                                     SpectralEngineParameters parameters);
+bool spectral_engine_run(SpectralProcessorHandle instance, float* fft_spectrum);
+const float* spectral_engine_get_tonal_mask(SpectralProcessorHandle instance);
+uint32_t spectral_engine_get_peaks(SpectralProcessorHandle instance,
+                                   float* peak_freqs_hz, uint32_t max_peaks);
+const float* spectral_engine_get_active_noise_profile(
     SpectralProcessorHandle instance);
-void spectral_denoiser_reset_noise_profile(SpectralProcessorHandle instance);
-uint32_t spectral_denoiser_get_latency_frames(SpectralProcessorHandle instance);
-bool spectral_denoiser_is_transient_detected(SpectralProcessorHandle instance);
-float spectral_denoiser_get_transient_intensity(
-    SpectralProcessorHandle instance);
+void spectral_engine_reset_noise_profile(SpectralProcessorHandle instance);
+uint32_t spectral_engine_get_latency_frames(SpectralProcessorHandle instance);
+bool spectral_engine_is_transient_detected(SpectralProcessorHandle instance);
+float spectral_engine_get_transient_intensity(SpectralProcessorHandle instance);
 
 #endif
