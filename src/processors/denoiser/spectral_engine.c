@@ -39,6 +39,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "shared/utils/critical_bands.h"
 #include "shared/utils/spectral_circular_buffer.h"
 #include "shared/utils/spectral_features.h"
+#include "shared/utils/spectral_neighbors.h"
 #include "shared/utils/spectral_smoother.h"
 #include "shared/utils/spectral_utils.h"
 #include "shared/utils/transient_detector.h"
@@ -88,6 +89,13 @@ typedef struct DenoiserSpectra {
   float* noise_bb;                  // Broadband profile (tonal peaks lifted)
   float* noise_tonal;               // Tonal residual (parallel gain path)
   float* gain_tonal;                // Tonal gain path output (shared scratch)
+  float* neighbor_power_row;        // Power row of the current input frame
+                                    // (pushed into the neighbor layer, and
+                                    // the only available row in low latency)
+  float* neighbor_acc;              // Time-averaged neighborhood scratch
+  float* blend_power;               // Neighbor-blended statistic feeding the
+                                    // chains (shared scratch, consumed
+                                    // synchronously inside one chain call)
   atomic_int
       active_noise_idx; // Index of current published noise spectrum (0 or 1)
   float* manual_noise_floor; // Manual profile floor
@@ -124,6 +132,8 @@ typedef struct DenoiserEngines {
   ReleaseShaper* release_shaper;
   float* release_scale;
   SpectralFeatures* spectral_features;
+  SpectralNeighborFreqKernel* neighbor_freq_kernel; // Erb-scaled frequency
+                                                    // halo (init-time build)
   MaskingVeto* masking_veto;
   SuppressionEngine* suppression_engine;
   NoiseFloorManager* noise_floor_manager;
@@ -135,6 +145,7 @@ typedef struct DenoiserLayers {
   uint32_t layer_fft;
   uint32_t layer_noise;
   uint32_t layer_smoothed;
+  uint32_t layer_power; // Power row of each frame (neighborhood statistic)
   // Circular buffer layers aligned at the common delay (broadband + tonal
   // profiles ride along so the parallel tonal path describes the same tile)
   uint32_t layer_noise_bb;
@@ -209,6 +220,14 @@ static int normalize_smoothing_mode(const int mode) {
 
 static void push_aligned_frame_layers(SbSpectralEngine* self,
                                       const float* fft_spectrum) {
+  // Power row of this frame rides along with the aligned layers so the
+  // gain statistic can gather past/future neighborhood rows at the common
+  // delay no matter which chain (or no chain) renders the frame.
+  spectral_neighbors_compute_power_row(self->spectra.neighbor_power_row,
+                                       fft_spectrum, self->config.fft_size);
+  spectral_circular_buffer_push(self->engines.circular_buffer,
+                                self->layers.layer_power,
+                                self->spectra.neighbor_power_row);
   spectral_circular_buffer_push(self->engines.circular_buffer,
                                 self->layers.layer_fft, fft_spectrum);
   spectral_circular_buffer_push(self->engines.circular_buffer,
@@ -234,6 +253,89 @@ static void push_filter_histories(SbSpectralEngine* self,
                            self->spectra.noise_bb, self->spectra.snr_frame);
   nlm_filter_push_frame(self->engines.nlm_filter, self->spectra.snr_frame);
   bm3d_filter_push_frame(self->engines.bm3d_filter, self->spectra.snr_frame);
+}
+
+/**
+ * Neighborhood statistic (reduction blend): part of the per-bin gain
+ * statistic is replaced by its time-frequency neighborhood power average so
+ * the suppression rule reacts to the energy of surrounding bins and frames
+ * instead of single bins. Musical noise comes from independent per-bin
+ * statistical fluctuations triggering sub-band gates at random; borrowing
+ * neighborhood energy de-correlates those flips. High values behave like a
+ * band-wide gate and keep short residual bursts after loud sections.
+ *
+ * At 0.0 the enforced statistic passes through untouched. In the causal
+ * low-latency mode no ring history exists, so the neighborhood degrades to
+ * the frequency axis of the current frame (no extra latency). Returns the
+ * statistic pointer the calling chain must consume; the shared blended
+ * scratch is consumed synchronously inside the chain call, so both chains
+ * may run back to back during a mode transition.
+ *
+ * When the blend is active, the statistic feeds every downstream consumer of
+ * the chain input (alpha, knee, gains, tonal floor) so the blend describes
+ * one coherent reduction decision.
+ */
+static const float* denoiser_neighbor_statistic(SbSpectralEngine* self,
+                                                const float* statistic,
+                                                const float* fft_spectrum) {
+  const float blend = self->config.parameters.reduction_blend;
+  if (blend <= 0.0F) {
+    return statistic;
+  }
+
+  const float* rows[NEIGHBOR_KERNEL_TAPS] = {NULL};
+  if (self->config.low_latency) {
+    // Causal mode: fill the center row from the frame being processed
+    spectral_neighbors_compute_power_row(self->spectra.neighbor_power_row,
+                                         fft_spectrum, self->config.fft_size);
+    rows[NEIGHBOR_KERNEL_HALO] = self->spectra.neighbor_power_row;
+  } else {
+    // Rows ordered oldest first; future rows sit below the common delay
+    // (delays stay >= 0 because the common delay is at least the kernel
+    // halo). Unwritten ring slots are zero-backed, so delays beyond the
+    // filled history are skipped and weights renormalize over real rows.
+    const uint32_t filled = spectral_circular_buffer_get_frames_filled(
+        self->engines.circular_buffer);
+    for (uint32_t i = 0U; i < NEIGHBOR_KERNEL_TAPS; i++) {
+      const uint32_t delay =
+          nlm_filter_get_latency_frames(self->engines.nlm_filter) +
+          NEIGHBOR_KERNEL_HALO - i;
+      rows[i] = (delay < filled) ? spectral_circular_buffer_retrieve(
+                                       self->engines.circular_buffer,
+                                       self->layers.layer_power, delay)
+                                 : NULL;
+    }
+  }
+
+  if (!rows[NEIGHBOR_KERNEL_HALO]) {
+    // Ring not filled yet: keep the enforced statistic (house fallback for
+    // the first frames of the stream)
+    return statistic;
+  }
+
+  const SpectralNeighborParameters neighbor_params = {
+      .rows = rows,
+      .rows_count = NEIGHBOR_KERNEL_TAPS,
+      .spectrum_size = self->config.real_spectrum_size,
+      .freq_kernel = self->engines.neighbor_freq_kernel,
+  };
+  if (!spectral_neighbor_average(&neighbor_params, self->spectra.neighbor_acc,
+                                 self->spectra.blend_power)) {
+    return statistic;
+  }
+
+  // Per-bin attack gate: bins with transient evidence keep the enforced
+  // statistic (no neighborhood borrowing) so onsets do not smear from
+  // neighbors; stationary bins take the full slider blend. The mask is
+  // zeroed when transient protection is off (gate stays neutral).
+  const float* transient_mask = self->transient.transient_band_mask;
+  for (uint32_t k = 0U; k < self->config.real_spectrum_size; k++) {
+    const float blend_bin = blend * (1.0F - transient_mask[k]);
+    self->spectra.blend_power[k] =
+        statistic[k] +
+        (blend_bin * (self->spectra.blend_power[k] - statistic[k]));
+  }
+  return self->spectra.blend_power;
 }
 
 /**
@@ -327,6 +429,12 @@ static bool denoiser_alloc_spectra(SbSpectralEngine* self) {
       (float*)calloc(self->config.real_spectrum_size, sizeof(float));
   self->spectra.gain_tonal =
       (float*)calloc(self->config.real_spectrum_size, sizeof(float));
+  self->spectra.neighbor_power_row =
+      (float*)calloc(self->config.real_spectrum_size, sizeof(float));
+  self->spectra.neighbor_acc =
+      (float*)calloc(self->config.real_spectrum_size, sizeof(float));
+  self->spectra.blend_power =
+      (float*)calloc(self->config.real_spectrum_size, sizeof(float));
   atomic_init(&self->spectra.active_noise_idx, 0);
   self->gains.alpha =
       (float*)calloc(self->config.real_spectrum_size, sizeof(float));
@@ -364,8 +472,9 @@ static bool denoiser_alloc_spectra(SbSpectralEngine* self) {
       !self->spectra.noise_spectrum_buffers[0] ||
       !self->spectra.noise_spectrum_buffers[1] || !self->spectra.noise_bb ||
       !self->spectra.noise_tonal || !self->spectra.gain_tonal ||
-      !self->gains.alpha || !self->gains.beta || !self->gains.alpha_b ||
-      !self->gains.beta_b ||
+      !self->spectra.neighbor_power_row || !self->spectra.neighbor_acc ||
+      !self->spectra.blend_power || !self->gains.alpha || !self->gains.beta ||
+      !self->gains.alpha_b || !self->gains.beta_b ||
 #if TRANSIENT_RELIEF_PARALLEL
       !self->gains.alpha_relief || !self->gains.gain_relief ||
 #endif
@@ -418,6 +527,8 @@ static bool denoiser_init_early_objects(SbSpectralEngine* self,
       self->engines.circular_buffer, self->config.real_spectrum_size);
   self->layers.layer_smoothed = spectral_circular_buffer_add_layer(
       self->engines.circular_buffer, self->config.real_spectrum_size);
+  self->layers.layer_power = spectral_circular_buffer_add_layer(
+      self->engines.circular_buffer, self->config.real_spectrum_size);
   self->layers.layer_noise_bb = spectral_circular_buffer_add_layer(
       self->engines.circular_buffer, self->config.real_spectrum_size);
   self->layers.layer_noise_tonal = spectral_circular_buffer_add_layer(
@@ -428,6 +539,7 @@ static bool denoiser_init_early_objects(SbSpectralEngine* self,
   if (self->layers.layer_fft == 0xFFFFFFFFU ||
       self->layers.layer_noise == 0xFFFFFFFFU ||
       self->layers.layer_smoothed == 0xFFFFFFFFU ||
+      self->layers.layer_power == 0xFFFFFFFFU ||
       self->layers.layer_noise_bb == 0xFFFFFFFFU ||
       self->layers.layer_noise_tonal == 0xFFFFFFFFU ||
       self->layers.layer_tonal_mask == 0xFFFFFFFFU) {
@@ -650,6 +762,14 @@ static SpectralProcessorHandle spectral_engine_initialize_inner(
     goto fail;
   }
 
+  // Erb-scaled frequency halo for the neighborhood statistic: built once
+  // from the FFT bin pitch (init-time allocation, read-only afterwards)
+  self->engines.neighbor_freq_kernel = spectral_neighbors_freq_kernel_create(
+      bin_hz, self->config.real_spectrum_size);
+  if (!self->engines.neighbor_freq_kernel) {
+    goto fail;
+  }
+
   if (!denoiser_init_transient_tail(self, hop_sec)) {
     goto fail;
   }
@@ -707,6 +827,9 @@ static void denoiser_free_objects(SbSpectralEngine* self) {
   free(self->engines.release_scale);
   if (self->engines.spectral_features) {
     spectral_features_free(self->engines.spectral_features);
+  }
+  if (self->engines.neighbor_freq_kernel) {
+    spectral_neighbors_freq_kernel_free(self->engines.neighbor_freq_kernel);
   }
   if (self->engines.masking_veto) {
     masking_veto_free(self->engines.masking_veto);
@@ -780,6 +903,9 @@ static void denoiser_free_buffers(SbSpectralEngine* self) {
   free(self->spectra.noise_bb);
   free(self->spectra.noise_tonal);
   free(self->spectra.gain_tonal);
+  free(self->spectra.neighbor_power_row);
+  free(self->spectra.neighbor_acc);
+  free(self->spectra.blend_power);
   if (self->spectra.manual_noise_floor) {
     free(self->spectra.manual_noise_floor);
   }
@@ -1444,6 +1570,12 @@ static bool run_nlm_chain(SbSpectralEngine* self, const float* fft_spectrum,
     smoothed_magnitude = fft_spectrum;
   }
 
+  // Neighborhood blend: alpha, veto, broadband and tonal gains all consume
+  // the neighbor-informed statistic so the blend stays one coherent
+  // reduction decision in the 2D chains too.
+  smoothed_magnitude =
+      denoiser_neighbor_statistic(self, smoothed_magnitude, fft_spectrum);
+
   // Calculate SNR-dependent oversubtraction factors (Alpha/Beta) on the
   // broadband profile: tonal noise no longer depresses the per-bin SNR here.
   SuppressionParameters suppression_params = {
@@ -1736,7 +1868,7 @@ static void temporal_smooth_gains(SbSpectralEngine* self,
           .release_scale = (self->config.parameters.smoothing_factor > 0.0F)
                                ? self->engines.release_scale
                                : NULL, // Unused while bypassed
-      };
+  };
   spectral_smoothing_run(self->engines.spectrum_smoothing,
                          spectral_smoothing_parameters, out.gain_out);
   if (self->config.parameters.smoothing_factor > 0.0f) {
@@ -1800,6 +1932,12 @@ static void run_temporal_chain(SbSpectralEngine* self, const float* delayed_fft,
   spectral_circular_buffer_push(self->engines.circular_buffer,
                                 self->layers.layer_smoothed,
                                 self->transient.smoothed_magnitude);
+
+  // Neighborhood blend: the gain decision statistic (alpha, knee, gains,
+  // tonal floor) consumes the neighbor-informed result below; the smoothing
+  // state published on layer_smoothed above stays on the unblended statistic.
+  effective_magnitude =
+      denoiser_neighbor_statistic(self, effective_magnitude, delayed_fft);
 
   temporal_apply_suppression(self, effective_magnitude, frames, out);
   temporal_compute_knee(self, effective_magnitude, delayed_magnitude,

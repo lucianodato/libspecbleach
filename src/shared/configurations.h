@@ -299,6 +299,29 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define BM3D_DEFAULT_H_PARAMETER NLM_DEFAULT_H_PARAMETER
 #define BM3D_MAX_H_PARAMETER NLM_MAX_H_PARAMETER
 
+// Neighborhood weighting ("reduction blend"): the gain statistic of each bin
+// is partly replaced by a separable neighborhood average of the power frames
+// (time radius in hops, symmetric Hann kernel on both axes). Wider kernels
+// trade single-bin spectral precision for band-wide gating behavior, which
+// suppresses musical noise at the cost of residual gaps after loud sections.
+// The future side of the time axis is clamped to the common 2D look-ahead;
+// in the causal low-latency mode only the current frame is available
+// (frequency-only degradations, no extra latency).
+#define REDUCTION_BLEND_MAX 1.0F
+#define NEIGHBOR_KERNEL_TAPS 5U // odd: center + halo each side
+#define NEIGHBOR_KERNEL_HALO ((NEIGHBOR_KERNEL_TAPS - 1U) / 2U)
+// Erb-scaled frequency halo: radius grows with center frequency so the
+// averaging half-width tracks (half of) the critical band, i.e. narrow
+// where hearing is fine-grained and wide where it is not. Clamped so the
+// kernel stays a local neighborhood at both extremes.
+#define NEIGHBOR_FREQ_HALO_MIN 2U
+#define NEIGHBOR_FREQ_HALO_MAX 8U
+#define NEIGHBOR_ERB_ROOT_HZ (24.7F)
+#define NEIGHBOR_ERB_PER_KHZ (4.37F)
+#define NEIGHBOR_ERB_HALO_SHARE (0.5F)
+// Symmetric Hann shaped kernel, sums to 1.0 (shared by both axes)
+#define NEIGHBOR_KERNEL_W {0.0625F, 0.25F, 0.375F, 0.25F, 0.0625F}
+
 // Must be >= search_time_past + search_time_future + patch_size for NLM caching
 // Using power-of-two (64U) for efficient modulo wrap-around and future headroom
 #define DELAY_BUFFER_FRAMES 64U

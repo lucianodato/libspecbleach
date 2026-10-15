@@ -74,6 +74,8 @@ static SpectralEngineParameters sanitize_engine_parameters(
       .aggressiveness = fmaxf(-1.0f, fminf(1.0f, parameters->aggressiveness)),
       .tonal_reduction =
           fmaxf(0.0f, fminf(1.0f, parameters->tonal_reduction_gain)),
+      .reduction_blend =
+          fmaxf(0.0f, fminf(REDUCTION_BLEND_MAX, parameters->reduction_blend)),
       .transient_protection_enable =
           parameters->transient_protection_enable ? 1 : 0,
       .noise_profile_offset_linear =
@@ -130,6 +132,7 @@ SpecbleachDenoiserParameters specbleach_denoiser_get_default_parameters(void) {
   p.reduction_curve_enabled = false;
   p.reduction_curve_size = 0;
   p.tonal_noise_profile_scale = 1.0f;
+  p.reduction_blend = 0.0f;
   return p;
 }
 
