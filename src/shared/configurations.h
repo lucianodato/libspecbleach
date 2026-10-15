@@ -320,7 +320,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define NEIGHBOR_ERB_PER_KHZ (4.37F)
 #define NEIGHBOR_ERB_HALO_SHARE (0.5F)
 // Symmetric Hann shaped kernel, sums to 1.0 (shared by both axes)
-#define NEIGHBOR_KERNEL_W {0.0625F, 0.25F, 0.375F, 0.25F, 0.0625F}
+#define NEIGHBOR_KERNEL_W                                                      \
+  { 0.0625F, 0.25F, 0.375F, 0.25F, 0.0625F }
 
 // Must be >= search_time_past + search_time_future + patch_size for NLM caching
 // Using power-of-two (64U) for efficient modulo wrap-around and future headroom
