@@ -50,6 +50,58 @@ void spectral_neighbors_compute_power_row(float* power_row,
   }
 }
 
+// Clamp a signed neighbor tap bin to the valid spectrum range
+// (edge-extension at DC and Nyquist)
+static inline uint32_t spectral_neighbors_clamp_bin(int32_t bin,
+                                                    uint32_t spectrum_size) {
+  if (bin < 0) {
+    return 0U;
+  }
+  if ((uint32_t)bin >= spectrum_size) {
+    return spectrum_size - 1U;
+  }
+  return (uint32_t)bin;
+}
+
+// Frequency axis with per-bin Erb-scaled variable-radius Hann. Edge taps
+// clamp to DC/Nyquist and the used weights renormalize so the output stays
+// a true average there too.
+static void spectral_neighbors_average_variable(
+    const SpectralNeighborFreqKernel* freq, const float* acc_scratch,
+    uint32_t spectrum_size, float* out) {
+  for (uint32_t k = 0U; k < spectrum_size; k++) {
+    const uint32_t halo = freq->halo[k];
+    const uint32_t first = freq->start[k];
+    float sum = 0.0F;
+    float used = 0.0F;
+    for (uint32_t i = 0U; i < 2U * halo + 1U; i++) {
+      const uint32_t bin = spectral_neighbors_clamp_bin(
+          (int32_t)k + ((int32_t)i - (int32_t)halo), spectrum_size);
+      sum += freq->weights[first + i] * acc_scratch[bin];
+      used += freq->weights[first + i];
+    }
+    out[k] = sum * (1.0F / used);
+  }
+}
+
+// Frequency axis: symmetric FIR, edges clamped (edge-extension)
+static void spectral_neighbors_average_fixed(const float* kernel,
+                                             const float* acc_scratch,
+                                             uint32_t spectrum_size,
+                                             float* out) {
+  for (uint32_t k = 0U; k < spectrum_size; k++) {
+    float sum = 0.0F;
+    for (uint32_t j = 0U; j < NEIGHBOR_KERNEL_TAPS; j++) {
+      uint32_t idx = k + j - NEIGHBOR_KERNEL_HALO;
+      if (idx >= spectrum_size) { // unsigned clamp: negatives wrap high
+        idx = (j < NEIGHBOR_KERNEL_HALO) ? 0U : (spectrum_size - 1U);
+      }
+      sum += kernel[j] * acc_scratch[idx];
+    }
+    out[k] = sum;
+  }
+}
+
 bool spectral_neighbor_average(const SpectralNeighborParameters* parameters,
                                float* acc_scratch, float* out) {
   if (!parameters || !parameters->rows || !acc_scratch || !out ||
@@ -88,41 +140,12 @@ bool spectral_neighbor_average(const SpectralNeighborParameters* parameters,
   }
 
   if (parameters->freq_kernel != NULL) {
-    // Frequency axis: per-bin Erb-scaled variable-radius Hann. Edge taps
-    // clamp to DC/Nyquist and the used weights renormalize so the output
-    // stays a true average there too.
-    const SpectralNeighborFreqKernel* freq = parameters->freq_kernel;
-    for (uint32_t k = 0U; k < spectrum_size; k++) {
-      const uint32_t halo = freq->halo[k];
-      const uint32_t first = freq->start[k];
-      float sum = 0.0F;
-      float used = 0.0F;
-      for (uint32_t i = 0U; i < 2U * halo + 1U; i++) {
-        const int32_t bin = (int32_t)k + ((int32_t)i - (int32_t)halo);
-        uint32_t idx =
-            (bin < 0) ? 0U
-                      : ((uint32_t)bin >= spectrum_size ? (spectrum_size - 1U)
-                                                        : (uint32_t)bin);
-        sum += freq->weights[first + i] * acc_scratch[idx];
-        used += freq->weights[first + i];
-      }
-      out[k] = sum * (1.0F / used);
-    }
+    spectral_neighbors_average_variable(parameters->freq_kernel, acc_scratch,
+                                        spectrum_size, out);
     return true;
   }
 
-  // Frequency axis: symmetric FIR, edges clamped (edge-extension)
-  for (uint32_t k = 0U; k < spectrum_size; k++) {
-    float sum = 0.0F;
-    for (uint32_t j = 0U; j < NEIGHBOR_KERNEL_TAPS; j++) {
-      uint32_t idx = k + j - NEIGHBOR_KERNEL_HALO;
-      if (idx >= spectrum_size) { // unsigned clamp: negatives wrap high
-        idx = (j < NEIGHBOR_KERNEL_HALO) ? 0U : (spectrum_size - 1U);
-      }
-      sum += kernel[j] * acc_scratch[idx];
-    }
-    out[k] = sum;
-  }
+  spectral_neighbors_average_fixed(kernel, acc_scratch, spectrum_size, out);
 
   return true;
 }
