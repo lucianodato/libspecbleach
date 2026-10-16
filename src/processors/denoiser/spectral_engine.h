@@ -39,6 +39,7 @@ typedef struct SpectralEngineParameters {
   int smoothing_mode; /**< 0=temporal (1D), 1=NLM 2D, 2=NLM 2D + DFTT, 3=BM3D */
   float dftt_strength;    /**< DFTT threshold multiplier (<=0 -> default 1.0) */
   float smoothing_factor; /**< Temporal smoothing strength / NLM h parameter */
+  float reduction_blend;  /**< Neighborhood weighting of the gain statistic */
   float whitening_factor; /**< Whitening factor (0.0 to 1.0) */
   int adaptive_noise;     /**< Adaptive noise mode: 0=disabled, 1=enabled */
   int noise_estimation_method; /**< 0=SPP-MMSE, 1=Brandt, 2=Martin MS */

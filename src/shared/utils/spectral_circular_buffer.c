@@ -33,6 +33,9 @@ struct SbSpectralCircularBuffer {
   uint32_t num_layers;
   uint32_t num_frames;
   uint32_t write_index;
+  uint32_t frames_filled; // Frames actually written (<= num_frames), so
+                          // consumers can tell real rows from the zeros
+                          // that back unwritten ring slots
 };
 
 SbSpectralCircularBuffer* spectral_circular_buffer_create(uint32_t num_frames) {
@@ -103,13 +106,21 @@ void spectral_circular_buffer_advance(SbSpectralCircularBuffer* self) {
   }
 
   self->write_index = (self->write_index + 1) % self->num_frames;
+  // Capped at num_frames: every delay below it maps to a written slot
+  if (self->frames_filled < self->num_frames) {
+    self->frames_filled++;
+  }
+}
+
+uint32_t spectral_circular_buffer_get_frames_filled(
+    const SbSpectralCircularBuffer* self) {
+  return self ? self->frames_filled : 0U;
 }
 
 void spectral_circular_buffer_clear(SbSpectralCircularBuffer* self) {
   if (!self) {
     return;
   }
-
   for (uint32_t i = 0; i < self->num_layers; i++) {
     if (self->layers[i].buffer) {
       memset(self->layers[i].buffer, 0,
@@ -117,6 +128,7 @@ void spectral_circular_buffer_clear(SbSpectralCircularBuffer* self) {
     }
   }
   self->write_index = 0;
+  self->frames_filled = 0U;
 }
 
 void spectral_circular_buffer_free(SbSpectralCircularBuffer* self) {

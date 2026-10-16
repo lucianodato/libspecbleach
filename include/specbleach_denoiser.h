@@ -249,6 +249,17 @@ typedef struct SpecbleachDenoiserParameters {
    * 1.0 shift threshold higher (more reduction) at tonal bins.
    */
   float tonal_noise_profile_scale;
+
+  /**
+   * Normalized neighborhood weighting of the reduction decision (0.0 to
+   * 1.0, 0.0 = fully enforced per-bin gains). Higher values let the
+   * statistic each bin's gain is computed from borrow energy from its
+   * time-frequency neighborhood (past/future frames and neighboring bins),
+   * trading single-bin precision for band-wide gating behavior: fewer
+   * musical artifacts, at the cost of short residual bursts after loud
+   * sections. Values outside the range are clamped.
+   */
+  float reduction_blend;
 } SpecbleachDenoiserParameters;
 
 /**

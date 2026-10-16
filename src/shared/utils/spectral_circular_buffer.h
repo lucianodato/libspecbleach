@@ -85,6 +85,16 @@ float* spectral_circular_buffer_retrieve(SbSpectralCircularBuffer* self,
 void spectral_circular_buffer_advance(SbSpectralCircularBuffer* self);
 
 /**
+ * @brief Number of ring slots holding data written since the last clear.
+ *
+ * Unwritten slots are backed by zero-filled memory, so consumers must not
+ * treat delays >= this value as valid history. Increments once per advance,
+ * capped at the ring capacity.
+ */
+uint32_t spectral_circular_buffer_get_frames_filled(
+    const SbSpectralCircularBuffer* self);
+
+/**
  * @brief Clear all layers and reset write index in the circular buffer.
  *
  * @param self The circular buffer instance.
