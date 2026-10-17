@@ -84,6 +84,7 @@ void suppression_engine_calculate(SuppressionEngine* self,
                                   float* alpha, float* beta);
 
 /* Init-time only: recompute temporal-masking decays from the true hop. */
-void suppression_engine_set_hop_sec(SuppressionEngine* self, float hop_sec);
+void suppression_engine_set_hop_sec(const SuppressionEngine* self,
+                                    float hop_sec);
 
 #endif

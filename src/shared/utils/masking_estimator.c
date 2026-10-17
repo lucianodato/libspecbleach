@@ -233,6 +233,85 @@ void masking_estimation_free(MaskingEstimator* self) {
   free(self);
 }
 
+// Zero bands the veto did not validate as masker evidence: untrusted
+// bands contribute nothing, so the temporal layer's memory cannot
+// accumulate a phantom from biased clean-estimate noise.
+static void zero_unmasker_bands(const float* band_masker_mask, float* bands,
+                                uint32_t number_critical_bands) {
+  for (uint32_t j = 0U; j < number_critical_bands; j++) {
+    if (band_masker_mask[j] == 0.0F) {
+      bands[j] = 0.0F;
+    }
+  }
+}
+
+// TMN has the higher offset (~16-41dB depending on Bark); NMT the lower
+// one (~6dB). The mix tracks how tonal the frame is per band.
+static float compute_tmn_nmt_offset(float tonality_factor, float bark_idx) {
+  return (tonality_factor * (TMN_OFFSET_BASE + bark_idx)) +
+         (NMT_OFFSET_DB * (1.F - tonality_factor));
+}
+
+// Future-frame frequency thresholds become the backward-masking donor for
+// the next hop (frequency masking only).
+static void prepare_future_thresholds(MaskingEstimator* self,
+                                      const float* future_spectrum,
+                                      const float* band_masker_mask,
+                                      float spectral_p, float spectral_inv_p) {
+  compute_critical_bands_spectrum(self->owned.critical_bands, future_spectrum,
+                                  self->scratch.future_cb_spectrum_buf);
+  if (band_masker_mask) {
+    zero_unmasker_bands(band_masker_mask, self->scratch.future_cb_spectrum_buf,
+                        self->config.number_critical_bands);
+  }
+
+  spread_critical_bands(self, self->scratch.future_cb_spectrum_buf,
+                        self->scratch.spreaded_future_buf, spectral_p,
+                        spectral_inv_p);
+
+  for (uint32_t j = 0U; j < self->config.number_critical_bands; j++) {
+    const float tonality_factor =
+        compute_tonality_factor(self, future_spectrum, j);
+    const float bark_idx = fminf((float)(j + 1), 25.0F);
+    const float offset = compute_tmn_nmt_offset(tonality_factor, bark_idx);
+
+    self->state.future_thresholds[j] = powf(
+        10.F, (log10f(self->scratch.spreaded_future_buf[j] + SPECTRAL_EPSILON) -
+               (offset / 10.F)));
+  }
+}
+
+// Power-law temporal integration per band (Johnston, 1988):
+// Total_T = (T_freq^p + T_forward^p + T_backward^p)^(1/p) — non-linear
+// summation of multiple maskers compared to simple linear addition.
+static float integrate_temporal_masking(MaskingEstimator* self, float threshold,
+                                        uint32_t j, bool future_available) {
+  float threshold_p = powf(threshold, POWER_LAW_EXPONENT);
+  float temporal_p = 0.0F;
+
+  // Forward masking contribution from the previous frame.
+  float forward_threshold =
+      self->state.previous_thresholds[j] * self->state.forward_decays[j];
+  temporal_p += powf(forward_threshold, POWER_LAW_EXPONENT);
+
+  // Backward masking contribution from the incoming frame.
+  if (future_available) {
+    float backward_threshold =
+        self->state.future_thresholds[j] * self->config.backward_decay;
+    temporal_p += powf(backward_threshold, POWER_LAW_EXPONENT);
+  }
+
+  threshold_p += temporal_p;
+
+  // The model's temporal claim alone (masker memory + incoming maskers,
+  // no fresh frame-local estimate). Consumers that need it can read it
+  // via masking_estimation_get_temporal_persistence.
+  self->state.temporal_persistence[j] =
+      powf(temporal_p, 1.0F / POWER_LAW_EXPONENT);
+
+  return powf(threshold_p, 1.0F / POWER_LAW_EXPONENT);
+}
+
 bool compute_masking_thresholds(MaskingEstimator* self, const float* spectrum,
                                 const float* future_spectrum,
                                 const float* band_masker_mask,
@@ -247,47 +326,15 @@ bool compute_masking_thresholds(MaskingEstimator* self, const float* spectrum,
   const float spectral_p = self->config.spectral_additivity_exponent;
   const float spectral_inv_p = 1.0F / spectral_p;
 
-  // Only validated masker evidence may drive the frequency threshold:
-  // untrusted bands contribute nothing, so the temporal layer's memory
-  // cannot accumulate a phantom from biased clean-estimate noise.
   if (band_masker_mask) {
-    for (uint32_t j = 0U; j < self->config.number_critical_bands; j++) {
-      if (band_masker_mask[j] == 0.0F) {
-        self->state.critical_bands_spectrum[j] = 0.0F;
-      }
-    }
+    zero_unmasker_bands(band_masker_mask, self->state.critical_bands_spectrum,
+                        self->config.number_critical_bands);
   }
 
-  // 1. Calculate spreaded future spectrum (Frequency Masking only)
+  // Future spectrum feeds backward masking (frequency masking only).
   if (future_spectrum) {
-    compute_critical_bands_spectrum(self->owned.critical_bands, future_spectrum,
-                                    self->scratch.future_cb_spectrum_buf);
-    if (band_masker_mask) {
-      for (uint32_t j = 0U; j < self->config.number_critical_bands; j++) {
-        if (band_masker_mask[j] == 0.0F) {
-          self->scratch.future_cb_spectrum_buf[j] = 0.0F;
-        }
-      }
-    }
-
-    spread_critical_bands(self, self->scratch.future_cb_spectrum_buf,
-                          self->scratch.spreaded_future_buf, spectral_p,
-                          spectral_inv_p);
-
-    for (uint32_t j = 0U; j < self->config.number_critical_bands; j++) {
-      const float tonality_factor =
-          compute_tonality_factor(self, future_spectrum, j);
-      const float bark_idx = fminf((float)(j + 1), 25.0F);
-      // Tone-masking-noise (TMN) has higher offset (~16-41dB depending on Bark)
-      // Noise-masking-tone (NMT) has lower offset (~6dB)
-      const float offset = (tonality_factor * (TMN_OFFSET_BASE + bark_idx)) +
-                           (NMT_OFFSET_DB * (1.F - tonality_factor));
-
-      self->state.future_thresholds[j] = powf(
-          10.F,
-          (log10f(self->scratch.spreaded_future_buf[j] + SPECTRAL_EPSILON) -
-           (offset / 10.F)));
-    }
+    prepare_future_thresholds(self, future_spectrum, band_masker_mask,
+                              spectral_p, spectral_inv_p);
   }
 
   spread_critical_bands(self, self->state.critical_bands_spectrum,
@@ -309,36 +356,12 @@ bool compute_masking_thresholds(MaskingEstimator* self, const float* spectrum,
              (log10f(self->scratch.spreaded_current_buf[j] + SPECTRAL_EPSILON) -
               (self->state.masking_offset[j] / 10.F)));
 
-    // 2. Combine with temporal masking using Power Law (p=0.6)
-    // Total_T = (T_freq^p + T_forward^p + T_backward^p)^(1/p)
-    // This model (Johnston, 1988) better reflects the non-linear summation
-    // of multiple maskers compared to simple linear addition.
+    // 2. Combine with temporal masking using the power-law non-linear
+    // summation of the model's temporal layer (integrate_temporal_masking).
     self->state.temporal_persistence[j] = 0.0F;
     if (self->config.use_temporal_masking) {
-      float threshold_p = powf(threshold, POWER_LAW_EXPONENT);
-      float temporal_p = 0.0F;
-
-      // Add forward masking contribution
-      float forward_threshold =
-          self->state.previous_thresholds[j] * self->state.forward_decays[j];
-      temporal_p += powf(forward_threshold, POWER_LAW_EXPONENT);
-
-      // Add backward masking contribution if available
-      if (future_spectrum) {
-        float backward_threshold =
-            self->state.future_thresholds[j] * self->config.backward_decay;
-        temporal_p += powf(backward_threshold, POWER_LAW_EXPONENT);
-      }
-
-      threshold_p += temporal_p;
-
-      // The model's temporal claim alone (masker memory + incoming maskers,
-      // no fresh frame-local estimate). Consumers that need it can read it
-      // via masking_estimation_get_temporal_persistence.
-      self->state.temporal_persistence[j] =
-          powf(temporal_p, 1.0F / POWER_LAW_EXPONENT);
-
-      threshold = powf(threshold_p, 1.0F / POWER_LAW_EXPONENT);
+      threshold = integrate_temporal_masking(self, threshold, j,
+                                             future_spectrum != NULL);
     }
 
     self->state.previous_thresholds[j] =

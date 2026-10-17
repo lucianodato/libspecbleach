@@ -89,7 +89,8 @@ void suppression_engine_free(SuppressionEngine* self) {
   free(self);
 }
 
-void suppression_engine_set_hop_sec(SuppressionEngine* self, float hop_sec) {
+void suppression_engine_set_hop_sec(const SuppressionEngine* self,
+                                    float hop_sec) {
   (void)self;
   (void)hop_sec; // Kept for API compatibility; no hop-tuned state remains
 }
