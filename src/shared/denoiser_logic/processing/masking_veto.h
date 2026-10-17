@@ -28,11 +28,13 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 /**
  * @file masking_veto.h
- * @brief Psychoacoustic veto module for spectral denoising.
+ * @brief Psychoacoustic audibility floor for spectral denoising.
  *
- * This module implements a masking veto mechanism that moderates noise
- * reduction based on psychoacoustic masking thresholds. It ensures that
- * noise reduction is only applied where it is perceptually necessary.
+ * This module computes a per-bin gain floor from a psychoacoustic masking
+ * analysis: suppression is relieved where the denoised residual would fall
+ * below the masking threshold (frequency spreading + temporal integration +
+ * absolute-hearing floor). Pushing reduction deeper there is imperceptible
+ * and only breeds musical noise.
  */
 
 typedef struct MaskingVeto MaskingVeto;
@@ -57,25 +59,32 @@ MaskingVeto* masking_veto_initialize(uint32_t fft_size, uint32_t sample_rate,
 void masking_veto_free(MaskingVeto* self);
 
 /**
- * Moderate noise reduction alpha values based on psychoacoustic masking.
+ * Lift the suppression gain toward the psychoacoustic audibility floor.
  *
- * In bands where noise is below the masking threshold (NMR < 0dB), the
- * noise is inaudible. The veto lerps alpha toward 1.0 (no extra subtraction)
- * to preserve band energy. In bands where noise is audible (NMR > 0dB),
- * alpha is left unchanged and suppression proceeds normally.
+ * The masking threshold field is computed from a gated clean-signal
+ * estimate (future spectrum adds backward masking), band NMR is converted
+ * into an audibility gain floor (the gain at which the residual lands
+ * exactly on the masking threshold) and the gain is lerped toward it:
+ *
+ *   gain = max(gain, gain + depth * (floor - gain))
+ *
+ * Where the original noise is already masked the relief floor saturates at
+ * the fixed relief ceiling, so reduction is reduced but never fully
+ * disabled ("soft suppression where noise is subjectively inaudible").
+ * Relief only ever raises the gain, so the
+ * maximum residual per band is bounded by the masked-audibility level.
  *
  * @param self MaskingVeto instance
- * @param smoothed_spectrum Temporally smoothed spectral magnitude/power
- * @param noise_spectrum Estimated noise profile
+ * @param spectrum Smoothed spectral power/magnitude of the masked frame
+ * @param noise_spectrum Estimated noise profile (broadband)
  * @param future_spectrum Future frame for backward masking (or NULL)
- * @param alpha In/Out oversubtraction factors to be moderated
- * @param depth Veto strength (0.0: No veto, 1.0: Full psychoacoustic
- * protection)
+ * @param gain In/Out suppression gains to be relieved
+ * @param depth Veto strength (0.0: no relief, 1.0: full audibility floor)
  */
-void masking_veto_apply(MaskingVeto* self, const float* smoothed_spectrum,
-                        const float* noise_spectrum,
-                        const float* future_spectrum, float* alpha,
-                        float depth);
+void masking_veto_apply_floor(MaskingVeto* self, const float* spectrum,
+                              const float* noise_spectrum,
+                              const float* future_spectrum, float* gain,
+                              float depth);
 
 /* Init-time only: retune smoothing + true-hop decays. */
 void masking_veto_set_hop_sec(MaskingVeto* self, float hop_sec);

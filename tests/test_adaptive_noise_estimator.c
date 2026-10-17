@@ -182,7 +182,7 @@ int main(void) {
   // Suppression Engine
   suppression_engine_free(NULL);
   SuppressionEngine* se = suppression_engine_initialize(
-      real_spectrum_size, sample_rate, OPUS_SCALE, POWER_SPECTRUM, true, true);
+      real_spectrum_size, sample_rate, OPUS_SCALE);
   suppression_engine_set_hop_sec(NULL, 0.0058f);
   suppression_engine_set_hop_sec(se, 0.0058f);
   suppression_engine_free(se);

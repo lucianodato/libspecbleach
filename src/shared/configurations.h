@@ -356,7 +356,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define CRITICAL_BANDS_TYPE BARK_SCALE
 #define GAIN_ESTIMATION_TYPE WIENER
 
-// Masking Veto defaults
+// Masking decomposition: the estimator's temporal layer (forward masking
+// persistence + backward masking off the lookahead frame, integrated by
+// power-law with the frequency threshold) owns ALL threshold dynamics.
+// Use false only to benchmark the frame-local (frequency-only) model.
 #define USE_TEMPORAL_MASKING_DEFAULT true
 
 // Absolute hearing thresholds
@@ -387,22 +390,52 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 // Temporal Masking Constants (seconds; the _SEC suffix is load-bearing:
 // hop_sec is seconds, so decays are expf(-hop_sec / tau_sec))
 // Frequency-dependent forward masking (Low: 100ms, High: 25ms)
-#define FORWARD_MASKING_TAU_LOW_SEC (0.100F)  // 100ms decay for low frequencies
-#define FORWARD_MASKING_TAU_HIGH_SEC (0.025F) // 25ms decay for high frequencies
+#define FORWARD_MASKING_TAU_LOW_SEC (0.070F)  // 70ms decay for low frequencies
+#define FORWARD_MASKING_TAU_HIGH_SEC (0.018F) // 18ms decay for high frequencies
 #define BACKWARD_MASKING_TAU_SEC (0.010F)     // 10ms decay for pre-masking
 
 // Schroeder Slope Adaptation Constants
 #define S_LEVEL_REF_DB 40.0F // Reference level for slope adaptation (dB SPL)
 #define S_SLOPE_FACTOR 0.2F  // Slope broadening factor per dB
 
-// Veto Parameters
-#define MASKING_VETO_SMOOTHING 0.5F  // Stabilization alpha for clean signal
-#define MASKING_VETO_NMR_RANGE 20.0F // NMR range for protection mapping (dB)
+// Veto Parameters (psychoacoustic audibility floor: depth-lerped relief stops
+// suppression where the residual would fall below the masking threshold —
+// deeper carving there is imperceptible and only breeds musical noise)
+#define MASKING_VETO_USE_ABSOLUTE_THRESHOLD (true)
+#define MASKING_VETO_SMOOTHING 0.5F // Stabilization alpha for clean signal
 #define MASKING_VETO_NOISE_GATE                                                \
   1.5F // Noise floor multiplier for clean signal estimation (gates noise
        // variance)
-#define MASKING_VETO_SNR_THRESHOLD                                             \
-  3.0F // ~5dB SNR local bin-level threshold for full protection
+#define MASKING_VETO_FLOOR_SMOOTH_SEC                                          \
+  (0.025F) // Mapper regularization, not psychoacoustics: symmetric one-pole
+           // stabilizing the audibility floor target against per-frame
+           // masker/lookahead fluctuations (musical noise). Psychoacoustic
+           // persistence in time belongs to the model's temporal layer.
+// No temporal attack/release here: the floor reports the masking threshold
+// as the model computes it, and the model's temporal masking layer (see
+// USE_TEMPORAL_MASKING_DEFAULT) carries all threshold persistence.
+#define MASKING_VETO_RELIEF_CEILING                                            \
+  (0.30F) // Maximum relief under a live or incoming masker: suppression
+          // never drops below ~-10dB. The masking model shapes the NMR
+          // mapping, it never overrides the reduction the user asked for
+          // (the legacy veto anchored at alpha = 1.0, never gain = 1.0)
+#define MASKING_VETO_PERSISTENCE_RELIEF_CEILING                                \
+  (0.30F) // Maximum relief held ONLY by the temporal claim (no live or
+          // incoming masker this frame): a weak persistence floor keeps
+          // low-level gap detail inaudible-but-present while the claim
+          // decays per the model's forward/backward law. The floors are
+          // tared equal so gap-tail relief is never outrun by live relief
+#define MASKING_VETO_RELIEF_RANGE_DB                                           \
+  (20.0F) // Audible-noise fadeout: relief fades to zero over this NMR span
+#define MASKING_VETO_MASKER_MIN_RATIO                                          \
+  (2.0F) // Relief prerequisite: estimated-masker energy must exceed the
+         // band noise estimate (biased noise estimators otherwise leave a
+         // phantom "masker" that keeps relief alive in noise-only sections)
+#define MASKING_VETO_PERSISTENCE_RATIO                                         \
+  (256.0F) // Persistence relief needs stronger evidence than a live masker:
+           // the model claims masking from this band's own recent/incoming
+           // maskers only, and relief held on that claim alone must fire well
+           // clear of the noise-estimator bias margin
 
 /* --------------------------------------------------------------------- */
 /* 7. Gain smoothing envelopes and runtime smoothing-mode crossfade.      */
@@ -433,7 +466,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 // get up to GAIN_KNEE_DECAY_BOOST extra knee width once the decay evidence
 // reaches GAIN_KNEE_DECAY_RANGE, forgiving weak component tails instead of
 // cutting them. Steady or rising bins keep the base knee.
-#define GAIN_KNEE_DECAY_BOOST (0.35F)
+#define GAIN_KNEE_DECAY_BOOST (0.30F)
 #define GAIN_KNEE_DECAY_RANGE (1.0F)
 
 // Pre-subtraction magnitude stabilization ("time smoothing of the signal

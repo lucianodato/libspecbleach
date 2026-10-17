@@ -25,24 +25,20 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 /**
  * @file suppression_engine.h
- * @brief SNR-dependent and psychoacoustic oversubtraction (Alpha) calculation
- * engine.
+ * @brief SNR-dependent oversubtraction (Alpha) calculation engine.
  *
- * This module implements various oversubtraction factor calculation strategies,
- * including Berouti-style per-bin SNR scaling, global SNR scaling,
- * critical band SNR scaling, and NMR-based psychoacoustic scaling.
+ * This module implements various oversubtraction factor calculation
+ * strategies, including Berouti-style per-bin SNR scaling, global SNR
+ * scaling, and critical band SNR scaling.
  */
 
 #include "shared/utils/critical_bands.h"
-#include "shared/utils/spectral_features.h"
 
 typedef enum SuppressionType {
   SUPPRESSION_BEROUTI_PER_BIN = 0,    // Per-bin SNR-dependent oversubtraction
   SUPPRESSION_GLOBAL_SNR = 1,         // Global SNR-based scaling
   SUPPRESSION_CRITICAL_BANDS_SNR = 2, // Critical band SNR-based scaling
-  SUPPRESSION_MASKING_THRESHOLDS =
-      3, // NMR-based scaling using psychoacoustic model
-  SUPPRESSION_NONE = 4
+  SUPPRESSION_NONE = 3                // No suppression (alpha floor only)
 } SuppressionType;
 
 typedef struct SuppressionParameters {
@@ -58,13 +54,11 @@ typedef struct SuppressionEngine SuppressionEngine;
  * @param real_spectrum_size Size of the real spectrum ((fft_size/2)+1)
  * @param sample_rate Sample rate of the audio
  * @param critical_band_type Type of critical bands to use
- * @param spectrum_type Type of spectral representation
  * @return Initialized instance or NULL on failure
  */
 SuppressionEngine* suppression_engine_initialize(
     uint32_t real_spectrum_size, uint32_t sample_rate,
-    CriticalBandType critical_band_type, SpectrumType spectrum_type,
-    bool use_absolute_threshold, bool use_temporal_masking);
+    CriticalBandType critical_band_type);
 
 /**
  * Free a SuppressionEngine instance.
@@ -90,6 +84,7 @@ void suppression_engine_calculate(SuppressionEngine* self,
                                   float* alpha, float* beta);
 
 /* Init-time only: recompute temporal-masking decays from the true hop. */
-void suppression_engine_set_hop_sec(SuppressionEngine* self, float hop_sec);
+void suppression_engine_set_hop_sec(const SuppressionEngine* self,
+                                    float hop_sec);
 
 #endif

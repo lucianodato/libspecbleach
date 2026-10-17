@@ -105,11 +105,7 @@ typedef struct DenoiserGains {
   float* alpha;   // Oversubtraction factors (active chain)
   float* beta;    // Undersubtraction factors (active chain)
   float* alpha_b; // Oversubtraction factors (transition chain)
-#if !TONAL_DUAL_PATH
-  float* alpha_base;  // Legacy combined-path scratch (Berouti base)
-  float* alpha_tonal; // Legacy combined-path scratch (tonal branch)
-#endif
-  float* beta_b; // Undersubtraction factors (transition chain)
+  float* beta_b;  // Undersubtraction factors (transition chain)
 #if TRANSIENT_RELIEF_PARALLEL
   float* alpha_relief; // Relief-branch alpha (all ALPHA_MIN)
   float* gain_relief;  // Relief-branch preservation gain (parallel output)
@@ -450,12 +446,6 @@ static bool denoiser_alloc_spectra(SbSpectralEngine* self) {
   self->gains.gain_relief =
       (float*)calloc(self->config.fft_size, sizeof(float));
 #endif
-#if !TONAL_DUAL_PATH
-  self->gains.alpha_base =
-      (float*)calloc(self->config.real_spectrum_size, sizeof(float));
-  self->gains.alpha_tonal =
-      (float*)calloc(self->config.real_spectrum_size, sizeof(float));
-#endif
   self->spectra.manual_noise_floor =
       (float*)calloc(self->config.real_spectrum_size, sizeof(float));
   self->transient.smoothed_magnitude =
@@ -477,9 +467,6 @@ static bool denoiser_alloc_spectra(SbSpectralEngine* self) {
       !self->gains.alpha_b || !self->gains.beta_b ||
 #if TRANSIENT_RELIEF_PARALLEL
       !self->gains.alpha_relief || !self->gains.gain_relief ||
-#endif
-#if !TONAL_DUAL_PATH
-      !self->gains.alpha_base || !self->gains.alpha_tonal ||
 #endif
       !self->spectra.manual_noise_floor ||
       !self->transient.smoothed_magnitude || !self->transient.clean_magnitude ||
@@ -640,11 +627,11 @@ static bool denoiser_init_filters(SbSpectralEngine* self,
 
   self->engines.masking_veto = masking_veto_initialize(
       self->config.fft_size, self->config.sample_rate, CRITICAL_BANDS_TYPE,
-      self->config.spectrum_type, false, USE_TEMPORAL_MASKING_DEFAULT);
+      self->config.spectrum_type, MASKING_VETO_USE_ABSOLUTE_THRESHOLD,
+      USE_TEMPORAL_MASKING_DEFAULT);
   self->engines.suppression_engine = suppression_engine_initialize(
       self->config.real_spectrum_size, self->config.sample_rate,
-      CRITICAL_BANDS_TYPE, self->config.spectrum_type, true,
-      USE_TEMPORAL_MASKING_DEFAULT);
+      CRITICAL_BANDS_TYPE);
 
   if (!self->engines.masking_veto || !self->engines.suppression_engine) {
     return false;
@@ -895,10 +882,6 @@ static void denoiser_free_buffers(SbSpectralEngine* self) {
 #if TRANSIENT_RELIEF_PARALLEL
   free(self->gains.alpha_relief);
   free(self->gains.gain_relief);
-#endif
-#if !TONAL_DUAL_PATH
-  free(self->gains.alpha_base);
-  free(self->gains.alpha_tonal);
 #endif
   free(self->spectra.noise_bb);
   free(self->spectra.noise_tonal);
@@ -1548,10 +1531,11 @@ bool spectral_engine_run(SpectralProcessorHandle instance,
 
 /**
  * 2D Non-Local Means chain: NLM-smoothed magnitude feeds broadband
- * suppression (Berouti alpha + masking veto) and a Wiener evaluation against
- * the BROADBAND noise profile only. The tonal residual is handled by the
+ * suppression (Berouti alpha) and a Wiener evaluation against the
+ * BROADBAND noise profile only. The tonal residual is handled by the
  * parallel tonal gain path; the final bin gain is
- * min(broadband, tonal) with the transient floor re-asserted on top.
+ * min(broadband, tonal) with the transient floor re-asserted on top and
+ * the masking audibility floor relieving it last.
  * When the tonal path is inactive (reduction >= ~1.0 or zero mask) the tonal
  * gain is unity and the min() is a no-op.
  */
@@ -1576,6 +1560,25 @@ static bool run_nlm_chain(SbSpectralEngine* self, const float* fft_spectrum,
   smoothed_magnitude =
       denoiser_neighbor_statistic(self, smoothed_magnitude, fft_spectrum);
 
+  // Backward masking needs the frame one hop AFTER the one being processed:
+  // the delayed frame (nlm_delay hops back) plus one hop, not the current
+  // frame, which is desynchronized by the whole NLM look-ahead.
+  const uint32_t nlm_delay =
+      nlm_filter_get_latency_frames(self->engines.nlm_filter);
+  // The veto consumes power spectra: fetch the future frame's power layer
+  // (aligned with the NLM look-ahead) or convert the current input frame.
+  const float* future_spectrum = NULL;
+  if (nlm_delay > 0U) {
+    future_spectrum = spectral_circular_buffer_retrieve(
+        self->engines.circular_buffer, self->layers.layer_power,
+        nlm_delay - 1U);
+  }
+  if (!future_spectrum) {
+    spectral_neighbors_compute_power_row(self->spectra.neighbor_power_row,
+                                         fft_spectrum, self->config.fft_size);
+    future_spectrum = self->spectra.neighbor_power_row;
+  }
+
   // Calculate SNR-dependent oversubtraction factors (Alpha/Beta) on the
   // broadband profile: tonal noise no longer depresses the per-bin SNR here.
   SuppressionParameters suppression_params = {
@@ -1586,33 +1589,13 @@ static bool run_nlm_chain(SbSpectralEngine* self, const float* fft_spectrum,
                                smoothed_magnitude, frames.noise_bb,
                                suppression_params, alpha, beta);
 
-#if TONAL_DUAL_PATH
-  // Structural Veto on the broadband profile: alpha lifts where noise is
-  // psychoacoustically masked. With the tonal notch decoupled into its own
-  // gain path, the veto can no longer partially undo a tonal boost
-  // (order-dependence removed).
-  masking_veto_apply(self->engines.masking_veto, smoothed_magnitude,
-                     frames.noise_bb, fft_spectrum, alpha,
-                     self->config.parameters.masking_depth);
-#else
-  // Legacy coupled path: parallel branches from the same Berouti base (the
-  // tonal branch boosts, the veto branch preserves), combined once.
-  memcpy(self->gains.alpha_base, alpha,
-         self->config.real_spectrum_size * sizeof(float));
-  memcpy(self->gains.alpha_tonal, alpha,
-         self->config.real_spectrum_size * sizeof(float));
-  tonal_reducer_apply_alpha_boost(self->engines.tonal_reducer,
-                                  self->gains.alpha_tonal,
+#if !TONAL_DUAL_PATH
+  // Legacy coupled path: tonal alpha boost applied inline (the veto moved
+  // to the gain domain — audibility floor applied below, after gains).
+  tonal_reducer_apply_alpha_boost(self->engines.tonal_reducer, alpha,
                                   self->config.parameters.tonal_reduction);
-  masking_veto_apply(self->engines.masking_veto, smoothed_magnitude,
-                     frames.noise_bb, fft_spectrum, alpha,
-                     self->config.parameters.masking_depth);
   for (uint32_t k = 0U; k < self->config.real_spectrum_size; ++k) {
-    const float boost = self->gains.alpha_tonal[k] - self->gains.alpha_base[k];
-    const float preservation = self->gains.alpha_base[k] - alpha[k];
-    float combined = self->gains.alpha_base[k] + boost - preservation;
-    combined = fminf(combined, ALPHA_MAX_TONAL);
-    alpha[k] = fmaxf(ALPHA_MIN, combined);
+    alpha[k] = fminf(alpha[k], ALPHA_MAX_TONAL);
   }
 #endif
 
@@ -1648,6 +1631,14 @@ static bool run_nlm_chain(SbSpectralEngine* self, const float* fft_spectrum,
     gain_out[k] = fminf(gain_out[k], self->spectra.gain_tonal[k]);
   }
 #endif
+
+  // Masking audibility floor applied last on the combined gain: relief is
+  // depth-lerped and bounded by the masked-audibility level, so it cannot
+  // excavate unsmoothed flicker the way the old alpha modulation did in
+  // this chain (which has no gain smoother after calculate_gains).
+  masking_veto_apply_floor(self->engines.masking_veto, smoothed_magnitude,
+                           frames.noise_bb, future_spectrum, gain_out,
+                           self->config.parameters.masking_depth);
 
   return true;
 }
@@ -1729,22 +1720,15 @@ static void temporal_apply_suppression(SbSpectralEngine* self,
   suppression_engine_calculate(self->engines.suppression_engine,
                                effective_magnitude, frames.noise_bb,
                                suppression_params, out.alpha, out.beta);
-#if TONAL_DUAL_PATH
-  // Apply Structural Veto on the broadband profile. The tonal notch lives in
-  // its own parallel gain path, so the veto can no longer partially undo a
-  // tonal alpha boost (sequential order-dependence removed).
-  masking_veto_apply(self->engines.masking_veto, effective_magnitude,
-                     frames.noise_bb, NULL, out.alpha,
-                     self->config.parameters.masking_depth);
-#else
-  // Legacy coupled path: tonal alpha boost applied inline BEFORE the veto,
-  // so the veto can partially undo the boost at masked bins (the coupled
-  // behavior under measurement).
+#if !TONAL_DUAL_PATH
+  // Legacy coupled path: tonal alpha boost applied inline (the veto moved
+  // to the gain domain — audibility floor applied in
+  // temporal_compute_gains, before the gain smoothers).
   tonal_reducer_apply_alpha_boost(self->engines.tonal_reducer, out.alpha,
                                   self->config.parameters.tonal_reduction);
-  masking_veto_apply(self->engines.masking_veto, effective_magnitude,
-                     frames.noise_bb, NULL, out.alpha,
-                     self->config.parameters.masking_depth);
+  for (uint32_t k = 0U; k < self->config.real_spectrum_size; ++k) {
+    out.alpha[k] = fminf(out.alpha[k], ALPHA_MAX_TONAL);
+  }
 #endif
 #if !TRANSIENT_RELIEF_PARALLEL
   // When transients are detected and enabled, drop alphas firmly to ALPHA_MIN
@@ -1844,6 +1828,15 @@ static void temporal_compute_gains(SbSpectralEngine* self,
       }
     }
   }
+
+  // Masking audibility floor: relief joins the gain field BEFORE the
+  // time/spatial smoothers so the smoother owns the transition. The floor
+  // reports the model's masking threshold (its temporal masking layer owns
+  // all time dynamics) and replaces the old alpha modulation that
+  // flickered with SFM classification.
+  masking_veto_apply_floor(self->engines.masking_veto, effective_magnitude,
+                           frames.noise_bb, NULL, out.gain_out,
+                           self->config.parameters.masking_depth);
 }
 
 static void temporal_smooth_gains(SbSpectralEngine* self,

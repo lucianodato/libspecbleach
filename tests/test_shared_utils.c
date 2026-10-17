@@ -137,9 +137,9 @@ void test_masking_estimator(void) {
     spectrum[i] = 0.1f + ((float)i * 0.01f);
   }
 
-  TEST_ASSERT(
-      compute_masking_thresholds(me, spectrum, spectrum, masking_thresholds),
-      "Compute masking thresholds should succeed");
+  TEST_ASSERT(compute_masking_thresholds(me, spectrum, spectrum, NULL,
+                                         masking_thresholds),
+              "Compute masking thresholds should succeed");
 
   masking_estimation_set_hop_sec(NULL, 0.0058F); // must not crash
   masking_estimation_set_hop_sec(me, 0.0058F);
@@ -158,11 +158,11 @@ void test_masking_estimator(void) {
   float th_short[513] = {0.0f};
   float th_long[513] = {0.0f};
   for (int pass = 0; pass < 2; pass++) {
+    TEST_ASSERT(compute_masking_thresholds(me_short, spectrum, spectrum, NULL,
+                                           th_short),
+                "Short-hop masking run must succeed");
     TEST_ASSERT(
-        compute_masking_thresholds(me_short, spectrum, spectrum, th_short),
-        "Short-hop masking run must succeed");
-    TEST_ASSERT(
-        compute_masking_thresholds(me_long, spectrum, spectrum, th_long),
+        compute_masking_thresholds(me_long, spectrum, spectrum, NULL, th_long),
         "Long-hop masking run must succeed");
   }
   int differing = 0;
