@@ -69,13 +69,12 @@ typedef struct MaskingOwned {
 
 typedef struct MaskingState {
   float* critical_bands_spectrum;
-  float* critical_bands_reference_spectrum;
-  float* spreading_matrix; // Matrix for simultaneous masking
   float* masking_offset;
   float* previous_thresholds;
   float* forward_decays;
   float* future_thresholds;
-  float* absolute_threshold_cb;
+  float* temporal_persistence; // Model's per-band temporal claim: masking
+                               // still in force from recent/incoming maskers
 } MaskingState;
 
 typedef struct MaskingScratch {
@@ -121,12 +120,6 @@ MaskingEstimator* masking_estimation_initialize(
 
   self->state.critical_bands_spectrum =
       (float*)calloc(self->config.number_critical_bands, sizeof(float));
-  self->state.critical_bands_reference_spectrum =
-      (float*)calloc(self->config.number_critical_bands, sizeof(float));
-  self->state.spreading_matrix =
-      (float*)calloc((size_t)self->config.number_critical_bands *
-                         (size_t)self->config.number_critical_bands,
-                     sizeof(float));
   self->state.masking_offset =
       (float*)calloc(self->config.number_critical_bands, sizeof(float));
   self->state.previous_thresholds =
@@ -135,7 +128,7 @@ MaskingEstimator* masking_estimation_initialize(
       (float*)calloc(self->config.number_critical_bands, sizeof(float));
   self->state.forward_decays =
       (float*)calloc(self->config.number_critical_bands, sizeof(float));
-  self->state.absolute_threshold_cb =
+  self->state.temporal_persistence =
       (float*)calloc(self->config.number_critical_bands, sizeof(float));
 
   self->scratch.future_cb_spectrum_buf =
@@ -156,11 +149,9 @@ MaskingEstimator* masking_estimation_initialize(
   self->config.use_temporal_masking = use_temporal_masking;
   self->config.absolute_threshold_enabled = use_absolute_threshold;
 
-  if (!self->state.critical_bands_spectrum ||
-      !self->state.critical_bands_reference_spectrum ||
-      !self->state.spreading_matrix || !self->state.masking_offset ||
+  if (!self->state.critical_bands_spectrum || !self->state.masking_offset ||
       !self->state.previous_thresholds || !self->state.future_thresholds ||
-      !self->state.forward_decays || !self->state.absolute_threshold_cb ||
+      !self->state.forward_decays || !self->state.temporal_persistence ||
       !self->scratch.future_cb_spectrum_buf || !self->scratch.bark_levels_buf ||
       !self->scratch.spreaded_future_buf ||
       !self->scratch.spreaded_current_buf ||
@@ -203,6 +194,23 @@ void masking_estimation_set_hop_sec(MaskingEstimator* self, float hop_sec) {
   self->config.backward_decay = expf(-hop_sec / BACKWARD_MASKING_TAU_SEC);
 }
 
+const float* masking_estimation_get_absolute_thresholds(
+    const MaskingEstimator* self) {
+  if (!self || !self->config.absolute_threshold_enabled) {
+    return NULL;
+  }
+  return absolute_hearing_thresholds_get_spectrum(
+      self->owned.reference_spectrum);
+}
+
+const float* masking_estimation_get_temporal_persistence(
+    const MaskingEstimator* self) {
+  if (!self || !self->state.temporal_persistence) {
+    return NULL;
+  }
+  return self->state.temporal_persistence;
+}
+
 void masking_estimation_free(MaskingEstimator* self) {
   if (!self) {
     return;
@@ -211,13 +219,11 @@ void masking_estimation_free(MaskingEstimator* self) {
   critical_bands_free(self->owned.critical_bands);
 
   free(self->state.critical_bands_spectrum);
-  free(self->state.critical_bands_reference_spectrum);
-  free(self->state.spreading_matrix);
   free(self->state.masking_offset);
   free(self->state.previous_thresholds);
   free(self->state.future_thresholds);
   free(self->state.forward_decays);
-  free(self->state.absolute_threshold_cb);
+  free(self->state.temporal_persistence);
   free(self->scratch.future_cb_spectrum_buf);
   free(self->scratch.bark_levels_buf);
   free(self->scratch.spreaded_future_buf);
@@ -229,6 +235,7 @@ void masking_estimation_free(MaskingEstimator* self) {
 
 bool compute_masking_thresholds(MaskingEstimator* self, const float* spectrum,
                                 const float* future_spectrum,
+                                const float* band_masker_mask,
                                 float* masking_thresholds) {
   if (!self || !spectrum || !masking_thresholds) {
     return false;
@@ -240,10 +247,28 @@ bool compute_masking_thresholds(MaskingEstimator* self, const float* spectrum,
   const float spectral_p = self->config.spectral_additivity_exponent;
   const float spectral_inv_p = 1.0F / spectral_p;
 
+  // Only validated masker evidence may drive the frequency threshold:
+  // untrusted bands contribute nothing, so the temporal layer's memory
+  // cannot accumulate a phantom from biased clean-estimate noise.
+  if (band_masker_mask) {
+    for (uint32_t j = 0U; j < self->config.number_critical_bands; j++) {
+      if (band_masker_mask[j] == 0.0F) {
+        self->state.critical_bands_spectrum[j] = 0.0F;
+      }
+    }
+  }
+
   // 1. Calculate spreaded future spectrum (Frequency Masking only)
   if (future_spectrum) {
     compute_critical_bands_spectrum(self->owned.critical_bands, future_spectrum,
                                     self->scratch.future_cb_spectrum_buf);
+    if (band_masker_mask) {
+      for (uint32_t j = 0U; j < self->config.number_critical_bands; j++) {
+        if (band_masker_mask[j] == 0.0F) {
+          self->scratch.future_cb_spectrum_buf[j] = 0.0F;
+        }
+      }
+    }
 
     spread_critical_bands(self, self->scratch.future_cb_spectrum_buf,
                           self->scratch.spreaded_future_buf, spectral_p,
@@ -288,20 +313,30 @@ bool compute_masking_thresholds(MaskingEstimator* self, const float* spectrum,
     // Total_T = (T_freq^p + T_forward^p + T_backward^p)^(1/p)
     // This model (Johnston, 1988) better reflects the non-linear summation
     // of multiple maskers compared to simple linear addition.
+    self->state.temporal_persistence[j] = 0.0F;
     if (self->config.use_temporal_masking) {
       float threshold_p = powf(threshold, POWER_LAW_EXPONENT);
+      float temporal_p = 0.0F;
 
       // Add forward masking contribution
       float forward_threshold =
           self->state.previous_thresholds[j] * self->state.forward_decays[j];
-      threshold_p += powf(forward_threshold, POWER_LAW_EXPONENT);
+      temporal_p += powf(forward_threshold, POWER_LAW_EXPONENT);
 
       // Add backward masking contribution if available
       if (future_spectrum) {
         float backward_threshold =
             self->state.future_thresholds[j] * self->config.backward_decay;
-        threshold_p += powf(backward_threshold, POWER_LAW_EXPONENT);
+        temporal_p += powf(backward_threshold, POWER_LAW_EXPONENT);
       }
+
+      threshold_p += temporal_p;
+
+      // The model's temporal claim alone (masker memory + incoming maskers,
+      // no fresh frame-local estimate). Consumers that need it can read it
+      // via masking_estimation_get_temporal_persistence.
+      self->state.temporal_persistence[j] =
+          powf(temporal_p, 1.0F / POWER_LAW_EXPONENT);
 
       threshold = powf(threshold_p, 1.0F / POWER_LAW_EXPONENT);
     }

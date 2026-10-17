@@ -33,4 +33,11 @@ void absolute_hearing_thresholds_free(AbsoluteHearingThresholds* self);
 bool apply_thresholds_as_floor(const AbsoluteHearingThresholds* self,
                                float* spectrum);
 
+/**
+ * Returns the absolute-hearing-threshold power spectrum (read-only, live
+ * internal state; valid while the instance lives). Sized real_spectrum_size.
+ */
+const float* absolute_hearing_thresholds_get_spectrum(
+    const AbsoluteHearingThresholds* self);
+
 #endif

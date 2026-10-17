@@ -181,9 +181,11 @@ typedef struct SpecbleachDenoiserParameters {
   SpecbleachNoiseEstimationMethod noise_estimation_method;
 
   /**
-   * Masking veto/protection depth (0.0 - 1.0): depth of signal energy
-   * preservation. Applies to both smoothing modes. Values outside the range
-   * are clamped.
+   * Masking audibility floor depth (0.0 - 1.0): how far suppression is
+   * relieved where the denoised residual would fall below the psychoacoustic
+   * masking threshold. 0.0 disables the veto; 1.0 stops all suppression in
+   * bands whose noise is masked. Applies to both smoothing modes. Values
+   * outside the range are clamped.
    */
   float masking_depth;
 

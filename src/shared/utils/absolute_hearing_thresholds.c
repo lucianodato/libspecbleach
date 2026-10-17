@@ -145,26 +145,35 @@ bool apply_thresholds_as_floor(const AbsoluteHearingThresholds* self,
   }
 
   for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
-    const float spl_level = (10.F * log10f(spectrum[k] + SPECTRAL_EPSILON)) +
-                            self->spl_reference_value;
-    const float max_spl = fmaxf(spl_level, self->absolute_thresholds[k]);
-    spectrum[k] = powf(10.F, (max_spl - self->spl_reference_value) / 10.F) -
-                  SPECTRAL_EPSILON;
-    if (spectrum[k] < 0.0F) {
-      spectrum[k] = 0.0F;
-    }
+    /**
+     * absolute_thresholds is precomputed in the same power scale as the
+     * spectra, so the floor is a plain max in this domain.
+     */
+    const float floored = fmaxf(spectrum[k], self->absolute_thresholds[k]);
+    spectrum[k] =
+        floored > SPECTRAL_EPSILON ? floored - SPECTRAL_EPSILON : 0.0F;
   }
 
   return true;
+}
+
+const float* absolute_hearing_thresholds_get_spectrum(
+    const AbsoluteHearingThresholds* self) {
+  return self ? self->absolute_thresholds : NULL;
 }
 
 static void compute_absolute_thresholds(AbsoluteHearingThresholds* self) {
   for (uint32_t k = 0U; k < self->real_spectrum_size; k++) {
     const float frequency =
         fmaxf(fft_bin_to_freq(k, self->sample_rate, self->fft_size), 20.F);
-    self->absolute_thresholds[k] =
+    const float threshold_db =
         (3.64F * powf((frequency / 1000.F), -0.8F)) -
         (6.5F * expf(-0.6F * powf(((frequency / 1000.F) - 3.3F), 2.F))) +
         (powf(10.F, -3.F) * powf((frequency / 1000.F), 4.F));
+    // Store in the same power scale as the engine's spectra: values are
+    // directly comparable to per-bin noise power (and used as a max floor
+    // on masking thresholds).
+    self->absolute_thresholds[k] =
+        powf(10.F, (threshold_db - self->spl_reference_value) / 10.F);
   }
 }

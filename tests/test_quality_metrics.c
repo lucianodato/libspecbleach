@@ -78,6 +78,12 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 // higher deviation than frozen ones — NLM is accepted at 19.71 on identical
 // material, so 18.0 stays the stricter bar while covering the fixed point
 // (~16.7) with headroom.
+// Unvoiced-gap CV normalization removes level breathing, so *retained*
+// per-band relief floor in gaps (model-time persistence relief, which holds
+// the residual while forward/backward masking decays) counts toward MNI as
+// if it were spectral instability. Relief is capped well under reduction
+// depth (live masker 0.25, persistence-only 0.18), which keeps the NLM 2D
+// numbers back under the strict gate.
 #define MNI_GATE 1.25F
 static const float MNI_GATES[3] = {1.25F, 1.25F, 1.05F};
 static const float LSD_GATES[3] = {18.0F, 23.0F, 23.0F};

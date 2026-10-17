@@ -19,7 +19,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 /*
- * Unit tests for Masking Veto
+ * Unit tests for the Masking Veto (psychoacoustic audibility floor)
  */
 
 #include <math.h>
@@ -27,6 +27,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdlib.h>
 #include <string.h>
 
+#include "shared/configurations.h"
 #include "shared/denoiser_logic/processing/masking_veto.h"
 #include "shared/utils/spectral_features.h"
 
@@ -41,39 +42,60 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define TEST_FLOAT_CLOSE(a, b, tolerance)                                      \
   TEST_ASSERT(fabsf((a) - (b)) < (tolerance), "Float values not close enough")
 
+static void fill_uniform(float* buffer, uint32_t size, float value) {
+  for (uint32_t i = 0U; i < size; i++) {
+    buffer[i] = value;
+  }
+}
+
+/* Run the veto for N frames with a caller-computed (reset) base gain, as in
+ * the engine. The floor attack settles over ~one hop*20, so callers must
+ * provide enough frames for asymptotic checks. */
+static void run_frames(MaskingVeto* mv, const float* spectrum,
+                       const float* noise, const float* future, float* gain,
+                       uint32_t real_size, float base, float depth,
+                       int frames) {
+  for (int f = 0; f < frames; f++) {
+    fill_uniform(gain, real_size, base);
+    masking_veto_apply_floor(mv, spectrum, noise, future, gain, depth);
+  }
+}
+
 void test_masking_veto_logic(void) {
-  printf("Testing MaskingVeto logic...\n");
+  printf("Testing MaskingVeto floor logic...\n");
 
   uint32_t fft_size = 1024;
+  uint32_t real_size = (fft_size / 2) + 1;
   MaskingVeto* mv = masking_veto_initialize(fft_size, 44100, OPUS_SCALE,
-                                            POWER_SPECTRUM, false, true);
+                                            POWER_SPECTRUM, true, true);
   TEST_ASSERT(mv != NULL, "Init failed");
 
-  float smoothed[513];
+  float spectrum[513];
   float noise[513];
-  float alpha[513];
-  for (uint32_t i = 0; i < 513; i++) {
-    smoothed[i] = 1.0F;
-    noise[i] = 0.1F;
-    alpha[i] = 2.0F;
-  }
+  float gain[513];
+  fill_uniform(spectrum, real_size, 1000.0F);
+  fill_uniform(noise, real_size, 1.0F);
 
-  // 1. Normal run
-  masking_veto_apply(mv, smoothed, noise, NULL, alpha, 1.0F);
+  // 1. Normal run: strong signal, tiny noise -> relief converges to the
+  // ceiling (legacy alpha = 1.0 anchor); attack settles over ~a hop*20
+  run_frames(mv, spectrum, noise, NULL, gain, real_size, 0.2F, 1.0F, 40);
+  TEST_FLOAT_CLOSE(gain[100], MASKING_VETO_RELIEF_CEILING, 0.02F);
 
-  // 2. NMR branches: Low noise vs threshold
-  // Set noise very low so NMR <= 0
-  for (uint32_t i = 0; i < 513; i++) {
-    noise[i] = 1e-15F;
-  }
-  masking_veto_apply(mv, smoothed, noise, NULL, alpha, 1.0F);
+  // 2. Depth 0 must be an exact no-op
+  fill_uniform(gain, real_size, 0.2F);
+  masking_veto_apply_floor(mv, spectrum, noise, NULL, gain, 0.0F);
+  TEST_FLOAT_CLOSE(gain[100], 0.2F, 1e-6F);
 
-  // 3. Edge/Invalid Depth
-  masking_veto_apply(mv, smoothed, noise, NULL, alpha, -1.0F);
+  // 3. Edge/Invalid Depth (negative treated as no-op)
+  fill_uniform(gain, real_size, 0.5F);
+  masking_veto_apply_floor(mv, spectrum, noise, NULL, gain, -1.0F);
+  TEST_FLOAT_CLOSE(gain[100], 0.5F, 1e-6F);
 
   // 4. NULL guards
-  masking_veto_apply(NULL, smoothed, noise, NULL, alpha, 1.0F);
-  masking_veto_apply(mv, NULL, noise, NULL, alpha, 1.0F);
+  masking_veto_apply_floor(NULL, spectrum, noise, NULL, gain, 1.0F);
+  masking_veto_apply_floor(mv, NULL, noise, NULL, gain, 1.0F);
+  masking_veto_apply_floor(mv, spectrum, NULL, NULL, gain, 1.0F);
+  masking_veto_apply_floor(mv, spectrum, noise, NULL, NULL, 1.0F);
 
   // 5. Frame-rate normalization guards
   masking_veto_set_hop_sec(NULL, 0.0115F); // must not crash
@@ -81,210 +103,166 @@ void test_masking_veto_logic(void) {
   masking_veto_set_hop_sec(mv, 0.0F); // edge: ignored
 
   masking_veto_free(mv);
-  printf("✓ Masking Veto tests passed\n");
+  printf("OK Masking Veto floor logic tests passed\n");
 }
 
-void test_nmr_protection(void) {
-  printf("Testing NMR-based Protection...\n");
+void test_audibility_floor_knobs(void) {
+  printf("Testing audibility floor bounds...\n");
 
-  uint32_t fft_size = 1024; // Real size = 513
+  uint32_t fft_size = 1024;
+  uint32_t real_size = (fft_size / 2) + 1;
+
+  // Scenario: noise-only (no masker present anywhere) -> no relief
+  {
+    MaskingVeto* mv = masking_veto_initialize(fft_size, 44100, OPUS_SCALE,
+                                              POWER_SPECTRUM, false, true);
+    TEST_ASSERT(mv != NULL, "Init failed (noise-only scenario)");
+    float* spectrum = (float*)calloc(real_size, sizeof(float));
+    float* noise = (float*)calloc(real_size, sizeof(float));
+    float* gain = (float*)calloc(real_size, sizeof(float));
+    fill_uniform(spectrum, real_size, 0.0F); // Near silence
+    fill_uniform(noise, real_size, 100.0F);  // Loud noise
+    run_frames(mv, spectrum, noise, NULL, gain, real_size, 0.1F, 1.0F, 40);
+    TEST_FLOAT_CLOSE(gain[100], 0.1F, 1e-3F);
+    TEST_ASSERT(gain[42] >= 0.1F, "Relief must be upward-only");
+    free(spectrum);
+    free(noise);
+    free(gain);
+    masking_veto_free(mv);
+  }
+
+  // Scenario: masked noise -> relief, and depth lerps the amount
+  {
+    MaskingVeto* mv = masking_veto_initialize(fft_size, 44100, OPUS_SCALE,
+                                              POWER_SPECTRUM, false, true);
+    TEST_ASSERT(mv != NULL, "Init failed (masked scenario)");
+    float* spectrum = (float*)calloc(real_size, sizeof(float));
+    float* noise = (float*)calloc(real_size, sizeof(float));
+    float* gain_full = (float*)calloc(real_size, sizeof(float));
+    float* gain_half = (float*)calloc(real_size, sizeof(float));
+    fill_uniform(spectrum, real_size, 1000.0F); // Strong signal
+    fill_uniform(noise, real_size, 1.0F);       // Masked noise
+    run_frames(mv, spectrum, noise, NULL, gain_half, real_size, 0.1F, 0.5F, 40);
+    run_frames(mv, spectrum, noise, NULL, gain_full, real_size, 0.1F, 1.0F, 40);
+    TEST_ASSERT(gain_full[100] > gain_half[100],
+                "Full depth must relieve more than half depth");
+    TEST_ASSERT(gain_half[100] > 0.1F,
+                "Half depth must still provide some relief");
+    TEST_FLOAT_CLOSE(gain_full[100], MASKING_VETO_RELIEF_CEILING, 0.02F);
+    TEST_ASSERT(gain_full[100] <= MASKING_VETO_RELIEF_CEILING + 1e-3F,
+                "Relief must never exceed the ceiling");
+    free(spectrum);
+    free(noise);
+    free(gain_full);
+    free(gain_half);
+    masking_veto_free(mv);
+  }
+
+  printf("OK Audibility floor tests passed\n");
+}
+
+void test_temporal_stability(void) {
+  printf("Testing temporal stability (attack/release/no crash)...\n");
+
+  uint32_t fft_size = 1024;
+  uint32_t real_size = (fft_size / 2) + 1;
+  float* spectrum = (float*)calloc(real_size, sizeof(float));
+  float* noise = (float*)calloc(real_size, sizeof(float));
+  float* gain = (float*)calloc(real_size, sizeof(float));
+
   MaskingVeto* mv = masking_veto_initialize(fft_size, 44100, OPUS_SCALE,
                                             POWER_SPECTRUM, false, true);
   TEST_ASSERT(mv != NULL, "Init failed");
+  masking_veto_set_hop_sec(mv, 0.0116F);
 
-  uint32_t real_size = (fft_size / 2) + 1;
-  float* smoothed = (float*)calloc(real_size, sizeof(float));
-  float* noise = (float*)calloc(real_size, sizeof(float));
-  float* alpha = (float*)calloc(real_size, sizeof(float));
+  // A: sustained signal -> relief converges to the ceiling (never overshoots)
+  fill_uniform(spectrum, real_size, 1000.0F);
+  fill_uniform(noise, real_size, 1.0F);
+  run_frames(mv, spectrum, noise, NULL, gain, real_size, 0.1F, 1.0F, 60);
+  TEST_ASSERT(gain[100] > 0.20F, "Protected band should get relief");
+  TEST_ASSERT(gain[100] <= MASKING_VETO_RELIEF_CEILING + 1e-3F,
+              "Relief must never overshoot the ceiling");
 
-  // Scenario: Strong signal (1000.0) with low noise (1.0)
-  // The masking threshold should be high -> noise (1.0) is masked
-  // -> NMR < 0dB -> full protection -> alpha lerped toward 1.0
-  for (uint32_t i = 0; i < real_size; i++) {
-    smoothed[i] = 1000.0F; // Strong signal
-    noise[i] = 1.0F;       // Low noise (masked by signal)
-    alpha[i] = 4.0F;       // High oversubtraction
+  // B: signal vanishes. The floor must decay smoothly (release), never
+  // crash back to zero on the first weak frame (the alpha veto's
+  // musical-noise generator at note decay). Persistence-only relief
+  // preserves low-level detail, capped at the stricter persistence ceiling
+  // — the masking model shapes reduction, it never overrides it.
+  fill_uniform(spectrum, real_size, 0.0F);
+  fill_uniform(noise, real_size, 100.0F);
+  for (int frame = 0; frame < 3; frame++) {
+    fill_uniform(gain, real_size, 0.1F);
+    masking_veto_apply_floor(mv, spectrum, noise, NULL, gain, 1.0F);
+    TEST_ASSERT(gain[100] > 0.10F,
+                "Floor must hold through note-off (release)");
   }
+  // ...until the release settles (the floor decays smoothly through the
+  // estimator's forward-masking decay, no crash back to zero)
+  for (int frame = 0; frame < 150; frame++) {
+    fill_uniform(gain, real_size, 0.1F);
+    masking_veto_apply_floor(mv, spectrum, noise, NULL, gain, 1.0F);
+  }
+  TEST_ASSERT(gain[100] < 0.20F, "Floor must decay to no relief eventually");
 
-  masking_veto_apply(mv, smoothed, noise, NULL, alpha, 1.0F);
+  // C: signal returns -> attack re-claims relief gradually (no flicker
+  // between carved and relieved states)
+  fill_uniform(spectrum, real_size, 1000.0F);
+  fill_uniform(noise, real_size, 1.0F);
+  run_frames(mv, spectrum, noise, NULL, gain, real_size, 0.1F, 1.0F, 30);
+  TEST_ASSERT(gain[100] > 0.20F, "Attack must re-claim relief gradually");
 
-  // With noise masked, alpha should be lerped toward 1.0
-  // (less than original 4.0)
-  TEST_ASSERT(alpha[100] < 4.0F, "Masked noise should reduce alpha toward 1.0");
-
-  free(smoothed);
+  free(spectrum);
   free(noise);
-  free(alpha);
+  free(gain);
   masking_veto_free(mv);
 
-  // Scenario 2: Noise-only (noise >> signal -> NMR high -> no protection)
-  // Use a fresh instance to avoid state from previous scenario
-  mv = masking_veto_initialize(fft_size, 44100, OPUS_SCALE, POWER_SPECTRUM,
-                               false, true);
-  TEST_ASSERT(mv != NULL, "Init failed for noise-only scenario");
-
-  smoothed = (float*)calloc(real_size, sizeof(float));
-  noise = (float*)calloc(real_size, sizeof(float));
-  alpha = (float*)calloc(real_size, sizeof(float));
-
-  for (uint32_t i = 0; i < real_size; i++) {
-    smoothed[i] = 0.01F; // Near silence
-    noise[i] = 100.0F;   // Very loud noise
-    alpha[i] = 4.0F;     // High oversubtraction
-  }
-
-  // Run multiple frames to let the clean signal estimation stabilize at ~0
-  for (int frame = 0; frame < 10; frame++) {
-    for (uint32_t i = 0; i < real_size; i++) {
-      alpha[i] = 4.0F;
-    }
-    masking_veto_apply(mv, smoothed, noise, NULL, alpha, 1.0F);
-  }
-
-  // With noise clearly audible (NMR >> 0dB), alpha should stay near 4.0
-  TEST_ASSERT(alpha[100] > 3.0F,
-              "Audible noise should leave alpha mostly unchanged");
-
-  free(smoothed);
-  free(noise);
-  free(alpha);
-  masking_veto_free(mv);
-
-  // Scenario 3: Intermediate NMR protection (signal present, moderate noise)
-  mv = masking_veto_initialize(fft_size, 44100, OPUS_SCALE, POWER_SPECTRUM,
-                               false, true);
-  TEST_ASSERT(mv != NULL, "Init failed for intermediate scenario");
-
-  smoothed = (float*)calloc(real_size, sizeof(float));
-  noise = (float*)calloc(real_size, sizeof(float));
-  alpha = (float*)calloc(real_size, sizeof(float));
-
-  for (uint32_t i = 0; i < real_size; i++) {
-    smoothed[i] = 100.0F; // Signal present
-    noise[i] = 10.0F;     // Moderate noise -> partial protection
-    alpha[i] = 4.0F;
-  }
-
-  masking_veto_apply(mv, smoothed, noise, NULL, alpha, 1.0F);
-  TEST_ASSERT(alpha[100] > 1.0F && alpha[100] < 4.0F,
-              "Partial NMR protection should partially reduce alpha");
-
-  free(smoothed);
-  free(noise);
-  free(alpha);
-  masking_veto_free(mv);
-
-  printf("✓ NMR protection tests passed\n");
+  printf("OK Temporal stability tests passed\n");
 }
 
-void test_temporal_masking(void) {
-  printf("Testing Temporal Masking (Forward and Backward)...\n");
+void test_backward_masking_future_frame(void) {
+  printf("Testing backward masking from the future frame...\n");
 
   uint32_t fft_size = 1024;
-  MaskingVeto* mv = masking_veto_initialize(fft_size, 48000, OPUS_SCALE,
-                                            POWER_SPECTRUM, false, true);
-  TEST_ASSERT(mv != NULL, "Init failed");
-
-  uint32_t real_size = 513;
-  float* smoothed = (float*)calloc(real_size, sizeof(float));
+  uint32_t real_size = (fft_size / 2) + 1;
+  float* spectrum = (float*)calloc(real_size, sizeof(float));
+  float* noise = (float*)calloc(real_size, sizeof(float));
   float* future = (float*)calloc(real_size, sizeof(float));
-  float* noise = (float*)calloc(real_size, sizeof(float));
-  float* alpha = (float*)calloc(real_size, sizeof(float));
+  float* gain = (float*)calloc(real_size, sizeof(float));
 
-  // Initialize
-  for (uint32_t i = 0; i < real_size; i++) {
-    alpha[i] = 4.0F; // High reduction
-    noise[i] = 0.1F; // Medium noise
-  }
+  // Noise-only bands (clean gated to zero): no masker anywhere, so
+  // suppression must run at full depth (no relief).
+  fill_uniform(noise, real_size, 1.0F);
 
-  // 1. Forward Masking: Impulse in previous frame
-  for (uint32_t i = 0; i < real_size; i++) {
-    smoothed[i] = 1000.0F;
-  }
-  masking_veto_apply(mv, smoothed, noise, NULL, alpha, 1.0F);
-
-  // Now run with a quiet signal that follows the impulse.
-  // Forward masking should still provide some protection.
-  for (uint32_t i = 0; i < real_size; i++) {
-    smoothed[i] = 3.2F;
-    alpha[i] = 4.0F;
-  }
-  masking_veto_apply(mv, smoothed, noise, NULL, alpha, 1.0F);
-
-  // Forward masking should reduce alpha (provide some protection)
-  TEST_ASSERT(alpha[100] < 4.0F,
-              "Forward masking should provide some protection");
-
-  // 2. Backward Masking: Impulse in future frame
-  for (uint32_t i = 0; i < real_size; i++) {
-    smoothed[i] = 3.2F;
-    future[i] = 1000.0F;
-    alpha[i] = 4.0F;
-  }
-  masking_veto_apply(mv, smoothed, noise, future, alpha, 1.0F);
-
-  // Backward masking should also provide protection
-  TEST_ASSERT(alpha[100] < 4.0F,
-              "Backward masking should provide some protection");
-
-  free(smoothed);
-  free(future);
-  free(noise);
-  free(alpha);
-  masking_veto_free(mv);
-
-  printf("✓ Temporal masking tests passed\n");
-}
-
-void test_protected_band_becomes_noise_only(void) {
-  printf(
-      "Testing regression: previously protected band becomes noise-only...\n");
-
-  uint32_t fft_size = 1024;
   MaskingVeto* mv = masking_veto_initialize(fft_size, 44100, OPUS_SCALE,
                                             POWER_SPECTRUM, false, true);
   TEST_ASSERT(mv != NULL, "Init failed");
+  masking_veto_set_hop_sec(mv, 0.0116F);
 
-  uint32_t real_size = (fft_size / 2) + 1;
-  float* smoothed = (float*)calloc(real_size, sizeof(float));
-  float* noise = (float*)calloc(real_size, sizeof(float));
-  float* alpha = (float*)calloc(real_size, sizeof(float));
+  run_frames(mv, spectrum, noise, NULL, gain, real_size, 0.1F, 1.0F, 40);
+  TEST_FLOAT_CLOSE(gain[100], 0.1F, 0.001F);
 
-  // Frame 1: Strong signal -> protected
-  for (uint32_t i = 0; i < real_size; i++) {
-    smoothed[i] = 1000.0F;
-    noise[i] = 1.0F;
-    alpha[i] = 4.0F;
-  }
-  masking_veto_apply(mv, smoothed, noise, NULL, alpha, 1.0F);
-  TEST_ASSERT(alpha[100] < 4.0F, "Protected band should reduce alpha");
+  // Loud impulse in the next frame: pre-masking (backward masking) must
+  // relieve suppression in the current frame ahead of the hit.
+  fill_uniform(future, real_size, 1000.0F);
+  run_frames(mv, spectrum, noise, future, gain, real_size, 0.1F, 1.0F, 60);
+  TEST_ASSERT(gain[100] > 0.1F + 0.05F,
+              "Future masker must relieve suppression via backward masking");
 
-  // Frame 2: Signal becomes 0.0F (noise-only). Run frames until clean-signal
-  // gate fails.
-  for (int frame = 0; frame < 15; frame++) {
-    for (uint32_t i = 0; i < real_size; i++) {
-      smoothed[i] = 0.0F;
-      noise[i] = 100.0F;
-      alpha[i] = 4.0F;
-    }
-    masking_veto_apply(mv, smoothed, noise, NULL, alpha, 1.0F);
-  }
-  TEST_FLOAT_CLOSE(alpha[100], 4.0F, 0.001F);
-
-  free(smoothed);
+  free(spectrum);
   free(noise);
-  free(alpha);
+  free(future);
+  free(gain);
   masking_veto_free(mv);
 
-  printf("✓ Protected band becomes noise-only regression test passed\n");
+  printf("OK Backward masking tests passed\n");
 }
 
 int main(void) {
   printf("Running Masking Veto tests...\n");
   test_masking_veto_logic();
-  test_nmr_protection();
-  test_temporal_masking();
-  test_protected_band_becomes_noise_only();
-  printf("✅ All Masking Veto tests passed!\n");
+  test_audibility_floor_knobs();
+  test_temporal_stability();
+  test_backward_masking_future_frame();
+  printf("OK All Masking Veto tests passed!\n");
   return 0;
 }
