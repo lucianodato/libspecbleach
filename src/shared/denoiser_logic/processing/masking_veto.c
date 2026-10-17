@@ -306,8 +306,8 @@ static void mv_compute_band_floor(MaskingVeto* self,
     // The two relief ceilings are the evidence-class hierarchy and may
     // diverge if tuning separates them again; the split stays even while
     // both map to 0.30.
-    // NOLINTNEXTLINE(bugprone-branch-clone)
     const float relief_ceiling = live_masker
+                                     // NOLINTNEXTLINE(bugprone-branch-clone)
                                      ? MASKING_VETO_RELIEF_CEILING
                                      : MASKING_VETO_PERSISTENCE_RELIEF_CEILING;
     const float target =
