@@ -411,5 +411,7 @@ void masking_veto_set_hop_sec(MaskingVeto* self, float hop_sec) {
   }
   self->smooth =
       sb_alpha_retuned(MASKING_VETO_SMOOTHING, LEGACY_REF_HOP_SEC, hop_sec);
+  self->floor_smooth_memory =
+      sb_alpha_from_tau(MASKING_VETO_FLOOR_SMOOTH_SEC, hop_sec);
   masking_estimation_set_hop_sec(self->masking_estimator, hop_sec);
 }

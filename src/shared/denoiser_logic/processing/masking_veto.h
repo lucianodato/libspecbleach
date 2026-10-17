@@ -68,9 +68,10 @@ void masking_veto_free(MaskingVeto* self);
  *
  *   gain = max(gain, gain + depth * (floor - gain))
  *
- * Where the original noise is already masked (floor = 1.0) no suppression
- * is applied to that band at all ("soft suppression where noise is
- * subjectively inaudible"). Relief only ever raises the gain, so the
+ * Where the original noise is already masked the relief floor saturates at
+ * the fixed relief ceiling, so reduction is reduced but never fully
+ * disabled ("soft suppression where noise is subjectively inaudible").
+ * Relief only ever raises the gain, so the
  * maximum residual per band is bounded by the masked-audibility level.
  *
  * @param self MaskingVeto instance

@@ -1565,13 +1565,18 @@ static bool run_nlm_chain(SbSpectralEngine* self, const float* fft_spectrum,
   // frame, which is desynchronized by the whole NLM look-ahead.
   const uint32_t nlm_delay =
       nlm_filter_get_latency_frames(self->engines.nlm_filter);
+  // The veto consumes power spectra: fetch the future frame's power layer
+  // (aligned with the NLM look-ahead) or convert the current input frame.
   const float* future_spectrum = NULL;
   if (nlm_delay > 0U) {
     future_spectrum = spectral_circular_buffer_retrieve(
-        self->engines.circular_buffer, self->layers.layer_fft, nlm_delay - 1U);
+        self->engines.circular_buffer, self->layers.layer_power,
+        nlm_delay - 1U);
   }
   if (!future_spectrum) {
-    future_spectrum = fft_spectrum;
+    spectral_neighbors_compute_power_row(self->spectra.neighbor_power_row,
+                                         fft_spectrum, self->config.fft_size);
+    future_spectrum = self->spectra.neighbor_power_row;
   }
 
   // Calculate SNR-dependent oversubtraction factors (Alpha/Beta) on the
