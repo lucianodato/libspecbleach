@@ -303,11 +303,16 @@ static void mv_compute_band_floor(MaskingVeto* self,
                             MASKING_VETO_PERSISTENCE_RATIO * band_noise_energy);
 
     const bool valid = masker_present && audacious_noise;
+    // The two relief ceilings are the evidence-class hierarchy and may
+    // diverge if tuning separates them again; the split stays even while
+    // both map to 0.30.
+    // NOLINTNEXTLINE(bugprone-branch-clone)
+    const float relief_ceiling = live_masker
+                                     ? MASKING_VETO_RELIEF_CEILING
+                                     : MASKING_VETO_PERSISTENCE_RELIEF_CEILING;
     const float target =
-        valid ? mv_floor_target(
-                    band_noise_energy, band_threshold, self->spectrum_type,
-                    live_masker ? MASKING_VETO_RELIEF_CEILING
-                                : MASKING_VETO_PERSISTENCE_RELIEF_CEILING)
+        valid ? mv_floor_target(band_noise_energy, band_threshold,
+                                self->spectrum_type, relief_ceiling)
               : 0.0F;
 
     // Mapper regularization: symmetric one-pole (processing-time tau, not a
