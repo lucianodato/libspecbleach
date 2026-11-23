@@ -14,6 +14,15 @@ if(NOT SPECBLEACH_HEADER_VERSION VERSION_EQUAL PROJECT_VERSION)
         "CMake project() is ${PROJECT_VERSION}; keep them in sync.")
 endif()
 
+# ABI policy: pre-1.0 minor releases may rename or remove exported symbols,
+# so the soname tracks major.minor. Package managers then refuse an
+# incompatible upgrade instead of leaving already-built plugins unable to
+# resolve symbols at load time.
+set(SPECBLEACH_SOVERSION "${PROJECT_VERSION_MAJOR}")
+if(PROJECT_VERSION_MAJOR EQUAL 0)
+    set(SPECBLEACH_SOVERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}")
+endif()
+
 # Optional C++ support (used only by the header-wrapper smoke test; the
 # library itself is pure C and builds without a C++ compiler).
 include(CheckLanguage)
@@ -119,7 +128,7 @@ add_library(libspecbleach
 set_target_properties(libspecbleach PROPERTIES
     OUTPUT_NAME "specbleach"
     VERSION ${PROJECT_VERSION}
-    SOVERSION ${PROJECT_VERSION_MAJOR}
+    SOVERSION ${SPECBLEACH_SOVERSION}
     C_VISIBILITY_PRESET hidden
     VISIBILITY_INLINES_HIDDEN ON
 )
@@ -188,7 +197,7 @@ if(SPECBLEACH_BUILD_EXTRAS)
     set_target_properties(libspecbleach_extras PROPERTIES
         OUTPUT_NAME "specbleach_extras"
         VERSION ${PROJECT_VERSION}
-        SOVERSION ${PROJECT_VERSION_MAJOR}
+        SOVERSION ${SPECBLEACH_SOVERSION}
         C_VISIBILITY_PRESET hidden
         VISIBILITY_INLINES_HIDDEN ON
     )
