@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **Shared library soname**: Pre-1.0 soname now includes the minor version
+  (`libspecbleach.so.0.5`), so an ABI-breaking minor upgrade can no longer
+  satisfy an older plugin's package dependency and fail at load time.
+
 ## [0.4.1] - 2026-09-15
 
 ### Added
@@ -130,9 +137,10 @@ This project follows **Semantic Versioning**:
   - When MAJOR changes, SOVERSION will be incremented
   - Breaking changes to public API or ABI
   
-- **MINOR version** (x.Y.z): New features, backward-compatible
-  - New functionality added without breaking existing code
-  - New functions or capabilities
+- **MINOR version** (x.Y.z): New features
+  - Pre-1.0 minor releases may include incompatible API/ABI changes, so the
+    SOVERSION (major.minor) changes with them and consumers must be rebuilt
+  - After 1.0.0, minor releases keep the existing API/ABI compatible
   
 - **PATCH version** (x.y.Z): Backward-compatible bug fixes
   - Bug fixes that don't change API/ABI
@@ -142,6 +150,7 @@ This project follows **Semantic Versioning**:
 ### ABI Stability Promise
 
 - Libraries with the same **SOVERSION** are binary compatible
-- Current **SOVERSION: 0** (pre-1.0 release, API may still evolve)
+- Pre-1.0 **SOVERSION is `0.<minor>`** (e.g. `libspecbleach.so.0.5`); every
+  minor release gets a new soname because exported symbols may change
 - SOVERSION will be incremented to 1 when API reaches stability (1.0.0 release)
 - After 1.0.0, SOVERSION will match MAJOR version number
